@@ -1,4 +1,5 @@
 import os
+import re
 import math
 from dataclasses import asdict
 from logging import getLogger
@@ -30,7 +31,7 @@ from paz.models.detection.dino_v2_object_detection.utils.utils import (
 
 logger = getLogger(__name__)
 
-# ---- Keras weights directory ---------------------------------------------
+# ---- weights directory ---------------------------------------------
 
 # Directory containing pre-ported .weights.h5 files (relative to project root).
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -59,7 +60,7 @@ def resolve_weights_path(filename):
 
 
 def build_backbone_from_config(cfg):
-    """Instantiate a Keras backbone (``Joiner``) from a ``ModelConfig``.
+    """Instantiate a backbone (``Joiner``) from a ``ModelConfig``.
 
     Returns a ``Joiner`` that wraps ``Backbone`` + ``PositionEmbeddingSine``.
 
@@ -86,7 +87,7 @@ def build_backbone_from_config(cfg):
 
 
 def build_transformer_from_config(cfg):
-    """Instantiate a Keras ``Transformer`` decoder from a ``ModelConfig``.
+    """Instantiate a ``Transformer`` decoder from a ``ModelConfig``.
 
     Args:
         cfg (ModelConfig): Architecture configuration.
@@ -136,7 +137,7 @@ def build_segmentation_head_from_config(cfg):
 
 
 def build_matcher_from_config(cfg, train_cfg=None):
-    """Build the ``HungarianMatcher`` Keras layer.
+    """Build the ``HungarianMatcher`` layer.
 
     Args:
         cfg (ModelConfig): Architecture configuration.
@@ -159,7 +160,7 @@ def build_matcher_from_config(cfg, train_cfg=None):
 
 
 def build_model_from_config(cfg):
-    """Build a complete ``LWDETR`` Keras model from a ``ModelConfig``.
+    """Build a complete ``LWDETR`` model from a ``ModelConfig``.
 
     Returns
     -------
@@ -243,20 +244,135 @@ def build_criterion_from_config(cfg, train_cfg=None):
     return criterion, postprocess
 
 
+# ---- Per-variable weight-decay exclusion --------------------------------
+
+_WD_EXEMPT_KEYWORDS = ("gamma", "pos_embed", "rel_pos", "bias",
+                       "norm", "embeddings")
+
+
+def get_backbone_no_weight_decay_vars(model):
+    """Return backbone variables that should be excluded from weight decay.
+    ``get_dinov2_weight_decay_rate`` sets
+    ``weight_decay=0`` for backbone parameters whose names contain any of
+    ``gamma``, ``pos_embed``, ``rel_pos``, ``bias``, ``norm``, or
+    ``embeddings``.  Decoder and head parameters always use the default
+    weight decay.
+
+    This function identifies the corresponding variables so they
+    can be passed to ``optimizer.exclude_from_weight_decay(var_list=...)``.
+
+    Args:
+        model: Built LWDETR model.
+
+    Returns:
+        list: ``Variable`` objects to exclude from weight decay.
+    """
+    excluded = []
+    for var in model.trainable_variables:
+        path = var.path
+        # Only backbone encoder variables are eligible for exemption
+        if "joiner/backbone/encoder/" not in path:
+            continue
+        if "projector" in path:
+            continue
+        if any(kw in path for kw in _WD_EXEMPT_KEYWORDS):
+            excluded.append(var)
+    return excluded
+
+
+# ---- Differential learning-rate multipliers ------------------------------
+
+_LAYER_PATTERN = re.compile(r"/layer_(\d+)/")
+
+
+def get_param_lr_multipliers(model, train_config, model_config=None):
+    """Compute per-variable gradient multipliers for differential LR.
+
+    The base learning rate is specified in ``train_config.lr``.  To
+    achieve per-group learning rates,
+    we pre-multiply each gradient by a variable-specific multiplier so that
+    ``base_lr × multiplier == effective_lr``.
+
+    Groups (matching ``rfdetr/util/get_param_dicts.py``):
+
+    * **Backbone encoder** — variables under ``joiner/backbone/encoder/``
+      (excluding the projector).  Per-layer decay is applied via
+      ``lr_vit_layer_decay`` and the group is also scaled by
+      ``lr_component_decay²``.
+    * **Decoder** — variables under ``transformer/transformer_decoder/``.
+      Scaled by ``lr_component_decay``.
+    * **Everything else** — heads, projector, other transformer params.
+      Multiplier = 1.0.
+
+    Parameters
+    ----------
+    model : LWDETR
+        The built LWDETR model.
+    train_config : TrainConfig or object
+        Must have ``lr``, ``lr_encoder``, ``lr_vit_layer_decay``, and
+        ``lr_component_decay`` attributes.  If *model_config* is ``None``,
+        must also have ``out_feature_indexes``.
+    model_config : ModelConfig or None, optional
+        When provided, ``out_feature_indexes`` is read from here instead
+        of *train_config*.
+    """
+    lr = train_config.lr
+    lr_encoder = train_config.lr_encoder
+    lr_vit_layer_decay = train_config.lr_vit_layer_decay
+    lr_component_decay = train_config.lr_component_decay
+
+    cfg_for_indexes = model_config if model_config is not None else train_config
+
+    num_layers = cfg_for_indexes.out_feature_indexes[-1] + 2
+
+    multipliers = {}
+
+    for var in model.trainable_variables:
+        path = var.path
+
+        # ---- backbone encoder variables --------------------------------
+        if "joiner/backbone/encoder/" in path and "projector" not in path:
+            if "embeddings" in path:
+                layer_id = 0
+            else:
+                m = _LAYER_PATTERN.search(path)
+                if m:
+                    layer_id = int(m.group(1)) + 1
+                else:
+                    # Final layernorm or other non-block params inside
+                    # the encoder — gives these decay=1.0
+                    layer_id = num_layers + 1
+
+            decay = lr_vit_layer_decay ** (num_layers + 1 - layer_id)
+            multiplier = (lr_encoder / lr) * decay * (lr_component_decay ** 2)
+
+        # ---- decoder variables -----------------------------------------
+        elif "transformer/transformer_decoder/" in path:
+            multiplier = lr_component_decay
+
+        # ---- everything else (heads, projector, etc.) ------------------
+        else:
+            multiplier = 1.0
+
+        multipliers[path] = multiplier
+
+    return multipliers
+
+
 # ---- Model wrapper -------------------------------------------------------
 
 
 class Model:
-    """High-level wrapper around the LWDETR Keras model.
+    """High-level wrapper around the LWDETR model.
 
-    * Builds the Keras ``LWDETR`` from a ``ModelConfig``.
+    * Builds the ``LWDETR`` from a ``ModelConfig``.
     * Optionally loads pre-trained weights (via the weight-porting utilities).
     * Exposes ``predict`` for numpy-in / numpy-out inference.
 
     Attributes:
         config (ModelConfig): Architecture configuration.
         resolution (int): Input image resolution.
-        model (LWDETR): Underlying Keras model.
+        model (LWDETR): Underlying model.
         postprocess (PostProcess): Post-processing layer.
         class_names (list[str] or None): Class label names.
     """
@@ -280,7 +396,7 @@ class Model:
         self.postprocess = PostProcess(num_select=config.num_select)
         self.class_names = None
 
-        # Auto-load pre-ported Keras weights (.weights.h5 or .keras)
+        # Auto-load pre-ported weights (.weights.h5 or .keras)
         if config.pretrain_weights is not None:
             wpath = resolve_weights_path(config.pretrain_weights)
             if wpath is not None:
@@ -360,13 +476,20 @@ class Model:
 
         # Forward pass and post-processing
         outputs = self.model(imgs, training=False)
-        scores, labels, boxes = self.postprocess(
+        post_result = self.postprocess(
             outputs,
             kops.convert_to_tensor(
                 np.array([[images.shape[1], images.shape[2]]] * images.shape[0]),
                 dtype="float32",
             ),
         )
+
+        # Handle both detection-only (3 returns) and segmentation (4 returns)
+        if len(post_result) == 4:
+            scores, labels, boxes, masks_list = post_result
+        else:
+            scores, labels, boxes = post_result
+            masks_list = None
 
         # Convert to numpy and filter by confidence threshold
         scores = ops.convert_to_numpy(scores)
@@ -376,13 +499,15 @@ class Model:
         results = []
         for i in range(images.shape[0]):
             keep = scores[i] > threshold
-            results.append(
-                {
-                    "boxes": boxes[i][keep],
-                    "scores": scores[i][keep],
-                    "labels": labels[i][keep],
-                }
-            )
+            result = {
+                "boxes": boxes[i][keep],
+                "scores": scores[i][keep],
+                "labels": labels[i][keep],
+            }
+            if masks_list is not None:
+                masks_i = ops.convert_to_numpy(masks_list[i])
+                result["masks"] = masks_i[keep]
+            results.append(result)
         return results
 
     # ------------------------------------------------------------------
@@ -390,19 +515,122 @@ class Model:
     # ------------------------------------------------------------------
 
     def reinitialize_detection_head(self, num_classes):
-        """Rebuild the model with a new number of classes.
+        """Rebuild the model with a new number of classes, preserving
+        all backbone and transformer weights.
 
-        Recreates the entire ``LWDETR`` from scratch with the updated
-        ``num_classes``.  Existing pretrained backbone and transformer
-        weights are discarded; this is intended for fine-tuning on a
-        new dataset where weights will be re-initialised.
 
         Args:
             num_classes (int): New number of object categories.
         """
+        import tempfile
         from dataclasses import replace as _dc_replace
 
+        old_num_classes = self.config.num_classes
+
+        # Step 2a — Save current weights to a temp file
+        # Also snapshot values positionally for verification
+        old_weights = [w.numpy().copy() for w in self.model.weights]
+        old_shapes = [tuple(w.shape) for w in self.model.weights]
+        old_count = len(old_weights)
+
+        # Snapshot class_embed weights for tiling
+        old_class_weights = {}
+        for w in self.model.weights:
+            if "class_embed" in w.path:
+                old_class_weights[w.path] = w.numpy().copy()
+
+        tmpdir = tempfile.mkdtemp()
+        tmp_path = os.path.join(tmpdir, "reinit_checkpoint.weights.h5")
+        self.model.save_weights(tmp_path)
+
+        # Step 2b — Rebuild model with new num_classes
         updated_config = _dc_replace(self.config, num_classes=num_classes)
         self.config = updated_config
         self.model = build_model_from_config(updated_config)
         self.postprocess = PostProcess(num_select=updated_config.num_select)
+
+        # Step 2c — Materialise all layers via dummy forward pass
+        res = updated_config.resolution
+        dummy = np.ones((1, res, res, 3), dtype="float32") * 0.5
+        self.model(dummy, training=False)
+
+        # Step 2d — Restore weights via load_weights with skip_mismatch
+        self.model.load_weights(tmp_path, skip_mismatch=True)
+
+        # Clean up temp file
+        try:
+            os.remove(tmp_path)
+            os.rmdir(tmpdir)
+        except OSError:
+            pass
+
+        # Step 2e — Tile old class_embed weights into new heads
+        # Instead of leaving mismatched heads randomly initialised,
+        # tile (repeat) the pretrained weights along the class axis.
+        for w in self.model.weights:
+            if w.path in old_class_weights:
+                old_val = old_class_weights[w.path]
+                new_shape = tuple(w.shape)
+                if old_val.shape == new_shape:
+                    continue  # shapes match, already restored
+                # Tile along the last axis (classes dimension)
+                # Kernel: (hidden, old_C) → (hidden, new_C)
+                # Bias:   (old_C,) → (new_C,)
+                if old_val.ndim == 2:
+                    reps = int(np.ceil(new_shape[1] / old_val.shape[1]))
+                    tiled = np.tile(old_val, (1, reps))[:, :new_shape[1]]
+                elif old_val.ndim == 1:
+                    reps = int(np.ceil(new_shape[0] / old_val.shape[0]))
+                    tiled = np.tile(old_val, reps)[:new_shape[0]]
+                else:
+                    continue
+                w.assign(tiled)
+                logger.debug(
+                    "Tiled class_embed weight %s: %s → %s",
+                    w.path, old_val.shape, new_shape,
+                )
+
+        # Step 2f — Validate restoration
+        new_weights = [w.numpy() for w in self.model.weights]
+        new_shapes = [tuple(w.shape) for w in self.model.weights]
+
+        if len(new_weights) != old_count:
+            logger.warning(
+                "reinitialize_detection_head: weight count changed "
+                "from %d to %d", old_count, len(new_weights),
+            )
+
+        # Count restored vs changed by comparing positionally
+        restored = 0
+        shape_changed = 0
+        for i in range(min(old_count, len(new_weights))):
+            if old_shapes[i] == new_shapes[i]:
+                max_diff = float(np.max(np.abs(old_weights[i] - new_weights[i])))
+                if max_diff < 1e-5:
+                    restored += 1
+            else:
+                shape_changed += 1
+
+        # Guard: at least old_count - 30 should be restored
+        # (group_detr=13 → 14 Dense layers × 2 = 28 class_embed vars)
+        min_expected = old_count - 30
+        if restored < min_expected:
+            raise RuntimeError(
+                f"Too few weights restored: {restored} < {min_expected}. "
+                f"shape_changed={shape_changed}. "
+                f"Possible architecture mismatch between builds."
+            )
+
+        # If num_classes actually changed, at least one var must differ
+        if num_classes != old_num_classes and shape_changed == 0:
+            logger.warning(
+                "reinitialize_detection_head: num_classes changed but "
+                "no weight shapes differed — head may not have been "
+                "reinitialised."
+            )
+
+        logger.info(
+            "reinitialize_detection_head: restored=%d, "
+            "shape_changed=%d (of %d total)",
+            restored, shape_changed, len(new_weights),
+        )

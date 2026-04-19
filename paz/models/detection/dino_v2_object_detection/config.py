@@ -433,7 +433,10 @@ class TrainConfig:
     warmup_epochs: float = 0.0
     lr_vit_layer_decay: float = 0.8
     lr_component_decay: float = 0.7
+    lr_scheduler: str = "step"
+    lr_min_factor: float = 0.0
     drop_path: float = 0.0
+    dropout: float = 0.0
     group_detr: int = 13
     ia_bce_loss: bool = True
     cls_loss_coef: float = 1.0
@@ -460,6 +463,13 @@ class TrainConfig:
     clip_max_norm: float = 0.1
     segmentation_head: bool = False
     eval_max_dets: int = 500
+    resume: bool = False
+    amp: bool = True
+    fp16_eval: bool = False
+    backbone_lora: bool = False
+    lora_rank: int = 16
+    lora_alpha: int = 16
+    use_dora: bool = True
 
 
 @dataclass

@@ -1,4 +1,5 @@
 import math
+import random
 import time
 import datetime
 import numpy as np
@@ -64,12 +65,12 @@ def build_lr_lambda(
 
 
 # ---------------------------------------------------------------------------
-# Simple Keras LR scheduler wrapping lr_lambda
+# Simple LR scheduler wrapping lr_lambda
 # ---------------------------------------------------------------------------
 
 
 class LambdaLRSchedule(keras.optimizers.schedules.LearningRateSchedule):
-    """Keras LR schedule that delegates to a ``lr_lambda`` callable.
+    """LR schedule that delegates to a ``lr_lambda`` callable.
 
     Multiplies ``base_lr`` by ``lr_lambda(step)`` at each training step.
 
@@ -91,6 +92,61 @@ class LambdaLRSchedule(keras.optimizers.schedules.LearningRateSchedule):
 
 
 # ---------------------------------------------------------------------------
+# Drop path / dropout schedule builder
+# ---------------------------------------------------------------------------
+
+
+def build_drop_schedule(
+    drop_rate,
+    epochs,
+    niter_per_ep,
+    cutoff_epoch=0,
+    mode="standard",
+    schedule="constant",
+):
+    """Pre-compute a per-step drop-rate array.
+
+    Args:
+        drop_rate (float): Target drop rate.
+        epochs (int): Total training epochs.
+        niter_per_ep (int): Steps per epoch.
+        cutoff_epoch (int): Epoch boundary for early/late modes.
+        mode (str): ``'standard'``, ``'early'``, or ``'late'``.
+        schedule (str): ``'constant'`` or ``'linear'`` (early mode only).
+
+    Returns:
+        np.ndarray: Float32 array of length ``epochs * niter_per_ep``.
+    """
+    assert mode in ("standard", "early", "late")
+    if mode == "standard":
+        return np.full(epochs * niter_per_ep, drop_rate, dtype="float32")
+
+    early_iters = cutoff_epoch * niter_per_ep
+    late_iters = (epochs - cutoff_epoch) * niter_per_ep
+
+    if mode == "early":
+        assert schedule in ("constant", "linear")
+        if schedule == "constant":
+            early_schedule = np.full(early_iters, drop_rate, dtype="float32")
+        elif schedule == "linear":
+            early_schedule = np.linspace(
+                drop_rate, 0, early_iters, dtype="float32"
+            )
+        final_schedule = np.concatenate(
+            (early_schedule, np.full(late_iters, 0, dtype="float32"))
+        )
+    elif mode == "late":
+        assert schedule in ("constant",)
+        early_schedule = np.full(early_iters, 0, dtype="float32")
+        final_schedule = np.concatenate(
+            (early_schedule, np.full(late_iters, drop_rate, dtype="float32"))
+        )
+
+    assert len(final_schedule) == epochs * niter_per_ep
+    return final_schedule
+
+
+# ---------------------------------------------------------------------------
 # Training loop for one epoch
 # ---------------------------------------------------------------------------
 
@@ -104,6 +160,14 @@ def train_one_epoch(
     epoch,
     clip_max_norm=0.1,
     print_freq=10,
+    lr_multipliers=None,
+    ema_m=None,
+    grad_accum_steps=1,
+    multi_scale_config=None,
+    drop_path_schedule=None,
+    dropout_schedule=None,
+    vit_encoder_num_layers=None,
+    amp=False,
 ):
     """Train *model* for one epoch using *data_iterator*.
 
@@ -115,9 +179,9 @@ def train_one_epoch(
          indices, so the full loss computation is JAX-traceable.
 
     Args:
-        model (keras.Model): The LWDETR Keras model.
+        model: The LWDETR model.
         criterion (SetCriterion): Computes losses given outputs and targets.
-        optimizer (keras.optimizers.Optimizer): Optimiser instance.
+        optimizer: Optimiser instance.
         data_iterator (iterable): Yields ``(images, targets)`` batches.
             ``images`` is ``(B, H, W, 3)`` float32; ``targets`` is a list
             of dicts with ``labels`` and ``boxes`` keys.
@@ -125,6 +189,23 @@ def train_one_epoch(
         epoch (int): Current epoch index.
         clip_max_norm (float): Max gradient norm for clipping (0 disables).
         print_freq (int): Print every N steps.
+        lr_multipliers (dict or None): Per-variable gradient multipliers
+            for differential learning rates.
+        ema_m: Optional EMA wrapper; ``ema_m.update(model)`` is called
+            after every optimiser step.
+        grad_accum_steps (int): Number of sub-batches to accumulate
+            gradients over before each optimiser step.
+        multi_scale_config (dict or None): When not None, enables
+            per-batch multi-scale resizing.  Must contain a ``scales``
+            list of valid square sizes.
+        drop_path_schedule (np.ndarray or None): Pre-computed per-step
+            drop-path rates.  When not None, the model's backbone
+            drop-path rate is updated at each iteration.
+        dropout_schedule (np.ndarray or None): Pre-computed per-step
+            dropout rates.  When not None, all Dropout layers in the
+            transformer are updated at each iteration.
+        vit_encoder_num_layers (int or None): Number of ViT encoder
+            layers (needed for per-layer linear scaling of drop path).
 
     Returns:
         dict: Averaged metric values across the epoch.
@@ -139,75 +220,209 @@ def train_one_epoch(
     group_detr = criterion.group_detr
     sum_group_losses = getattr(criterion, "sum_group_losses", False)
 
+    ms_scales = (
+        multi_scale_config["scales"] if multi_scale_config is not None
+        else None
+    )
+
     start_time = time.time()
     for step, (images, targets) in enumerate(
         metric_logger.log_every(data_iterator, print_freq, header)
     ):
-        images = ops.convert_to_tensor(images, dtype="float32")
+        global_step = epoch * num_steps + step
 
-        # ==================================================================
-        # Phase 1 – Eager forward + Hungarian matching
-        # ==================================================================
-        # The matcher calls scipy (non-JAX-traceable), so we must produce
-        # concrete matching indices before entering jax.value_and_grad.
-        outputs_eager = model(images, training=False)
-
-        outputs_for_match = {
-            k: v for k, v in outputs_eager.items() if k != "aux_outputs"
-        }
-        indices_main = criterion.matcher(
-            outputs_for_match, targets, group_detr=group_detr
-        )
-
-        aux_indices = []
-        if "aux_outputs" in outputs_eager:
-            for aux_out in outputs_eager["aux_outputs"]:
-                aux_indices.append(
-                    criterion.matcher(
-                        aux_out, targets, group_detr=group_detr
+        # ---- Per-step drop path scheduling ----
+        if drop_path_schedule is not None:
+            if global_step < len(drop_path_schedule):
+                dp_rate = float(drop_path_schedule[global_step])
+                if hasattr(model, "update_drop_path"):
+                    model.update_drop_path(
+                        dp_rate, vit_encoder_num_layers
                     )
+
+        # ---- Per-step dropout scheduling ----
+        if dropout_schedule is not None:
+            if global_step < len(dropout_schedule):
+                do_rate = float(dropout_schedule[global_step])
+                if hasattr(model, "update_dropout"):
+                    model.update_dropout(do_rate)
+
+        # Unpack images (may be a plain array or a (tensor, mask) tuple)
+        if isinstance(images, (list, tuple)) and len(images) == 2:
+            img_tensor, img_mask = images
+            images = ops.convert_to_tensor(img_tensor, dtype="float32")
+            img_mask = ops.convert_to_tensor(img_mask, dtype="bool")
+        else:
+            images = ops.convert_to_tensor(images, dtype="float32")
+            img_mask = None
+
+        # ---- Per-batch multi-scale resize (deterministic per step) ----
+        if ms_scales is not None:
+            random.seed(step)
+            scale = random.choice(ms_scales)
+            images = ops.image.resize(images, (scale, scale))
+            if img_mask is not None:
+                img_mask = ops.cast(
+                    ops.image.resize(
+                        ops.cast(img_mask[:, :, :, None], "float32"),
+                        (scale, scale),
+                        interpolation="nearest",
+                    )[:, :, :, 0],
+                    "bool",
                 )
 
-        num_boxes = sum(len(t["labels"]) for t in targets)
-        if not sum_group_losses:
-            num_boxes = num_boxes * group_detr
-        num_boxes_f = max(float(num_boxes), 1.0)
+        batch_size = int(images.shape[0])
+        sub_batch_size = batch_size // grad_accum_steps
 
-        # ==================================================================
-        # Phase 2 – Traced forward + loss + gradient computation
-        # ==================================================================
-        trainable_values = [v.value for v in model.trainable_variables]
-        non_trainable_values = [v.value for v in model.non_trainable_variables]
+        accumulated_grads = None
+        accumulated_loss = 0.0
+        last_updated_nt = None
 
-        def forward_and_loss(trainable_params):
-            """Pure function suitable for ``jax.value_and_grad``."""
-            outputs, updated_nt = model.stateless_call(
-                trainable_params, non_trainable_values,
-                images, training=True,
+        for accum_i in range(grad_accum_steps):
+            start_idx = accum_i * sub_batch_size
+            final_idx = start_idx + sub_batch_size
+            sub_images = images[start_idx:final_idx]
+            sub_targets = targets[start_idx:final_idx]
+
+            # Build model input (with mask if available)
+            if img_mask is not None:
+                sub_mask = img_mask[start_idx:final_idx]
+                model_input = (sub_images, sub_mask)
+            else:
+                model_input = sub_images
+
+            # ==============================================================
+            # Phase 1 – Eager forward + Hungarian matching
+            # ==============================================================
+            outputs_eager = model(model_input, training=False)
+
+            outputs_for_match = {
+                k: v for k, v in outputs_eager.items()
+                if k not in ("aux_outputs", "enc_outputs")
+            }
+            indices_main = criterion.matcher(
+                outputs_for_match, sub_targets, group_detr=group_detr
             )
-            total_loss = _compute_loss_with_indices(
-                outputs, targets, indices_main, aux_indices,
-                criterion, weight_dict, num_boxes_f,
+
+            aux_indices = []
+            if "aux_outputs" in outputs_eager:
+                for aux_out in outputs_eager["aux_outputs"]:
+                    aux_indices.append(
+                        criterion.matcher(
+                            aux_out, sub_targets, group_detr=group_detr
+                        )
+                    )
+
+            enc_indices = None
+            if "enc_outputs" in outputs_eager:
+                enc_indices = criterion.matcher(
+                    outputs_eager["enc_outputs"], sub_targets,
+                    group_detr=group_detr,
+                )
+
+            num_boxes = sum(len(t["labels"]) for t in sub_targets)
+            if not sum_group_losses:
+                num_boxes = num_boxes * group_detr
+            num_boxes_f = max(float(num_boxes), 1.0)
+
+            # ==============================================================
+            # Phase 2 – Traced forward + loss + gradient computation
+            # ==============================================================
+            trainable_values = [v.value for v in model.trainable_variables]
+            non_trainable_values = [
+                v.value for v in model.non_trainable_variables
+            ]
+
+            # Cast inputs to bfloat16 when AMP is enabled
+            fwd_images = sub_images
+            if amp:
+                fwd_images = ops.cast(sub_images, "bfloat16")
+
+            # Build traced input (with or without mask)
+            if img_mask is not None:
+                fwd_input = (fwd_images, sub_mask)
+            else:
+                fwd_input = fwd_images
+
+            def forward_and_loss(trainable_params):
+                """Pure function suitable for ``jax.value_and_grad``."""
+                outputs, updated_nt = model.stateless_call(
+                    trainable_params, non_trainable_values,
+                    fwd_input, training=True,
+                )
+                # Cast outputs to float32 for loss computation
+                if amp:
+                    outputs = {
+                        k: (ops.cast(v, "float32")
+                             if hasattr(v, "dtype") else v)
+                        for k, v in outputs.items()
+                    }
+                total_loss = _compute_loss_with_indices(
+                    outputs, sub_targets, indices_main, aux_indices,
+                    enc_indices, criterion, weight_dict, num_boxes_f,
+                )
+                return total_loss, updated_nt
+
+            grad_fn = jax.value_and_grad(forward_and_loss, has_aux=True)
+            (sub_loss, updated_nt), sub_grads = grad_fn(trainable_values)
+
+            # Cast gradients to float32 when AMP is enabled
+            if amp:
+                sub_grads = [ops.cast(g, "float32") for g in sub_grads]
+
+            # Scale gradients by 1/grad_accum_steps
+            scale = 1.0 / grad_accum_steps
+            sub_grads = [g * scale for g in sub_grads]
+            accumulated_loss += float(ops.convert_to_numpy(sub_loss)) * scale
+            last_updated_nt = updated_nt
+
+            if accumulated_grads is None:
+                accumulated_grads = sub_grads
+            else:
+                accumulated_grads = [
+                    a + g for a, g in zip(accumulated_grads, sub_grads)
+                ]
+
+        grads = accumulated_grads
+
+        # ==================================================================
+        # Phase 3 – Check for NaN/Inf gradients, clip & apply
+        # ==================================================================
+
+        # Detect gradient overflow — skip the optimiser step entirely
+        # (similar to GradScaler behaviour in mixed-precision training)
+        if _has_nan_or_inf(grads):
+            import logging as _logging
+            _logging.getLogger(__name__).warning(
+                "NaN/Inf gradients at step %d — skipping update", step,
             )
-            return total_loss, updated_nt
+            metric_logger.update(loss=accumulated_loss, lr=0.0,
+                                 grad_overflow=1.0)
+            if step >= num_steps - 1:
+                break
+            continue
 
-        grad_fn = jax.value_and_grad(forward_and_loss, has_aux=True)
-        (total_loss, updated_nt), grads = grad_fn(trainable_values)
-
-        # ==================================================================
-        # Phase 3 – Clip & apply gradients, update state
-        # ==================================================================
         if clip_max_norm > 0:
             grads = _clip_grad_norm(grads, clip_max_norm)
+
+        if lr_multipliers is not None:
+            grads = [
+                g * lr_multipliers.get(v.path, 1.0)
+                for g, v in zip(grads, model.trainable_variables)
+            ]
 
         optimizer.apply(grads, model.trainable_variables)
 
         # Sync non-trainable vars (e.g. BatchNorm running stats)
-        for var, val in zip(model.non_trainable_variables, updated_nt):
+        for var, val in zip(model.non_trainable_variables, last_updated_nt):
             var.assign(val)
 
+        # Per-step EMA update
+        if ema_m is not None:
+            ema_m.update(model)
+
         # ---- logging -----------------------------------------------------
-        loss_value = float(ops.convert_to_numpy(total_loss))
+        loss_value = accumulated_loss
         if not math.isfinite(loss_value):
             raise ValueError(f"Loss is {loss_value}, stopping training")
 
@@ -239,7 +454,7 @@ def train_one_epoch(
 
 def _compute_loss_with_indices(
     outputs, targets, indices_main, aux_indices_list,
-    criterion, weight_dict, num_boxes_f,
+    enc_indices, criterion, weight_dict, num_boxes_f,
 ):
     """Compute weighted total loss using pre-computed matching indices.
 
@@ -248,10 +463,11 @@ def _compute_loss_with_indices(
 
     Args:
         outputs (dict): Model outputs with ``pred_logits``, ``pred_boxes``,
-            and optionally ``aux_outputs``.
+            and optionally ``aux_outputs`` and ``enc_outputs``.
         targets (list[dict]): Ground-truth targets.
         indices_main (list): Main-head matching indices.
         aux_indices_list (list): Per-layer auxiliary matching indices.
+        enc_indices (list or None): Encoder output matching indices.
         criterion (SetCriterion): Loss module.
         weight_dict (dict): Loss name → weight mapping.
         num_boxes_f (float): Total matched boxes (for normalisation).
@@ -288,7 +504,45 @@ def _compute_loss_with_indices(
                     if k_aux in weight_dict:
                         total_loss = total_loss + v * weight_dict[k_aux]
 
+    # ---- Two-stage encoder output losses ---------------------------------
+    if "enc_outputs" in outputs and enc_indices is not None:
+        enc_out = outputs["enc_outputs"]
+        for loss_type in criterion.loss_types:
+            kwargs = {}
+            if loss_type == "labels":
+                kwargs["log"] = False
+            l_dict = criterion.get_loss(
+                loss_type, enc_out, targets, enc_indices, num_boxes_t,
+                **kwargs,
+            )
+            for k, v in l_dict.items():
+                k_enc = f"{k}_enc"
+                if k_enc in weight_dict:
+                    total_loss = total_loss + v * weight_dict[k_enc]
+
     return total_loss
+
+
+def _has_nan_or_inf(grads):
+    """Return True if any gradient tensor contains NaN or Inf values.
+
+    This mimics PyTorch's ``GradScaler`` overflow detection: when
+    mixed-precision (or ill-conditioned batches) produce non-finite
+    gradients the optimiser step should be skipped entirely.
+
+    Args:
+        grads (list): Gradient tensors.
+
+    Returns:
+        bool
+    """
+    for g in grads:
+        if g is None:
+            continue
+        g_np = np.asarray(g)
+        if not np.all(np.isfinite(g_np)):
+            return True
+    return False
 
 
 def _clip_grad_norm(grads, max_norm):
@@ -312,39 +566,138 @@ def _clip_grad_norm(grads, max_norm):
 
 
 # ---------------------------------------------------------------------------
-# Evaluation (forward-only, no COCO eval)
+# Evaluation with COCO metrics
 # ---------------------------------------------------------------------------
 
 
-def evaluate(model, data_iterator, num_steps=None, print_freq=10):
-    """Run the model in evaluation mode and collect predictions.
+def evaluate(
+    model,
+    criterion,
+    postprocess,
+    data_iterator,
+    coco_gt,
+    config=None,
+    print_freq=10,
+):
+    """Run the model in evaluation mode and compute COCO metrics.
 
     Args:
-        model (keras.Model): Trained model.
+        model: Trained LWDETR model.
+        criterion (SetCriterion): Loss module (for computing val losses).
+        postprocess (PostProcess): Converts raw outputs to detections.
         data_iterator (iterable): Yields ``(images, targets)`` batches.
-        num_steps (int or None): Max steps; ``None`` iterates to exhaustion.
+        coco_gt (COCO): Ground-truth COCO object for evaluation.
+        config: Training/model config with ``segmentation_head`` and
+            ``eval_max_dets`` attributes.
         print_freq (int): Logging interval.
 
     Returns:
-        list[dict]: One dict per batch with ``pred_logits``, ``pred_boxes``
-            (and optionally ``pred_masks``) as numpy arrays.
+        tuple: ``(stats_dict, coco_evaluator)`` where ``stats_dict``
+            contains loss averages and ``coco_eval_bbox`` / optionally
+            ``coco_eval_masks`` metric arrays.
     """
-    all_results = []
-    for step, (images, _targets) in enumerate(data_iterator):
-        outputs = model(images, training=False)
-        # Convert to numpy for downstream consumption
-        result = {
-            "pred_logits": ops.convert_to_numpy(outputs["pred_logits"]),
-            "pred_boxes": ops.convert_to_numpy(outputs["pred_boxes"]),
+    from paz.models.detection.dino_v2_object_detection.utils.coco_eval import (
+        CocoEvaluator,
+    )
+
+    metric_logger = MetricLogger(delimiter="  ")
+    header = "Test:"
+
+    segmentation_head = getattr(config, "segmentation_head", False)
+    eval_max_dets = getattr(config, "eval_max_dets", 500)
+
+    iou_types = ("bbox",) if not segmentation_head else ("bbox", "segm")
+    coco_evaluator = CocoEvaluator(coco_gt, list(iou_types), eval_max_dets)
+
+    for step, (images, targets) in enumerate(
+        metric_logger.log_every(data_iterator, print_freq, header)
+    ):
+        images_t = ops.convert_to_tensor(images, dtype="float32")
+        outputs = model(images_t, training=False)
+
+        # Compute losses during evaluation (group_detr=1 in eval mode)
+        weight_dict = criterion.weight_dict
+        group_detr = 1  # eval mode: single query group
+        outputs_for_match = {
+            k: v for k, v in outputs.items()
+            if k not in ("aux_outputs", "enc_outputs")
         }
-        if "pred_masks" in outputs:
-            result["pred_masks"] = ops.convert_to_numpy(outputs["pred_masks"])
-        all_results.append(result)
+        indices_main = criterion.matcher(
+            outputs_for_match, targets, group_detr=group_detr
+        )
+        num_boxes = sum(len(t["labels"]) for t in targets)
+        sum_group_losses = getattr(criterion, "sum_group_losses", False)
+        if not sum_group_losses:
+            num_boxes = num_boxes * group_detr
+        num_boxes_f = max(float(num_boxes), 1.0)
 
-        if num_steps is not None and step >= num_steps - 1:
-            break
+        enc_indices = None
+        if "enc_outputs" in outputs:
+            enc_indices = criterion.matcher(
+                outputs["enc_outputs"], targets, group_detr=group_detr,
+            )
 
-    return all_results
+        total_loss = _compute_loss_with_indices(
+            outputs, targets, indices_main, [],
+            enc_indices, criterion, weight_dict, num_boxes_f,
+        )
+        metric_logger.update(loss=float(ops.convert_to_numpy(total_loss)))
+
+        # Post-process predictions and feed to COCO evaluator
+        orig_sizes = np.stack(
+            [t["orig_size"] for t in targets], axis=0
+        ).astype("float32")
+        target_sizes = ops.convert_to_tensor(orig_sizes, dtype="float32")
+        post_result = postprocess(outputs, target_sizes)
+
+        if len(post_result) == 4:
+            scores, labels, boxes, masks_list = post_result
+        else:
+            scores, labels, boxes = post_result
+            masks_list = None
+
+        scores_np = ops.convert_to_numpy(scores)
+        labels_np = ops.convert_to_numpy(labels)
+        boxes_np = ops.convert_to_numpy(boxes)
+
+        res = {}
+        for i, t in enumerate(targets):
+            image_id = int(t["image_id"].flat[0])
+            res[image_id] = {
+                "scores": scores_np[i],
+                "labels": labels_np[i],
+                "boxes": boxes_np[i],
+            }
+            if masks_list is not None:
+                res[image_id]["masks"] = ops.convert_to_numpy(
+                    masks_list[i]
+                )
+
+        coco_evaluator.update(res)
+
+    print("Averaged stats:", metric_logger)
+
+    coco_evaluator.accumulate()
+    coco_evaluator.summarize()
+
+    stats = {k: meter.global_avg for k, meter in metric_logger.meters.items()}
+
+    results_json = coco_extended_metrics(coco_evaluator.coco_eval["bbox"])
+    stats["results_json"] = results_json
+    stats["coco_eval_bbox"] = (
+        coco_evaluator.coco_eval["bbox"].stats.tolist()
+    )
+
+    if "segm" in iou_types:
+        results_json_segm = coco_extended_metrics(
+            coco_evaluator.coco_eval["segm"]
+        )
+        stats["results_json_segm"] = results_json_segm
+        stats["coco_eval_masks"] = (
+            coco_evaluator.coco_eval["segm"].stats.tolist()
+        )
+
+    return stats, coco_evaluator
 
 
 # ---------------------------------------------------------------------------
@@ -413,3 +766,139 @@ def sweep_confidence_thresholds(per_class_data, conf_thresholds, classes_with_gt
             }
         )
     return results
+
+
+def coco_extended_metrics(coco_eval):
+    """Compute per-class precision/recall by sweeping confidence thresholds.
+
+    Finds the threshold that maximizes macro-F1 across all classes, then
+    reports per-class and aggregate metrics at that threshold.
+
+    Args:
+        coco_eval (COCOeval): A completed COCOeval object (after
+            ``accumulate()`` and ``summarize()``).
+
+    Returns:
+        dict: Contains ``class_map`` (per-class stats list), ``map``,
+            ``precision``, and ``recall`` at the best threshold.
+    """
+    iou50_idx = np.argwhere(
+        np.isclose(coco_eval.params.iouThrs, 0.50)
+    ).item()
+    cat_ids = coco_eval.params.catIds
+    num_classes = len(cat_ids)
+    area_idx = 0
+    maxdet_idx = 2
+
+    # Unflatten evalImgs into nested dict
+    evalImgs_unflat = {}
+    for e in coco_eval.evalImgs:
+        if e is None:
+            continue
+        cat_id = e["category_id"]
+        area_rng = tuple(e["aRng"])
+        img_id = e["image_id"]
+
+        if cat_id not in evalImgs_unflat:
+            evalImgs_unflat[cat_id] = {}
+        if area_rng not in evalImgs_unflat[cat_id]:
+            evalImgs_unflat[cat_id][area_rng] = {}
+        evalImgs_unflat[cat_id][area_rng][img_id] = e
+
+    area_rng_all = tuple(coco_eval.params.areaRng[area_idx])
+
+    per_class_data = []
+    for cid in cat_ids:
+        dt_scores = []
+        dt_matches = []
+        dt_ignore = []
+        total_gt = 0
+
+        for img_id in coco_eval.params.imgIds:
+            e = (
+                evalImgs_unflat.get(cid, {})
+                .get(area_rng_all, {})
+                .get(img_id)
+            )
+            if e is None:
+                continue
+
+            num_dt = len(e["dtIds"])
+            gt_ignore = e["gtIgnore"]
+            total_gt += sum(1 for ig in gt_ignore if not ig)
+
+            for d in range(num_dt):
+                dt_scores.append(e["dtScores"][d])
+                dt_matches.append(e["dtMatches"][iou50_idx, d])
+                dt_ignore.append(e["dtIgnore"][iou50_idx, d])
+
+        per_class_data.append(
+            {
+                "scores": np.array(dt_scores),
+                "matches": np.array(dt_matches),
+                "ignore": np.array(dt_ignore, dtype=bool),
+                "total_gt": total_gt,
+            }
+        )
+
+    conf_thresholds = np.linspace(0.0, 1.0, 101)
+    classes_with_gt = [
+        k for k in range(num_classes) if per_class_data[k]["total_gt"] > 0
+    ]
+
+    confidence_sweep = sweep_confidence_thresholds(
+        per_class_data, conf_thresholds, classes_with_gt
+    )
+
+    best = max(confidence_sweep, key=lambda x: x["macro_f1"])
+
+    map_50_95 = float(coco_eval.stats[0])
+    map_50 = float(coco_eval.stats[1])
+
+    per_class = []
+    cat_id_to_name = {
+        c["id"]: c["name"]
+        for c in coco_eval.cocoGt.loadCats(cat_ids)
+    }
+    for k, cid in enumerate(cat_ids):
+        p_slice = coco_eval.eval["precision"][:, :, k, area_idx, maxdet_idx]
+        p_masked = np.where(p_slice > -1, p_slice, np.nan)
+        ap_per_iou = np.nanmean(p_masked, axis=1)
+        ap_50_95 = float(np.nanmean(ap_per_iou))
+        ap_50 = float(np.nanmean(p_masked[iou50_idx]))
+
+        if (
+            np.isnan(ap_50_95)
+            or np.isnan(ap_50)
+            or np.isnan(best["per_class_prec"][k])
+            or np.isnan(best["per_class_rec"][k])
+        ):
+            continue
+
+        per_class.append(
+            {
+                "class": cat_id_to_name.get(int(cid), str(cid)),
+                "map@50:95": ap_50_95,
+                "map@50": ap_50,
+                "precision": best["per_class_prec"][k],
+                "recall": best["per_class_rec"][k],
+            }
+        )
+
+    per_class.append(
+        {
+            "class": "all",
+            "map@50:95": map_50_95,
+            "map@50": map_50,
+            "precision": best["macro_precision"],
+            "recall": best["macro_recall"],
+        }
+    )
+
+    return {
+        "class_map": per_class,
+        "map": map_50,
+        "precision": best["macro_precision"],
+        "recall": best["macro_recall"],
+    }
+

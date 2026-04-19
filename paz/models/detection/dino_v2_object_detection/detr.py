@@ -2,6 +2,7 @@ import json
 import os
 import datetime
 import math
+import shutil
 import time
 from collections import defaultdict
 from dataclasses import asdict
@@ -35,6 +36,8 @@ from paz.models.detection.dino_v2_object_detection.config import (
 from paz.models.detection.dino_v2_object_detection.main import (
     Model,
     build_criterion_from_config,
+    get_backbone_no_weight_decay_vars,
+    get_param_lr_multipliers,
 )
 from paz.models.detection.dino_v2_object_detection.utils.coco_classes import (
     COCO_CLASSES,
@@ -116,12 +119,17 @@ class RFDETR:
         """
         from paz.models.detection.dino_v2_object_detection.engine import (
             build_lr_lambda,
+            build_drop_schedule,
             LambdaLRSchedule,
             train_one_epoch,
+            evaluate as evaluate_model,
         )
         from paz.models.detection.dino_v2_object_detection.utils.utils import (
             ModelEma,
             BestMetricHolder,
+        )
+        from paz.models.detection.dino_v2_object_detection.datasets import (
+            compute_multi_scale_scales,
         )
 
         # ---- Determine num_classes / class_names from annotations -----
@@ -209,13 +217,30 @@ class RFDETR:
             config,
         )
 
-        model = self.model.model  # underlying Keras LWDETR
+        model = self.model.model  # underlying LWDETR
 
-        # ---- Optimizer ----------------------------------------------------
-        optimizer = keras.optimizers.AdamW(
-            learning_rate=config.lr,
-            weight_decay=config.weight_decay,
-            clipnorm=config.clip_max_norm if config.clip_max_norm > 0 else None,
+        # ---- Apply LoRA to backbone (before optimizer, after weights) -----
+        if getattr(config, "backbone_lora", False):
+            from paz.models.detection.dino_v2_object_detection.utils.lora import (
+                apply_lora_to_backbone,
+            )
+            apply_lora_to_backbone(
+                model,
+                rank=getattr(config, "lora_rank", 16),
+                lora_alpha=getattr(config, "lora_alpha", 16),
+                use_dora=getattr(config, "use_dora", True),
+            )
+            logger.info(
+                "Applied LoRA (rank=%d, alpha=%d, dora=%s) to backbone.",
+                config.lora_rank, config.lora_alpha, config.use_dora,
+            )
+
+        # ---- Optimizer (schedule built below after data loading) ----------
+        optimizer = None  # placeholder; created after num_training_steps known
+
+        # ---- Differential learning-rate multipliers -----------------------
+        lr_multipliers = get_param_lr_multipliers(
+            model, config, model_config=self.model_config
         )
 
         # ---- EMA ----------------------------------------------------------
@@ -227,9 +252,83 @@ class RFDETR:
         output_dir = Path(config.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        best_map_holder = BestMetricHolder(use_ema=config.use_ema)
+        best_map_holder = BestMetricHolder(
+            init_res=0.0, use_ema=config.use_ema, better='large',
+        )
         best_map_5095 = 0.0
         best_map_ema_5095 = 0.0
+        start_epoch = 0
+
+        # ---- Resume from checkpoint -------------------------------------
+        _resume_state = None
+        if getattr(config, "resume", False):
+            training_state_path = output_dir / "training_state.json"
+            checkpoint_path = output_dir / "checkpoint.weights.h5"
+
+            if training_state_path.exists():
+                try:
+                    with open(training_state_path) as f:
+                        state = json.load(f)
+                    start_epoch = state.get("epoch", 0) + 1
+                    best_map_5095 = float(state.get("best_map_5095", 0.0))
+                    best_map_ema_5095 = float(
+                        state.get("best_map_ema_5095", 0.0)
+                    )
+                    _resume_state = state
+                    logger.info(
+                        "Loaded training state: epoch=%d, "
+                        "best_map_5095=%.4f, best_map_ema_5095=%.4f",
+                        start_epoch - 1,
+                        best_map_5095,
+                        best_map_ema_5095,
+                    )
+                except (json.JSONDecodeError, ValueError, KeyError) as e:
+                    logger.warning(
+                        "Failed to load training_state.json: %s. "
+                        "Starting from epoch 0.",
+                        e,
+                    )
+                    start_epoch = 0
+            else:
+                logger.warning(
+                    "resume=True but training_state.json not found in %s. "
+                    "Starting from epoch 0.",
+                    output_dir,
+                )
+
+            if checkpoint_path.exists() and start_epoch > 0:
+                model.load_weights(str(checkpoint_path))
+                logger.info(
+                    "Loaded model weights from checkpoint. "
+                    "Resuming from epoch %d",
+                    start_epoch,
+                )
+
+                # Restore EMA weights
+                ema_weights_path = output_dir / "ema_weights.npz"
+                if ema_m is not None and ema_weights_path.exists():
+                    ema_data = np.load(
+                        str(ema_weights_path), allow_pickle=True
+                    )
+                    for key in ema_data.files:
+                        if key in ema_m.model_weights:
+                            ema_m.model_weights[key] = ema_data[key]
+                    logger.info("Restored EMA weights from checkpoint.")
+                elif ema_m is not None:
+                    # Fallback: create fresh EMA from current model
+                    ema_m.set(model)
+                    logger.warning(
+                        "EMA weights not found. Using current model weights."
+                    )
+
+            elif start_epoch > 0 and not checkpoint_path.exists():
+                logger.warning(
+                    "training_state.json found but checkpoint.weights.h5 "
+                    "missing. Starting from epoch 0."
+                )
+                start_epoch = 0
+                best_map_5095 = 0.0
+                best_map_ema_5095 = 0.0
 
         # ---- Data loading ------------------------------------------------
         # Users may provide a custom data pipeline.  When ``dataset_dir``
@@ -252,10 +351,108 @@ class RFDETR:
         else:
             num_training_steps = 1
 
+        # ---- Build LR schedule & optimizer (needs num_training_steps) -----
+        lr_lambda = build_lr_lambda(
+            num_training_steps_per_epoch=num_training_steps,
+            epochs=config.epochs,
+            warmup_epochs=config.warmup_epochs,
+            lr_scheduler=config.lr_scheduler,
+            lr_drop=config.lr_drop,
+            lr_min_factor=config.lr_min_factor,
+        )
+        lr_schedule = LambdaLRSchedule(config.lr, lr_lambda)
+
+        optimizer = keras.optimizers.AdamW(
+            learning_rate=lr_schedule,
+            weight_decay=config.weight_decay,
+        )
+
+        # ---- Exclude backbone bias/norm/embed from weight decay -----------
+        no_wd_vars = get_backbone_no_weight_decay_vars(model)
+        if no_wd_vars:
+            optimizer.exclude_from_weight_decay(var_list=no_wd_vars)
+
+        # ---- Restore optimizer state on resume ----------------------------
+        if _resume_state is not None and start_epoch > 0:
+            opt_state_path = output_dir / "optimizer_state.npz"
+            if opt_state_path.exists():
+                # Run a dummy optimizer step to initialise variables
+                dummy_grads = [
+                    ops.zeros_like(v) for v in model.trainable_variables
+                ]
+                optimizer.apply(dummy_grads, model.trainable_variables)
+                # Reload model weights (dummy step may have changed them)
+                checkpoint_path = output_dir / "checkpoint.weights.h5"
+                if checkpoint_path.exists():
+                    model.load_weights(str(checkpoint_path))
+
+                # Restore optimizer variables
+                opt_data = np.load(str(opt_state_path), allow_pickle=True)
+                for v in optimizer.variables:
+                    if v.path in opt_data.files:
+                        v.assign(opt_data[v.path])
+
+                # Restore iteration count for LR schedule
+                saved_iters = _resume_state.get("optimizer_iterations", None)
+                if saved_iters is not None:
+                    optimizer.iterations.assign(int(saved_iters))
+
+                logger.info(
+                    "Restored optimizer state (iterations=%s).",
+                    saved_iters,
+                )
+            else:
+                logger.warning(
+                    "optimizer_state.npz not found. "
+                    "Optimizer starts fresh."
+                )
+
+        # ---- Per-batch multi-scale config ---------------------------------
+        multi_scale_config = None
+        if (
+            config.multi_scale
+            and not config.do_random_resize_via_padding
+        ):
+            ms_scales = compute_multi_scale_scales(
+                self.model_config.resolution,
+                config.expanded_scales,
+                self.model_config.patch_size,
+                self.model_config.num_windows,
+            )
+            multi_scale_config = {"scales": ms_scales}
+
+        # ---- Drop path schedule ------------------------------------------
+        drop_path_schedule = None
+        vit_encoder_num_layers = None
+        if getattr(config, "drop_path", 0.0) > 0:
+            drop_path_schedule = build_drop_schedule(
+                config.drop_path,
+                config.epochs,
+                num_training_steps,
+            )
+            vit_encoder_num_layers = (
+                model.backbone.backbone.encoder.encoder.encoder.num_hidden_layers
+            )
+
+        dropout_schedule = None
+        if getattr(config, "dropout", 0.0) > 0:
+            dropout_schedule = build_drop_schedule(
+                config.dropout,
+                config.epochs,
+                num_training_steps,
+            )
+
         # ---- Epoch loop ---------------------------------------------------
         start_time = time.time()
 
-        for epoch in range(config.epochs):
+        # Get COCO ground truth for validation evaluation
+        coco_gt = None
+        if data_loader_val is not None:
+            dataset_val = data_loader_val.dataset
+            if hasattr(dataset_val, "coco"):
+                coco_gt = dataset_val.coco
+
+        for epoch in range(start_epoch, config.epochs):
             epoch_start = time.time()
             print(f"\nEpoch [{epoch}/{config.epochs}]")
 
@@ -270,16 +467,38 @@ class RFDETR:
                     num_steps=num_training_steps,
                     epoch=epoch,
                     clip_max_norm=config.clip_max_norm,
+                    lr_multipliers=lr_multipliers,
+                    ema_m=ema_m,
+                    grad_accum_steps=config.grad_accum_steps,
+                    multi_scale_config=multi_scale_config,
+                    drop_path_schedule=drop_path_schedule,
+                    dropout_schedule=dropout_schedule,
+                    vit_encoder_num_layers=vit_encoder_num_layers,
+                    amp=getattr(config, "amp", False),
                 )
-
-            # Update exponential moving average after each epoch
-            if ema_m is not None:
-                ema_m.update(model)
 
             # Save periodic checkpoints
             if config.output_dir:
                 ckpt_path = output_dir / "checkpoint.weights.h5"
                 model.save_weights(str(ckpt_path))
+
+                # Save optimizer state
+                opt_state = {
+                    v.path: v.numpy()
+                    for v in optimizer.variables
+                }
+                np.savez(
+                    str(output_dir / "optimizer_state.npz"),
+                    **opt_state,
+                )
+
+                # Save EMA weights
+                if ema_m is not None:
+                    np.savez(
+                        str(output_dir / "ema_weights.npz"),
+                        **ema_m.model_weights,
+                    )
+
                 if (epoch + 1) % config.checkpoint_interval == 0:
                     model.save_weights(
                         str(output_dir / f"checkpoint{epoch:04}.weights.h5")
@@ -291,11 +510,97 @@ class RFDETR:
                 "epoch": epoch,
             }
 
-            # Update best metrics
-            train_loss = train_stats.get("loss", train_stats.get("train_loss", 0.0))
-            _isbest = best_map_holder.update(train_loss, epoch, is_ema=False)
+            # ---- COCO evaluation on validation set ----
+            map_regular = 0.0
+            if data_loader_val is not None and coco_gt is not None:
+                test_stats, coco_evaluator = evaluate_model(
+                    model, criterion, postprocess, data_loader_val,
+                    coco_gt, config=config,
+                )
+                log_stats.update(
+                    {f"test_{k}": v for k, v in test_stats.items()}
+                )
+
+                if not config.segmentation_head:
+                    map_regular = test_stats.get(
+                        "coco_eval_bbox", [0.0]
+                    )[0]
+                else:
+                    map_regular = test_stats.get(
+                        "coco_eval_masks", [0.0]
+                    )[0]
+
+            is_best_regular = best_map_holder.update(
+                map_regular, epoch, is_ema=False,
+            )
+
+            # Save best-regular checkpoint when the metric improves
+            if is_best_regular and config.output_dir:
+                model.save_weights(
+                    str(output_dir / "checkpoint_best_regular.weights.h5")
+                )
+
+            # EMA evaluation
+            if ema_m is not None and config.use_ema:
+                # Apply EMA weights, evaluate, then restore
+                original_weights = {
+                    w.path: w.numpy().copy() for w in model.weights
+                }
+                ema_m.apply_to(model)
+
+                map_ema = 0.0
+                if data_loader_val is not None and coco_gt is not None:
+                    ema_test_stats, _ = evaluate_model(
+                        model, criterion, postprocess, data_loader_val,
+                        coco_gt, config=config,
+                    )
+                    log_stats.update(
+                        {f"ema_test_{k}": v
+                         for k, v in ema_test_stats.items()}
+                    )
+                    if not config.segmentation_head:
+                        map_ema = ema_test_stats.get(
+                            "coco_eval_bbox", [0.0]
+                        )[0]
+                    else:
+                        map_ema = ema_test_stats.get(
+                            "coco_eval_masks", [0.0]
+                        )[0]
+
+                is_best_ema = best_map_holder.update(
+                    map_ema, epoch, is_ema=True,
+                )
+                if is_best_ema and config.output_dir:
+                    model.save_weights(
+                        str(output_dir / "checkpoint_best_ema.weights.h5")
+                    )
+                # Restore original (non-EMA) weights
+                for w in model.weights:
+                    if w.path in original_weights:
+                        w.assign(original_weights[w.path])
 
             log_stats.update(best_map_holder.summary())
+
+            # Save training state for resume
+            if config.output_dir:
+                training_state = {
+                    "epoch": epoch,
+                    "optimizer_iterations": int(
+                        ops.convert_to_numpy(optimizer.iterations)
+                    ),
+                    "best_map_5095": float(
+                        best_map_holder.best_regular.best_res
+                        if config.use_ema
+                        else best_map_holder.best_all.best_res
+                    ),
+                    "best_map_ema_5095": float(
+                        best_map_holder.best_ema.best_res
+                        if config.use_ema
+                        else 0.0
+                    ),
+                }
+                with (output_dir / "training_state.json").open("w") as f:
+                    json.dump(training_state, f, indent=2)
 
             epoch_time = time.time() - epoch_start
             log_stats["epoch_time"] = str(
@@ -314,11 +619,47 @@ class RFDETR:
                 print(f"Early stopping at epoch {epoch}")
                 break
 
-        # ---- Post-training: apply EMA and fire callbacks ---------------
+        # ---- Post-training: merge LoRA, best checkpoint & apply EMA ----
         total_time = time.time() - start_time
         print(
             f"Training time {datetime.timedelta(seconds=int(total_time))}"
         )
+
+        # Merge LoRA weights into the base model
+        if getattr(config, "backbone_lora", False):
+            from paz.models.detection.dino_v2_object_detection.utils.lora import (
+                merge_lora_weights,
+            )
+            merge_lora_weights(model)
+            logger.info("Merged LoRA weights into base model.")
+            if config.output_dir:
+                merged_path = output_dir / "checkpoint_merged.weights.h5"
+                model.save_weights(str(merged_path))
+                logger.info("Saved merged checkpoint to %s", merged_path)
+
+        # Determine best-total: copy whichever best checkpoint is better
+        if config.output_dir:
+            best_regular_path = output_dir / "checkpoint_best_regular.weights.h5"
+            best_ema_path = output_dir / "checkpoint_best_ema.weights.h5"
+            best_total_path = output_dir / "checkpoint_best_total.weights.h5"
+
+            if config.use_ema and ema_m is not None:
+                reg_val = best_map_holder.best_regular.best_res
+                ema_val = best_map_holder.best_ema.best_res
+                best_is_ema = best_map_holder.best_ema.isbetter(
+                    ema_val, reg_val,
+                )
+                if best_is_ema and best_ema_path.exists():
+                    shutil.copy2(str(best_ema_path), str(best_total_path))
+                elif best_regular_path.exists():
+                    shutil.copy2(
+                        str(best_regular_path), str(best_total_path),
+                    )
+            else:
+                if best_regular_path.exists():
+                    shutil.copy2(
+                        str(best_regular_path), str(best_total_path),
+                    )
 
         # Apply EMA weights to the model if available
         if ema_m is not None:
@@ -334,6 +675,11 @@ class RFDETR:
     def _build_data_loader(config, split, all_kwargs):
         """Build a COCO-format data loader from ``dataset_dir``.
 
+        For training splits, applies small-dataset oversampling when the
+        dataset has fewer samples than ``batch_size * grad_accum_steps *
+        min_batches``.  When ``num_workers > 0``, wraps the loader with
+        a prefetching thread pool.
+
         Returns ``None`` if the annotation file does not exist, letting
         the caller fall back to an alternative pipeline.
 
@@ -343,25 +689,92 @@ class RFDETR:
             all_kwargs (dict): Extra keyword arguments (used for ``resolution``).
 
         Returns:
-            _COCODataLoader or None: The data loader, or ``None``.
+            COCOBatchLoader or PrefetchBatchLoader or None.
         """
+        import logging
+        import multiprocessing
+        import warnings
+        from paz.models.detection.dino_v2_object_detection.datasets import (
+            build_dataset,
+            COCOBatchLoader,
+        )
+        from paz.models.detection.dino_v2_object_detection.datasets.coco import (
+            PrefetchBatchLoader,
+        )
+
+        _logger = logging.getLogger(__name__)
+
         if not config.dataset_dir:
             return None
-        split_dir = os.path.join(config.dataset_dir, split)
-        ann_file = os.path.join(split_dir, "_annotations.coco.json")
-        if not os.path.isfile(ann_file):
-            # For "val" split try "valid" (roboflow convention)
-            if split == "val":
-                split_dir = os.path.join(config.dataset_dir, "valid")
-                ann_file = os.path.join(split_dir, "_annotations.coco.json")
-            if not os.path.isfile(ann_file):
-                return None
-        return _COCODataLoader(
-            ann_file=ann_file,
-            img_dir=split_dir,
-            batch_size=config.batch_size * config.grad_accum_steps,
-            resolution=all_kwargs.get("resolution", 560),
+
+        # Build a lightweight namespace for the dataset builder
+        class _Args:
+            dataset_file = config.dataset_file
+            dataset_dir = config.dataset_dir
+            square_resize_div_64 = config.square_resize_div_64
+            multi_scale = config.multi_scale if split == "train" else False
+            expanded_scales = config.expanded_scales
+            do_random_resize_via_padding = config.do_random_resize_via_padding
+            patch_size = all_kwargs.get("patch_size", 14)
+            num_windows = all_kwargs.get("num_windows", 4)
+            segmentation_head = getattr(config, "segmentation_head", False)
+
+        resolution = all_kwargs.get("resolution", 560)
+        try:
+            dataset = build_dataset(split, _Args(), resolution)
+        except (AssertionError, FileNotFoundError):
+            return None
+
+        effective_batch_size = config.batch_size * config.grad_accum_steps
+        replacement = False
+        num_samples = None
+
+        # Small-dataset oversampling (train split only)
+        if split == "train":
+            min_batches = 5
+            if len(dataset) < effective_batch_size * min_batches:
+                _logger.info(
+                    "Training with uniform sampler because dataset is too "
+                    "small: %d < %d",
+                    len(dataset), effective_batch_size * min_batches,
+                )
+                replacement = True
+                num_samples = effective_batch_size * min_batches
+
+        loader = COCOBatchLoader(
+            dataset,
+            batch_size=effective_batch_size,
+            shuffle=(split == "train"),
+            drop_last=(split == "train"),
+            replacement=replacement,
+            num_samples=num_samples,
         )
+
+        # Multi-process prefetching
+        num_workers = getattr(config, "num_workers", 0)
+        if num_workers > 0:
+            # Safety check for spawn start method
+            start_method = multiprocessing.get_start_method(allow_none=True)
+            if start_method == "spawn":
+                try:
+                    import __main__
+                    if (not hasattr(__main__, "__file__")
+                            or __main__.__name__ != "__main__"):
+                        warnings.warn(
+                            "Setting num_workers to 0 because the script is "
+                            "not wrapped in `if __name__ == '__main__':`. "
+                            "This is required for multiprocessing with the "
+                            "'spawn' start method.",
+                            RuntimeWarning,
+                        )
+                        num_workers = 0
+                except Exception:
+                    num_workers = 0
+
+        if num_workers > 0:
+            loader = PrefetchBatchLoader(loader, num_workers=num_workers)
+
+        return loader
 
     # ---- predict ---------------------------------------------------------
 
@@ -400,96 +813,6 @@ class RFDETR:
     @property
     def resolution(self):
         return self.model_config.resolution
-
-
-# ---------------------------------------------------------------------------
-# Minimal COCO data-loader (backend agnostic, numpy-based)
-# ---------------------------------------------------------------------------
-
-
-class _COCODataLoader:
-    """Thin data loader that reads COCO annotation JSON + images.
-
-    Yields ``(images_np, targets)`` tuples where ``images_np`` is
-    ``(B, H, W, 3)`` float32 and ``targets`` is a list of dicts with
-    ``labels`` and ``boxes`` numpy arrays.
-    """
-
-    def __init__(self, ann_file, img_dir, batch_size, resolution):
-        with open(ann_file, "r") as f:
-            self._coco = json.load(f)
-        self._img_dir = img_dir
-        self._batch_size = batch_size
-        self._resolution = resolution
-
-        # Build mappings
-        self._images = {img["id"]: img for img in self._coco["images"]}
-        self._img_ids = list(self._images.keys())
-
-        self._anns_by_img = defaultdict(list)
-        for ann in self._coco.get("annotations", []):
-            self._anns_by_img[ann["image_id"]].append(ann)
-
-    def __len__(self):
-        return max(1, math.ceil(len(self._img_ids) / self._batch_size))
-
-    def __iter__(self):
-        indices = np.random.permutation(len(self._img_ids))
-        for start in range(0, len(indices), self._batch_size):
-            batch_idx = indices[start : start + self._batch_size]
-            images, targets = [], []
-            for idx in batch_idx:
-                img_id = self._img_ids[idx]
-                img_info = self._images[img_id]
-                img_path = os.path.join(self._img_dir, img_info["file_name"])
-                img_np = self._load_and_resize(img_path)
-                images.append(img_np)
-
-                anns = self._anns_by_img.get(img_id, [])
-                boxes, labels = [], []
-                for ann in anns:
-                    x, y, w, h = ann["bbox"]
-                    # Convert to cxcywh normalised
-                    cx = (x + w / 2) / img_info["width"]
-                    cy = (y + h / 2) / img_info["height"]
-                    nw = w / img_info["width"]
-                    nh = h / img_info["height"]
-                    boxes.append([cx, cy, nw, nh])
-                    labels.append(ann["category_id"])
-
-                targets.append(
-                    {
-                        "labels": np.array(labels, dtype="int64"),
-                        "boxes": np.array(boxes, dtype="float32").reshape(-1, 4),
-                    }
-                )
-            images_np = np.stack(images).astype("float32")
-            yield images_np, targets
-
-    def _load_and_resize(self, path):
-        """Load an image, resize to ``resolution``, and normalise to [0, 1].
-
-        ImageNet channel means and standard deviations are applied after
-        dividing by 255.
-
-        Args:
-            path (str): Path to the image file.
-
-        Returns:
-            np.ndarray: ``(H, W, 3)`` float32 normalised image.
-        """
-        from PIL import Image as PILImage
-
-        img = PILImage.open(path).convert("RGB")
-        img = img.resize(
-            (self._resolution, self._resolution), PILImage.BILINEAR
-        )
-        arr = np.asarray(img, dtype="float32") / 255.0
-        # Normalise with ImageNet channel statistics
-        means = np.array([0.485, 0.456, 0.406], dtype="float32")
-        stds = np.array([0.229, 0.224, 0.225], dtype="float32")
-        arr = (arr - means) / stds
-        return arr
 
 
 # ---------------------------------------------------------------------------
