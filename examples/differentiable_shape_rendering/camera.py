@@ -1,6 +1,3 @@
-# import jax
-
-# jax.config.update("jax_platform_name", "cpu")
 import jax.numpy as jp
 import paz
 
@@ -35,7 +32,7 @@ button_shift = paz.SE3.translation(jp.array([2.0, 1.5, 0.0]))
 button_scale = paz.SE3.scaling(jp.array([0.2, 0.2, 0.2]))
 button = paz.graphics.Cylinder(button_shift @ button_scale, red_material)
 
-viewfinder_shift = paz.SE3.translation(jp.array([1.9, 1.1, 1.0]))
+viewfinder_shift = paz.SE3.translation(jp.array([1.9, 1.1, 0.9]))
 viewfinder_scale = paz.SE3.scaling(jp.array([0.4, 0.2, 0.1]))
 viewfinder_transform = viewfinder_shift @ viewfinder_scale
 viewfinder = paz.graphics.Cube(viewfinder_transform, white_material)
@@ -50,4 +47,5 @@ world_to_camera = paz.SE3.view_transform(
     world_up=jp.array([0.0, 1.0, 0.0]),
 )
 paz.graphics.scene.show(scene)
+paz.graphics.save("assets/camera", camera)
 paz.graphics.viewer(scene, world_to_camera, True)

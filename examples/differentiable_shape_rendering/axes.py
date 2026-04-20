@@ -31,8 +31,9 @@ head_z = paz.graphics.Cone(rotate_in_x @ head_transform, B_material)
 
 sphere = paz.graphics.Sphere(paz.SE3.translation(jp.array([0.0, 2.0, 0.0])))
 
-scene = [origin, line_x, head_x, line_y, head_y, line_z, head_z]
-scene = paz.graphics.Scene(scene)
+axes = [origin, line_x, head_x, line_y, head_y, line_z, head_z]
+axes = paz.graphics.Group(axes)
+scene = paz.graphics.Scene([axes])
 camera_pose = paz.SE3.view_transform(
     camera_origin=jp.array([10.0, 10.0, 10.0]),
     target_origin=jp.array([0.0, 0.0, 0.0]),
@@ -44,4 +45,5 @@ H, W, y_FOV = 480, 640, jp.pi / 4.0
 rays = paz.graphics.camera.build_rays((H, W), y_FOV, camera_pose)
 render_args = ((H, W), camera_pose, rays, scene, light, None, False)
 image, depth = paz.graphics.render(*render_args)
+paz.graphics.save("assets/axes", axes)
 paz.image.show(paz.image.denormalize(image))
