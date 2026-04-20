@@ -1,9 +1,6 @@
-from jax.experimental.compilation_cache.compilation_cache import set_cache_dir
 import jax.numpy as jp
 import jax
 import paz
-
-set_cache_dir(paz.logger.make_directory("cache"))
 
 GREEN = (85 / 255, 181 / 255, 103 / 255)  # YlGnL
 GRAY = (0.662, 0.647, 0.576)
@@ -77,12 +74,6 @@ floor = paz.graphics.Plane()
 scene = paz.graphics.Scene([shape_01, shape_02, shape_03, shape_04, floor])
 image, depth = render(scene=scene, mask=None)
 paz.image.show(paz.image.denormalize(image))
-
-
-def compute_loss(true_image, parameters):
-    pred_image = render(parameters)
-    return jp.mean((true_image - pred_image) ** 2)
-
 
 key = jax.random.PRNGKey(0)
 for key in jax.random.split(key, 3):
