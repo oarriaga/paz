@@ -60,6 +60,13 @@ from .tile import (
     tile_render_masks,
     transform_tile_rays,
 )
+from .silhouette import (
+    build_pixel_coordinates,
+    build_tile_pixel_coordinates,
+    compute_face_alpha,
+    render_soft_mask,
+    tile_render_soft_mask,
+)
 from .builders import (
     build_cube,
     build_sphere,
