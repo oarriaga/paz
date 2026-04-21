@@ -14,7 +14,9 @@ EPSILON = 1e-8
 def compute_f(edges_AC, edges_AB, ray_directions):
     directions_cross_edges_AC = jp.cross(ray_directions, edges_AC)
     determinants = paz.algebra.dot(edges_AB, directions_cross_edges_AC)
-    f = 1.0 / (determinants + EPSILON)
+    valid = jp.abs(determinants) > EPSILON
+    safe_determinants = jp.where(valid, determinants, 1.0)
+    f = jp.where(valid, 1.0 / safe_determinants, 0.0)
     return f, directions_cross_edges_AC
 
 
@@ -29,6 +31,7 @@ def intersect_canonical_mesh(vertices, faces, ray_origins, ray_directions):
     hit_mask_v = jp.logical_not(jp.logical_or(v < 0.0, (u + v) > 1.0))
     hit_mask = jp.logical_and(hit_mask_u, hit_mask_v)
     depth = f * paz.algebra.dot(edges_AC, origins_cross_edge_1)
+    hit_mask = jp.logical_and(hit_mask, depth > EPSILON)
     depth = jp.where(hit_mask, depth, FARAWAY)
     return hit_mask, depth, u, v
 
@@ -43,7 +46,7 @@ def _pad_to_chunks(faces, chunk_size):
 
 
 def _select_closest(hit_mask, depth, u, v):
-    best = jp.argmin(depth, axis=0)
+    best = jp.argmin(depth, axis=0).astype(jp.int32)
     idx = jp.expand_dims(best, 0)
     take = lambda x: jp.take_along_axis(x, idx, 0)[0]
     return take(hit_mask), take(depth), take(u), take(v), best
@@ -89,7 +92,7 @@ def intersect_chunked(vertices, faces, rays, chunk_size=1024):
     padded = _pad_to_chunks(faces, chunk_size)
     num_chunks = padded.shape[0] // chunk_size
     chunks = jp.reshape(padded, (num_chunks, chunk_size, 3))
-    offsets = jp.arange(num_chunks) * chunk_size
+    offsets = jp.arange(num_chunks, dtype=jp.int32) * chunk_size
     init = _init_carry(rays[0].shape[0])
     step = partial(_chunk_step, vertices=vertices, rays=rays)
     carry, _ = jax.lax.scan(step, init, (chunks, offsets))
@@ -100,5 +103,6 @@ def intersect_chunked(vertices, faces, rays, chunk_size=1024):
 
 def intersect_mesh(mesh, ray_origins, ray_directions, chunk_size=1024):
     world_to_shape = jp.linalg.inv(mesh.transform)
-    rays = paz.algebra.transform_rays(world_to_shape, ray_origins, ray_directions)
+    args = (world_to_shape, ray_origins, ray_directions)
+    rays = paz.algebra.transform_rays(*args)
     return intersect_chunked(mesh.vertices, mesh.faces, rays, chunk_size)
