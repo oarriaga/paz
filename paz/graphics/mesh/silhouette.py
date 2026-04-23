@@ -13,6 +13,7 @@ from paz.graphics.mesh.tile import make_tile_coordinates
 
 Projection = namedtuple("Projection", "points depths")
 Fragments = namedtuple("Fragments", "depths distances valid")
+BinArgs = namedtuple("BinArgs", "size max_faces")
 
 BLEND_EPSILON = 1e-4
 FACES_PER_PIXEL = 50
@@ -37,6 +38,21 @@ def tile_render_soft_mask(tile_shape, y_fov, H, W, pose, mesh, sigma, chunk):
     return assemble(H, W, H_tiles, W_tiles, masks)[..., 0]
 
 
+def tile_render_binned_soft_mask(bins, y_fov, H, W, pose, mesh, sigma, chunk):
+    assert_exact_tile_side(H, bins.size)
+    assert_exact_tile_side(W, bins.size)
+    H_bins, W_bins = H // bins.size, W // bins.size
+    projection = project_mesh_vertices(mesh, pose, H, W, y_fov)
+    args = (projection, mesh.faces, H, W, sigma, bins)
+    bin_faces, bin_valid = build_bin_faces(*args)
+    args = (H, W, H_bins, W_bins, projection, sigma, chunk)
+    args = args + (bin_faces, bin_valid)
+    render_bin = partial(render_binned_soft_mask_tile, *args)
+    bin_coordinates = make_tile_coordinates(H_bins, W_bins)
+    masks = jax.lax.scan(render_bin, None, bin_coordinates)[1]
+    return assemble(H, W, H_bins, W_bins, masks)[..., 0]
+
+
 def render_soft_mask_tile(*args):
     H, W, H_tiles, W_tiles, y_fov, pose, mesh, sigma, chunk = args[:9]
     carry, tile_arg = args[9:]
@@ -47,6 +63,41 @@ def render_soft_mask_tile(*args):
     mask = render_soft_mask_pixels(*args)
     mask = jp.reshape(mask, (tile_H, tile_W, 1))
     return carry, mask
+
+
+def render_binned_soft_mask_tile(*args):
+    H, W, H_bins, W_bins, projection, sigma, chunk = args[:7]
+    bin_faces, bin_valid, carry, bin_arg = args[7:]
+    bin_id = bin_arg[1] * W_bins + bin_arg[0]
+    pixels = build_tile_pixel_coordinates(H, W, H_bins, W_bins, bin_arg)
+    tile_shape = (bin_side(H, H_bins), bin_side(W, W_bins), 1)
+    data = (bin_faces[bin_id], bin_valid[bin_id], pixels)
+    run_bin = partial(render_active_bin, projection=projection, sigma=sigma)
+    run_bin = partial(run_bin, chunk=chunk, tile_shape=tile_shape)
+    empty_bin = partial(render_empty_bin, tile_shape=tile_shape)
+    active = jp.any(bin_valid[bin_id])
+    return jax.lax.cond(active, run_bin, empty_bin, data)
+
+
+def render_active_bin(data, projection, sigma, chunk, tile_shape):
+    bin_faces, bin_valid, pixels = data
+    faces, valid = pad_binned_faces(bin_faces, bin_valid, chunk)
+    num_chunks = faces.shape[0] // chunk
+    faces = jp.reshape(faces, (num_chunks, chunk, 3))
+    valid = jp.reshape(valid, (num_chunks, chunk))
+    fragments = build_empty_fragments(pixels.shape[0])
+    blur = compute_blur_radius(sigma)
+    step = partial(fragment_chunk_or_empty_step, projection=projection)
+    step = partial(step, pixels=pixels)
+    step = partial(step, blur=blur)
+    fragments, _ = jax.lax.scan(step, fragments, (faces, valid))
+    mask = blend_fragments(fragments.distances, fragments.valid, sigma)
+    mask = jp.reshape(mask, tile_shape)
+    return None, mask
+
+
+def render_empty_bin(data, tile_shape):
+    return None, jp.zeros(tile_shape)
 
 
 def render_soft_mask_pixels(pixels, H, W, pose, mesh, y_fov, sigma, chunk):
@@ -61,6 +112,93 @@ def render_soft_mask_pixels(pixels, H, W, pose, mesh, y_fov, sigma, chunk):
     step = partial(step, blur=blur)
     fragments, _ = jax.lax.scan(step, init, (faces, valid))
     return blend_fragments(fragments.distances, fragments.valid, sigma)
+
+
+def count_binned_faces(image_shape, pose, mesh, y_fov, sigma, bins):
+    H, W = image_shape
+    projection = project_mesh_vertices(mesh, pose, H, W, y_fov)
+    face_points = projection.points[mesh.faces]
+    face_depths = projection.depths[mesh.faces]
+    overlap = compute_bin_overlaps(face_points, face_depths, H, W, sigma, bins)
+    return jp.sum(overlap, axis=1)
+
+
+def build_bin_faces(projection, faces, H, W, sigma, bins):
+    max_faces = min(bins.max_faces, faces.shape[0])
+    face_points = projection.points[faces]
+    face_depths = projection.depths[faces]
+    overlap = compute_bin_overlaps(face_points, face_depths, H, W, sigma, bins)
+    face_args = jp.arange(faces.shape[0])
+    scores = jp.where(overlap, faces.shape[0] - face_args[None, :], -1)
+    _, indices = jax.lax.top_k(scores, max_faces)
+    valid = jp.take_along_axis(overlap, indices, axis=1)
+    return faces[indices], valid
+
+
+def pad_binned_faces(faces, valid, chunk):
+    remainder = faces.shape[0] % chunk
+    if remainder == 0:
+        return faces, valid
+    pad = chunk - remainder
+    faces = jp.concatenate([faces, jp.repeat(faces[-1:], pad, axis=0)])
+    valid = jp.concatenate([valid, jp.zeros((pad,), dtype=bool)])
+    return faces, valid
+
+
+def compute_bin_overlaps(face_points, face_depths, H, W, sigma, bins):
+    x_min, x_max, y_min, y_max = compute_face_boxes(face_points, sigma)
+    bin_boxes = build_bin_boxes(H, W, bins.size)
+    bin_x_min, bin_x_max, bin_y_min, bin_y_max = bin_boxes
+    left = x_min[None] <= bin_x_max[:, None]
+    right = bin_x_min[:, None] <= x_max[None]
+    x_hit = jp.logical_and(left, right)
+    lower = y_min[None] <= bin_y_max[:, None]
+    upper = bin_y_min[:, None] <= y_max[None]
+    y_hit = jp.logical_and(lower, upper)
+    valid = compute_valid_projected_faces(face_points, face_depths)
+    return jp.logical_and(jp.logical_and(x_hit, y_hit), valid[None])
+
+
+def compute_face_boxes(face_points, sigma):
+    radius = jp.sqrt(compute_blur_radius(sigma))
+    x, y = face_points[..., 0], face_points[..., 1]
+    x_min, x_max = jp.min(x, axis=1) - radius, jp.max(x, axis=1) + radius
+    y_min, y_max = jp.min(y, axis=1) - radius, jp.max(y, axis=1) + radius
+    return x_min, x_max, y_min, y_max
+
+
+def compute_valid_projected_faces(face_points, face_depths):
+    A, B, C = face_points[:, 0], face_points[:, 1], face_points[:, 2]
+    area = edge_function(C, A, B)
+    return valid_faces(area, face_depths)
+
+
+def build_bin_boxes(H, W, bin_size):
+    x_min, x_max = build_x_bin_bounds(H, W, bin_size)
+    y_min, y_max = build_y_bin_bounds(H, W, bin_size)
+    x_min, y_min = jp.meshgrid(x_min, y_min)
+    x_max, y_max = jp.meshgrid(x_max, y_max)
+    return jp.ravel(x_min), jp.ravel(x_max), jp.ravel(y_min), jp.ravel(y_max)
+
+
+def build_x_bin_bounds(H, W, bin_size):
+    base = jp.minimum(H, W)
+    cols = jp.arange(W // bin_size)
+    low = cols * bin_size + 0.5
+    high = (cols + 1) * bin_size - 0.5
+    return (low - W / 2.0) * 2.0 / base, (high - W / 2.0) * 2.0 / base
+
+
+def build_y_bin_bounds(H, W, bin_size):
+    base = jp.minimum(H, W)
+    rows = jp.arange(H // bin_size)
+    high = rows * bin_size + 0.5
+    low = (rows + 1) * bin_size - 0.5
+    return (H / 2.0 - low) * 2.0 / base, (H / 2.0 - high) * 2.0 / base
+
+
+def bin_side(image_size, num_bins):
+    return image_size // num_bins
 
 
 def build_empty_fragments(num_pixels):
@@ -81,6 +219,20 @@ def fragment_chunk_step(fragments, data, projection, pixels, blur):
     candidates = jp.logical_and(candidates, valid[:, None])
     fragments = merge_fragments(fragments, distances, depths, candidates)
     return fragments, None
+
+
+def fragment_chunk_or_empty_step(fragments, data, projection, pixels, blur):
+    args = (fragments, data, projection, pixels, blur)
+    active = jp.any(data[1])
+    return jax.lax.cond(active, run_fragment_chunk, skip_fragment_chunk, args)
+
+
+def run_fragment_chunk(args):
+    return fragment_chunk_step(*args)
+
+
+def skip_fragment_chunk(args):
+    return args[0], None
 
 
 def compute_face_fragments(face_points, face_depths, pixels, blur):

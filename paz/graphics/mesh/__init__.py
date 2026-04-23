@@ -61,10 +61,13 @@ from .tile import (
     transform_tile_rays,
 )
 from .silhouette import (
+    BinArgs,
     build_pixel_coordinates,
     build_tile_pixel_coordinates,
+    count_binned_faces,
     compute_face_alpha,
     render_soft_mask,
+    tile_render_binned_soft_mask,
     tile_render_soft_mask,
 )
 from .builders import (

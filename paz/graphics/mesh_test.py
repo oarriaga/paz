@@ -9,9 +9,12 @@ from paz.graphics.camera import build_rays
 from paz.graphics.mesh.silhouette import blend_fragments
 from paz.graphics.mesh.silhouette import build_empty_fragments
 from paz.graphics.mesh.silhouette import compute_face_fragments
+from paz.graphics.mesh.silhouette import fragment_chunk_or_empty_step
 from paz.graphics.mesh.silhouette import merge_fragments
+from paz.graphics.mesh.silhouette import Projection
 from paz.graphics.mesh import (
     Mesh,
+    BinArgs,
     render,
     render_mesh,
     merge_meshes,
@@ -35,7 +38,9 @@ from paz.graphics.mesh import (
     tile_render,
     tile_render_depth,
     render_soft_mask,
+    tile_render_binned_soft_mask,
     tile_render_soft_mask,
+    count_binned_faces,
     assert_exact_tile_side,
     make_tile_coordinates,
     make_ray_origins,
@@ -574,6 +579,45 @@ def test_tile_render_soft_mask_matches_untiled():
     args = ((2, 2), jp.pi / 3.0, 16, 16, jp.eye(4), mesh, 1e-4, 2)
     actual = tile_render_soft_mask(*args)
     assert jp.allclose(actual, expected, atol=1e-5)
+
+
+def test_tile_render_binned_soft_mask_matches_untiled():
+    mesh = make_soft_square_mesh()
+    expected = render_soft_mask(*build_soft_shift_args(0.0))
+    args = (BinArgs(8, 2), jp.pi / 3.0, 16, 16, jp.eye(4), mesh)
+    args = args + (1e-4, 2)
+    actual = tile_render_binned_soft_mask(*args)
+    assert jp.allclose(actual, expected, atol=1e-5)
+
+
+def test_binned_soft_mask_matches_untiled_with_empty_bins():
+    mesh = make_soft_square_mesh()
+    args = ((32, 32), jp.eye(4), mesh, jp.pi / 3.0, 1e-4, 2)
+    expected = render_soft_mask(*args)
+    args = (BinArgs(8, 2), jp.pi / 3.0, 32, 32, jp.eye(4), mesh)
+    args = args + (1e-4, 2)
+    actual = tile_render_binned_soft_mask(*args)
+    assert jp.allclose(actual, expected, atol=1e-5)
+
+
+def test_empty_fragment_chunk_keeps_fragments():
+    fragments = build_empty_fragments(1)
+    points = jp.zeros((3, 2))
+    projection = Projection(points, jp.ones(3))
+    data = (jp.array([[0, 1, 2]]), jp.array([False]))
+    pixels = jp.zeros((1, 2))
+    args = (fragments, data, projection, pixels, 1.0)
+    result, _ = fragment_chunk_or_empty_step(*args)
+    assert jp.allclose(result.depths, fragments.depths)
+    assert jp.allclose(result.distances, fragments.distances)
+    assert jp.all(result.valid == fragments.valid)
+
+
+def test_count_binned_faces_counts_overlaps():
+    mesh = make_soft_square_mesh()
+    args = ((16, 16), jp.eye(4), mesh, jp.pi / 3.0, 1e-4, BinArgs(8, 2))
+    counts = count_binned_faces(*args)
+    assert jp.max(counts) == 2
 
 
 def test_render_soft_mask_is_chunk_invariant():
