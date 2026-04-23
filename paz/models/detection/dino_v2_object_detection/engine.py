@@ -294,7 +294,7 @@ def train_one_epoch(
             # ==============================================================
             # Phase 1 – Eager forward + Hungarian matching
             # ==============================================================
-            outputs_eager = model(model_input, training=False)
+            outputs_eager = model(model_input, training=True)
 
             outputs_for_match = {
                 k: v for k, v in outputs_eager.items()
