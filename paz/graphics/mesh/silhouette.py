@@ -19,25 +19,6 @@ BLEND_EPSILON = 1e-4
 FACES_PER_PIXEL = 50
 
 
-def render_soft_mask(image_shape, pose, mesh, y_fov, sigma, chunk):
-    H, W = image_shape
-    pixels = build_pixel_coordinates(H, W)
-    args = (pixels, H, W, pose, mesh, y_fov, sigma, chunk)
-    mask = render_soft_mask_pixels(*args)
-    return jp.reshape(mask, (H, W))
-
-
-def tile_render_soft_mask(tile_shape, y_fov, H, W, pose, mesh, sigma, chunk):
-    H_tiles, W_tiles = tile_shape
-    assert_exact_tile_side(H, H_tiles)
-    assert_exact_tile_side(W, W_tiles)
-    args = (H, W, H_tiles, W_tiles, y_fov, pose, mesh, sigma, chunk)
-    render_tile = partial(render_soft_mask_tile, *args)
-    tile_coordinates = make_tile_coordinates(H_tiles, W_tiles)
-    masks = jax.lax.scan(render_tile, None, tile_coordinates)[1]
-    return assemble(H, W, H_tiles, W_tiles, masks)[..., 0]
-
-
 def tile_render_binned_soft_mask(bins, y_fov, H, W, pose, mesh, sigma, chunk):
     assert_exact_tile_side(H, bins.size)
     assert_exact_tile_side(W, bins.size)
@@ -51,18 +32,6 @@ def tile_render_binned_soft_mask(bins, y_fov, H, W, pose, mesh, sigma, chunk):
     bin_coordinates = make_tile_coordinates(H_bins, W_bins)
     masks = jax.lax.scan(render_bin, None, bin_coordinates)[1]
     return assemble(H, W, H_bins, W_bins, masks)[..., 0]
-
-
-def render_soft_mask_tile(*args):
-    H, W, H_tiles, W_tiles, y_fov, pose, mesh, sigma, chunk = args[:9]
-    carry, tile_arg = args[9:]
-    tile_H = H // H_tiles
-    tile_W = W // W_tiles
-    pixels = build_tile_pixel_coordinates(H, W, H_tiles, W_tiles, tile_arg)
-    args = (pixels, H, W, pose, mesh, y_fov, sigma, chunk)
-    mask = render_soft_mask_pixels(*args)
-    mask = jp.reshape(mask, (tile_H, tile_W, 1))
-    return carry, mask
 
 
 def render_binned_soft_mask_tile(*args):
@@ -98,20 +67,6 @@ def render_active_bin(data, projection, sigma, chunk, tile_shape):
 
 def render_empty_bin(data, tile_shape):
     return None, jp.zeros(tile_shape)
-
-
-def render_soft_mask_pixels(pixels, H, W, pose, mesh, y_fov, sigma, chunk):
-    projection = project_mesh_vertices(mesh, pose, H, W, y_fov)
-    faces, valid = pad_faces(mesh.faces, chunk)
-    num_chunks = faces.shape[0] // chunk
-    faces = jp.reshape(faces, (num_chunks, chunk, 3))
-    valid = jp.reshape(valid, (num_chunks, chunk))
-    init = build_empty_fragments(pixels.shape[0])
-    blur = compute_blur_radius(sigma)
-    step = partial(fragment_chunk_step, projection=projection, pixels=pixels)
-    step = partial(step, blur=blur)
-    fragments, _ = jax.lax.scan(step, init, (faces, valid))
-    return blend_fragments(fragments.distances, fragments.valid, sigma)
 
 
 def count_binned_faces(image_shape, pose, mesh, y_fov, sigma, bins):
@@ -274,14 +229,6 @@ def compute_blur_radius(sigma):
     return jp.log(1.0 / BLEND_EPSILON - 1.0) * sigma
 
 
-def compute_face_alpha(face_points, face_depths, pixels, sigma):
-    blur = compute_blur_radius(sigma)
-    args = (face_points, face_depths, pixels, blur)
-    distances, _, valid = compute_face_fragments(*args)
-    scale = jp.maximum(sigma, EPSILON)
-    return jp.where(valid, jax.nn.sigmoid(-distances / scale), 0.0)
-
-
 def project_mesh_vertices(mesh, pose, H, W, y_fov):
     world_vertices = paz.algebra.transform_points(mesh.transform, mesh.vertices)
     camera_vertices = paz.algebra.transform_points(pose, world_vertices)
@@ -351,23 +298,6 @@ def edge_function(point, start, end):
 
 def cross2D(left, right):
     return left[..., 0] * right[..., 1] - left[..., 1] * right[..., 0]
-
-
-def pad_faces(faces, chunk):
-    remainder = faces.shape[0] % chunk
-    valid = jp.ones((faces.shape[0],), dtype=bool)
-    if remainder == 0:
-        return faces, valid
-    pad = chunk - remainder
-    faces = jp.concatenate([faces, jp.repeat(faces[-1:], pad, axis=0)])
-    valid = jp.concatenate([valid, jp.zeros((pad,), dtype=bool)])
-    return faces, valid
-
-
-def build_pixel_coordinates(H, W, H_start=0, W_start=0):
-    cols = jp.arange(W) + W_start + 0.5
-    rows = jp.arange(H) + H_start + 0.5
-    return build_coordinates(H, W, rows, cols)
 
 
 def build_coordinates(H, W, rows, cols):

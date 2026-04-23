@@ -37,9 +37,7 @@ from paz.graphics.mesh import (
     build_sphere,
     tile_render,
     tile_render_depth,
-    render_soft_mask,
     tile_render_binned_soft_mask,
-    tile_render_soft_mask,
     count_binned_faces,
     assert_exact_tile_side,
     make_tile_coordinates,
@@ -564,39 +562,22 @@ def test_tile_render_depth_matches_render_depth():
     assert jp.allclose(depth, expected_depth, atol=1e-5)
 
 
-def test_render_soft_mask_returns_smooth_square():
-    mesh = make_soft_square_mesh()
-    mask = render_soft_mask(*build_soft_shift_args(0.0))
+def test_tile_render_binned_soft_mask_returns_smooth_square():
+    mask = render_binned_soft_shift(0.0)
     assert mask.shape == (16, 16)
     assert mask[8, 8] > 0.7
     assert mask[0, 0] < 0.1
 
 
-def test_tile_render_soft_mask_matches_untiled():
-    mesh = make_soft_square_mesh()
-    args = ((16, 16), jp.eye(4), mesh, jp.pi / 3.0, 1e-4, 2)
-    expected = render_soft_mask(*args)
-    args = ((2, 2), jp.pi / 3.0, 16, 16, jp.eye(4), mesh, 1e-4, 2)
-    actual = tile_render_soft_mask(*args)
+def test_tile_render_binned_soft_mask_matches_single_bin():
+    expected = render_binned_soft_shift(0.0, 16, 16)
+    actual = render_binned_soft_shift(0.0, 16, 8)
     assert jp.allclose(actual, expected, atol=1e-5)
 
 
-def test_tile_render_binned_soft_mask_matches_untiled():
-    mesh = make_soft_square_mesh()
-    expected = render_soft_mask(*build_soft_shift_args(0.0))
-    args = (BinArgs(8, 2), jp.pi / 3.0, 16, 16, jp.eye(4), mesh)
-    args = args + (1e-4, 2)
-    actual = tile_render_binned_soft_mask(*args)
-    assert jp.allclose(actual, expected, atol=1e-5)
-
-
-def test_binned_soft_mask_matches_untiled_with_empty_bins():
-    mesh = make_soft_square_mesh()
-    args = ((32, 32), jp.eye(4), mesh, jp.pi / 3.0, 1e-4, 2)
-    expected = render_soft_mask(*args)
-    args = (BinArgs(8, 2), jp.pi / 3.0, 32, 32, jp.eye(4), mesh)
-    args = args + (1e-4, 2)
-    actual = tile_render_binned_soft_mask(*args)
+def test_binned_soft_mask_matches_single_bin_with_empty_bins():
+    expected = render_binned_soft_shift(0.0, 32, 32)
+    actual = render_binned_soft_shift(0.0, 32, 8)
     assert jp.allclose(actual, expected, atol=1e-5)
 
 
@@ -620,19 +601,17 @@ def test_count_binned_faces_counts_overlaps():
     assert jp.max(counts) == 2
 
 
-def test_render_soft_mask_is_chunk_invariant():
-    mesh = make_soft_square_mesh()
-    args = ((16, 16), jp.eye(4), mesh, jp.pi / 3.0, 1e-4)
-    mask_A = render_soft_mask(*(args + (1,)))
-    mask_B = render_soft_mask(*(args + (2,)))
+def test_tile_render_binned_soft_mask_is_chunk_invariant():
+    mask_A = render_binned_soft_shift(0.0, chunk=1)
+    mask_B = render_binned_soft_shift(0.0, chunk=2)
     assert jp.allclose(mask_A, mask_B, atol=1e-5)
 
 
-def test_render_soft_mask_shift_gradient_matches_finite_difference():
-    target = render_soft_mask(*build_soft_shift_args(0.25))
+def test_tile_render_binned_shift_gradient_matches_finite_difference():
+    target = render_binned_soft_shift(0.25)
 
     def loss_fn(shift):
-        prediction = render_soft_mask(*build_soft_shift_args(shift[0]))
+        prediction = render_binned_soft_shift(shift[0])
         return jp.mean((prediction - target) ** 2)
 
     _, gradient = jax.value_and_grad(loss_fn)(jp.array([0.0]))
@@ -642,9 +621,12 @@ def test_render_soft_mask_shift_gradient_matches_finite_difference():
     assert cosine > 0.9
 
 
-def build_soft_shift_args(shift):
+def render_binned_soft_shift(shift, image_size=16, bin_size=8, chunk=2):
     mesh = make_soft_square_mesh(shift)
-    return (16, 16), jp.eye(4), mesh, jp.pi / 3.0, 1e-4, 2
+    bins = BinArgs(bin_size, mesh.faces.shape[0])
+    args = (bins, jp.pi / 3.0, image_size, image_size, jp.eye(4), mesh)
+    args = args + (1e-4, chunk)
+    return tile_render_binned_soft_mask(*args)
 
 
 def compute_finite_shift_gradient(loss_fn, shift):
