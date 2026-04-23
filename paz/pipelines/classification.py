@@ -4,6 +4,7 @@ from . import PreprocessImage
 from ..models.classification import MiniXception, VVAD_LRS3_LSTM, CNN2Plus1D
 from ..datasets import get_class_names
 from .keypoints import MinimalHandPoseEstimation
+import numpy as np
 
 
 # neutral, happiness, surprise, sadness, anger, disgust, fear, contempt
@@ -110,14 +111,29 @@ class ClassifyVVAD(SequentialProcessor):
         self.class_names = get_class_names('VVAD_LRS3')
 
         preprocess = PreprocessImage(input_size[1:3], (0.0, 0.0, 0.0))
-        preprocess.add(pr.BufferImages(input_size, stride=stride))
+        self.buffer_images = pr.BufferImages(input_size, stride=stride)
+        preprocess.add(self.buffer_images)
+
         self.add(pr.PredictWithNones(self.classifier, preprocess))
 
-        weighted_mean = average_type == 'weighted'
-        self.add(pr.ControlMap(pr.AveragePredictions(averaging_window_size, weighted_mean), [0], [0]))
+        weighted_mean = (average_type == 'weighted')
+        self.avg = pr.AveragePredictions(averaging_window_size, weighted_mean)
+        self.add(pr.ControlMap(self.avg, [0], [0]))
 
         self.add(pr.ControlMap(pr.NoneConverter(), [0], [0]))
         self.add(pr.CopyDomain([0], [1]))
         self.add(pr.ControlMap(pr.FloatToBoolean(), [0], [0]))
         self.add(pr.ControlMap(pr.BooleanToTextMessage(true_message=self.class_names[0], false_message=self.class_names[1]), [0], [0]))
         self.add(pr.WrapOutput(['class_name', 'scores']))
+    
+    def reset(self):
+        """Clear temporal state: clip buffer (BufferImages) and score window (AveragePredictions)."""
+        # BufferImages
+        self.buffer_images.frames_since_last_update = 0
+        self.buffer_images.buffer_index = 0
+        self.buffer_images.is_full = False
+        if isinstance(self.buffer_images.buffer, np.ndarray):
+            self.buffer_images.buffer[...] = 0
+
+        # AveragePredictions
+        self.avg.predictions.clear()

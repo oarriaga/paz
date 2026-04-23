@@ -924,13 +924,17 @@ class DetectVVAD(Processor):
         average_type: String. 'mean' or 'weighted'. How the predictions are averaged. Set averaging_window_size to 1 to
             disable averaging
     """
-    def __init__(self, architecture='CNN2Plus1D_Light', stride=10, averaging_window_size=6,
-                 average_type='weighted', offsets=[0, 0], colors=[[0, 255, 0], [255, 0, 0]]):
+
+    def __init__(self, architecture='CNN2Plus1D_Light', stride=2, averaging_window_size=3,
+                 average_type='weighted', offsets=[0,0], colors=[[0, 255, 0], [255, 0, 0]],min_frames=38,patience=5):
         super(DetectVVAD, self).__init__()
         self.offsets = offsets
         self.colors = colors
-
-        # detection
+        self.min_frames = int(min_frames)
+        self.patience = int(patience)
+        self.absent_counts = []
+        
+        #detection
         self.copy = pr.Copy()
         self.detect = HaarCascadeFrontalFace()
         self.square = SequentialProcessor()
@@ -939,13 +943,22 @@ class DetectVVAD(Processor):
         self.clip = pr.ClipBoxes2D()
         self.crop = pr.CropBoxes2D()
 
-        # classification
-        self.classify = ClassifyVVAD(stride=stride, averaging_window_size=averaging_window_size, average_type=str(average_type),
-                                     architecture=architecture)
+        
+        self.vvad_args = dict(
+            stride=stride,
+            averaging_window_size=averaging_window_size,
+            average_type=str(average_type),
+            architecture=architecture
+        )
+        self.classifiers = []  
+        self.adders = [] 
+        self.frame_counts = [] 
+        self.miss_counts  = []     
 
-        # drawing and wrapping
-        self.class_names = self.classify.class_names
-        self.add_class_and_score = pr.AddClassAndScoreToBoxes(self.classify)
+        _tmp = ClassifyVVAD(**self.vvad_args)
+        self.class_names = list(_tmp.class_names)  
+        del _tmp
+      
         self.draw = pr.DrawBoxes2D(self.class_names, self.colors, True)
         self.wrap = pr.WrapOutput(['image', 'boxes2D'])
 
@@ -955,6 +968,48 @@ class DetectVVAD(Processor):
         boxes2D = self.square(boxes2D)
         boxes2D = self.clip(image, boxes2D)
         cropped_images = self.crop(image, boxes2D)
-        boxes2D = self.add_class_and_score(cropped_images, boxes2D)
+
+        N = len(cropped_images)
+
+        # one (classifier, adder) pair per face slot
+        while len(self.adders) < N:
+            clf = ClassifyVVAD(**self.vvad_args)
+            self.classifiers.append(clf)
+            self.adders.append(pr.AddClassAndScoreToBoxes(clf))
+            self.frame_counts.append(0)
+            self.miss_counts.append(0)
+            self.absent_counts.append(0)
+
+        # Increment counters for the first N slots (faces we actually saw this frame)
+        for i in range(N):
+            self.frame_counts[i] += 1
+            self.miss_counts[i] = 0
+            self.absent_counts[i] = 0
+
+        # Reset counters
+        for i in range(N, len(self.adders)):
+            self.miss_counts[i] += 1
+            self.absent_counts[i] += 1
+            if self.miss_counts[i] > self.patience:
+                # clear counter and clear the VVAD temporal buffer
+                self.frame_counts[i] = 0
+                self.classifiers[i].reset() 
+                self.miss_counts[i] = 0
+        # Drop dangling tail slots that have been absent long enough
+        while len(self.adders) > N and self.absent_counts[-1] >= self.min_frames:
+            self.adders.pop()
+            self.classifiers.pop()
+            self.frame_counts.pop()
+            self.miss_counts.pop()
+            self.absent_counts.pop()
+
+        # Classify and update only the slots that have matured enough frames
+        updated_boxes = []
+        for i, (adder, crop, box) in enumerate(zip(self.adders, cropped_images, boxes2D)):
+            updated = adder([crop], [box])[0] 
+            if self.frame_counts[i] >= self.min_frames:
+                updated_boxes.append(updated)
+
+        boxes2D = updated_boxes
         image = self.draw(image, boxes2D)
         return self.wrap(image, boxes2D)
