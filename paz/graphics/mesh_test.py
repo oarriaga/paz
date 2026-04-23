@@ -581,6 +581,18 @@ def test_binned_soft_mask_matches_single_bin_with_empty_bins():
     assert jp.allclose(actual, expected, atol=1e-5)
 
 
+def test_tile_render_binned_soft_mask_matches_rect_single_bin():
+    expected = render_binned_soft_shift(0.0, (16, 24), (16, 24))
+    actual = render_binned_soft_shift(0.0, (16, 24), (8, 6))
+    assert jp.allclose(actual, expected, atol=1e-5)
+
+
+def test_binned_soft_mask_matches_rect_bin_with_empty_bins():
+    expected = render_binned_soft_shift(0.0, (32, 24), (32, 24))
+    actual = render_binned_soft_shift(0.0, (32, 24), (8, 6))
+    assert jp.allclose(actual, expected, atol=1e-5)
+
+
 def test_empty_fragment_chunk_keeps_fragments():
     fragments = build_empty_fragments(1)
     points = jp.zeros((3, 2))
@@ -601,9 +613,22 @@ def test_count_binned_faces_counts_overlaps():
     assert jp.max(counts) == 2
 
 
+def test_count_binned_faces_counts_rect_overlaps():
+    mesh = make_soft_square_mesh()
+    args = ((16, 24), jp.eye(4), mesh, jp.pi / 3.0, 1e-4)
+    counts = count_binned_faces(*(args + (BinArgs((8, 6), 2),)))
+    assert jp.max(counts) == 2
+
+
 def test_tile_render_binned_soft_mask_is_chunk_invariant():
     mask_A = render_binned_soft_shift(0.0, chunk=1)
     mask_B = render_binned_soft_shift(0.0, chunk=2)
+    assert jp.allclose(mask_A, mask_B, atol=1e-5)
+
+
+def test_tile_render_binned_rect_mask_is_chunk_invariant():
+    mask_A = render_binned_soft_shift(0.0, (16, 24), (8, 6), 1)
+    mask_B = render_binned_soft_shift(0.0, (16, 24), (8, 6), 2)
     assert jp.allclose(mask_A, mask_B, atol=1e-5)
 
 
@@ -621,12 +646,21 @@ def test_tile_render_binned_shift_gradient_matches_finite_difference():
     assert cosine > 0.9
 
 
-def render_binned_soft_shift(shift, image_size=16, bin_size=8, chunk=2):
+def render_binned_soft_shift(shift, image_shape=16, bin_shape=8, chunk=2):
+    H, W = unpack_soft_shape(image_shape)
     mesh = make_soft_square_mesh(shift)
-    bins = BinArgs(bin_size, mesh.faces.shape[0])
-    args = (bins, jp.pi / 3.0, image_size, image_size, jp.eye(4), mesh)
+    bins = BinArgs(bin_shape, mesh.faces.shape[0])
+    args = (bins, jp.pi / 3.0, H, W, jp.eye(4), mesh)
     args = args + (1e-4, chunk)
     return tile_render_binned_soft_mask(*args)
+
+
+def unpack_soft_shape(shape):
+    try:
+        H, W = shape
+    except TypeError:
+        return shape, shape
+    return H, W
 
 
 def compute_finite_shift_gradient(loss_fn, shift):
