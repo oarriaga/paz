@@ -8,6 +8,11 @@ import time
 import json
 import datetime
 
+VIEWER_NAMES = "camera_pose shadows light H W y_FOV".split()
+VIEWER_DEFAULTS = None, False, None, 480, 640, 0.78
+MESH_RENDERER_NAMES = "y_FOV lights chunk_size tiles".split()
+MESH_RENDERER_DEFAULTS = 0.78, None, 1024, (1, 1)
+
 
 def clamp_tilt(tilt, limit=None):
     if limit is None:
@@ -61,22 +66,38 @@ def shape_renderer(scene, H, W, y_FOV=0.78, lights=None, shadows=False):
     return render_frame
 
 
-def mesh_renderer(meshes, mask, H, W, y_FOV=0.78, lights=None, chunk_size=1024):
+def mesh_renderer(meshes, mask, H, W, *args, **kwargs):
+    y_FOV, lights, chunk_size, tiles = parse_mesh_renderer_args(args, kwargs)
     if lights is None:
         lights = _default_lights()
-    identity_rays = _build_identity_rays(H, W, y_FOV)
 
     @jax.jit
     def render_frame(pose_matrix):
-        rays = _transform_rays(pose_matrix, identity_rays)
-        args = ((H, W), pose_matrix, rays, meshes, mask, lights, chunk_size)
+        args = (H, W), y_FOV, pose_matrix, meshes, mask, lights
+        args = args + (tiles, chunk_size)
         image, _ = paz.graphics.mesh.render(*args)
         return _to_uint8(image)
 
     return render_frame
 
 
-def viewer(render_fn_or_scene, camera_pose=None, shadows=False, light=None, H=480, W=640, y_FOV=0.78):
+def parse_mesh_renderer_args(args, kwargs):
+    if len(args) > len(MESH_RENDERER_NAMES):
+        raise TypeError("mesh_renderer received too many positional arguments")
+    unknown = set(kwargs) - set(MESH_RENDERER_NAMES)
+    if unknown:
+        raise TypeError("mesh_renderer received unknown keyword arguments")
+    duplicates = set(MESH_RENDERER_NAMES[:len(args)]) & set(kwargs)
+    if duplicates:
+        raise TypeError("mesh_renderer received duplicate arguments")
+    values = dict(zip(MESH_RENDERER_NAMES, MESH_RENDERER_DEFAULTS))
+    values.update(zip(MESH_RENDERER_NAMES, args))
+    values.update(kwargs)
+    return [values[name] for name in MESH_RENDERER_NAMES]
+
+
+def viewer(render_fn_or_scene, *args, **kwargs):
+    camera_pose, shadows, light, H, W, y_FOV = parse_viewer_args(args, kwargs)
     if callable(render_fn_or_scene):
         render_fn = render_fn_or_scene
     else:
@@ -85,6 +106,21 @@ def viewer(render_fn_or_scene, camera_pose=None, shadows=False, light=None, H=48
         args = (render_fn_or_scene, H, W, y_FOV, light, shadows)
         render_fn = shape_renderer(*args)
     _run_viewer(render_fn, camera_pose, H, W)
+
+
+def parse_viewer_args(args, kwargs):
+    if len(args) > len(VIEWER_NAMES):
+        raise TypeError("viewer received too many positional arguments")
+    unknown = set(kwargs) - set(VIEWER_NAMES)
+    if unknown:
+        raise TypeError("viewer received unknown keyword arguments")
+    duplicates = set(VIEWER_NAMES[:len(args)]) & set(kwargs)
+    if duplicates:
+        raise TypeError("viewer received duplicate arguments")
+    values = dict(zip(VIEWER_NAMES, VIEWER_DEFAULTS))
+    values.update(zip(VIEWER_NAMES, args))
+    values.update(kwargs)
+    return [values[name] for name in VIEWER_NAMES]
 
 
 def _run_viewer(render_fn, camera_pose, H, W):

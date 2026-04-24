@@ -115,11 +115,11 @@ def compute_selected_shadow_depths(camera_pose, image_shape=(120, 160)):
     shapes, mask, _, lights = paz.graphics.scene.compile(scene, lights, None)
     intersections = renderer.intersect(shapes, rays, mask)
     closest = renderer.gather_closest(*intersections)
-    vector = lights[0].position - closest["point"]
+    vector = lights[0].position - closest.point
     distance = jp.squeeze(paz.algebra.compute_norms(vector, 1), axis=1)
     light_directions = vector / jp.expand_dims(distance, 1)
     shadow_ray_origins = renderer.compute_shadow_ray_origins(
-        closest["point"], closest["normal"]
+        closest.point, closest.normal
     )
     intersections = renderer.intersect_shadow_groups(
         shapes, shadow_ray_origins, light_directions
@@ -134,11 +134,11 @@ def compute_selected_shadow_depths(camera_pose, image_shape=(120, 160)):
         shadow_masks,
         depths,
         shape_indices,
-        closest["shape_idx"],
-        closest["normal"],
+        closest.shape_idx,
+        closest.normal,
         light_directions,
     )
-    return shadow_masks, depths, shape_indices, closest["shape_idx"]
+    return shadow_masks, depths, shape_indices, closest.shape_idx
 
 
 def take_shape_depths(depths, shape_indices, receiver_indices, shape_index):
@@ -304,11 +304,11 @@ def test_initialize_render_state():
     num_rays = 10
     rays = (jp.zeros((num_rays, 3)), jp.ones((num_rays, 3)))
     state = renderer.initialize_state(rays)
-    assert state["color"].shape == (num_rays, 3)
-    assert state["throughput"].shape == (num_rays, 3)
-    assert jp.all(state["current_refractive_index"] == 1.0)
-    assert state["depth"].shape == (num_rays,)
-    assert state["hit_mask"].dtype == bool
+    assert state.color.shape == (num_rays, 3)
+    assert state.throughput.shape == (num_rays, 3)
+    assert jp.all(state.refractive_index == 1.0)
+    assert state.depth.shape == (num_rays,)
+    assert state.hit_mask.dtype == bool
 
 
 def test_find_closest_intersection_args():
@@ -414,6 +414,29 @@ def rays(small_image_shape, camera_pose):
     )
 
 
+def build_tile_args(tile_shape, chunk_size, num_bounces=1):
+    args = tile_shape, jp.pi / 3.0, chunk_size, None, num_bounces
+    return renderer.TileRenderArgs(*args)
+
+
+def render_full_scene(image_shape, camera_pose, scene, lights, shadows=False):
+    rays = paz.graphics.camera.build_rays(image_shape, jp.pi / 3.0, camera_pose)
+    args = image_shape, camera_pose, rays, scene, lights, None, shadows
+    return renderer.render(*args)
+
+
+def render_tiled_scene(shape, camera_pose, scene, lights, config, shadows):
+    H, W = shape
+    args = config, H, W, camera_pose, scene, lights, None, shadows
+    return renderer.tile_render(*args)
+
+
+def build_shifted_sphere_scene(z_shift):
+    offset = jp.array([0.0, 0.0, 1.0]) * z_shift
+    material = Material(color=jp.array([0.8, 0.2, 0.1]))
+    return Scene([Sphere(SE3.translation(offset), material)])
+
+
 def test_render_reflection_scene(small_image_shape, camera_pose, rays):
     scene, lights = build_material_scene()
     image, depth = renderer.render(
@@ -428,6 +451,76 @@ def test_render_reflection_scene(small_image_shape, camera_pose, rays):
     assert image.shape == (small_image_shape[0], small_image_shape[1], 3)
     assert not jp.isnan(image).any()
     assert jp.std(image) > 0.0
+
+
+def test_tile_render_matches_render_single_tile(small_image_shape, camera_pose):
+    scene, lights = build_shaded_sphere_scene()
+    expected = render_full_scene(small_image_shape, camera_pose, scene, lights)
+    H, W = small_image_shape
+    config = build_tile_args((1, 1), H * W)
+    args = small_image_shape, camera_pose, scene, lights, config, False
+    actual = render_tiled_scene(*args)
+    assert_render_matches(actual, expected)
+
+
+def test_tile_render_matches_render_rect_tiles(small_image_shape, camera_pose):
+    scene, lights = build_material_scene()
+    expected = render_full_scene(small_image_shape, camera_pose, scene, lights)
+    config = build_tile_args((2, 4), 13)
+    args = small_image_shape, camera_pose, scene, lights, config, False
+    actual = render_tiled_scene(*args)
+    assert_render_matches(actual, expected)
+
+
+def test_tile_render_matches_render_shadows(small_image_shape, camera_pose):
+    scene, lights = build_shadow_scene()
+    args = small_image_shape, camera_pose, scene, lights, True
+    expected = render_full_scene(*args)
+    config = build_tile_args((2, 2), 17)
+    args = small_image_shape, camera_pose, scene, lights, config, True
+    actual = render_tiled_scene(*args)
+    assert_render_matches(actual, expected)
+
+
+def test_tile_render_gradient_matches_render(small_image_shape, camera_pose):
+    lights = [PointLight(jp.ones(3), jp.array([0.0, 5.0, -5.0]))]
+    ray_args = small_image_shape, jp.pi / 3.0, camera_pose
+    rays = paz.graphics.camera.build_rays(*ray_args)
+    H, W = small_image_shape
+    config = build_tile_args((2, 4), 11)
+
+    def full_loss(shift):
+        scene = build_shifted_sphere_scene(shift[0])
+        args = small_image_shape, camera_pose, rays, scene, lights, None, False
+        _, depth = renderer.render(*args)
+        return jp.mean(depth)
+
+    def tile_loss(shift):
+        scene = build_shifted_sphere_scene(shift[0])
+        args = config, H, W, camera_pose, scene, lights, None, False
+        _, depth = renderer.tile_render(*args)
+        return jp.mean(depth)
+
+    shift = jp.array([0.1])
+    full_gradient = jax.grad(full_loss)(shift)
+    tile_gradient = jax.grad(tile_loss)(shift)
+    assert jp.abs(full_gradient[0]) > 1e-5
+    assert jp.allclose(tile_gradient, full_gradient, atol=1e-4)
+
+
+def test_tile_render_jit_compatible(small_image_shape, camera_pose):
+    scene, lights = build_shaded_sphere_scene()
+    H, W = small_image_shape
+    config = build_tile_args((2, 2), 16)
+
+    @jax.jit
+    def jitted_render():
+        args = config, H, W, camera_pose, scene, lights, None, False
+        return renderer.tile_render(*args)
+
+    image, depth = jitted_render()
+    assert image.shape == (H, W, 3)
+    assert depth.shape == (H, W)
 
 
 def test_render_matches_legacy_rays_for_shaded_sphere(

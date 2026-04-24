@@ -1,69 +1,221 @@
 # TODO consider that the acne could be inside the renderer
 # i.e. rays from scene to lights being tiny (floor hitting base).
-import jax.numpy as jp
-import paz
+from collections import namedtuple
+
 import jax
+import jax.numpy as jp
+
+import paz
 
 SHADOW_ORIGIN_EPSILON = 1e-3
 SHADOW_SELF_HIT_EPSILON = 1e-3
+TILE_RENDER_NAMES = "tile_shape y_FOV chunk_size shadow_mask num_bounces"
+TileRenderArgs = namedtuple("TileRenderArgs", TILE_RENDER_NAMES.split())
+RENDER_MASK_NAMES = "image_shape camera_pose rays scene lights num_objects "
+RENDER_MASK_NAMES += "min_depth max_depth shadows"
+RENDER_NAMES = "image_shape world_to_camera rays scene lights mask shadows "
+RENDER_NAMES += "shadow_mask num_bounces"
+BOUNCED_NAMES = "H W world_to_camera rays shapes lights mask shadows "
+BOUNCED_NAMES += "shadow_mask num_bounces"
+STATE_NAMES = "color depth hit_mask throughput active_mask "
+STATE_NAMES += "refractive_index rays"
+CLOSEST_NAMES = "hit_mask depth point normal eye shape_idx"
+SHADOW_COLOR_NAMES = "rays shapes lights indices mask shadow_mask "
+SHADOW_COLOR_NAMES += "point normal points normals eyes"
+
+RenderMaskArgs = namedtuple("RenderMaskArgs", RENDER_MASK_NAMES.split())
+RenderArgs = namedtuple("RenderArgs", RENDER_NAMES.split())
+RenderBouncedArgs = namedtuple("RenderBouncedArgs", BOUNCED_NAMES.split())
+RenderState = namedtuple("RenderState", STATE_NAMES.split())
+ClosestHit = namedtuple("ClosestHit", CLOSEST_NAMES.split())
+ShadowColorArgs = namedtuple("ShadowColorArgs", SHADOW_COLOR_NAMES.split())
 
 
-def render_masks(image_shape, camera_pose, rays, scene, lights, num_objects, min_depth, max_depth, shadows):  # fmt: skip
-    num_nodes = len(scene.nodes)
+def tile_render(args, H, W, camera_pose, scene, lights, mask, shadows):
+    H_tiles, W_tiles = args.tile_shape
+    paz.graphics.mesh.assert_exact_tile_side(H, H_tiles)
+    paz.graphics.mesh.assert_exact_tile_side(W, W_tiles)
+    compiled = paz.graphics.scene.compile(scene, lights, mask, args.shadow_mask)
+    shapes, mask, shadow_mask, lights = compiled
+    coordinates = paz.graphics.mesh.make_tile_coordinates(H_tiles, W_tiles)
+    config = args, H, W, camera_pose, shapes, lights, mask
+    config += shadows, shadow_mask
+    render_step = paz.lock(render_tile_step, config)
+    image, depth = jax.lax.scan(render_step, None, coordinates)[1]
+    image = paz.graphics.mesh.assemble(H, W, H_tiles, W_tiles, image)
+    depth = paz.graphics.mesh.assemble(H, W, H_tiles, W_tiles, depth)
+    return image, depth[..., 0]
+
+
+def render_tile_step(carry, tile_arg, config):
+    args, H, W, camera_pose, shapes, lights, mask = config[:7]
+    shadows, shadow_mask = config[7:]
+    H_tiles, W_tiles = args.tile_shape
+    camera_to_world = jp.linalg.inv(camera_pose)
+    tile_args = H, W, H_tiles, W_tiles, args.y_FOV, camera_to_world
+    rays = paz.graphics.mesh.build_tile_rays(*tile_args, tile_arg)
+    tile_H, tile_W = H // H_tiles, W // W_tiles
+    trace_args = shapes, lights, mask, shadows, shadow_mask
+    trace_args += args.num_bounces,
+    hit_mask, depth, color = trace_chunks(rays, trace_args, args.chunk_size)
+    post_args = hit_mask, depth, color, camera_pose, rays, tile_H, tile_W
+    image, depth = postprocess(*post_args)
+    return carry, (image, jp.expand_dims(depth, -1))
+
+
+def trace_chunks(rays, config, chunk_size):
+    ray_chunks = split_ray_chunks(rays, chunk_size)
+    trace_step = paz.lock(trace_chunk_step, config)
+    hit_mask, depth, color = jax.lax.scan(trace_step, None, ray_chunks)[1]
+    return flatten_chunk_results(hit_mask, depth, color, len(rays[0]))
+
+
+def trace_chunk_step(carry, rays, config):
+    shapes, lights, mask, shadows, shadow_mask, num_bounces = config
+    args = rays, shapes, lights, mask, shadows, shadow_mask, num_bounces
+    return carry, trace_bounces(*args)
+
+
+def split_ray_chunks(rays, chunk_size):
+    origins, directions = rays
+    origins = pad_to_chunks(origins, chunk_size)
+    directions = pad_to_chunks(directions, chunk_size)
+    num_chunks = origins.shape[0] // chunk_size
+    shape = num_chunks, chunk_size, 3
+    return origins.reshape(shape), directions.reshape(shape)
+
+
+def pad_to_chunks(array, chunk_size):
+    remainder = array.shape[0] % chunk_size
+    if remainder == 0:
+        return array
+    pad_size = chunk_size - remainder
+    padding = jp.repeat(array[-1:], pad_size, axis=0)
+    return jp.concatenate([array, padding], axis=0)
+
+
+def flatten_chunk_results(hit_mask, depth, color, num_rays):
+    hit_mask = flatten_chunk_array(hit_mask, num_rays)
+    depth = flatten_chunk_array(depth, num_rays)
+    color = flatten_chunk_array(color, num_rays)
+    return hit_mask, depth, color
+
+
+def flatten_chunk_array(array, num_rays):
+    shape = (-1,) + array.shape[2:]
+    return array.reshape(shape)[:num_rays]
+
+
+def render_masks(*inputs, **options):
+    config = unpack_args(RenderMaskArgs, inputs, options)
+    num_nodes = len(config.scene.nodes)
     masks = []
-    for object_arg in range(num_objects):
+    for object_arg in range(config.num_objects):
         mask = jp.zeros((num_nodes,), dtype=bool).at[object_arg].set(True)
-        args = (image_shape, camera_pose, rays, scene, lights, mask, shadows)
+        args = config.image_shape, config.camera_pose, config.rays
+        args += config.scene, config.lights, mask, config.shadows
         _, depth = render(*args)
-        soft = paz.depth.to_soft_mask(depth, min_depth, max_depth)
+        soft = paz.depth.to_soft_mask(depth, config.min_depth, config.max_depth)
         masks.append(jp.expand_dims(soft, axis=-1))
     return jp.stack(masks)
 
 
-def render(image_shape, world_to_camera, rays, scene, lights, mask, shadows, shadow_mask=None, num_bounces=1):  # fmt: skip
-    shapes, mask, shadow_mask, lights = paz.graphics.scene.compile(scene, lights, mask, shadow_mask)  # fmt:skip
-    args = (world_to_camera, rays, shapes, lights, mask, shadows, shadow_mask, num_bounces)  # fmt: skip
-    return render_bounced(*image_shape, *args)
+def render(*inputs, **options):
+    defaults = {"shadow_mask": None, "num_bounces": 1}
+    args = unpack_args(RenderArgs, inputs, options, defaults)
+    scene_args = args.scene, args.lights, args.mask, args.shadow_mask
+    shapes, mask, shadow_mask, lights = paz.graphics.scene.compile(*scene_args)
+    inputs = args.world_to_camera, args.rays, shapes, lights, mask
+    inputs += args.shadows, shadow_mask, args.num_bounces
+    return render_bounced(*args.image_shape, *inputs)
 
 
-def render_bounced(H, W, world_to_camera, rays, shapes, lights, mask, shadows, shadow_mask, num_bounces):  # fmt: skip
+def render_bounced(*inputs, **options):
+    args = unpack_args(RenderBouncedArgs, inputs, options)
+    inputs = args.rays, args.shapes, args.lights, args.mask, args.shadows
+    inputs += args.shadow_mask, args.num_bounces
+    hit_mask, depth, color = trace_bounces(*inputs)
+    post_args = hit_mask, depth, color, args.world_to_camera, args.rays
+    return postprocess(*post_args, args.H, args.W)
+
+
+def unpack_args(container, inputs, options, defaults=None):
+    if defaults is None:
+        defaults = {}
+    names = container._fields
+    values = list(inputs)
+    if len(values) > len(names):
+        raise TypeError("too many positional arguments")
+    for name in names[len(values):]:
+        values.append(resolve_argument(name, options, defaults))
+    if options:
+        name = next(iter(options))
+        raise TypeError(f"unexpected keyword argument: {name}")
+    return container(*values)
+
+
+def resolve_argument(name, options, defaults):
+    if name in options:
+        return options.pop(name)
+    if name in defaults:
+        return defaults[name]
+    raise TypeError(f"missing required argument: {name}")
+
+
+def trace_bounces(rays, shapes, lights, mask, shadows, shadow_mask, bounces):
     state = initialize_state(rays)
     bounce = paz.lock(bounce_step, shapes, lights, mask, shadows, shadow_mask)
-    for step_arg in range(num_bounces):
+    for step_arg in range(bounces):
         state = bounce(state, step_arg)
-    hit_mask, depth, color = state["hit_mask"], state["depth"], state["color"]
-    return postprocess(hit_mask, depth, color, world_to_camera, rays, H, W)
+    return state.hit_mask, state.depth, state.color
 
 
 def initialize_state(rays):
     num_rays = rays[0].shape[0]
-    return {
-        "color": jp.zeros((num_rays, 3)),
-        "depth": jp.full((num_rays,), paz.graphics.FARAWAY),
-        "hit_mask": jp.zeros((num_rays,), dtype=bool),
-        "throughput": jp.ones((num_rays, 3)),
-        "active_mask": jp.ones((num_rays,), dtype=bool),
-        "current_refractive_index": jp.ones((num_rays,)),
-        "rays": rays,
-    }
+    color = jp.zeros((num_rays, 3))
+    depth = jp.full((num_rays,), paz.graphics.FARAWAY)
+    hit_mask = jp.zeros((num_rays,), dtype=bool)
+    throughput = jp.ones((num_rays, 3))
+    active_mask = jp.ones((num_rays,), dtype=bool)
+    refractive_index = jp.ones((num_rays,))
+    args = color, depth, hit_mask, throughput, active_mask
+    args += refractive_index, rays
+    return RenderState(*args)
 
 
 def bounce_step(state, bounce, shapes, lights, mask, shadows, shadow_mask):
-    rays = state["rays"]
-    intersections = intersect(shapes, rays, mask)
+    intersections = intersect(shapes, state.rays, mask)
     hit_masks, depths, points, normals, indices, eyes = intersections
     hit_shape_args = find_closest_intersection_args(hit_masks, depths)
     closest = gather_closest(*intersections)
-    if bounce == 0:
-        state["depth"] = closest["depth"]
-        state["hit_mask"] = closest["hit_mask"]
-    state["active_mask"] &= closest["hit_mask"]
-
-    if shadows:
-        colors = color_with_shadows(rays, shapes, lights, hit_shape_args, mask, shadow_mask, closest["point"], closest["normal"], points, normals, eyes)  # fmt: skip
-    else:
-        colors = color_without_shadow(lights, shapes, points, normals, eyes, hit_shape_args)  # fmt: skip
+    state = update_first_hit(state, closest, bounce)
+    state = update_active_mask(state, closest)
+    args = state.rays, shapes, lights, hit_shape_args, mask, shadow_mask
+    args += closest, points, normals, eyes, shadows
+    colors = compute_hit_colors(*args)
     return update_state(state, shapes, closest, colors)
+
+
+def update_first_hit(state, closest, bounce):
+    if bounce != 0:
+        return state
+    return state._replace(depth=closest.depth, hit_mask=closest.hit_mask)
+
+
+def update_active_mask(state, closest):
+    active_mask = state.active_mask & closest.hit_mask
+    return state._replace(active_mask=active_mask)
+
+
+def compute_hit_colors(*args):
+    rays, shapes, lights, indices, mask, shadow_mask = args[:6]
+    closest, points, normals, eyes, shadows = args[6:]
+    if shadows:
+        color_args = rays, shapes, lights, indices, mask, shadow_mask
+        color_args += closest.point, closest.normal, points, normals, eyes
+        return color_with_shadows(ShadowColorArgs(*color_args))
+    args = lights, shapes, points, normals, eyes, indices
+    return color_without_shadow(*args)
 
 
 def intersect(shapes, rays, mask):
@@ -97,32 +249,34 @@ def take_closest(candidates, closest_indices):
 
 def gather_closest(hit_masks, depths, points, normals, indices, eyes):
     closest_args = find_closest_intersection_args(hit_masks, depths)
-    return {
-        "hit_mask": take_closest(hit_masks, closest_args),
-        "depth": take_closest(depths, closest_args),
-        "point": take_closest(points, closest_args),
-        "normal": take_closest(normals, closest_args),
-        "eye": take_closest(eyes, closest_args),
-        "shape_idx": indices[closest_args],
-    }
+    args = take_closest(hit_masks, closest_args)
+    args = args, take_closest(depths, closest_args)
+    args += take_closest(points, closest_args),
+    args += take_closest(normals, closest_args),
+    args += take_closest(eyes, closest_args),
+    args += indices[closest_args],
+    return ClosestHit(*args)
 
 
 def color_without_shadow(lights, shapes, points, normals, eyes, hit_shape_args):
-
-    def split(points, normal, eyes, arg_0, arg_1):
-        return points[arg_0:arg_1], normals[arg_0:arg_1], eyes[arg_0:arg_1]
-
     colors, start_arg, merged_lights = [], 0, paz.graphics.shapes.merge(*lights)
     for group in paz.graphics.shapes.group_by_pattern_size(shapes).values():
         final_arg = start_arg + len(group)
         group = paz.graphics.shapes.merge(*group)
-        data = split(points, normals, eyes, start_arg, final_arg)
+        data = split_shape_data(points, normals, eyes, start_arg, final_arg)
         args, axes = (group, group.material, *data), (0, 0, 0, 0, 0, None)
         color_per_light = jax.vmap(paz.graphics.phong.compute_colors, axes)
         color = jax.vmap(color_per_light, (None, None, None, None, None, 0))
         colors.append(jp.sum(color(*args, merged_lights), axis=0))
         start_arg = final_arg
     return take_closest(jp.concatenate(colors, axis=0), hit_shape_args)
+
+
+def split_shape_data(points, normals, eyes, start_arg, final_arg):
+    points = points[start_arg:final_arg]
+    normals = normals[start_arg:final_arg]
+    eyes = eyes[start_arg:final_arg]
+    return points, normals, eyes
 
 
 def intersect_shape_groups(shapes, origins, directions, intersect_shape):
@@ -170,28 +324,20 @@ def compute_shadow_depth_thresholds(shape_indices, receiver_indices):
     return jp.where(same_shape, SHADOW_SELF_HIT_EPSILON, paz.graphics.EPSILON)
 
 
-def compute_front_side_shadow_mask(
-    shape_indices, receiver_indices, receiver_normals, light_directions
-):
+def compute_front_side_shadow_mask(*args):
+    shape_indices, receiver_indices, receiver_normals, directions = args
     same_shape = shape_indices[:, None] == receiver_indices[None, :]
-    front_side = paz.algebra.dot(receiver_normals, light_directions) >= 0.0
+    front_side = paz.algebra.dot(receiver_normals, directions) >= 0.0
     return jp.logical_and(same_shape, front_side[None, :])
 
 
-def select_shadow_depths(
-    hit_masks,
-    depths,
-    shape_indices,
-    receiver_indices,
-    receiver_normals,
-    light_directions,
-):
-    thresholds = compute_shadow_depth_thresholds(
-        shape_indices, receiver_indices
-    )
-    front_side_hits = compute_front_side_shadow_mask(
-        shape_indices, receiver_indices, receiver_normals, light_directions
-    )
+def select_shadow_depths(*args):
+    hit_masks, depths, shape_indices = args[:3]
+    receiver_indices, receiver_normals, directions = args[3:]
+    threshold_args = shape_indices, receiver_indices
+    thresholds = compute_shadow_depth_thresholds(*threshold_args)
+    front_args = shape_indices, receiver_indices, receiver_normals, directions
+    front_side_hits = compute_front_side_shadow_mask(*front_args)
     valid_roots = depths > thresholds[:, None, :]
     valid_roots = jp.logical_and(valid_roots, depths < paz.graphics.FARAWAY)
     valid_roots = jp.logical_and(jp.expand_dims(hit_masks, 1), valid_roots)
@@ -206,74 +352,74 @@ def compute_soft_occlusion(hit_masks, depths, light_lengths, slope=0.01):
     closest_depths = jp.where(hit_masks, depths, paz.graphics.FARAWAY)
     closest_depths = jp.min(closest_depths, axis=0)
     scene_hit_mask = compute_scene_hit_mask(hit_masks)
-    blocker_mask = jp.logical_and(
-        scene_hit_mask, closest_depths <= light_lengths
-    )
+    blockers = closest_depths <= light_lengths
+    blocker_mask = jp.logical_and(scene_hit_mask, blockers)
     difference = light_lengths - closest_depths
     occlusion = jax.nn.sigmoid(slope * difference)
     return jp.where(blocker_mask, occlusion, 0.0)
 
 
-def color_with_shadows(rays, shapes, lights, indices, mask, shadow_mask, closest_point, closest_normal, points, normals, eyes):  # fmt: skip
-    transparencies = jp.array([shape.material.transparency for shape in shapes])
-
-    def compute_light_colors(light):
-        # avoid casting shadow rays directly from surface so object doesn't shadow itself (self-intersection) due to floating-point rounding errors.
-        light_directions, distance = compute_light_directions(light, closest_point)  # fmt: skip
-        shadow_ray_origins = compute_shadow_ray_origins(
-            closest_point, closest_normal
-        )
-        intersections = intersect_shadow_groups(
-            shapes, shadow_ray_origins, light_directions
-        )
-        hit_masks, depths, _, _, _, shape_indices = intersections
-        shadow_masks = resolve_shadow_masks(mask, shadow_mask, hit_masks, transparencies)  # fmt: skip
-        shadow_masks, depths = select_shadow_depths(
-            shadow_masks,
-            depths,
-            shape_indices,
-            indices,
-            closest_normal,
-            light_directions,
-        )
-        is_shadow = compute_soft_occlusion(shadow_masks, depths, distance)
-        colors = compute_shadowed_colors(shapes, light, points, normals, eyes, is_shadow)  # fmt: skip
-        return take_closest(colors, indices)
-
-    def compute_light_directions(light, points):
-        vector = light.position - points
-        norm = paz.algebra.compute_norms(vector, 1)
-        return vector / norm, jp.squeeze(norm, axis=1)
-
-    def resolve_shadow_masks(mask, shadow_mask, hit_masks, transparencies): # fmt: skip
-        shadow_masks = jp.where(jp.expand_dims(mask, 1), hit_masks, False)  # fmt: skip
-        is_transparent = transparencies > 0.0
-        shadow_masks = jp.where(jp.expand_dims(is_transparent, 1), False, shadow_masks) # fmt: skip
-        if shadow_mask is not None:
-            cast_mask = jp.expand_dims(shadow_mask, 1)
-            shadow_masks = jp.where(cast_mask, shadow_masks, False)
-        return shadow_masks
-
-    def compute_shadowed_colors(shapes, light, points, normals, eyes, is_shadow):  # fmt: skip
-
-        def split(points, normal, eyes, arg_0, arg_1):
-            return points[arg_0:arg_1], normals[arg_0:arg_1], eyes[arg_0:arg_1]
-
-        colors, start_arg = [], 0
-        for group in paz.graphics.shapes.group_by_pattern_size(shapes).values():
-            final_arg = start_arg + len(group)
-            group = paz.graphics.shapes.merge(*group)
-            data = split(points, normals, eyes, start_arg, final_arg)
-            args, axes = (group, group.material, *data), ( 0, 0, 0, 0, 0, None, None)  # fmt: skip
-            color = jax.vmap(paz.graphics.phong.compute_colors_with_shadow, axes)  # fmt: skip
-            colors.append(color(*args, light, is_shadow))
-            start_arg = final_arg
-        return jp.concatenate(colors, axis=0)
-
-    colors = jp.zeros((len(points[0]), 3))
-    for light in lights:
-        colors = colors + compute_light_colors(light)
+def color_with_shadows(args):
+    transparencies = compute_transparencies(args.shapes)
+    colors = jp.zeros((len(args.points[0]), 3))
+    for light in args.lights:
+        colors = colors + compute_light_colors(args, light, transparencies)
     return colors
+
+
+def compute_transparencies(shapes):
+    return jp.array([shape.material.transparency for shape in shapes])
+
+
+def compute_light_colors(args, light, transparencies):
+    directions, distance = compute_light_directions(light, args.point)
+    origins = compute_shadow_ray_origins(args.point, args.normal)
+    intersections = intersect_shadow_groups(args.shapes, origins, directions)
+    hit_masks, depths, _, _, _, shape_indices = intersections
+    masks = resolve_shadow_masks(args, hit_masks, transparencies)
+    select_args = masks, depths, shape_indices, args.indices
+    select_args += args.normal, directions
+    masks, depths = select_shadow_depths(*select_args)
+    is_shadow = compute_soft_occlusion(masks, depths, distance)
+    color_args = args.shapes, light, args.points, args.normals, args.eyes
+    color_args += is_shadow,
+    colors = compute_shadowed_colors(*color_args)
+    return take_closest(colors, args.indices)
+
+
+def compute_light_directions(light, points):
+    vector = light.position - points
+    norm = paz.algebra.compute_norms(vector, 1)
+    return vector / norm, jp.squeeze(norm, axis=1)
+
+
+def resolve_shadow_masks(args, hit_masks, transparencies):
+    shadow_masks = jp.where(jp.expand_dims(args.mask, 1), hit_masks, False)
+    is_transparent = transparencies > 0.0
+    shadow_masks = hide_transparent_shapes(shadow_masks, is_transparent)
+    if args.shadow_mask is not None:
+        cast_mask = jp.expand_dims(args.shadow_mask, 1)
+        shadow_masks = jp.where(cast_mask, shadow_masks, False)
+    return shadow_masks
+
+
+def hide_transparent_shapes(shadow_masks, is_transparent):
+    return jp.where(jp.expand_dims(is_transparent, 1), False, shadow_masks)
+
+
+def compute_shadowed_colors(*args):
+    shapes, light, points, normals, eyes, is_shadow = args
+    colors, start_arg = [], 0
+    for group in paz.graphics.shapes.group_by_pattern_size(shapes).values():
+        final_arg = start_arg + len(group)
+        group = paz.graphics.shapes.merge(*group)
+        data = split_shape_data(points, normals, eyes, start_arg, final_arg)
+        axes = 0, 0, 0, 0, 0, None, None
+        color = jax.vmap(paz.graphics.phong.compute_colors_with_shadow, axes)
+        color_args = group, group.material, *data, light, is_shadow
+        colors.append(color(*color_args))
+        start_arg = final_arg
+    return jp.concatenate(colors, axis=0)
 
 
 def postprocess(hit_masks, depths, colors, world_to_camera, rays, H, W):
@@ -341,25 +487,19 @@ def reshape_depth_image(depths, height, width):
 
 
 def update_state(state, shapes, closest, intersected_colors):
-    reflectivities, transparencies, refractivities = get_material_properties(shapes, closest["shape_idx"])  # fmt: skip
-    state["color"] = accumulate_color(state["color"], state["throughput"], state["active_mask"], intersected_colors, reflectivities, transparencies)  # fmt:skip
-    computations = _prepare_computations(
-        state["rays"][1],
-        state["current_refractive_index"],
-        closest["normal"],
-        refractivities,
-    )
-    normal, eye, n1, n2, n_ratio = computations
+    material = get_material_properties(shapes, closest.shape_idx)
+    reflectivities, transparencies, refractivities = material
+    color_args = state.color, state.throughput, state.active_mask
+    color_args += intersected_colors, reflectivities, transparencies
+    color = accumulate_color(*color_args)
+    args = state.rays[1], state.refractive_index, closest.normal
+    args += refractivities,
+    normal, eye, n1, n2, n_ratio = prepare_computations(*args)
     reflectance = schlick(normal, eye, n1, n2)
-    new_rays = compute_new_rays(
-        normal,
-        eye,
-        n_ratio,
-        closest["point"],
-        transparencies,
-        reflectance,
-    )
-    return _apply_bounce_update(state, new_rays, n2, reflectivities, transparencies, reflectance)  # fmt: skip
+    ray_args = normal, eye, n_ratio, closest.point, transparencies, reflectance
+    new_rays = compute_new_rays(*ray_args)
+    update_args = new_rays, n2, reflectivities, transparencies, reflectance
+    return apply_bounce_update(state._replace(color=color), *update_args)
 
 
 def get_material_properties(shapes, hit_shape_args):
@@ -374,12 +514,12 @@ def get_material_properties(shapes, hit_shape_args):
     return reflectivities, transparencies, refractivities
 
 
-def accumulate_color(colors, throughput, active_mask, intersected_colors, reflectivities, transparancies):  # fmt: skip
-    weights = jp.maximum(1.0 - reflectivities - transparancies, 0.0)
+def accumulate_color(*args):
+    colors, throughput, active_mask = args[:3]
+    intersected_colors, reflectivities, transparencies = args[3:]
+    weights = jp.maximum(1.0 - reflectivities - transparencies, 0.0)
     weights = jp.expand_dims(weights, -1)
     active_mask = jp.expand_dims(active_mask, -1)
-    # TODO why throughput
-    # TODO why active mask
     return colors + (throughput * active_mask * weights * intersected_colors)
 
 
@@ -394,10 +534,11 @@ def displace_by_normal(point, normal):
     return lower_point, upper_point
 
 
-def _prepare_computations(current_directions, now_refractive_index, normal, refractive_indices):   # fmt: skip
+def prepare_computations(*args):
+    current_directions, refractive_index, normal, refractive_indices = args
     eye = -current_directions
     normal, is_inside = flip_normal_if_inside(eye, normal)
-    n1 = now_refractive_index
+    n1 = refractive_index
     n2 = jp.where(is_inside, 1.0, refractive_indices)  # TODO why 1.0 hardcoded
     n_ratio = n1 / (n2)
     return normal, eye, n1, n2, n_ratio
@@ -449,13 +590,35 @@ def compute_new_rays(normal, eye, n_ratio, point, transparancies, reflectance):
     return origin, direction
 
 
-def _apply_bounce_update(state, new_rays, n2, reflectivities, transparencies, reflectance):   # fmt: skip
+def apply_bounce_update(*args):
+    state, new_rays, n2, reflectivities, transparencies, reflectance = args
     is_transparent = transparencies > 0.0
     is_reflective = reflectivities > 0.0
-    factor = jp.where(is_transparent, transparencies * (1.0 - reflectance), jp.where(is_reflective, reflectivities, 0.0))  # fmt: skip
+    factor_args = is_transparent, is_reflective, transparencies
+    factor_args += reflectivities, reflectance
+    factor = compute_bounce_factor(*factor_args)
     factor = jp.where(is_transparent & (reflectance >= 1.0), 1.0, factor)
-    state["throughput"] *= jp.expand_dims(factor, -1)
-    state["active_mask"] &= is_transparent | is_reflective
-    state["current_refractive_index"] = jp.where(is_transparent & (reflectance < 1.0), n2, state["current_refractive_index"])  # fmt: skip
-    state["rays"] = new_rays
-    return state
+    throughput = state.throughput * jp.expand_dims(factor, -1)
+    active_mask = state.active_mask & (is_transparent | is_reflective)
+    index_args = state, n2, is_transparent, reflectance
+    refractive_index = update_refractive_index(*index_args)
+    args = throughput, active_mask, refractive_index, new_rays
+    return replace_bounce_state(state, *args)
+
+
+def compute_bounce_factor(*args):
+    is_transparent, is_reflective, transparencies = args[:3]
+    reflectivities, reflectance = args[3:]
+    transparent_factor = transparencies * (1.0 - reflectance)
+    reflective_factor = jp.where(is_reflective, reflectivities, 0.0)
+    return jp.where(is_transparent, transparent_factor, reflective_factor)
+
+
+def update_refractive_index(state, n2, is_transparent, reflectance):
+    update_mask = is_transparent & (reflectance < 1.0)
+    return jp.where(update_mask, n2, state.refractive_index)
+
+
+def replace_bounce_state(state, throughput, active_mask, index, rays):
+    state = state._replace(throughput=throughput, active_mask=active_mask)
+    return state._replace(refractive_index=index, rays=rays)
