@@ -18,6 +18,7 @@ def build_parser():
     add("--subdivisions", default=4, type=int)
     add("--max_steps", default=2000, type=int)
     add("--learning_rate", default=1.0, type=float)
+    add("--color_learning_rate_scale", default=40.0, type=float)
     add("--momentum", default=0.9, type=float)
     add("--distance", default=2.7, type=float)
     add("--tile_shape", default=[2, 2], nargs=2, type=int)
@@ -112,12 +113,14 @@ def validate_config(config):
         raise ValueError("max_faces_per_bin must be positive.")
     if config.save_every < 1:
         raise ValueError("save_every must be positive.")
+    if config.color_learning_rate_scale <= 0.0:
+        raise ValueError("color_learning_rate_scale must be positive.")
 
 
 def optimize(initial, loss_args, config):
     loss_fn = build_sampled_loss(loss_args)
     value_grad_fn = jax.jit(jax.value_and_grad(loss_fn))
-    optimizer = optax.sgd(config.learning_rate, config.momentum)
+    optimizer = build_optimizer(config)
     trace = []
     key = jax.random.PRNGKey(config.seed)
     state = optimizer.init(initial)
@@ -134,6 +137,7 @@ def optimize(initial, loss_args, config):
         best, best_loss = update_best(params, loss_value, best, best_loss)
         updates, state = optimizer.update(gradients, state, params)
         params = optax.apply_updates(params, updates)
+        params = clip_vertex_colors(params)
         losses.append(loss)
         trace_step(trace, step_arg + 1, params, config.save_every)
         print_progress(step_arg + 1, config.max_steps, loss, start_time)
@@ -149,6 +153,20 @@ def update_best(params, loss_value, best, best_loss):
     if loss_value >= best_loss:
         return best, best_loss
     return copy_parameters(params), loss_value
+
+
+def build_optimizer(config):
+    color_rate = config.learning_rate * config.color_learning_rate_scale
+    transforms = {}
+    transforms["offsets"] = optax.sgd(config.learning_rate, config.momentum)
+    transforms["vertex_colors"] = optax.sgd(color_rate, config.momentum)
+    labels = Parameters("offsets", "vertex_colors")
+    return optax.multi_transform(transforms, labels)
+
+
+def clip_vertex_colors(parameters):
+    colors = jp.clip(parameters.vertex_colors, 0.0, 1.0)
+    return parameters._replace(vertex_colors=colors)
 
 
 def build_sampled_loss(loss_args):
