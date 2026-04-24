@@ -52,7 +52,7 @@ from paz.graphics.types import Material
 from paz.graphics.types import Pattern
 from paz.graphics.types import PointLight
 
-Parameters = namedtuple("Parameters", "offsets vertex_colors")
+Parameters = namedtuple("Parameters", "offsets vertex_colors step_arg")
 MeshArgs = namedtuple("MeshArgs", "vertices faces edges material transform")
 RENDER = "image_shape y_fov tile chunk lights sigma bins"
 RenderArgs = namedtuple("RenderArgs", RENDER)
@@ -118,60 +118,63 @@ def validate_config(config):
 
 
 def optimize(initial, loss_args, config):
-    loss_fn = build_sampled_loss(loss_args)
-    value_grad_fn = jax.jit(jax.value_and_grad(loss_fn))
+    view_schedule = build_view_schedule(config)
+    loss_fn = build_loss(loss_args, view_schedule)
     optimizer = build_optimizer(config)
-    trace = []
-    key = jax.random.PRNGKey(config.seed)
-    state = optimizer.init(initial)
-    params = initial
-    best = initial
-    best_loss = float("inf")
-    losses = []
-    start_time = paz.utils.progressbar.start()
-    for step_arg in range(config.max_steps):
-        key, view_key = jax.random.split(key)
-        view_args = sample_view_args(view_key, config)
-        loss, gradients = value_grad_fn(params, view_args)
-        loss_value = float(jax.device_get(loss))
-        best, best_loss = update_best(params, loss_value, best, best_loss)
-        updates, state = optimizer.update(gradients, state, params)
-        params = optax.apply_updates(params, updates)
-        params = clip_vertex_colors(params)
-        losses.append(loss)
-        trace_step(trace, step_arg + 1, params, config.save_every)
-        print_progress(step_arg + 1, config.max_steps, loss, start_time)
-    print()
-    fitted = best
-    losses = jp.array(losses)
-    history = paz.optimization.Trace(losses, None, config.max_steps)
-    status = paz.optimization.MAX_STEPS_REACHED
+    parameters_trace = []
+    callbacks = [paz.optimization.TraceParameters(parameters_trace)]
+    args = (initial, loss_fn, optimizer, config.max_steps)
+    kwargs = {"callbacks": callbacks, "verbose": True}
+    status, final_parameters, history = paz.minimize(*args, **kwargs)
+    best_arg = int(jax.device_get(jp.argmin(history.losses)))
+    fitted = parameters_trace[best_arg]
+    trace = build_trace(parameters_trace, final_parameters, history, config)
     return fitted, history, status, trace
-
-
-def update_best(params, loss_value, best, best_loss):
-    if loss_value >= best_loss:
-        return best, best_loss
-    return copy_parameters(params), loss_value
 
 
 def build_optimizer(config):
     color_rate = config.learning_rate * config.color_learning_rate_scale
-    transforms = {}
-    transforms["offsets"] = optax.sgd(config.learning_rate, config.momentum)
-    transforms["vertex_colors"] = optax.sgd(color_rate, config.momentum)
-    labels = Parameters("offsets", "vertex_colors")
+    colors = optax.sgd(color_rate, config.momentum)
+    colors = optax.chain(colors, clip_color_updates())
+    transforms = {"offsets": optax.sgd(config.learning_rate, config.momentum)}
+    transforms["vertex_colors"] = colors
+    transforms["step_arg"] = increment_step()
+    labels = Parameters("offsets", "vertex_colors", "step_arg")
     return optax.multi_transform(transforms, labels)
 
 
-def clip_vertex_colors(parameters):
-    colors = jp.clip(parameters.vertex_colors, 0.0, 1.0)
-    return parameters._replace(vertex_colors=colors)
+def clip_color_updates():
+    def project(updates, parameters):
+        colors = parameters.vertex_colors
+        updates_now = updates.vertex_colors
+        clipped = jp.clip(colors + updates_now, 0.0, 1.0) - colors
+        return updates._replace(vertex_colors=clipped)
+
+    return optax.stateless(project)
 
 
-def build_sampled_loss(loss_args):
-    def loss_fn(parameters, view_args):
-        target = subset_target(loss_args.target, view_args)
+def increment_step():
+    def project(updates, parameters):
+        step_arg = jp.ones_like(parameters.step_arg)
+        return updates._replace(step_arg=step_arg)
+
+    return optax.stateless(project)
+
+
+def build_view_schedule(config):
+    key = jax.random.PRNGKey(config.seed)
+    view_schedule = []
+    for _ in range(config.max_steps):
+        key, view_key = jax.random.split(key)
+        view_schedule.append(sample_view_args(view_key, config))
+    return jp.stack(view_schedule)
+
+
+def build_loss(loss_args, view_schedule):
+    def loss_fn(parameters):
+        step_arg = jax.lax.stop_gradient(parameters.step_arg)
+        step_arg = jp.int32(step_arg)
+        target = subset_target(loss_args.target, view_schedule[step_arg])
         args = loss_args._replace(target=target)
         terms = compute_loss_terms(parameters, args)
         return weight_terms(terms, loss_args.weights)
@@ -191,29 +194,15 @@ def subset_target(target, view_args):
     return TargetArgs(images, masks, poses)
 
 
-def trace_step(trace, step_arg, parameters, period):
-    if step_arg % period != 0:
-        return
-    trace.append((step_arg, copy_parameters(parameters)))
-
-
-def copy_parameters(parameters):
-    return jax.tree.map(jax.device_get, parameters)
-
-
-def print_progress(step_arg, max_steps, loss, start_time):
-    loss = float(jax.device_get(loss))
-    description = f"loss={loss:.4g}"
-    args = (step_arg, max_steps, start_time, description)
-    paz.utils.progressbar.print_bar(*args, width=30)
-
-
-def build_loss(loss_args):
-    def loss_fn(parameters):
-        terms = compute_loss_terms(parameters, loss_args)
-        return weight_terms(terms, loss_args.weights)
-
-    return loss_fn
+def build_trace(parameters_trace, final_parameters, history, config):
+    stop_step = int(jax.device_get(history.stop_step))
+    trace = []
+    for step_arg in range(config.save_every, stop_step + 1, config.save_every):
+        parameters = final_parameters
+        if step_arg < stop_step:
+            parameters = parameters_trace[step_arg]
+        trace.append((step_arg, parameters))
+    return trace
 
 
 def compute_loss_terms(parameters, loss_args):
@@ -358,7 +347,7 @@ def build_source_mesh(parameters, source):
 def build_initial_parameters(source):
     offsets = jp.zeros_like(source.vertices)
     vertex_colors = jp.full(source.vertices.shape, 0.5)
-    return Parameters(offsets, vertex_colors)
+    return Parameters(offsets, vertex_colors, jp.array(0.0, dtype=jp.float32))
 
 
 def build_material():
