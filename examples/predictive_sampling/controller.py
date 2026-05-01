@@ -17,9 +17,7 @@ except ImportError:
     from structures import Trajectory
 
 
-def PredictiveSampling(*args):
-    task, num_samples, noise_level, plan_horizon = args[:4]
-    interpolate, num_knots, iterations = args[4:]
+def PredictiveSampling(task, num_samples, noise_level, plan_horizon, interpolate, num_knots, iterations):  # fmt: skip
     if iterations < 1:
         raise ValueError("iterations must be greater than 0.")
     num_control_steps = int(round(plan_horizon / task.time_delta))

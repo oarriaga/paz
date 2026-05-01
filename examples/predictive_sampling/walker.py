@@ -95,7 +95,8 @@ def parse_args():
 
 
 def build_controller(task):
-    args = task, 128, 0.5, 0.6, interpolate_zero, 5, 1
+    # args = task, 128, 0.5, 0.6, interpolate_zero, 5, 1
+    args = task, 256, 0.5, 1.0, interpolate_zero, 5, 1
     return PredictiveSampling(*args)
 
 
