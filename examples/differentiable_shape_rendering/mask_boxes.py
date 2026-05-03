@@ -49,14 +49,14 @@ world_to_camera = paz.SE3.view_transform(
     jp.array([0.0, 0.0, 4.0]),
     jp.array([0.0, 1.0, 0.0]),
 )
-H, W = image_size = 224, 224
-rays = paz.graphics.camera.build_rays(image_size, jp.pi / 3, world_to_camera)
+H, W = image_size = 256, 256
 num_shapes = jp.prod(shape)
 mask = jp.ones((num_shapes,), dtype=bool)
 shapes = build_shapes(key, num_shapes, transforms)
 scene = paz.graphics.Scene(shapes)
-render_args = ((H, W), world_to_camera, rays)
-render = paz.partial(paz.graphics.render, *render_args, lights=lights)
+render_args = image_size, jp.pi / 3, world_to_camera
+render_kwargs = dict(lights=lights, tiles=(1, 1), chunk_size=1024)
+render = paz.partial(paz.graphics.render, *render_args, **render_kwargs)
 render = jax.jit(paz.partial(render, shadows=False))
 
 for subkey in jax.random.split(key, 20):
@@ -65,3 +65,5 @@ for subkey in jax.random.split(key, 20):
     plt.imshow(image)
     plt.title(f"Total Cubes: {jp.sum(mask)}")
     plt.show()
+
+paz.graphics.viewer(scene, world_to_camera, H=512, W=512)

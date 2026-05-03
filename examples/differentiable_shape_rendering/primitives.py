@@ -33,9 +33,9 @@ lights = [
 # H, W = 8, 8
 H, W = 1024, 1024
 y_FOV = jp.pi / 4.0
-rays = paz.graphics.camera.build_rays((H, W), y_FOV, camera_pose)
-render_args = ((H, W), camera_pose, rays)
-render = paz.partial(paz.graphics.render, *render_args, lights=lights)
+render_args = (H, W), y_FOV, camera_pose
+render_kwargs = dict(lights=lights, tiles=(1, 1), chunk_size=1024)
+render = paz.partial(paz.graphics.render, *render_args, **render_kwargs)
 render = jax.jit(paz.partial(render, shadows=True))
 
 
