@@ -18,12 +18,13 @@ def build_render(image_shape, y_FOV, camera_origin, shadows):
     target = jp.array([0.0, 0.0, 0.0])
     upward = jp.array([0.0, 1.0, 0.0])
     pose = paz.SE3.view_transform(jp.array(camera_origin), target, upward)
-    rays = paz.graphics.camera.build_rays(image_shape, y_FOV, pose)
     return paz.partial(
         paz.graphics.render,
-        image_shape=image_shape,
-        world_to_camera=pose,
-        rays=rays,
+        shape=image_shape,
+        y_FOV=y_FOV,
+        pose=pose,
+        tiles=(1, 1),
+        chunk_size=1024,
         shadows=shadows,
     )
 

@@ -66,7 +66,9 @@ def build_observation_model(render, floor):
     return apply
 
 
-def build_render_function(image_shape, y_FOV, camera_pose, lights, shadows=False):
+def build_render_function(
+    image_shape, y_FOV, camera_pose, lights, shadows=False
+):
     """Builds a JIT-compiled render function for the observation model.
 
     Args:
@@ -79,10 +81,14 @@ def build_render_function(image_shape, y_FOV, camera_pose, lights, shadows=False
     Returns:
         JIT-compiled render function
     """
-    H, W = image_shape
-    rays = paz.graphics.camera.build_rays((H, W), y_FOV, camera_pose)
-    render_args = ((H, W), camera_pose, rays)
-    render_kwargs = {"lights": lights, "mask": None, "shadows": shadows}
+    render_args = image_shape, y_FOV, camera_pose
+    render_kwargs = dict(
+        lights=lights,
+        mask=None,
+        shadows=shadows,
+        tiles=(1, 1),
+        chunk_size=1024,
+    )
     import jax
     from functools import partial
 
