@@ -6,7 +6,7 @@ from paz.graphics.mesh import Mesh, load_mesh, merge_meshes
 from paz.graphics.types import Material, PointLight
 from paz.graphics.viewer import mesh_renderer, viewer
 
-H, W = 256, 256
+H, W = 512, 512
 Y_FOV = jp.pi / 4.0
 
 
@@ -38,6 +38,7 @@ def make_bunny_mesh(path):
 
 example_dir = Path(__file__).resolve().parent
 mesh_path = example_dir / "dragon.obj"
+mesh_path = "/home/dfki.uni-bremen.de/loarriagacamargo/Documents/Repositories/common-3d-test-models/data/nefertiti.obj"
 mesh_path = example_dir / "bunny.obj"
 
 camera_origin = jp.array([1.3, 0.55, -2.2])
@@ -53,5 +54,5 @@ lights = [
 bunny = make_bunny_mesh(mesh_path)
 meshes, mask = merge_meshes(bunny)
 
-render_fn = mesh_renderer(meshes, mask, H, W, Y_FOV, lights)
+render_fn = mesh_renderer(meshes, mask, H, W, Y_FOV, lights, 1024 * 12, (4, 4))
 viewer(render_fn, camera_pose, H=H, W=W)

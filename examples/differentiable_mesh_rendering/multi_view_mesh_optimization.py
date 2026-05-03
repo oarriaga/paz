@@ -425,10 +425,9 @@ def render_target_masks(mesh, poses, render_args):
 
 def render_mesh(mesh, pose, render_args):
     meshes, mask = paz.graphics.mesh.merge_meshes(mesh)
-    H, W = render_args.image_shape
-    args = (render_args.tile, render_args.y_fov, H, W, pose)
-    args = args + (meshes, mask, render_args.lights, render_args.chunk)
-    return paz.graphics.mesh.tile_render(*args)
+    args = render_args.image_shape, render_args.y_fov, pose, meshes, mask
+    args = args + (render_args.lights, render_args.tile, render_args.chunk)
+    return paz.graphics.mesh.render(*args)
 
 
 def render_mesh_mask(mesh, pose, render_args):

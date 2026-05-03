@@ -6,10 +6,8 @@ from paz.graphics.mesh import (
     build_sphere,
     merge_meshes,
     render,
-    tile_render,
 )
 from paz.graphics.types import PointLight, Material
-from paz.graphics.camera import build_rays
 
 H, W = 2**8, 2**8
 y_FOV = jp.pi / 3.0
@@ -34,18 +32,16 @@ transform = paz.SE3.translation(jp.zeros(3))
 mesh = Mesh(vertices, vertex_colors, transform, material, faces, edges)
 meshes, mask = merge_meshes(mesh)
 
-rays = build_rays((H, W), y_FOV, camera_pose)
-render_fn = jax.jit(render, static_argnums=(0,))
-image, depth = render_fn((H, W), camera_pose, rays, meshes, mask, lights)
+shape = (H, W)
+base_args = shape, y_FOV, camera_pose, meshes, mask, lights
+render_fn = jax.jit(render, static_argnums=(0, 6, 7))
+image, depth = render_fn(*base_args, (1, 1), 1024)
 image = paz.image.denormalize(image)
 paz.image.write("render_full.png", image)
 print("Saved render_full.png")
 
-tile_render_fn = jax.jit(tile_render, static_argnums=(0, 2, 3))
 tile_shape = (4, 4)
-image, depth = tile_render_fn(
-    tile_shape, y_FOV, H, W, camera_pose, meshes, mask, lights
-)
+image, depth = render_fn(*base_args, tile_shape, 1024)
 image = paz.image.denormalize(image)
 paz.image.write("render_tiled.png", image)
 print("Saved render_tiled.png")
@@ -56,7 +52,8 @@ print("Computing gradient through vertex positions...")
 def loss_fn(verts):
     mesh = Mesh(verts, vertex_colors, transform, material, faces, edges)
     meshes, mask = merge_meshes(mesh)
-    _, depth = render_fn((H, W), camera_pose, rays, meshes, mask, lights)
+    args = shape, y_FOV, camera_pose, meshes, mask, lights
+    _, depth = render_fn(*args, (1, 1), 1024)
     return jp.sum(depth)
 
 
