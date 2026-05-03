@@ -5,7 +5,6 @@ import paz
 from paz.graphics.constants import FARAWAY
 from paz.graphics.types import PointLight, Material
 from paz.backend.lie import SE3
-from paz.graphics.camera import build_rays
 from paz.graphics.mesh.silhouette import blend_fragments
 from paz.graphics.mesh.silhouette import build_empty_fragments
 from paz.graphics.mesh.silhouette import compute_face_fragments
@@ -16,7 +15,7 @@ from paz.graphics.mesh import (
     Mesh,
     BinArgs,
     render,
-    render_mesh,
+    render_masks,
     merge_meshes,
     extract_points,
     build_edges,
@@ -30,13 +29,10 @@ from paz.graphics.mesh import (
     select_closest_color,
     to_color_image,
     to_depth_image,
-    render_depth,
     fill_bottom_with_last,
     fill_mesh,
     build_cube,
     build_sphere,
-    tile_render,
-    tile_render_depth,
     tile_render_binned_soft_mask,
     count_binned_faces,
     assert_exact_tile_side,
@@ -56,19 +52,6 @@ def make_triangle():
     ])
     faces = jp.array([[0, 2, 1]])
     return vertices, faces
-
-
-def build_legacy_rays(image_shape, y_fov, world_to_camera):
-    H, W = image_shape[:2]
-    aspect_ratio = paz.graphics.camera.compute_aspect_ratio(H, W)
-    H_world, W_world = paz.graphics.camera.compute_image_sizes(
-        y_fov, aspect_ratio
-    )
-    args = (H, W, H_world, W_world)
-    directions = paz.graphics.camera.build_ray_directions(*args)
-    origins = paz.graphics.camera.build_ray_origins(H, W)
-    camera_to_world = jp.linalg.inv(world_to_camera)
-    return paz.algebra.transform_rays(camera_to_world, origins, directions)
 
 
 def compute_max_abs_difference(array_A, array_B):
@@ -317,7 +300,6 @@ def make_scene(image_shape=(20, 20)):
     camera_pose = SE3.view_transform(
         camera_origin, jp.zeros(3), jp.array([0.0, 0.0, 1.0])
     )
-    rays = build_rays(image_shape, y_FOV, camera_pose)
     lights = [PointLight(jp.full((3,), 10.0), camera_origin)]
     vertices, faces, edges = build_cube(1.0)
     color = jp.array([[0.7, 0.3, 0.1]])
@@ -326,65 +308,60 @@ def make_scene(image_shape=(20, 20)):
     material = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100)
     mesh = Mesh(vertices, vertex_colors, transform, material, faces, edges)
     meshes, mask = merge_meshes(mesh)
-    return image_shape, camera_pose, rays, meshes, mask, lights
+    return image_shape, y_FOV, camera_pose, meshes, mask, lights
+
+
+def render_scene(image_shape=(20, 20), tiles=(1, 1), chunk_size=1024):
+    args = make_scene(image_shape)
+    return render(*args, tiles, chunk_size)
 
 
 def test_render_returns_correct_shapes():
-    image_shape = (20, 20)
-    args = make_scene(image_shape)
-    image, depth = render(*args)
+    image, depth = render_scene((20, 20))
     assert image.shape == (20, 20, 3)
     assert depth.shape == (20, 20)
 
 
 def test_render_produces_nonzero_image():
-    args = make_scene()
-    image, depth = render(*args)
+    image, depth = render_scene()
     assert jp.any(image < 1.0)
 
 
 def test_render_jit_compatible():
     args = make_scene()
-    render_fn = jax.jit(render, static_argnums=(0,))
+    args = args + ((1, 1), 1024)
+    render_fn = jax.jit(render, static_argnums=(0, 6, 7))
     image, depth = render_fn(*args)
     assert image.shape == (20, 20, 3)
 
 
-def test_render_depth_matches_render_depth():
-    args = make_scene()
-    _, expected_depth = render(*args)
-    depth = render_depth(*args)
-    assert depth.shape == expected_depth.shape
-    assert jp.allclose(depth, expected_depth, atol=1e-5)
+def test_render_rect_tiles_match_single_tile():
+    expected_image, expected_depth = render_scene((20, 20), (1, 1), 1024)
+    actual_image, actual_depth = render_scene((20, 20), (2, 4), 13)
+    assert compute_max_abs_difference(actual_image, expected_image) <= 1e-4
+    assert compute_max_abs_difference(actual_depth, expected_depth) <= 1e-4
 
 
-def test_render_matches_legacy_rays():
-    image_shape, camera_pose, rays, meshes, mask, lights = make_scene()
-    legacy_rays = build_legacy_rays(image_shape, jp.pi / 4.0, camera_pose)
-    image, depth = render(image_shape, camera_pose, rays, meshes, mask, lights)
-    legacy_image, legacy_depth = render(
-        image_shape, camera_pose, legacy_rays, meshes, mask, lights
-    )
-    assert compute_max_abs_difference(image, legacy_image) <= 1e-4
-    assert compute_max_abs_difference(depth, legacy_depth) <= 1e-4
-
-
-def test_render_depth_matches_legacy_rays():
-    image_shape, camera_pose, _, meshes, mask, lights = make_scene()
-    rays = build_rays(image_shape, jp.pi / 4.0, camera_pose)
-    legacy_rays = build_legacy_rays(image_shape, jp.pi / 4.0, camera_pose)
-    depth = render_depth(image_shape, camera_pose, rays, meshes, mask, lights)
-    legacy_depth = render_depth(
-        image_shape, camera_pose, legacy_rays, meshes, mask, lights
-    )
-    assert compute_max_abs_difference(depth, legacy_depth) <= 1e-4
+def test_render_depth_is_chunk_invariant():
+    _, expected_depth = render_scene((20, 20), (2, 2), 1024)
+    _, actual_depth = render_scene((20, 20), (2, 2), 7)
+    assert compute_max_abs_difference(actual_depth, expected_depth) <= 1e-4
 
 
 def test_render_depth_respects_mask():
-    image_shape, camera_pose, rays, meshes, mask, lights = make_scene()
+    image_shape, y_FOV, camera_pose, meshes, mask, lights = make_scene()
     mask = jp.zeros_like(mask).astype(bool)
-    depth = render_depth(image_shape, camera_pose, rays, meshes, mask, lights)
+    args = image_shape, y_FOV, camera_pose, meshes, mask, lights
+    _, depth = render(*args, (1, 1), 1024)
     assert jp.allclose(depth, 0.0)
+
+
+def test_render_masks_returns_mesh_masks():
+    shape, y_FOV, pose, meshes, mask, lights = make_scene()
+    args = shape, y_FOV, pose, meshes, lights, (0.1, 10.0), (2, 2), 1024
+    masks = render_masks(*args)
+    assert masks.shape == (1, 20, 20, 1)
+    assert jp.any(masks > 0.0)
 
 
 def test_render_gradient_through_vertices():
@@ -394,7 +371,6 @@ def test_render_gradient_through_vertices():
     camera_pose = SE3.view_transform(
         camera_origin, jp.zeros(3), jp.array([0.0, 0.0, 1.0])
     )
-    rays = build_rays(image_shape, y_FOV, camera_pose)
     lights = [PointLight(jp.full((3,), 10.0), camera_origin)]
     vertices, faces, edges = build_cube(1.0)
     color = jp.array([[0.7, 0.3, 0.1]])
@@ -405,7 +381,8 @@ def test_render_gradient_through_vertices():
     def loss_fn(verts):
         mesh = Mesh(verts, vertex_colors, transform, material, faces, edges)
         meshes, mask = merge_meshes(mesh)
-        image, _ = render(image_shape, camera_pose, rays, meshes, mask, lights)
+        args = image_shape, y_FOV, camera_pose, meshes, mask, lights
+        image, _ = render(*args, (1, 1), 1024)
         return jp.sum(image)
 
     grad = jax.grad(loss_fn)(vertices)
@@ -466,7 +443,7 @@ def test_assemble_reconstructs_image():
     assert image.shape == (4, 6, 1)
 
 
-def make_tile_scene(image_shape=(20, 20)):
+def make_tile_scene(image_shape=(20, 20), tiles=(2, 2), chunk_size=1024):
     camera_origin = jp.array([0.0, 1.0, -1.5])
     y_FOV = jp.pi / 4.0
     camera_pose = SE3.view_transform(
@@ -480,8 +457,8 @@ def make_tile_scene(image_shape=(20, 20)):
     material = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100)
     mesh = Mesh(vertices, vertex_colors, transform, material, faces, edges)
     meshes, mask = merge_meshes(mesh)
-    H, W = image_shape
-    return (2, 2), y_FOV, H, W, camera_pose, meshes, mask, lights
+    args = image_shape, y_FOV, camera_pose, meshes, mask, lights
+    return args + (tiles, chunk_size)
 
 
 def make_soft_square_mesh(shift=0.0):
@@ -528,38 +505,33 @@ def test_merge_fragments_keeps_nearest_faces():
     assert jp.sum(fragments.valid[0]) == 50
 
 
-def test_tile_render_returns_correct_shapes():
+def test_render_rect_tiles_returns_correct_shapes():
     args = make_tile_scene((20, 20))
-    image, depth = tile_render(*args)
+    image, depth = render(*args)
     assert image.shape == (20, 20, 3)
     assert depth.shape == (20, 20)
 
 
-def test_tile_render_produces_nonzero_image():
+def test_render_rect_tiles_produces_nonzero_image():
     args = make_tile_scene()
-    image, depth = tile_render(*args)
+    image, depth = render(*args)
     assert jp.any(image < 1.0)
 
 
-def test_tile_render_jit_compatible():
+def test_render_rect_tiles_jit_compatible():
     args = make_tile_scene()
-    render_fn = jax.jit(tile_render, static_argnums=(0, 2, 3))
+    render_fn = jax.jit(render, static_argnums=(0, 6, 7))
     image, depth = render_fn(*args)
     assert image.shape == (20, 20, 3)
 
 
-def test_tile_render_depth_matches_render_depth():
-    scene = make_tile_scene()
-    tile_shape, y_FOV, H, W, camera_pose, meshes, mask, lights = scene
-    rays = build_rays((H, W), y_FOV, camera_pose)
-    expected_depth = render_depth(
-        (H, W), camera_pose, rays, meshes, mask, lights
-    )
-    depth = tile_render_depth(
-        tile_shape, y_FOV, H, W, camera_pose, meshes, mask, lights
-    )
-    assert depth.shape == expected_depth.shape
-    assert jp.allclose(depth, expected_depth, atol=1e-5)
+def test_render_rect_depth_matches_single_tile():
+    expected = make_tile_scene((20, 20), (1, 1), 1024)
+    actual = make_tile_scene((20, 20), (2, 2), 1024)
+    _, expected_depth = render(*expected)
+    _, actual_depth = render(*actual)
+    assert actual_depth.shape == expected_depth.shape
+    assert jp.allclose(actual_depth, expected_depth, atol=1e-5)
 
 
 def test_tile_render_binned_soft_mask_returns_smooth_square():

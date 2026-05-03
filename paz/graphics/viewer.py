@@ -8,8 +8,8 @@ import time
 import json
 import datetime
 
-VIEWER_NAMES = "camera_pose shadows light H W y_FOV".split()
-VIEWER_DEFAULTS = None, False, None, 480, 640, 0.78
+VIEWER_NAMES = "camera_pose shadows light H W y_FOV chunk_size tiles".split()
+VIEWER_DEFAULTS = None, False, None, 480, 640, 0.78, 1024, (1, 1)
 MESH_RENDERER_NAMES = "y_FOV lights chunk_size tiles".split()
 MESH_RENDERER_DEFAULTS = 0.78, None, 1024, (1, 1)
 
@@ -32,35 +32,30 @@ def _default_lights():
     return [paz.graphics.PointLight(jp.ones(3), position)]
 
 
-def _build_identity_rays(H, W, y_FOV):
-    args = ((H, W), y_FOV, jp.eye(4))
-    return paz.graphics.camera.build_rays(*args)
-
-
-def _transform_rays(pose_matrix, identity_rays):
-    cam_to_world = jp.linalg.inv(pose_matrix)
-    transform = paz.graphics.geometry.transform_rays
-    return transform(cam_to_world, *identity_rays)
-
-
 def _to_uint8(image):
     return (jp.clip(image, 0, 1) * 255.0).astype(jp.uint8)
 
 
-def shape_renderer(scene, H, W, y_FOV=0.78, lights=None, shadows=False):
+def shape_renderer(
+    scene,
+    H,
+    W,
+    y_FOV=0.78,
+    lights=None,
+    shadows=False,
+    chunk_size=1024,
+    tiles=(1, 1),
+):
     if lights is None:
         lights = _default_lights()
-    compiled = paz.graphics.scene.compile(scene, lights, mask=None)
-    scene, mask, _, lights = compiled
-    identity_rays = _build_identity_rays(H, W, y_FOV)
-    bounces = paz.graphics.scene.compute_bounces(scene)
+    shapes = paz.graphics.scene.flatten_scene(scene)
+    num_bounces = paz.graphics.scene.compute_bounces(shapes)
 
     @jax.jit
     def render_frame(pose_matrix):
-        rays = _transform_rays(pose_matrix, identity_rays)
-        render_bounced = paz.graphics.renderer.render_bounced
-        args = (H, W, pose_matrix, rays, scene, lights, mask)
-        image, _ = render_bounced(*args, shadows, None, bounces)
+        args = (H, W), y_FOV, pose_matrix, scene, None, lights
+        args = args + (tiles, chunk_size)
+        image, _ = paz.graphics.render(*args, shadows, None, num_bounces)
         return _to_uint8(image)
 
     return render_frame
@@ -87,7 +82,7 @@ def parse_mesh_renderer_args(args, kwargs):
     unknown = set(kwargs) - set(MESH_RENDERER_NAMES)
     if unknown:
         raise TypeError("mesh_renderer received unknown keyword arguments")
-    duplicates = set(MESH_RENDERER_NAMES[:len(args)]) & set(kwargs)
+    duplicates = set(MESH_RENDERER_NAMES[: len(args)]) & set(kwargs)
     if duplicates:
         raise TypeError("mesh_renderer received duplicate arguments")
     values = dict(zip(MESH_RENDERER_NAMES, MESH_RENDERER_DEFAULTS))
@@ -97,13 +92,16 @@ def parse_mesh_renderer_args(args, kwargs):
 
 
 def viewer(render_fn_or_scene, *args, **kwargs):
-    camera_pose, shadows, light, H, W, y_FOV = parse_viewer_args(args, kwargs)
+    # TODO this should all be explicit values instead of args and kwargs since this is a public function.
+    parsed_args = parse_viewer_args(args, kwargs)
+    camera_pose, shadows, light, H, W, y_FOV, chunk_size, tiles = parsed_args
     if callable(render_fn_or_scene):
         render_fn = render_fn_or_scene
     else:
         if light is None:
             light = _default_lights()
-        args = (render_fn_or_scene, H, W, y_FOV, light, shadows)
+        args = render_fn_or_scene, H, W, y_FOV, light, shadows
+        args = args + (chunk_size, tiles)
         render_fn = shape_renderer(*args)
     _run_viewer(render_fn, camera_pose, H, W)
 
@@ -114,7 +112,7 @@ def parse_viewer_args(args, kwargs):
     unknown = set(kwargs) - set(VIEWER_NAMES)
     if unknown:
         raise TypeError("viewer received unknown keyword arguments")
-    duplicates = set(VIEWER_NAMES[:len(args)]) & set(kwargs)
+    duplicates = set(VIEWER_NAMES[: len(args)]) & set(kwargs)
     if duplicates:
         raise TypeError("viewer received duplicate arguments")
     values = dict(zip(VIEWER_NAMES, VIEWER_DEFAULTS))
@@ -132,8 +130,7 @@ def _run_viewer(render_fn, camera_pose, H, W):
     cv2.namedWindow(window_name, cv2.WINDOW_GUI_NORMAL)
     cv2.resizeWindow(window_name, W, H)
 
-    current_pos = np.array(
-        paz.SE3.get_position_vector(camera_pose))
+    current_pos = np.array(paz.SE3.get_position_vector(camera_pose))
     cam_state = {
         "yaw": 0.0,
         "pitch": 0.0,
@@ -158,8 +155,7 @@ def _run_viewer(render_fn, camera_pose, H, W):
         key = cv2.waitKey(1) & 0xFF
         if key == 27:
             break
-        prop = cv2.getWindowProperty(
-            window_name, cv2.WND_PROP_VISIBLE)
+        prop = cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE)
         if prop < 1:
             break
 
@@ -168,8 +164,7 @@ def _run_viewer(render_fn, camera_pose, H, W):
         pose = rotation.at[:3, 3].set(jp.array(current_pos))
 
         image_jax = render_fn(pose)
-        image_bgr = cv2.cvtColor(
-            np.array(image_jax), cv2.COLOR_RGB2BGR)
+        image_bgr = cv2.cvtColor(np.array(image_jax), cv2.COLOR_RGB2BGR)
 
         if key == ord("c"):
             _save_camera_pose(pose)
@@ -210,6 +205,7 @@ def _make_mouse_callback(cam_state):
         cam_state["yaw"] -= dx * sens
         cam_state["pitch"] -= dy * sens
         cam_state["pitch"] = clamp_tilt(cam_state["pitch"])
+
     return callback
 
 

@@ -9,11 +9,7 @@ import paz
 
 SHADOW_ORIGIN_EPSILON = 1e-3
 SHADOW_SELF_HIT_EPSILON = 1e-3
-TILE_RENDER_NAMES = "tile_shape y_FOV chunk_size shadow_mask num_bounces"
-TileRenderArgs = namedtuple("TileRenderArgs", TILE_RENDER_NAMES.split())
-RENDER_MASK_NAMES = "image_shape camera_pose rays scene lights num_objects "
-RENDER_MASK_NAMES += "min_depth max_depth shadows"
-RENDER_NAMES = "image_shape world_to_camera rays scene lights mask shadows "
+RENDER_NAMES = "shape y_FOV pose scene mask lights tiles chunk_size shadows "
 RENDER_NAMES += "shadow_mask num_bounces"
 BOUNCED_NAMES = "H W world_to_camera rays shapes lights mask shadows "
 BOUNCED_NAMES += "shadow_mask num_bounces"
@@ -23,7 +19,6 @@ CLOSEST_NAMES = "hit_mask depth point normal eye shape_idx"
 SHADOW_COLOR_NAMES = "rays shapes lights indices mask shadow_mask "
 SHADOW_COLOR_NAMES += "point normal points normals eyes"
 
-RenderMaskArgs = namedtuple("RenderMaskArgs", RENDER_MASK_NAMES.split())
 RenderArgs = namedtuple("RenderArgs", RENDER_NAMES.split())
 RenderBouncedArgs = namedtuple("RenderBouncedArgs", BOUNCED_NAMES.split())
 RenderState = namedtuple("RenderState", STATE_NAMES.split())
@@ -31,36 +26,80 @@ ClosestHit = namedtuple("ClosestHit", CLOSEST_NAMES.split())
 ShadowColorArgs = namedtuple("ShadowColorArgs", SHADOW_COLOR_NAMES.split())
 
 
-def tile_render(args, H, W, camera_pose, scene, lights, mask, shadows):
-    H_tiles, W_tiles = args.tile_shape
+def render(shape, y_FOV, pose, scene, mask, lights, tiles, chunk_size,
+           shadows=False, shadow_mask=None, num_bounces=1):
+    args = shape, y_FOV, pose, scene, mask, lights, tiles, chunk_size
+    args += shadows, shadow_mask, num_bounces
+    args = RenderArgs(*args)
+    args = compile_render_args(args)
+    image, depth = scan_tiles(args, render_tile_step)
+    return assemble_image(args, image), assemble_depth(args, depth)
+
+
+def render_masks(shape, y_FOV, pose, scene, lights, depth, tiles, chunk_size,
+                 num_objects=None, shadows=False, shadow_mask=None,
+                 num_bounces=1):
+    if num_objects is None:
+        num_objects = len(scene.nodes)
+    min_depth, max_depth = depth
+    num_nodes = len(scene.nodes)
+    masks = []
+    for object_arg in range(num_objects):
+        mask = jp.zeros((num_nodes,), dtype=bool).at[object_arg].set(True)
+        args = shape, y_FOV, pose, scene, mask, lights, tiles, chunk_size
+        _, depth_image = render(*args, shadows, shadow_mask, num_bounces)
+        soft = paz.depth.to_soft_mask(depth_image, min_depth, max_depth)
+        masks.append(jp.expand_dims(soft, axis=-1))
+    return jp.stack(masks)
+
+
+def compile_render_args(args):
+    scene_args = args.scene, args.lights, args.mask, args.shadow_mask
+    shapes, mask, shadow_mask, lights = paz.graphics.scene.compile(*scene_args)
+    return args._replace(
+        scene=shapes,
+        mask=mask,
+        shadow_mask=shadow_mask,
+        lights=lights,
+    )
+
+
+def scan_tiles(args, render_step):
+    H, W = args.shape
+    H_tiles, W_tiles = args.tiles
     paz.graphics.mesh.assert_exact_tile_side(H, H_tiles)
     paz.graphics.mesh.assert_exact_tile_side(W, W_tiles)
-    compiled = paz.graphics.scene.compile(scene, lights, mask, args.shadow_mask)
-    shapes, mask, shadow_mask, lights = compiled
     coordinates = paz.graphics.mesh.make_tile_coordinates(H_tiles, W_tiles)
-    config = args, H, W, camera_pose, shapes, lights, mask
-    config += shadows, shadow_mask
-    render_step = paz.lock(render_tile_step, config)
-    image, depth = jax.lax.scan(render_step, None, coordinates)[1]
-    image = paz.graphics.mesh.assemble(H, W, H_tiles, W_tiles, image)
-    depth = paz.graphics.mesh.assemble(H, W, H_tiles, W_tiles, depth)
-    return image, depth[..., 0]
+    render_step = paz.lock(render_step, args)
+    return jax.lax.scan(render_step, None, coordinates)[1]
 
 
-def render_tile_step(carry, tile_arg, config):
-    args, H, W, camera_pose, shapes, lights, mask = config[:7]
-    shadows, shadow_mask = config[7:]
-    H_tiles, W_tiles = args.tile_shape
-    camera_to_world = jp.linalg.inv(camera_pose)
+def render_tile_step(carry, tile_arg, args):
+    H, W = args.shape
+    H_tiles, W_tiles = args.tiles
+    camera_to_world = jp.linalg.inv(args.pose)
     tile_args = H, W, H_tiles, W_tiles, args.y_FOV, camera_to_world
     rays = paz.graphics.mesh.build_tile_rays(*tile_args, tile_arg)
     tile_H, tile_W = H // H_tiles, W // W_tiles
-    trace_args = shapes, lights, mask, shadows, shadow_mask
+    trace_args = args.scene, args.lights, args.mask, args.shadows
+    trace_args += args.shadow_mask,
     trace_args += args.num_bounces,
     hit_mask, depth, color = trace_chunks(rays, trace_args, args.chunk_size)
-    post_args = hit_mask, depth, color, camera_pose, rays, tile_H, tile_W
+    post_args = hit_mask, depth, color, args.pose, rays, tile_H, tile_W
     image, depth = postprocess(*post_args)
     return carry, (image, jp.expand_dims(depth, -1))
+
+
+def assemble_image(args, image):
+    H, W = args.shape
+    H_tiles, W_tiles = args.tiles
+    return paz.graphics.mesh.assemble(H, W, H_tiles, W_tiles, image)
+
+
+def assemble_depth(args, depth):
+    H, W = args.shape
+    H_tiles, W_tiles = args.tiles
+    return paz.graphics.mesh.assemble(H, W, H_tiles, W_tiles, depth)[..., 0]
 
 
 def trace_chunks(rays, config, chunk_size):
@@ -104,30 +143,6 @@ def flatten_chunk_results(hit_mask, depth, color, num_rays):
 def flatten_chunk_array(array, num_rays):
     shape = (-1,) + array.shape[2:]
     return array.reshape(shape)[:num_rays]
-
-
-def render_masks(*inputs, **options):
-    config = unpack_args(RenderMaskArgs, inputs, options)
-    num_nodes = len(config.scene.nodes)
-    masks = []
-    for object_arg in range(config.num_objects):
-        mask = jp.zeros((num_nodes,), dtype=bool).at[object_arg].set(True)
-        args = config.image_shape, config.camera_pose, config.rays
-        args += config.scene, config.lights, mask, config.shadows
-        _, depth = render(*args)
-        soft = paz.depth.to_soft_mask(depth, config.min_depth, config.max_depth)
-        masks.append(jp.expand_dims(soft, axis=-1))
-    return jp.stack(masks)
-
-
-def render(*inputs, **options):
-    defaults = {"shadow_mask": None, "num_bounces": 1}
-    args = unpack_args(RenderArgs, inputs, options, defaults)
-    scene_args = args.scene, args.lights, args.mask, args.shadow_mask
-    shapes, mask, shadow_mask, lights = paz.graphics.scene.compile(*scene_args)
-    inputs = args.world_to_camera, args.rays, shapes, lights, mask
-    inputs += args.shadows, shadow_mask, args.num_bounces
-    return render_bounced(*args.image_shape, *inputs)
 
 
 def render_bounced(*inputs, **options):
