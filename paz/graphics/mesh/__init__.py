@@ -36,12 +36,8 @@ from .shading import (
 from .render import (
     mask_out_mesh,
     postprocess,
-    postprocess_depth,
     render,
-    render_depth,
     render_masks,
-    render_mesh,
-    render_mesh_depth,
     select_closest_color,
     to_color_image,
     to_depth_image,
@@ -53,11 +49,6 @@ from .tile import (
     make_ray_origins,
     make_ray_targets,
     make_tile_coordinates,
-    render_depth_tile,
-    render_tile,
-    tile_render,
-    tile_render_depth,
-    tile_render_masks,
     transform_tile_rays,
 )
 from .silhouette import (
