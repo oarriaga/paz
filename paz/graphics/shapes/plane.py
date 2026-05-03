@@ -8,7 +8,9 @@ from paz.graphics.constants import EPSILON, FARAWAY
 def intersect_canonical_plane(ray_origins, ray_directions):
     ray_origins_y = ray_origins[:, 1]
     ray_directions_y = ray_directions[:, 1]
-    depths = -ray_origins_y / ray_directions_y
+    sign = jp.where(ray_directions_y >= 0.0, 1e-7, -1e-7)
+    safe_y = jp.where(jp.abs(ray_directions_y) > 1e-7, ray_directions_y, sign)
+    depths = -ray_origins_y / safe_y
     # TODO check why jp.abs is not providing expected results for hit mask
     hit_mask = jp.logical_and((depths > EPSILON), (depths < FARAWAY))
     depths = apply_hit_mask(hit_mask, depths)
