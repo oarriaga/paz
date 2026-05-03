@@ -23,9 +23,14 @@ H, W = 1024, 1024
 y_FOV = jp.pi / 4.0
 resize_factor = 1
 image_size = (H, W)
-render_kwargs = {"mask": None, "shadows": True, "lights": lights}
-rays = paz.graphics.camera.build_rays(image_size, y_FOV, world_to_camera)
-render_args = ((H, W), world_to_camera, rays)
+render_kwargs = dict(
+    mask=None,
+    shadows=True,
+    lights=lights,
+    tiles=(1, 1),
+    chunk_size=1024,
+)
+render_args = image_size, y_FOV, world_to_camera
 
 
 def get_point_on_sphere(transform, theta, phi):
