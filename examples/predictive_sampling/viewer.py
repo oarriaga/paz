@@ -3,15 +3,17 @@ import time
 
 import jax
 import jax.numpy as jp
+import jax.random as jr
 import mujoco
 import mujoco.viewer
 import numpy as np
 
 
 def _print_plan(controller):
+    sampler = controller.sampler
     first = f"Planning with {controller.num_control_steps} steps"
-    second = f"over a {controller.plan_horizon} second horizon"
-    print(f"{first} {second} with {controller.num_knots} knots.")
+    second = f"over a {sampler.plan_horizon} second horizon"
+    print(f"{first} {second}")
 
 
 def _compute_replan_args(model, frequency):
@@ -24,7 +26,7 @@ def _compute_replan_args(model, frequency):
 
 
 def _build_rollout_data(controller, mj_data):
-    rollout_data = controller.task.make_data()
+    rollout_data = controller.model.make_state()
     data_kwargs = dict(qpos=mj_data.qpos, qvel=mj_data.qvel)
     data_kwargs["mocap_pos"] = mj_data.mocap_pos
     data_kwargs["mocap_quat"] = mj_data.mocap_quat
@@ -50,8 +52,10 @@ def _compute_controls(interpolate, model, num_steps, policy, current_time):
 def _warm_up(optimize, interpolate, rollout_data, policy, key, model, steps):
     print("Jitting the controller...")
     start_time = time.time()
-    policy, rollouts, key = optimize(rollout_data, policy, key)
-    policy, rollouts, key = optimize(rollout_data, policy, key)
+    key, subkey = jr.split(key)
+    policy, rollouts = optimize(subkey, rollout_data, policy)
+    key, subkey = jr.split(key)
+    policy, rollouts = optimize(subkey, rollout_data, policy)
     _compute_controls(interpolate, model, steps, policy, 0.0)
     _compute_controls(interpolate, model, steps, policy, 0.0)
     print(f"Time to jit: {time.time() - start_time:.3f} seconds")
@@ -122,7 +126,7 @@ def _init_trace_geom(geom, color):
 
 
 def _init_traces(viewer, controller, num_traces, color):
-    num_sites = len(controller.task.trace_site_ids)
+    num_sites = len(controller.model.trace_site_ids)
     num_geoms = num_sites * num_traces * controller.num_control_steps
     for geom_index in range(num_geoms):
         _init_trace_geom(viewer.user_scn.geoms[geom_index], color)
@@ -138,7 +142,7 @@ def _update_traces(viewer, rollouts, num_sites, num_traces, num_steps, width):
             for step_index in range(num_steps):
                 geom = viewer.user_scn.geoms[geom_index]
                 args = geom, mujoco.mjtGeom.mjGEOM_LINE
-                points = trace_points[step_index:step_index + 2]
+                points = trace_points[step_index : step_index + 2]
                 mujoco.mjv_connector(*args, width, points[0], points[1])
                 geom_index += 1
 
@@ -166,7 +170,6 @@ def _wait_for_step(step_time, loop_start, plan_time):
 
 def build_viewer_config(config):
     defaults = {}
-    defaults["initial_knots"] = None
     defaults["fixed_camera_id"] = None
     defaults["show_traces"] = True
     defaults["max_traces"] = 5
@@ -179,9 +182,8 @@ def build_viewer_config(config):
     return defaults
 
 
-def run_interactive(controller, mj_model, mj_data, frequency, **config):
+def run_interactive(controller, mj_model, mj_data, policy, frequency, **config):  # fmt: skip
     config = build_viewer_config(config)
-    initial_knots = config["initial_knots"]
     fixed_camera_id = config["fixed_camera_id"]
     show_traces = config["show_traces"]
     max_traces = config["max_traces"]
@@ -195,9 +197,8 @@ def run_interactive(controller, mj_model, mj_data, frequency, **config):
     num_steps, step_time, actual_frequency = replan_args
     rollout_data = _build_rollout_data(controller, mj_data)
     key = jax.random.key(0)
-    policy = controller.initialize_parameters(initial_knots=initial_knots)
     optimize = jax.jit(controller.optimize)
-    interpolate = jax.jit(controller.interpolate)
+    interpolate = jax.jit(controller.sampler.interpolate)
     warm_up_args = optimize, interpolate, rollout_data, policy, key
     policy, rollouts, key = _warm_up(*warm_up_args, mj_model, num_steps)
     num_traces = min(rollouts.controls.shape[1], max_traces)
@@ -215,7 +216,8 @@ def run_interactive(controller, mj_model, mj_data, frequency, **config):
             loop_start = time.time()
             rollout_data = _update_rollout_data(rollout_data, mj_data)
             plan_start = time.time()
-            policy, rollouts, key = optimize(rollout_data, policy, key)
+            key, subkey = jr.split(key)
+            policy, rollouts = optimize(subkey, rollout_data, policy)
             plan_time = time.time() - plan_start
             if show_traces:
                 trace_args = viewer, rollouts, num_sites, num_traces

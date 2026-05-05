@@ -5,7 +5,12 @@ import jax.numpy as jp
 
 @partial(jax.vmap, in_axes=(None, None, 0))
 def interpolate_zero(query_times, knot_times, knots):
-    """Zero-order spline interpolation."""
+    """Zero-order spline interpolation. Pick the most recent knot at or before
+    the query time. So a query at 0.4 with knots at [0.0, 0.5, 1.0] outputs
+    knot 0's value (10.0), even though 0.5 is geometrically closer. Always
+    look-back, never look-ahead. Thus, zero-order hold is causal i.e. the
+    control at time t never depends on a knot in the future.
+    """
     return knots[jp.searchsorted(knot_times, query_times, side="right") - 1]
 
 
