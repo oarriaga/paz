@@ -154,13 +154,20 @@ def test_benchmark_jit_renderer(
 
     H, W = resolution
     y_FOV = jp.pi / 4.0
-    rays = renderer.paz.graphics.camera.build_rays((H, W), y_FOV, camera_pose)
 
     # 2. JIT Compile
     @jax.jit
     def run_render():
         return renderer.render(
-            (H, W), camera_pose, rays, scene, lights, mask=None, shadows=shadows
+            (H, W),
+            y_FOV,
+            camera_pose,
+            scene,
+            None,
+            lights,
+            (1, 1),
+            1024,
+            shadows,
         )
 
     # Warmup (Compile time)

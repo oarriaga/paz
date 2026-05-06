@@ -42,8 +42,8 @@ camera_pose = paz.SE3.view_transform(
 
 light = paz.graphics.PointLight(jp.ones(3), jp.array([-4.0, 5.0, 6.0]))
 H, W, y_FOV = 480, 640, jp.pi / 4.0
-rays = paz.graphics.camera.build_rays((H, W), y_FOV, camera_pose)
-render_args = ((H, W), camera_pose, rays, scene, light, None, False)
-image, depth = paz.graphics.render(*render_args)
+render_args = (H, W), y_FOV, camera_pose, scene, None, light
+render_args = render_args + ((1, 1), 1024)
+image, depth = paz.graphics.render(*render_args, False)
 paz.graphics.save("assets/axes", axes)
 paz.image.show(paz.image.denormalize(image))

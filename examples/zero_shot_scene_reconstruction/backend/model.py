@@ -48,18 +48,26 @@ def parameters_to_scene(geometry, floor_material, materials, shapes):
 
 def build_shape_model(camera, geometry, shadows):
     image_shape, y_FOV, world_to_camera, min_depth, max_depth = camera
-    rays = paz.graphics.camera.build_rays(image_shape, y_FOV, world_to_camera)
 
     def model(lights, floor_material, materials, scale_vectors, distances):
         shapes = (scale_vectors, distances)
         scene_args = (geometry, floor_material, materials, shapes)
         result = parameters_to_scene(*scene_args)
         scene, transforms, points3D, final_scale_vectors = result
-        view_args = (image_shape, world_to_camera, rays, scene, lights)
-        image, depth = paz.graphics.render(*view_args, None, shadows)
+        view_args = image_shape, y_FOV, world_to_camera, scene, None, lights
+        view_args = view_args + ((1, 1), image_shape[0] * image_shape[1])
+        image, depth = paz.graphics.render(*view_args, shadows)
         num_objects = len(scene.nodes) - 1
-        mask_args = (*view_args, num_objects, min_depth, max_depth, shadows)
-        masks = render_masks(*mask_args)
+        mask_args = image_shape, y_FOV, world_to_camera, scene, lights
+        depth_range = min_depth, max_depth
+        masks = render_masks(
+            *mask_args,
+            depth_range,
+            (1, 1),
+            image_shape[0] * image_shape[1],
+            num_objects=num_objects,
+            shadows=shadows,
+        )
         depth = jp.expand_dims(depth, axis=-1)
         aux = {
             "transforms": transforms,
@@ -80,7 +88,6 @@ def build_mesh_model(camera, meshes, mesh_weights, floor, lights):
     num_f = meshes.faces.shape[1]
     num_e = meshes.edges.shape[1]
     filled_floor = paz.graphics.mesh.fill_mesh(floor, num_v, num_f, num_e)
-    H, W = image_shape
     tile = tuple(tile_shape)
 
     def model(cage_vertices):
@@ -89,13 +96,13 @@ def build_mesh_model(camera, meshes, mesh_weights, floor, lights):
         updated = meshes._replace(vertices=deformed_verts)
         scene_meshes = append_mesh(updated, filled_floor)
         all_mask = jp.ones(num_objects + 1, dtype=bool)
-        tile_args = tile, y_FOV, H, W, world_to_camera
-        scene_args = scene_meshes, all_mask, lights, chunk_size
-        render_fn = paz.graphics.mesh.tile_render
-        image, depth = render_fn(*tile_args, *scene_args)
-        mask_args = tile_args + (updated, lights, min_depth, max_depth)
-        render_masks = paz.graphics.mesh.tile_render_masks
-        masks = render_masks(*mask_args, chunk_size)
+        render_args = image_shape, y_FOV, world_to_camera, scene_meshes
+        render_args = render_args + (all_mask, lights, tile, chunk_size)
+        image, depth = paz.graphics.mesh.render(*render_args)
+        depth_range = (min_depth, max_depth)
+        mask_args = image_shape, y_FOV, world_to_camera, updated, lights
+        mask_args = mask_args + (depth_range, tile, chunk_size)
+        masks = paz.graphics.mesh.render_masks(*mask_args)
         depth = jp.expand_dims(depth, axis=-1)
         aux = {"meshes": updated, "vertices": deformed_verts}
         aux["faces"] = meshes.faces

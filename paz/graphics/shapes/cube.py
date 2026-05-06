@@ -4,9 +4,11 @@ from paz.graphics.geometry import apply_hit_mask
 from paz.graphics.constants import EPSILON, FARAWAY
 
 
-def check_axis(axis_origin, axis_direction):
-    depth_min = -(axis_origin + 1) / axis_direction
-    depth_max = -(axis_origin - 1) / axis_direction
+def check_axis(axis_origin, axis_direction, eps=1e-7):
+    sign = jp.where(axis_direction >= 0.0, eps, -eps)
+    safe = jp.where(jp.abs(axis_direction) > eps, axis_direction, sign)
+    depth_min = -(axis_origin + 1) / safe
+    depth_max = -(axis_origin - 1) / safe
 
     switch = depth_min > depth_max
     swapped_depth_min = jp.where(switch, depth_max, depth_min)

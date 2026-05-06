@@ -1,47 +1,6 @@
-from functools import partial
-
-import jax
 import jax.numpy as jp
 
 import paz
-
-from .render import render, render_depth
-
-
-def tile_render(tile_shape, y_FOV, H, W, world_to_camera, meshes, mask, lights, chunk_size=1024):
-    H_tiles, W_tiles = tile_shape
-    assert_exact_tile_side(H, H_tiles)
-    assert_exact_tile_side(W, W_tiles)
-    args = (H, W, *tile_shape, y_FOV, world_to_camera, meshes, mask, lights, chunk_size)
-    _render = partial(render_tile, *args)
-    tile_coordinates = make_tile_coordinates(H_tiles, W_tiles)
-    image, depth = jax.lax.scan(_render, None, tile_coordinates)[1]
-    image = assemble(H, W, H_tiles, W_tiles, image)
-    depth = assemble(H, W, H_tiles, W_tiles, depth)[..., 0]
-    return image, depth
-
-
-def tile_render_depth(tile_shape, y_FOV, H, W, world_to_camera, meshes, mask, lights, chunk_size=1024):
-    H_tiles, W_tiles = tile_shape
-    assert_exact_tile_side(H, H_tiles)
-    assert_exact_tile_side(W, W_tiles)
-    args = (H, W, *tile_shape, y_FOV, world_to_camera, meshes, mask, lights, chunk_size)
-    _render = partial(render_depth_tile, *args)
-    tile_coordinates = make_tile_coordinates(H_tiles, W_tiles)
-    depths = jax.lax.scan(_render, None, tile_coordinates)[1]
-    return assemble(H, W, H_tiles, W_tiles, depths)[..., 0]
-
-
-def tile_render_masks(tile_shape, y_FOV, H, W, world_to_camera, meshes, lights, min_depth, max_depth, chunk_size=1024):
-    num_meshes = len(meshes.vertices)
-    masks = []
-    for arg in range(num_meshes):
-        mask = jp.zeros(num_meshes, dtype=bool).at[arg].set(True)
-        args = tile_shape, y_FOV, H, W, world_to_camera, meshes, mask, lights
-        depth = tile_render_depth(*args, chunk_size)
-        soft = paz.depth.to_soft_mask(depth, min_depth, max_depth)
-        masks.append(jp.expand_dims(soft, axis=-1))
-    return jp.stack(masks)
 
 
 def assert_exact_tile_side(image_size, tile_size):
@@ -49,29 +8,10 @@ def assert_exact_tile_side(image_size, tile_size):
         raise ValueError("tile size must divide image size without a residual")
 
 
-def render_tile(H, W, H_tiles, W_tiles, y_FOV, world_to_camera, meshes, mask, lights, chunk_size, carry, tile_arg):  # fmt: skip
-    camera_to_world = jp.linalg.inv(world_to_camera)
-    tile_shape = (H_tiles, W_tiles)
-    rays = build_tile_rays(H, W, *tile_shape, y_FOV, camera_to_world, tile_arg)
-    tile_shape = (H // H_tiles, W // W_tiles)
-    tile = render(tile_shape, world_to_camera, rays, meshes, mask, lights, chunk_size)
-    return carry, tile
-
-
-def render_depth_tile(H, W, H_tiles, W_tiles, y_FOV, world_to_camera, meshes, mask, lights, chunk_size, carry, tile_arg):  # fmt: skip
-    camera_to_world = jp.linalg.inv(world_to_camera)
-    tile_shape = (H_tiles, W_tiles)
-    rays = build_tile_rays(H, W, *tile_shape, y_FOV, camera_to_world, tile_arg)
-    tile_shape = (H // H_tiles, W // W_tiles)
-    depth = render_depth(tile_shape, world_to_camera, rays, meshes, mask, lights, chunk_size)
-    return carry, depth
-
-
 def build_tile_rays(H, W, H_tiles, W_tiles, y_FOV, camera_to_world, tile_arg):
     aspect_ratio = paz.graphics.camera.compute_aspect_ratio(H, W)
-    H_world, W_world = paz.graphics.camera.compute_image_sizes(
-        y_FOV, aspect_ratio
-    )
+    sizes = paz.graphics.camera.compute_image_sizes(y_FOV, aspect_ratio)
+    H_world, W_world = sizes
     half_W = W_world / 2
     half_H = H_world / 2
     pixel_size = paz.graphics.camera.compute_pixel_size(W_world, W)

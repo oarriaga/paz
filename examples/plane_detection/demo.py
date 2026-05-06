@@ -209,9 +209,14 @@ for position in paz.pointcloud.sample(key, pointcloud_filtered, num_spheres):
 scene = paz.graphics.Scene(nodes)
 
 lights = [paz.graphics.PointLight(jp.ones(3), jp.ones(3))]
-rays = paz.graphics.camera.build_rays((H, W), y_FOV, world_to_camera)
-render_args = ((H, W), world_to_camera, rays)
-render_karg = {"lights": lights, "mask": None, "shadows": False}
+render_args = (H, W), y_FOV, world_to_camera
+render_karg = dict(
+    lights=lights,
+    mask=None,
+    shadows=False,
+    tiles=(1, 1),
+    chunk_size=1024,
+)
 render = jax.jit(paz.partial(paz.graphics.render, *render_args, **render_karg))
 pred_image, pred_depth = render(scene=scene)
 

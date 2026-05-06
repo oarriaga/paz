@@ -25,10 +25,9 @@ plane_pose = paz.SE3.translation(jp.array([0.0, -1.0, 0.0]))
 plane = paz.graphics.Plane(plane_pose, plane_material)
 scene_nodes = [paz.graphics.Sphere(material=shape_material), plane]
 scene = paz.graphics.Scene(scene_nodes)
-rays = paz.graphics.camera.build_rays(image_shape, y_FOV, camera_pose)
 lights = [paz.graphics.PointLight(jp.full(3, 0.9), jp.array([10.0, 18.0, 0.0]))]
-render_args = (image_shape, camera_pose, rays)
-render_kargs = dict(lights=lights, mask=None)
+render_args = image_shape, y_FOV, camera_pose
+render_kargs = dict(lights=lights, mask=None, tiles=(1, 1), chunk_size=1024)
 render = paz.partial(paz.graphics.render, *render_args, **render_kargs)
 
 

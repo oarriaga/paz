@@ -13,19 +13,16 @@ def orbit_pose(camera_origin, angle):
     return paz.SE3.view_transform(pos, jp.zeros(3), jp.array([0.0, 1.0, 0.0]))
 
 
-def render_orbit(image_shape, y_FOV, scene, lights, shadows, camera_origin, num_views):
-    H, W = image_shape
-    shapes, mask, _, lights = paz.graphics.scene.compile(scene, lights, mask=None)
-    bounces = paz.graphics.scene.compute_bounces(shapes)
-    identity_rays = paz.graphics.camera.build_rays(image_shape, y_FOV, jp.eye(4))
-    render_bounced = paz.graphics.renderer.render_bounced
+def render_orbit(
+    image_shape, y_FOV, scene, lights, shadows, camera_origin, num_views
+):
+    shapes = paz.graphics.scene.flatten_scene(scene)
+    num_bounces = paz.graphics.scene.compute_bounces(shapes)
 
     @jax.jit
     def render_frame(pose):
-        cam_to_world = jp.linalg.inv(pose)
-        rays = paz.graphics.geometry.transform_rays(cam_to_world, *identity_rays)
-        args = (H, W, pose, rays, shapes, lights, mask, shadows, None, bounces)
-        image, _ = render_bounced(*args)
+        args = image_shape, y_FOV, pose, scene, None, lights, (1, 1), 1024
+        image, _ = paz.graphics.render(*args, shadows, None, num_bounces)
         return jp.clip(image, 0.0, 1.0)
 
     angles = jp.linspace(1.5 * jp.pi, 3.5 * jp.pi, num_views)
