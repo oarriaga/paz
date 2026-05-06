@@ -19,13 +19,12 @@ def PredictiveSampler(task, model, sampler, iterations):
 def optimize(task, model, sampler, num_control_steps, iterations, key, state, parameters):  # fmt: skip
     parameters = sampler.warm_start(parameters, state)
     knot_times = parameters.knot_times
+    _rollout = partial(rollout, task, model, sampler, num_control_steps, state)
 
     def step(parameters, key):
         knots = sampler.sample(key, parameters)
-        args = task, model, sampler, num_control_steps
-        rollouts = rollout(*args, state, knot_times, knots)
-        best = jp.argmin(jp.sum(rollouts.costs, axis=1))
-        return parameters._replace(mean=rollouts.knots[best]), rollouts
+        rollouts = _rollout(knot_times, knots)
+        return sampler.update(parameters, rollouts), rollouts
 
     keys = jr.split(key, iterations)
     parameters, rollouts = jax.lax.scan(step, parameters, keys)
@@ -37,8 +36,8 @@ def rollout(task, model, sampler, num_control_steps, state, knot_times, knots):
     start_time, end_time = knot_times[0], knot_times[-1]
     query_times = jp.linspace(start_time, end_time, num_control_steps)
     controls = sampler.interpolate(query_times, knot_times, knots)
-    eval_fn = partial(evaluate_sample, task, model)
-    return jax.vmap(eval_fn, in_axes=(None, 0, 0))(state, controls, knots)
+    evaluate = jax.vmap(partial(evaluate_sample, task, model, state), (0, 0))
+    return evaluate(controls, knots)
 
 
 def evaluate_sample(task, model, state, controls, knots):

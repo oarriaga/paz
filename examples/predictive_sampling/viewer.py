@@ -8,11 +8,14 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 
+from video import start_recording, add_frame, stop_recording
 
-def _print_plan(controller):
+
+def _print_plan(controller, policy):
     sampler = controller.sampler
+    num_knots = policy.mean.shape[0]
     first = f"Planning with {controller.num_control_steps} steps"
-    second = f"over a {sampler.plan_horizon} second horizon"
+    second = f"and {num_knots} knots over a {sampler.plan_horizon}s horizon"
     print(f"{first} {second}")
 
 
@@ -20,25 +23,25 @@ def _compute_replan_args(model, frequency):
     replan_time = 1.0 / frequency
     num_steps = max(int(replan_time / model.opt.timestep), 1)
     step_time = num_steps * model.opt.timestep
-    first = f"Planning at {1.0 / step_time} Hz"
+    first = f"Replanning at {1.0 / step_time} Hz"
     print(f"{first}, simulating at {1.0 / model.opt.timestep} Hz")
     return num_steps, step_time, 1.0 / step_time
 
 
-def _build_rollout_data(controller, mj_data):
-    rollout_data = controller.model.make_state()
+def _build_state(controller, mj_data):
+    state = controller.model.make_state()
     data_kwargs = dict(qpos=mj_data.qpos, qvel=mj_data.qvel)
     data_kwargs["mocap_pos"] = mj_data.mocap_pos
     data_kwargs["mocap_quat"] = mj_data.mocap_quat
-    return rollout_data.replace(**data_kwargs)
+    return state.replace(**data_kwargs)
 
 
-def _update_rollout_data(rollout_data, mj_data):
+def _update_state(state, mj_data):
     data_kwargs = dict(qpos=jp.array(mj_data.qpos), qvel=jp.array(mj_data.qvel))
     data_kwargs["mocap_pos"] = jp.array(mj_data.mocap_pos)
     data_kwargs["mocap_quat"] = jp.array(mj_data.mocap_quat)
     data_kwargs["time"] = mj_data.time
-    return rollout_data.replace(**data_kwargs)
+    return state.replace(**data_kwargs)
 
 
 def _compute_controls(interpolate, model, num_steps, policy, current_time):
@@ -49,22 +52,17 @@ def _compute_controls(interpolate, model, num_steps, policy, current_time):
     return np.asarray(interpolate(query_times, knot_times, knots))[0]
 
 
-def _warm_up(optimize, interpolate, rollout_data, policy, key, model, steps):
+def _warm_up(optimize, interpolate, state, policy, key, model, steps):
     print("Jitting the controller...")
     start_time = time.time()
     key, subkey = jr.split(key)
-    policy, rollouts = optimize(subkey, rollout_data, policy)
-    key, subkey = jr.split(key)
-    policy, rollouts = optimize(subkey, rollout_data, policy)
-    _compute_controls(interpolate, model, steps, policy, 0.0)
+    policy, rollouts = optimize(subkey, state, policy)
     _compute_controls(interpolate, model, steps, policy, 0.0)
     print(f"Time to jit: {time.time() - start_time:.3f} seconds")
     return policy, rollouts, key
 
 
 def _build_reference(reference, model):
-    if reference is None:
-        return None
     reference_data = mujoco.MjData(model)
     assert reference.shape[1] == model.nq
     reference_data.qpos[:] = reference[0]
@@ -92,21 +90,13 @@ def _update_reference(model, mj_data, reference, reference_fps, view, viewer):
     mujoco.mjv_updateScene(*args, viewer.cam, category_mask, viewer.user_scn)
 
 
-def _build_video(model, actual_frequency, record_video):
-    if not record_video:
+def _build_video(model, replan_frequency):
+    output_dir = os.path.join(os.path.dirname(__file__), "recordings")
+    recorder = start_recording(output_dir, 720, 480, replan_frequency)
+    if recorder is None:
         return None, None
-    from hydrax import ROOT
-    from hydrax.utils.video import VideoRecorder
-
-    recorder_kwargs = dict(output_dir=os.path.join(ROOT, "recordings"))
-    recorder_kwargs["width"] = 720
-    recorder_kwargs["height"] = 480
-    recorder_kwargs["fps"] = actual_frequency
-    recorder = VideoRecorder(**recorder_kwargs)
-    model.vis.global_.offwidth = recorder_kwargs["width"]
-    model.vis.global_.offheight = recorder_kwargs["height"]
-    if not recorder.start():
-        return None, None
+    model.vis.global_.offwidth = 720
+    model.vis.global_.offheight = 480
     renderer = mujoco.Renderer(model, height=480, width=720)
     return recorder, renderer
 
@@ -152,11 +142,11 @@ def _step_simulation(model, mj_data, viewer, controls, recorder, renderer):
         mj_data.ctrl[:] = np.array(control)
         mujoco.mj_step(model, mj_data)
         viewer.sync()
-        if recorder is None or not recorder.is_recording:
+        if recorder is None:
             continue
         renderer.update_scene(mj_data, viewer.cam)
         frame = renderer.render()
-        recorder.add_frame(frame.tobytes())
+        add_frame(recorder, frame.tobytes())
 
 
 def _wait_for_step(step_time, loop_start, plan_time):
@@ -168,42 +158,23 @@ def _wait_for_step(step_time, loop_start, plan_time):
     print(message, end="\r")
 
 
-def build_viewer_config(config):
-    defaults = {}
-    defaults["fixed_camera_id"] = None
-    defaults["show_traces"] = True
-    defaults["max_traces"] = 5
-    defaults["trace_width"] = 5.0
-    defaults["trace_color"] = (1.0, 1.0, 1.0, 0.1)
-    defaults["reference"] = None
-    defaults["reference_fps"] = 30.0
-    defaults["record_video"] = False
-    defaults.update(config)
-    return defaults
-
-
-def run_interactive(controller, mj_model, mj_data, policy, frequency, **config):  # fmt: skip
-    config = build_viewer_config(config)
-    fixed_camera_id = config["fixed_camera_id"]
-    show_traces = config["show_traces"]
-    max_traces = config["max_traces"]
-    trace_width = config["trace_width"]
-    trace_color = config["trace_color"]
-    reference = config["reference"]
-    reference_fps = config["reference_fps"]
-    record_video = config["record_video"]
-    _print_plan(controller)
+def run_interactive(controller, mj_model, mj_data, policy, frequency, fixed_camera_id=None, show_traces=True, max_traces=5, trace_width=5.0, trace_color=(1.0, 1.0, 1.0, 0.1), reference=None, reference_fps=30.0, record_video=False):  # fmt: skip
+    _print_plan(controller, policy)
     replan_args = _compute_replan_args(mj_model, frequency)
-    num_steps, step_time, actual_frequency = replan_args
-    rollout_data = _build_rollout_data(controller, mj_data)
+    num_steps, step_time, replan_frequency = replan_args
+    state = _build_state(controller, mj_data)
     key = jax.random.key(0)
     optimize = jax.jit(controller.optimize)
     interpolate = jax.jit(controller.sampler.interpolate)
-    warm_up_args = optimize, interpolate, rollout_data, policy, key
+    warm_up_args = optimize, interpolate, state, policy, key
     policy, rollouts, key = _warm_up(*warm_up_args, mj_model, num_steps)
     num_traces = min(rollouts.controls.shape[1], max_traces)
-    reference_view = _build_reference(reference, mj_model)
-    recorder, renderer = _build_video(mj_model, actual_frequency, record_video)
+    reference_view = None
+    if reference is not None:
+        reference_view = _build_reference(reference, mj_model)
+    recorder, renderer = None, None
+    if record_video:
+        recorder, renderer = _build_video(mj_model, replan_frequency)
     with mujoco.viewer.launch_passive(mj_model, mj_data) as viewer:
         _set_camera(viewer, fixed_camera_id)
         num_sites = 0
@@ -214,10 +185,10 @@ def run_interactive(controller, mj_model, mj_data, policy, frequency, **config):
             _add_reference(mj_model, reference_view, viewer)
         while viewer.is_running():
             loop_start = time.time()
-            rollout_data = _update_rollout_data(rollout_data, mj_data)
+            state = _update_state(state, mj_data)
             plan_start = time.time()
             key, subkey = jr.split(key)
-            policy, rollouts = optimize(subkey, rollout_data, policy)
+            policy, rollouts = optimize(subkey, state, policy)
             plan_time = time.time() - plan_start
             if show_traces:
                 trace_args = viewer, rollouts, num_sites, num_traces
@@ -234,4 +205,4 @@ def run_interactive(controller, mj_model, mj_data, policy, frequency, **config):
             _wait_for_step(step_time, loop_start, plan_time)
     print()
     if recorder is not None:
-        recorder.stop()
+        stop_recording(recorder)

@@ -80,8 +80,7 @@ def parse_args():
 
 
 def build_controller(task, model):
-    # sampler_args = model, 256, 5, 1.0, 0.5, interpolate_zero
-    sampler_args = model, 256, 5, 1.0, 0.5, interpolate_cubic
+    sampler_args = model, 256, 5, 1.0, 0.5, interpolate_zero
     sampler = KnotSampler(*sampler_args)
     return PredictiveSampler(task, model, sampler, 1)
 
