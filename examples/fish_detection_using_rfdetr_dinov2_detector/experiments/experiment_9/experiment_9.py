@@ -1,0 +1,549 @@
+#!/usr/bin/env python
+"""Experiment 9: RF-DETR Nano — native RF-DETR augmentation benchmark.
+
+Identical to Experiment 5 in every hyperparameter, but replaces the
+custom ``pipeline2`` augmentation with the native RF-DETR augmentation
+pipeline (``make_coco_transforms_square_div_64``).
+
+Native RF-DETR train augmentation used here
+(square_resize_div_64=True, multi_scale=False):
+  - RandomHorizontalFlip  (p = 0.5)
+  - RandomSelect(
+        SquareResize([384]),
+        Compose([
+            RandomResize([400, 500, 600]),
+            RandomSizeCrop(384, 600),
+            SquareResize([384]),
+        ])
+    )
+  - ToTensor + Normalize(ImageNet mean/std)
+
+Differences vs Experiment 5:
+  - No custom _AugmentedDataLoader / DetectionDataGenerator for training.
+    ``train_from_config`` builds the native COCO data loader internally.
+  - RandomSizeCrop augmentation adds spatial diversity that pipeline2 lacks.
+  - LR-schedule monkey-patch removed: ``detr.py`` now builds the schedule.
+  - No engine patch needed: upstream engine.py already uses training=True
+    in Phase 1 (bug fixed in PAZ codebase).
+
+Hyperparameters (identical to Experiment 5):
+  - Variant:        RFDETRNano
+  - Resolution:     384 × 384
+  - Epochs:         100
+  - Batch size:     16 (grad_accum_steps=1, effective batch = 16)
+  - LR:             1e-4 cosine → 0   (warmup = 0 epochs)
+  - LR encoder:     1.5e-4
+  - Weight decay:   1e-4
+  - EMA decay:      0.993
+  - group_detr:     13
+  - drop_path:      0.0
+  - Early stopping: patience=10
+"""
+
+import os
+import sys
+import json
+import math
+import time
+import datetime
+import logging
+
+import numpy as np
+
+
+# ---------------------------------------------------------------------------
+# Tee stdout → log file so MetricLogger per-step prints appear in output.txt
+# ---------------------------------------------------------------------------
+
+class _TeeWriter:
+    """Duplicate writes to both the original stream and a file."""
+
+    def __init__(self, original, log_path):
+        self._original = original
+        self._log_file = open(log_path, "a")
+
+    def write(self, text):
+        self._original.write(text)
+        self._log_file.write(text)
+        self._log_file.flush()
+
+    def flush(self):
+        self._original.flush()
+        self._log_file.flush()
+
+    def close(self):
+        self._log_file.close()
+
+    def __getattr__(self, name):
+        return getattr(self._original, name)
+
+
+# ---------------------------------------------------------------------------
+# Path setup (must come before framework imports)
+# ---------------------------------------------------------------------------
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_PAZ_ROOT = os.path.abspath(os.path.join(_SCRIPT_DIR, "..", "..", "..", ".."))
+_SRC_DIR = os.path.abspath(os.path.join(_SCRIPT_DIR, "..", "..", "src"))
+if _PAZ_ROOT not in sys.path:
+    sys.path.insert(0, _PAZ_ROOT)
+if _SRC_DIR not in sys.path:
+    sys.path.insert(0, _SRC_DIR)
+
+os.environ.setdefault("TF_GPU_ALLOCATOR", "cuda_malloc_async")
+os.environ.setdefault("TF_FORCE_GPU_ALLOW_GROWTH", "true")
+os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
+
+import keras
+
+# ---------------------------------------------------------------------------
+# Project imports (after path setup and engine patch)
+# ---------------------------------------------------------------------------
+from paz.models.detection.dino_v2_object_detection.detr import RFDETRNano
+from paz.models.detection.dino_v2_object_detection.config import TrainConfig
+from paz.models.detection.dino_v2_object_detection.main import (
+    build_criterion_from_config,
+)
+from dataset import DeepFishDataset
+from train_utils import prepare_coco_dataset, setup_logging, validate_epoch_full
+from metrics_tracker import MetricsTracker
+
+logger = logging.getLogger(__name__)
+
+
+
+# =====================================================================
+# Experiment tracker — validation, checkpoints, plots, summaries
+# =====================================================================
+
+class ExperimentTracker:
+    """Per-epoch validation, checkpointing, plotting and summaries.
+
+    Plugs into ``train_from_config`` via ``on_fit_epoch_end`` /
+    ``on_train_end`` callbacks.
+    """
+
+    def __init__(
+        self,
+        model_ref,
+        keras_model,
+        criterion,
+        dataset,
+        train_indices,
+        val_indices,
+        num_classes,
+        class_names,
+        exp_dir,
+        batch_size,
+        total_epochs,
+        conf_threshold=0.3,
+        iou_threshold=0.5,
+    ):
+        self.model_ref = model_ref
+        self.keras_model = keras_model
+        self.val_model = keras_model
+        self.criterion = criterion
+        self.dataset = dataset
+        self.train_indices = train_indices
+        self.val_indices = val_indices
+        self.num_classes = num_classes
+        self.class_names = class_names
+        self.exp_dir = exp_dir
+        self.ckpt_dir = os.path.join(exp_dir, "checkpoints")
+        self.batch_size = batch_size
+        self.total_epochs = total_epochs
+        self.conf_threshold = conf_threshold
+        self.iou_threshold = iou_threshold
+
+        os.makedirs(self.ckpt_dir, exist_ok=True)
+        os.makedirs(os.path.join(exp_dir, "plots"), exist_ok=True)
+
+        self.tracker = MetricsTracker(
+            output_dir=exp_dir,
+            model_name="rfdetr_nano",
+            plot_interval=1,
+        )
+        self.best_val_loss = float("inf")
+
+    # ------------------------------------------------------------------
+
+    def on_epoch_end(self, log_stats):
+        epoch = log_stats.get("epoch", 0)
+        train_loss = float(
+            log_stats.get("train_loss", log_stats.get("loss", 0.0))
+        )
+        train_lr = log_stats.get("train_lr", log_stats.get("lr", 0.0))
+
+        # NaN / Inf guard
+        if not math.isfinite(train_loss):
+            logger.error(
+                "NaN/Inf loss detected (%.4f) — requesting stop", train_loss
+            )
+            self.model_ref.request_early_stop()
+            return
+
+        # Validation on VAL set
+        logger.info("  Running evaluation on VAL set...")
+        val_t0 = time.time()
+        val_metrics = validate_epoch_full(
+            model=self.val_model,
+            criterion=self.criterion,
+            dataset=self.dataset,
+            indices=self.val_indices,
+            batch_size=self.batch_size,
+            num_classes=self.num_classes,
+            class_names=self.class_names,
+            conf_threshold=self.conf_threshold,
+            iou_threshold=self.iou_threshold,
+            logger=logger,
+            prefix="val",
+        )
+        logger.info("  Val evaluation completed in %.1fs", time.time() - val_t0)
+
+        # Validation on TRAIN set (monitor overfitting)
+        logger.info("  Running evaluation on TRAIN set...")
+        train_eval_t0 = time.time()
+        train_eval_metrics = validate_epoch_full(
+            model=self.val_model,
+            criterion=self.criterion,
+            dataset=self.dataset,
+            indices=self.train_indices,
+            batch_size=self.batch_size,
+            num_classes=self.num_classes,
+            class_names=self.class_names,
+            conf_threshold=self.conf_threshold,
+            iou_threshold=self.iou_threshold,
+            logger=None,
+            prefix="train",
+        )
+        logger.info(
+            "  Train evaluation completed in %.1fs",
+            time.time() - train_eval_t0,
+        )
+
+        # Extract metrics
+        val_loss = val_metrics.get("val_loss", 0.0)
+        val_mAP_50 = val_metrics.get("val_mAP_50", 0.0)
+        val_mAP_50_95 = val_metrics.get("val_mAP_50_95", 0.0)
+        val_precision = val_metrics.get("val_precision", 0.0)
+        val_recall = val_metrics.get("val_recall", 0.0)
+        val_f1 = val_metrics.get("val_f1", 0.0)
+        val_accuracy = val_metrics.get("val_accuracy", 0.0)
+        val_num_gt = val_metrics.get("val_num_gt_boxes", 0)
+        val_num_pred = val_metrics.get("val_num_pred_boxes", 0)
+        val_loss_ce = val_metrics.get("val_loss_ce", 0.0)
+        val_loss_bbox = val_metrics.get("val_loss_bbox", 0.0)
+        val_loss_giou = val_metrics.get("val_loss_giou", 0.0)
+
+        train_mAP_50 = train_eval_metrics.get("train_mAP_50", 0.0)
+        train_mAP_50_95 = train_eval_metrics.get("train_mAP_50_95", 0.0)
+        train_precision = train_eval_metrics.get("train_precision", 0.0)
+        train_recall = train_eval_metrics.get("train_recall", 0.0)
+        train_f1 = train_eval_metrics.get("train_f1", 0.0)
+        train_accuracy = train_eval_metrics.get("train_accuracy", 0.0)
+        train_num_gt = train_eval_metrics.get("train_num_gt_boxes", 0)
+        train_num_pred = train_eval_metrics.get("train_num_pred_boxes", 0)
+
+        lr_val = float(train_lr) if isinstance(train_lr, (int, float)) else 0.0
+
+        # Epoch summary
+        logger.info("")
+        logger.info("-" * 60)
+        logger.info("Epoch %d Summary", epoch)
+        logger.info("-" * 60)
+        logger.info("  LOSSES:")
+        logger.info("    Train Loss (total) : %.4f", train_loss)
+        logger.info("    Val Loss   (total) : %.4f", val_loss)
+        logger.info("    Val   loss_ce      : %.4f", val_loss_ce)
+        logger.info("    Val   loss_bbox    : %.4f", val_loss_bbox)
+        logger.info("    Val   loss_giou    : %.4f", val_loss_giou)
+        logger.info("  OPTIMIZATION:")
+        logger.info("    Learning rate      : %.2e", lr_val)
+        logger.info("  TRAIN EVALUATION:")
+        logger.info("    mAP@50             : %.4f", train_mAP_50)
+        logger.info("    mAP@50:95          : %.4f", train_mAP_50_95)
+        logger.info("    Precision          : %.4f", train_precision)
+        logger.info("    Recall             : %.4f", train_recall)
+        logger.info("    F1 Score           : %.4f", train_f1)
+        logger.info("    Accuracy           : %.4f", train_accuracy)
+        logger.info("    GT Boxes           : %d", train_num_gt)
+        logger.info("    Pred Boxes         : %d", train_num_pred)
+        logger.info("  VAL EVALUATION:")
+        logger.info("    mAP@50             : %.4f", val_mAP_50)
+        logger.info("    mAP@50:95          : %.4f", val_mAP_50_95)
+        logger.info("    Precision          : %.4f", val_precision)
+        logger.info("    Recall             : %.4f", val_recall)
+        logger.info("    F1 Score           : %.4f", val_f1)
+        logger.info("    Accuracy           : %.4f", val_accuracy)
+        logger.info("    GT Boxes           : %d", val_num_gt)
+        logger.info("    Pred Boxes         : %d", val_num_pred)
+        logger.info("-" * 60)
+
+        # MetricsTracker
+        self.tracker.log_epoch(
+            epoch=epoch,
+            train_loss=train_loss,
+            val_loss=val_loss,
+            val_mAP_50=val_mAP_50,
+            val_mAP_50_95=val_mAP_50_95,
+            val_precision=val_precision,
+            val_recall=val_recall,
+            val_f1=val_f1,
+            val_accuracy=val_accuracy,
+            val_num_gt_boxes=val_num_gt,
+            val_num_pred_boxes=val_num_pred,
+            train_mAP_50=train_mAP_50,
+            train_mAP_50_95=train_mAP_50_95,
+            train_precision=train_precision,
+            train_recall=train_recall,
+            train_f1=train_f1,
+            train_accuracy=train_accuracy,
+            train_num_gt_boxes=train_num_gt,
+            train_num_pred_boxes=train_num_pred,
+            learning_rate=lr_val,
+            per_class_precision=val_metrics.get("per_class_precision"),
+            per_class_recall=val_metrics.get("per_class_recall"),
+            per_class_f1=val_metrics.get("per_class_f1"),
+            per_class_ap50=val_metrics.get("per_class_ap50"),
+            val_loss_ce=val_loss_ce,
+            val_loss_bbox=val_loss_bbox,
+            val_loss_giou=val_loss_giou,
+        )
+
+        # Checkpointing (best_keep strategy)
+        ckpt_name = (
+            f"rfdetr_nano_epoch_{epoch:04d}"
+            f"_val_loss_{val_loss:.4f}"
+            f"_mAP_{val_mAP_50:.4f}.weights.h5"
+        )
+        ckpt_path = os.path.join(self.ckpt_dir, ckpt_name)
+
+        if val_loss < self.best_val_loss:
+            self.best_val_loss = val_loss
+            self.keras_model.save_weights(ckpt_path)
+            logger.info(
+                "  [Checkpoint] NEW BEST (val_loss=%.4f): %s",
+                val_loss, ckpt_path,
+            )
+            best_path = os.path.join(self.ckpt_dir, "rfdetr_nano_best.weights.h5")
+            self.keras_model.save_weights(best_path)
+            logger.info("  [Checkpoint] Updated best: %s", best_path)
+        else:
+            logger.info(
+                "  [Checkpoint] No improvement "
+                "(current=%.4f, best=%.4f) — skipped",
+                val_loss, self.best_val_loss,
+            )
+
+        # Plots
+        if self.tracker.should_plot(epoch, self.total_epochs):
+            self.tracker.generate_plots()
+            logger.info(
+                "  [Plots] Updated: %s",
+                os.path.join(self.exp_dir, "plots"),
+            )
+
+    # ------------------------------------------------------------------
+
+    def on_train_end(self):
+        self.tracker.generate_plots()
+        logger.info("")
+        logger.info("=" * 68)
+        logger.info("TRAINING COMPLETE")
+        logger.info("=" * 68)
+        logger.info("  Best val loss     : %.4f", self.best_val_loss)
+        logger.info("  Experiment dir    : %s", self.exp_dir)
+        logger.info("  Checkpoints       : %s", self.ckpt_dir)
+        logger.info(
+            "  Plots             : %s",
+            os.path.join(self.exp_dir, "plots"),
+        )
+        logger.info("  Metrics log       : %s", self.tracker.log_path)
+        if self.tracker.history["epoch"]:
+            logger.info("\n%s", self.tracker.format_epoch_summary(-1))
+        logger.info("=" * 68)
+
+
+# =====================================================================
+# Main
+# =====================================================================
+
+def main():
+    EXP_DIR = _SCRIPT_DIR
+    os.makedirs(EXP_DIR, exist_ok=True)
+    os.makedirs(os.path.join(EXP_DIR, "checkpoints"), exist_ok=True)
+    os.makedirs(os.path.join(EXP_DIR, "plots"), exist_ok=True)
+    setup_logging(EXP_DIR)
+
+    sys.stdout = _TeeWriter(sys.stdout, os.path.join(EXP_DIR, "output.txt"))
+
+    logger.info("=" * 68)
+    logger.info("EXPERIMENT 9: RF-DETR Nano — Native RF-DETR Augmentation")
+    logger.info("=" * 68)
+
+    BATCH_SIZE = 16
+    EPOCHS = 100
+    BASE_LR = 1e-4
+    WARMUP_EPOCHS = 0.0
+
+    # Load dataset: resolution=None for COCO creation (native loader resizes),
+    # eval_ds resolution=384 for validate_epoch_full (uses make_batches).
+    logger.info("Loading DeepFish dataset ...")
+    ds = DeepFishDataset(resolution=None)
+    eval_ds = DeepFishDataset(resolution=384)
+    logger.info("DeepFish: %d images, %d classes %s",
+                len(ds), ds.num_classes, ds.class_names)
+
+    coco_dir, train_indices, val_indices = prepare_coco_dataset(
+        ds, EXP_DIR, val_split=0.2, seed=42,
+    )
+    logger.info("COCO data: %d train, %d val -> %s",
+                len(train_indices), len(val_indices), coco_dir)
+
+    # build_roboflow expects {dataset_dir}/valid/ (not val/)
+    valid_link = os.path.join(coco_dir, "valid")
+    val_dir = os.path.join(coco_dir, "val")
+    if os.path.isdir(val_dir) and not os.path.exists(valid_link):
+        os.symlink(os.path.abspath(val_dir), valid_link)
+        logger.info("Created symlink: valid -> val")
+
+    logger.info("Creating RFDETRNano (num_classes=1) ...")
+    model = RFDETRNano(num_classes=1)
+
+    # Warm the training-mode JAX trace before the loop starts
+    _dummy = np.ones((1, 384, 384, 3), dtype="float32") * 0.5
+    model.model.model(_dummy, training=True)
+    logger.info("Model ready — resolution=%d, group_detr=%d",
+                model.model_config.resolution,
+                model.model_config.group_detr)
+
+    # Build criterion for validate_epoch_full
+    config = TrainConfig(
+        dataset_dir=coco_dir,
+        dataset_file="coco_json",
+        output_dir=EXP_DIR,
+        epochs=EPOCHS,
+        batch_size=BATCH_SIZE,
+        grad_accum_steps=1,
+        lr=BASE_LR,
+        lr_encoder=1.5e-4,
+        lr_component_decay=0.7,
+        lr_vit_layer_decay=0.8,
+        lr_scheduler="cosine",
+        lr_min_factor=0.0,
+        warmup_epochs=WARMUP_EPOCHS,
+        weight_decay=1e-4,
+        clip_max_norm=0.1,
+        use_ema=True,
+        ema_decay=0.993,
+        ema_tau=100,
+        drop_path=0.0,
+        # Native RF-DETR augmentation — fixed 384 square, no multi-scale resize
+        multi_scale=False,
+        expanded_scales=False,
+        square_resize_div_64=True,
+        # Other flags
+        checkpoint_interval=10,
+        early_stopping=True,
+        early_stopping_patience=10,
+        early_stopping_min_delta=0.001,
+        early_stopping_use_ema=False,
+        amp=True,
+        num_workers=2,
+        run_test=False,
+        class_names=eval_ds.class_names,
+    )
+
+    val_criterion, _ = build_criterion_from_config(model.model_config, config)
+
+    # Register experiment tracker callbacks
+    tracker = ExperimentTracker(
+        model_ref=model,
+        keras_model=model.model.model,
+        criterion=val_criterion,
+        dataset=eval_ds,
+        train_indices=train_indices,
+        val_indices=val_indices,
+        num_classes=eval_ds.num_classes,
+        class_names=eval_ds.class_names,
+        exp_dir=EXP_DIR,
+        batch_size=BATCH_SIZE,
+        total_epochs=EPOCHS,
+        conf_threshold=0.3,
+        iou_threshold=0.5,
+    )
+    model.callbacks["on_fit_epoch_end"].append(tracker.on_epoch_end)
+    model.callbacks["on_train_end"].append(tracker.on_train_end)
+
+    # Save config for reproducibility
+    exp_config = {
+        "experiment": "experiment_9",
+        "description": (
+            "RF-DETR Nano with native RF-DETR augmentation "
+            "(RandomHorizontalFlip + RandomSizeCrop + SquareResize); "
+            "all other hyperparameters identical to Experiment 5"
+        ),
+        "variant": "RFDETRNano",
+        "api": "high-level (RFDETRNano.train_from_config)",
+        "augmentation": "native RF-DETR (make_coco_transforms_square_div_64)",
+        "epochs": EPOCHS,
+        "batch_size": BATCH_SIZE,
+        "grad_accum_steps": 1,
+        "effective_batch_size": BATCH_SIZE,
+        "lr": BASE_LR,
+        "lr_encoder": 1.5e-4,
+        "lr_scheduler": "cosine",
+        "lr_min_factor": 0.0,
+        "lr_component_decay": 0.7,
+        "lr_vit_layer_decay": 0.8,
+        "weight_decay": 1e-4,
+        "warmup_epochs": WARMUP_EPOCHS,
+        "clip_max_norm": 0.1,
+        "ema_decay": 0.993,
+        "ema_tau": 100,
+        "group_detr": model.model_config.group_detr,
+        "resolution": model.model_config.resolution,
+        "drop_path": 0.0,
+        "multi_scale": False,
+        "expanded_scales": False,
+        "square_resize_div_64": True,
+        "num_workers": 2,
+        "amp": True,
+        "early_stopping": True,
+        "early_stopping_patience": 10,
+        "val_split": 0.2,
+        "seed": 42,
+        "dataset": "DeepFish",
+        "train_images": len(train_indices),
+        "val_images": len(val_indices),
+        "validation": "validate_epoch_full per epoch (val + train-eval)",
+        "monkey_patches": [
+            "engine.train_one_epoch: training=True in Phase 1 eager forward",
+            "warm training-mode JAX trace after model init",
+        ],
+        "vs_experiment_5": (
+            "Same hyperparameters; augmentation changed from pipeline2 "
+            "(hflip + color jitter) to native RF-DETR "
+            "(hflip + RandomSizeCrop + SquareResize)"
+        ),
+    }
+    config_path = os.path.join(EXP_DIR, "experiment_config.json")
+    with open(config_path, "w") as f:
+        json.dump(exp_config, f, indent=2)
+    logger.info("Config saved to %s", config_path)
+
+    for k, v in sorted(exp_config.items()):
+        logger.info("  %-28s: %s", k, v)
+
+    # Train — native COCO loader is built internally by train_from_config
+    # (no data_loader_train argument → _build_data_loader is called with
+    #  the coco_dir and make_coco_transforms_square_div_64 augmentation).
+    logger.info("Starting training ...")
+    model.train_from_config(config)
+
+    final_path = os.path.join(EXP_DIR, "checkpoints", "rfdetr_nano_final.weights.h5")
+    model.model.model.save_weights(final_path)
+    logger.info("Final weights saved -> %s", final_path)
+
+
+if __name__ == "__main__":
+    main()
