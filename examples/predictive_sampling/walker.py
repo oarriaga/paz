@@ -23,7 +23,8 @@ Task = namedtuple("Task", "running_cost")
 
 def Walker(impl="jax", target_velocity=0.0, target_height=1.2):
     model_kwargs = dict(trace_sites=("torso_site",), backend=impl)
-    model_kwargs["naconmax"] = 800
+    # model_kwargs["naconmax"] = 800
+    model_kwargs["naconmax"] = 10_000
     model = Model(MODEL_PATH, **model_kwargs)
     sensors = build_walker_sensors(model.mujoco_model)
     values = model.model, *sensors, target_velocity, target_height
@@ -85,7 +86,8 @@ def parse_args():
 
 
 def build_controller(task, model, iterations):
-    sampler_args = model, 10, 3, 0.8, 0.5, interpolate_cubic
+    # sampler_args = model, 10, 3, 0.8, 0.5, interpolate_cubic
+    sampler_args = model, 1024, 3, 0.8, 0.5, interpolate_cubic
     sampler = KnotSampler(*sampler_args)
     return PredictiveSampler(task, model, sampler, iterations)
 
