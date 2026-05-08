@@ -38,10 +38,8 @@ def hide_ticks(axis):
 
 def build_cmap(transition_steps=64):
     ylgn = plt.colormaps["YlGn"]
-    white_to_yellow = ["white", ylgn(0.0)]
-    transition = mcolors.LinearSegmentedColormap.from_list(
-        "w2y_transition", white_to_yellow
-    )
+    transition = ("w2y_transition", ["white", ylgn(0.0)])
+    transition = mcolors.LinearSegmentedColormap.from_list(*transition)
     transition = transition(np.linspace(0, 1, transition_steps))
     colors = np.vstack((transition[:-1], ylgn(np.linspace(0, 1, 512))))
     return mcolors.LinearSegmentedColormap.from_list("SmoothWhiteYlGn", colors)
@@ -59,6 +57,7 @@ def show_magnitude(gradients, cmap):
     colorbar = axis.figure.colorbar(image, cax=cax)
     colorbar.ax.set_ylabel("L2 Gradient Norm", rotation=-90, va="bottom")
     hide_ticks(axis)
+    plot.hide_spines(axis, "all")
     return figure
 
 
@@ -70,11 +69,12 @@ def show_channels(gradients, cmap):
         v_max = np.abs(channel).max()
         image = axis.imshow(channel, cmap=cmap, vmin=-v_max, vmax=v_max)
         hide_ticks(axis)
+        plot.hide_spines(axis, "all")
         figure.colorbar(image, ax=axis, orientation="horizontal", pad=0.1)
     return figure
 
 
-def show_gradients(gradients, mode="magnitude", cmap=build_cmap()):
+def show_gradients(gradients, name, mode="magnitude", cmap=build_cmap()):
     if gradients.ndim not in [2, 3]:
         raise ValueError("'gradients' must have 2 or 3 dimensions")
     if mode not in ["channels", "magnitude"]:
@@ -85,8 +85,14 @@ def show_gradients(gradients, mode="magnitude", cmap=build_cmap()):
         gradients = gradients[..., jp.newaxis]
         mode = "channels"
     show = show_magnitude if mode == "magnitude" else show_channels
-    show(gradients, cmap)
-    plt.show()
+    figure = show(gradients, cmap)
+    save(figure, name)
+
+
+def save(figure, filepath):
+    """Save figure with tight bounding box."""
+    figure.savefig(filepath, bbox_inches="tight", dpi=150)
+    plt.close(figure)
 
 
 def build_renderer(transform_fn):
@@ -107,10 +113,11 @@ def plot_jacobian(function, args):
     hide_ticks(axis)
     num_channels = jacobian.shape[-1]
     for channel_arg in range(num_channels):
-        show_gradients(jp.array(jacobian[..., channel_arg]))
+        name = f"{channel_arg}-channel_color_translation_gradients.pdf"
+        show_gradients(jp.array(jacobian[..., channel_arg]), name)
 
 
 image, _ = render(scene=scene, shadows=False)
 image = paz.image.resize(image, (H // 2, W // 2), "bilinear")
-paz.image.show(paz.image.denormalize(image))
+paz.image.write("color_gradients_scene.png", paz.image.denormalize(image))
 plot_jacobian(build_renderer(paz.SE3.translation), jp.zeros(3))
