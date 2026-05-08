@@ -260,7 +260,7 @@ description = "Optimize only materials to match true_image.png"
 parser = argparse.ArgumentParser(description=description)
 parser.add_argument("--target-image-path", type=str, default="true_image.png")
 parser.add_argument("--num-steps", type=int, default=1000)
-parser.add_argument("--learning-rate", type=float, default=1e-2)
+parser.add_argument("--learning-rate", type=float, default=1e-3)
 parser.add_argument("--log-every", type=int, default=10)
 parser.add_argument("--save-every", type=int, default=10)
 parser.add_argument("--save-scene-every", type=int, default=10)
