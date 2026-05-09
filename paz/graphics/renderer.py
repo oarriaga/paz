@@ -273,6 +273,12 @@ def gather_closest(hit_masks, depths, points, normals, indices, eyes):
     return ClosestHit(*args)
 
 
+def select_shader(material):
+    if isinstance(material, paz.graphics.CookTorranceMaterial):
+        return paz.graphics.cook_torrance
+    return paz.graphics.phong
+
+
 def color_without_shadow(lights, shapes, points, normals, eyes, hit_shape_args):
     colors, start_arg, merged_lights = [], 0, paz.graphics.shapes.merge(*lights)
     for group in paz.graphics.shapes.group_by_pattern_size(shapes).values():
@@ -280,7 +286,8 @@ def color_without_shadow(lights, shapes, points, normals, eyes, hit_shape_args):
         group = paz.graphics.shapes.merge(*group)
         data = split_shape_data(points, normals, eyes, start_arg, final_arg)
         args, axes = (group, group.material, *data), (0, 0, 0, 0, 0, None)
-        color_per_light = jax.vmap(paz.graphics.phong.compute_colors, axes)
+        shader = select_shader(group.material)
+        color_per_light = jax.vmap(shader.compute_colors, axes)
         color = jax.vmap(color_per_light, (None, None, None, None, None, 0))
         colors.append(jp.sum(color(*args, merged_lights), axis=0))
         start_arg = final_arg
@@ -430,7 +437,8 @@ def compute_shadowed_colors(*args):
         group = paz.graphics.shapes.merge(*group)
         data = split_shape_data(points, normals, eyes, start_arg, final_arg)
         axes = 0, 0, 0, 0, 0, None, None
-        color = jax.vmap(paz.graphics.phong.compute_colors_with_shadow, axes)
+        shader = select_shader(group.material)
+        color = jax.vmap(shader.compute_colors_with_shadow, axes)
         color_args = group, group.material, *data, light, is_shadow
         colors.append(color(*color_args))
         start_arg = final_arg
