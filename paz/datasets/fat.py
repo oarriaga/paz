@@ -11,7 +11,6 @@ from .utils import get_class_names
 
 class FAT(Loader):
     """ Dataset loader for the falling things dataset (FAT).
-
     # Arguments
         path: String indicating full path to dataset
             e.g. /home/user/fat/
@@ -25,16 +24,26 @@ class FAT(Loader):
             Estimation (DOPE)](https://github.com/NVlabs/Deep_Object_Pose)
     """
     # TODO: Allow selection of class_names.
-    def __init__(self, path, split='train', class_names='all'):
-        if class_names == 'all':
-            class_names = get_class_names('FAT')
-        self.class_to_arg = dict(
-            zip(class_names, list(range(len(class_names)))))
-
-        super(FAT, self).__init__(path, split, class_names, 'FAT')
+    def __init__(self, path, split='train', class_type = 'all'):
+        self.class_type = class_type
+        if class_type == 'all':
+            self.class_names = get_class_names('FAT')
+            self.class_to_arg = dict(
+                                zip(self.class_names, list(range(len(
+                                    self.class_names)))))
+        else:
+            self.class_names = class_type
+            self.class_to_arg = {class_type: 0}
+        self.split = split
+        super(FAT, self).__init__(path, split, self.class_names, 'FAT')
 
     def load_data(self):
-        scene_names = glob(self.path + 'mixed/*')
+        if self.class_type == 'all':
+            scene_names = glob(self.path + 'mixed/*')
+            print(self.path)
+        else:
+            object_name = self.class_names + '_16k'
+            scene_names = glob(self.path + 'single/' + object_name + '/*')
         image_paths, label_paths = [], []
         for scene_name in scene_names:
             scene_image_paths, scene_label_paths = [], []
@@ -47,7 +56,6 @@ class FAT(Loader):
                 scene_label_paths = scene_label_paths + side_label_paths
             image_paths = image_paths + scene_image_paths
             label_paths = label_paths + scene_label_paths
-
         self.data = []
         progress_bar = Progbar(len(image_paths))
         for sample_arg, sample in enumerate(zip(image_paths, label_paths)):
@@ -59,7 +67,16 @@ class FAT(Loader):
                 continue
             self.data.append({'image': image_path, 'boxes': boxes})
             progress_bar.update(sample_arg + 1)
+        train_split = int(len(self.data) * 0.4)
+        test_split = int(len(self.data) * 0.4)
+        if self.split == 'train':
+            self.data = self.data[:train_split]
+        if self.split == 'test':
+            self.data = self.data[train_split:(train_split + test_split)]
+        if self.split == 'validation':
+            self.data = self.data[(train_split + test_split):]
         return self.data
+
 
     def _extract_boxes(self, json_filename):
         json_data = json.load(open(json_filename, 'r'))
@@ -78,13 +95,17 @@ class FAT(Loader):
             box_data[object_arg, -1] = self.class_to_arg[class_name]
         return box_data
 
+
     def _base_number(self, filename):
         order = os.path.basename(filename)
         order = order.split('.')[0]
         order = float(order)
         return order
 
+
     def _valid_name_match(self, image_path, label_path):
         image_name = os.path.basename(image_path)
         label_name = os.path.basename(label_path)
         return image_name[:-3] == label_name[:-4]
+
+
