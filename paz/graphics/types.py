@@ -16,6 +16,12 @@ from paz.graphics.constants import (
 
 PointLight = namedtuple("PointLight", ["intensity", "position"])
 
+AreaLight = namedtuple(
+    "AreaLight",
+    ["intensity", "corner", "edge1", "edge2", "usteps", "vsteps", "key"],
+    defaults=(None,),
+)
+
 
 Pattern = namedtuple(
     "Pattern",
@@ -49,6 +55,21 @@ Material = namedtuple(
         "refractive_index",
     ],
     defaults=(DEFAULT_COLOR, 0.1, 0.9, 0.9, 200.0, 0.0, 0.0, 1.0),
+)
+
+CookTorranceMaterial = namedtuple(
+    "CookTorranceMaterial",
+    [
+        "color",
+        "ambient",
+        "base_reflectance",
+        "roughness",
+        "metallic",
+        "reflective",
+        "transparency",
+        "refractive_index",
+    ],
+    defaults=(DEFAULT_COLOR, 0.1, 0.04, 0.5, 0.0, 0.0, 0.0, 1.0),
 )
 
 Shape = namedtuple(

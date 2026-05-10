@@ -1,5 +1,3 @@
-# TODO consider that the acne could be inside the renderer
-# i.e. rays from scene to lights being tiny (floor hitting base).
 from collections import namedtuple
 
 import jax
@@ -9,10 +7,9 @@ import paz
 
 SHADOW_ORIGIN_EPSILON = 1e-3
 SHADOW_SELF_HIT_EPSILON = 1e-3
+BOUNCE_ORIGIN_EPSILON = 1e-3
 RENDER_NAMES = "shape y_FOV pose scene mask lights tiles chunk_size shadows "
 RENDER_NAMES += "shadow_mask num_bounces"
-BOUNCED_NAMES = "H W world_to_camera rays shapes lights mask shadows "
-BOUNCED_NAMES += "shadow_mask num_bounces"
 STATE_NAMES = "color depth hit_mask throughput active_mask "
 STATE_NAMES += "refractive_index rays"
 CLOSEST_NAMES = "hit_mask depth point normal eye shape_idx"
@@ -20,14 +17,24 @@ SHADOW_COLOR_NAMES = "rays shapes lights indices mask shadow_mask "
 SHADOW_COLOR_NAMES += "point normal points normals eyes"
 
 RenderArgs = namedtuple("RenderArgs", RENDER_NAMES.split())
-RenderBouncedArgs = namedtuple("RenderBouncedArgs", BOUNCED_NAMES.split())
 RenderState = namedtuple("RenderState", STATE_NAMES.split())
 ClosestHit = namedtuple("ClosestHit", CLOSEST_NAMES.split())
 ShadowColorArgs = namedtuple("ShadowColorArgs", SHADOW_COLOR_NAMES.split())
 
 
-def render(shape, y_FOV, pose, scene, mask, lights, tiles, chunk_size,
-           shadows=False, shadow_mask=None, num_bounces=1):
+def render(
+    shape,
+    y_FOV,
+    pose,
+    scene,
+    mask,
+    lights,
+    tiles,
+    chunk_size,
+    shadows=False,
+    shadow_mask=None,
+    num_bounces=1,
+):
     args = shape, y_FOV, pose, scene, mask, lights, tiles, chunk_size
     args += shadows, shadow_mask, num_bounces
     args = RenderArgs(*args)
@@ -36,9 +43,20 @@ def render(shape, y_FOV, pose, scene, mask, lights, tiles, chunk_size,
     return assemble_image(args, image), assemble_depth(args, depth)
 
 
-def render_masks(shape, y_FOV, pose, scene, lights, depth, tiles, chunk_size,
-                 num_objects=None, shadows=False, shadow_mask=None,
-                 num_bounces=1):
+def render_masks(
+    shape,
+    y_FOV,
+    pose,
+    scene,
+    lights,
+    depth,
+    tiles,
+    chunk_size,
+    num_objects=None,
+    shadows=False,
+    shadow_mask=None,
+    num_bounces=1,
+):
     if num_objects is None:
         num_objects = len(scene.nodes)
     min_depth, max_depth = depth
@@ -82,8 +100,8 @@ def render_tile_step(carry, tile_arg, args):
     rays = paz.graphics.mesh.build_tile_rays(*tile_args, tile_arg)
     tile_H, tile_W = H // H_tiles, W // W_tiles
     trace_args = args.scene, args.lights, args.mask, args.shadows
-    trace_args += args.shadow_mask,
-    trace_args += args.num_bounces,
+    trace_args += (args.shadow_mask,)
+    trace_args += (args.num_bounces,)
     hit_mask, depth, color = trace_chunks(rays, trace_args, args.chunk_size)
     post_args = hit_mask, depth, color, args.pose, rays, tile_H, tile_W
     image, depth = postprocess(*post_args)
@@ -143,38 +161,6 @@ def flatten_chunk_results(hit_mask, depth, color, num_rays):
 def flatten_chunk_array(array, num_rays):
     shape = (-1,) + array.shape[2:]
     return array.reshape(shape)[:num_rays]
-
-
-def render_bounced(*inputs, **options):
-    args = unpack_args(RenderBouncedArgs, inputs, options)
-    inputs = args.rays, args.shapes, args.lights, args.mask, args.shadows
-    inputs += args.shadow_mask, args.num_bounces
-    hit_mask, depth, color = trace_bounces(*inputs)
-    post_args = hit_mask, depth, color, args.world_to_camera, args.rays
-    return postprocess(*post_args, args.H, args.W)
-
-
-def unpack_args(container, inputs, options, defaults=None):
-    if defaults is None:
-        defaults = {}
-    names = container._fields
-    values = list(inputs)
-    if len(values) > len(names):
-        raise TypeError("too many positional arguments")
-    for name in names[len(values):]:
-        values.append(resolve_argument(name, options, defaults))
-    if options:
-        name = next(iter(options))
-        raise TypeError(f"unexpected keyword argument: {name}")
-    return container(*values)
-
-
-def resolve_argument(name, options, defaults):
-    if name in options:
-        return options.pop(name)
-    if name in defaults:
-        return defaults[name]
-    raise TypeError(f"missing required argument: {name}")
 
 
 def trace_bounces(rays, shapes, lights, mask, shadows, shadow_mask, bounces):
@@ -266,11 +252,17 @@ def gather_closest(hit_masks, depths, points, normals, indices, eyes):
     closest_args = find_closest_intersection_args(hit_masks, depths)
     args = take_closest(hit_masks, closest_args)
     args = args, take_closest(depths, closest_args)
-    args += take_closest(points, closest_args),
-    args += take_closest(normals, closest_args),
-    args += take_closest(eyes, closest_args),
-    args += indices[closest_args],
+    args += (take_closest(points, closest_args),)
+    args += (take_closest(normals, closest_args),)
+    args += (take_closest(eyes, closest_args),)
+    args += (indices[closest_args],)
     return ClosestHit(*args)
+
+
+def select_shader(material):
+    if isinstance(material, paz.graphics.CookTorranceMaterial):
+        return paz.graphics.cook_torrance
+    return paz.graphics.phong
 
 
 def color_without_shadow(lights, shapes, points, normals, eyes, hit_shape_args):
@@ -280,7 +272,8 @@ def color_without_shadow(lights, shapes, points, normals, eyes, hit_shape_args):
         group = paz.graphics.shapes.merge(*group)
         data = split_shape_data(points, normals, eyes, start_arg, final_arg)
         args, axes = (group, group.material, *data), (0, 0, 0, 0, 0, None)
-        color_per_light = jax.vmap(paz.graphics.phong.compute_colors, axes)
+        shader = select_shader(group.material)
+        color_per_light = jax.vmap(shader.compute_colors, axes)
         color = jax.vmap(color_per_light, (None, None, None, None, None, 0))
         colors.append(jp.sum(color(*args, merged_lights), axis=0))
         start_arg = final_arg
@@ -311,11 +304,6 @@ def intersect_shape_groups(shapes, origins, directions, intersect_shape):
         intersections.append(process_group(group, rays, start_arg))
         start_arg = start_arg + len(group)
     return concatenate(intersections)
-
-
-def intersect_groups(shapes, origins, directions):
-    args = (shapes, origins, directions, paz.graphics.shapes.intersect)
-    return intersect_shape_groups(*args)
 
 
 def intersect_shadow_groups(shapes, origins, directions):
@@ -377,9 +365,13 @@ def compute_soft_occlusion(hit_masks, depths, light_lengths, slope=0.01):
 def color_with_shadows(args):
     transparencies = compute_transparencies(args.shapes)
     colors = jp.zeros((len(args.points[0]), 3))
-    for light in args.lights:
-        colors = colors + compute_light_colors(args, light, transparencies)
-    return colors
+    lights = paz.graphics.shapes.merge(*args.lights)
+    body = paz.lock(scan_light_step, args, transparencies)
+    return jax.lax.scan(body, colors, lights)[0]
+
+
+def scan_light_step(colors, light, args, transparencies):
+    return colors + compute_light_colors(args, light, transparencies), None
 
 
 def compute_transparencies(shapes):
@@ -397,7 +389,7 @@ def compute_light_colors(args, light, transparencies):
     masks, depths = select_shadow_depths(*select_args)
     is_shadow = compute_soft_occlusion(masks, depths, distance)
     color_args = args.shapes, light, args.points, args.normals, args.eyes
-    color_args += is_shadow,
+    color_args += (is_shadow,)
     colors = compute_shadowed_colors(*color_args)
     return take_closest(colors, args.indices)
 
@@ -430,7 +422,8 @@ def compute_shadowed_colors(*args):
         group = paz.graphics.shapes.merge(*group)
         data = split_shape_data(points, normals, eyes, start_arg, final_arg)
         axes = 0, 0, 0, 0, 0, None, None
-        color = jax.vmap(paz.graphics.phong.compute_colors_with_shadow, axes)
+        shader = select_shader(group.material)
+        color = jax.vmap(shader.compute_colors_with_shadow, axes)
         color_args = group, group.material, *data, light, is_shadow
         colors.append(color(*color_args))
         start_arg = final_arg
@@ -508,7 +501,7 @@ def update_state(state, shapes, closest, intersected_colors):
     color_args += intersected_colors, reflectivities, transparencies
     color = accumulate_color(*color_args)
     args = state.rays[1], state.refractive_index, closest.normal
-    args += refractivities,
+    args += (refractivities,)
     normal, eye, n1, n2, n_ratio = prepare_computations(*args)
     reflectance = schlick(normal, eye, n1, n2)
     ray_args = normal, eye, n_ratio, closest.point, transparencies, reflectance
@@ -544,8 +537,8 @@ def flip_normal_if_inside(eye, normal):
 
 
 def displace_by_normal(point, normal):
-    upper_point = point + normal * (paz.graphics.EPSILON / 2.0)
-    lower_point = point - normal * (paz.graphics.EPSILON / 2.0)
+    upper_point = point + normal * BOUNCE_ORIGIN_EPSILON
+    lower_point = point - normal * BOUNCE_ORIGIN_EPSILON
     return lower_point, upper_point
 
 
@@ -575,8 +568,6 @@ def schlick(normal, eye, n1, n2):
 
 def reflect_or_refract(transparancies, reflectance):
     is_transparent = transparancies > 0.0
-    # is_total_internal_reflection = reflectance >= 1.0
-    # do_reflect = (~is_transparent) | is_total_internal_reflection
     do_reflect = ~is_transparent
     return jp.expand_dims(do_reflect, -1)
 

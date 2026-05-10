@@ -1,3 +1,4 @@
+from collections import namedtuple
 from functools import partial
 
 import jax
@@ -5,7 +6,10 @@ import jax.numpy as jp
 import jax.random as jr
 from mujoco import mjx
 
-from structures import Controller, Trajectory
+trajectory_fields = "controls knots costs trace_sites"
+Trajectory = namedtuple("Trajectory", trajectory_fields)
+controller_fields = "task model sampler iterations num_control_steps optimize"
+Controller = namedtuple("Controller", controller_fields)
 
 
 def PredictiveSampler(task, model, sampler, iterations):
@@ -33,8 +37,8 @@ def optimize(task, model, sampler, num_control_steps, iterations, key, state, pa
 
 
 def rollout(task, model, sampler, num_control_steps, state, knot_times, knots):
-    start_time, end_time = knot_times[0], knot_times[-1]
-    query_times = jp.linspace(start_time, end_time, num_control_steps)
+    start_time = knot_times[0]
+    query_times = start_time + model.time_delta * jp.arange(num_control_steps)
     controls = sampler.interpolate(query_times, knot_times, knots)
     evaluate = jax.vmap(partial(evaluate_sample, task, model, state), (0, 0))
     return evaluate(controls, knots)
@@ -45,12 +49,12 @@ def evaluate_sample(task, model, state, controls, knots):
     def step(state, control):
         state = state.replace(ctrl=control)
         state = mjx.step(model.model, state)
-        cost = model.time_delta * task.running_cost(state, control)
+        cost = task.running_cost(state, control)
         trace_sites = model.get_trace_positions(state)
         return state, (cost, trace_sites)
 
     final_state, (costs, trace_sites) = jax.lax.scan(step, state, controls)
-    final_cost = task.terminal_cost(final_state)
+    final_cost = task.running_cost(final_state, controls[-1])
     final_sites = model.get_trace_positions(final_state)
     costs = jp.append(costs, final_cost)
     trace_sites = jp.append(trace_sites, final_sites[None], axis=0)

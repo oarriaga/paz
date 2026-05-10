@@ -1,6 +1,8 @@
 from paz.graphics.types import (
     PointLight,
+    AreaLight,
     Material,
+    CookTorranceMaterial,
     Pattern,
     Shape,
     Scene,
@@ -36,6 +38,7 @@ from paz.graphics import geometry
 from paz.graphics import shapes
 from paz.graphics import camera
 from paz.graphics import phong
+from paz.graphics import cook_torrance
 from paz.graphics import mesh
 from paz.graphics.renderer import render, render_masks
 

@@ -219,12 +219,12 @@ def test_cone_intersection_hit_wall():
 
 
 def test_cone_intersection_hit_cap():
-    """Tests a ray that intersects the cone's cap."""
+    """Tests a ray that intersects the cone's lower cap."""
     origin = jp.array([[0.0, 5.0, 0.0]])
     direction = jp.array([[0.0, -1.0, 0.0]])
     hit_mask, _, depth = cone.intersect_canonical_cone(origin, direction)
     assert hit_mask[0]
-    assert jp.allclose(depth[0], 5.0)
+    assert jp.allclose(depth[0], 6.0)
 
 
 def test_cone_normal_on_cap():

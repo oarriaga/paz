@@ -1,5 +1,6 @@
 import os
 import time
+from collections import namedtuple
 
 import jax
 import jax.numpy as jp
@@ -9,6 +10,8 @@ import mujoco.viewer
 import numpy as np
 
 from video import start_recording, add_frame, stop_recording
+
+TraceView = namedtuple("TraceView", "num_sites num_samples best_start")
 
 
 def _print_plan(controller, policy):
@@ -108,33 +111,78 @@ def _set_camera(viewer, fixed_camera_id):
     viewer.cam.type = 2
 
 
-def _init_trace_geom(geom, color):
-    args = geom, mujoco.mjtGeom.mjGEOM_LINE, np.zeros(3)
+def _init_trace_geom(geom, geom_type, color):
+    args = geom, geom_type, np.zeros(3)
     kwargs = dict(pos=np.zeros(3), mat=np.eye(3).flatten())
     kwargs["rgba"] = np.array(color)
     mujoco.mjv_initGeom(*args, **kwargs)
 
 
-def _init_traces(viewer, controller, num_traces, color):
+def _init_traces(viewer, controller, num_samples, sample_color, best_color):
     num_sites = len(controller.model.trace_site_ids)
-    num_geoms = num_sites * num_traces * controller.num_control_steps
-    for geom_index in range(num_geoms):
-        _init_trace_geom(viewer.user_scn.geoms[geom_index], color)
+    num_segments = controller.num_control_steps
+    num_sample_geoms = num_sites * num_samples * num_segments
+    num_best_geoms = num_sites * num_segments
+    for geom_index in range(num_sample_geoms):
+        geom = viewer.user_scn.geoms[geom_index]
+        _init_trace_geom(geom, mujoco.mjtGeom.mjGEOM_LINE, sample_color)
         viewer.user_scn.ngeom += 1
-    return num_sites
+    for geom_index in range(num_best_geoms):
+        scene_index = num_sample_geoms + geom_index
+        geom = viewer.user_scn.geoms[scene_index]
+        _init_trace_geom(geom, mujoco.mjtGeom.mjGEOM_CAPSULE, best_color)
+        viewer.user_scn.ngeom += 1
+    return TraceView(num_sites, num_samples, num_sample_geoms)
 
 
-def _update_traces(viewer, rollouts, num_sites, num_traces, num_steps, width):
+def _compute_best_rollout(rollouts):
+    costs = np.mean(np.asarray(rollouts.costs), axis=1)
+    return int(np.argmin(costs))
+
+
+def _select_sample_rollouts(num_rollouts, best_index, num_samples):
+    rollouts = [index for index in range(num_rollouts) if index != best_index]
+    return rollouts[:num_samples]
+
+
+def _update_trace_path(viewer, rollouts, geom_index, args):
+    rollout_index, site_index, num_steps, width, geom_type = args
+    trace_sites = rollouts.trace_sites
+    trace_points = np.asarray(trace_sites[rollout_index, :, site_index])
+    for step_index in range(num_steps):
+        geom = viewer.user_scn.geoms[geom_index]
+        points = trace_points[step_index : step_index + 2]
+        mujoco.mjv_connector(geom, geom_type, width, points[0], points[1])
+        geom_index += 1
+    return geom_index
+
+
+def _update_sample_traces(viewer, rollouts, view, best_index, num_steps, width):
+    num_rollouts = rollouts.trace_sites.shape[0]
+    args = num_rollouts, best_index, view.num_samples
+    indices = _select_sample_rollouts(*args)
     geom_index = 0
-    for site_index in range(num_sites):
-        for trace_index in range(num_traces):
-            trace_points = rollouts.trace_sites[trace_index, :, site_index]
-            for step_index in range(num_steps):
-                geom = viewer.user_scn.geoms[geom_index]
-                args = geom, mujoco.mjtGeom.mjGEOM_LINE
-                points = trace_points[step_index : step_index + 2]
-                mujoco.mjv_connector(*args, width, points[0], points[1])
-                geom_index += 1
+    for site_index in range(view.num_sites):
+        for rollout_index in indices:
+            geom_type = mujoco.mjtGeom.mjGEOM_LINE
+            args = rollout_index, site_index, num_steps, width, geom_type
+            geom_index = _update_trace_path(viewer, rollouts, geom_index, args)
+
+
+def _update_best_trace(viewer, rollouts, view, best_index, num_steps, width):
+    geom_index = view.best_start
+    geom_type = mujoco.mjtGeom.mjGEOM_CAPSULE
+    for site_index in range(view.num_sites):
+        args = best_index, site_index, num_steps, width, geom_type
+        geom_index = _update_trace_path(viewer, rollouts, geom_index, args)
+
+
+def _update_traces(viewer, rollouts, view, num_steps, sample_width, best_width):
+    best_index = _compute_best_rollout(rollouts)
+    args = viewer, rollouts, view, best_index, num_steps, sample_width
+    _update_sample_traces(*args)
+    args = viewer, rollouts, view, best_index, num_steps, best_width
+    _update_best_trace(*args)
 
 
 def _step_simulation(model, mj_data, viewer, controls, recorder, renderer):
@@ -158,7 +206,21 @@ def _wait_for_step(step_time, loop_start, plan_time):
     print(message, end="\r")
 
 
-def run_interactive(controller, mj_model, mj_data, policy, frequency, fixed_camera_id=None, show_traces=True, max_traces=5, trace_width=5.0, trace_color=(1.0, 1.0, 1.0, 0.1), reference=None, reference_fps=30.0, record_video=False):  # fmt: skip
+def run_interactive(*args, **kwargs):
+    controller, mj_model, mj_data, policy = args[:4]
+    frequency = _pop_frequency(args, kwargs)
+    fixed_camera_id = kwargs.pop("fixed_camera_id", None)
+    show_traces = kwargs.pop("show_traces", True)
+    max_traces = kwargs.pop("max_traces", 5)
+    trace_width = kwargs.pop("trace_width", 3.0)
+    trace_color = kwargs.pop("trace_color", (1.0, 1.0, 1.0, 0.15))
+    best_trace_width = kwargs.pop("best_trace_width", 0.015)
+    best_color = kwargs.pop("best_trace_color", (1.0, 0.0, 1.0, 1.0))
+    reference = kwargs.pop("reference", None)
+    reference_fps = kwargs.pop("reference_fps", 30.0)
+    record_video = kwargs.pop("record_video", False)
+    if kwargs:
+        raise ValueError(f"Unknown viewer options: {tuple(kwargs)}")
     _print_plan(controller, policy)
     replan_args = _compute_replan_args(mj_model, frequency)
     num_steps, step_time, replan_frequency = replan_args
@@ -168,7 +230,8 @@ def run_interactive(controller, mj_model, mj_data, policy, frequency, fixed_came
     interpolate = jax.jit(controller.sampler.interpolate)
     warm_up_args = optimize, interpolate, state, policy, key
     policy, rollouts, key = _warm_up(*warm_up_args, mj_model, num_steps)
-    num_traces = min(rollouts.controls.shape[1], max_traces)
+    num_rollouts = rollouts.controls.shape[0]
+    num_samples = min(max(num_rollouts - 1, 0), max(max_traces - 1, 0))
     reference_view = None
     if reference is not None:
         reference_view = _build_reference(reference, mj_model)
@@ -177,10 +240,11 @@ def run_interactive(controller, mj_model, mj_data, policy, frequency, fixed_came
         recorder, renderer = _build_video(mj_model, replan_frequency)
     with mujoco.viewer.launch_passive(mj_model, mj_data) as viewer:
         _set_camera(viewer, fixed_camera_id)
-        num_sites = 0
+        trace_view = None
         if show_traces:
-            trace_args = viewer, controller, num_traces, trace_color
-            num_sites = _init_traces(*trace_args)
+            trace_args = viewer, controller, num_samples
+            trace_colors = trace_color, best_color
+            trace_view = _init_traces(*trace_args, *trace_colors)
         if reference_view is not None:
             _add_reference(mj_model, reference_view, viewer)
         while viewer.is_running():
@@ -191,9 +255,9 @@ def run_interactive(controller, mj_model, mj_data, policy, frequency, fixed_came
             policy, rollouts = optimize(subkey, state, policy)
             plan_time = time.time() - plan_start
             if show_traces:
-                trace_args = viewer, rollouts, num_sites, num_traces
                 num_trace_steps = controller.num_control_steps
-                _update_traces(*trace_args, num_trace_steps, trace_width)
+                trace_args = viewer, rollouts, trace_view, num_trace_steps
+                _update_traces(*trace_args, trace_width, best_trace_width)
             if reference_view is not None:
                 ref_args = mj_model, mj_data, reference, reference_fps
                 _update_reference(*ref_args, reference_view, viewer)
@@ -206,3 +270,9 @@ def run_interactive(controller, mj_model, mj_data, policy, frequency, fixed_came
     print()
     if recorder is not None:
         stop_recording(recorder)
+
+
+def _pop_frequency(args, kwargs):
+    if len(args) > 4:
+        return args[4]
+    return kwargs.pop("frequency")
