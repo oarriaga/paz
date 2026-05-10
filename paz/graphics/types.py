@@ -16,6 +16,12 @@ from paz.graphics.constants import (
 
 PointLight = namedtuple("PointLight", ["intensity", "position"])
 
+AreaLight = namedtuple(
+    "AreaLight",
+    ["intensity", "corner", "edge1", "edge2", "usteps", "vsteps", "key"],
+    defaults=(None,),
+)
+
 
 Pattern = namedtuple(
     "Pattern",

@@ -1,6 +1,7 @@
+import jax
 import jax.numpy as jp
 import paz
-from paz.graphics import PointLight, Shape
+from paz.graphics import PointLight, AreaLight, Shape
 from paz.graphics import SPHERE, CYLINDER, CONE, CUBE, PLANE
 
 
@@ -65,15 +66,46 @@ def show(scene):
 
 
 def prepare_lights(lights):
-    if isinstance(lights, paz.graphics.PointLight):
-        processed_lights = [lights]
-    elif isinstance(lights, list):
-        if not all(isinstance(light, PointLight) for light in lights):
-            raise TypeError("All elements must be PointLight objects.")
-        processed_lights = lights
-    else:
-        raise TypeError("'lights' must be a PointLight or list of PointLights.")
-    return processed_lights
+    if isinstance(lights, (PointLight, AreaLight)):
+        lights = [lights]
+    elif not isinstance(lights, list):
+        raise TypeError("'lights' must be a Light or list of Lights.")
+    return expand_lights(lights)
+
+
+def expand_lights(lights):
+    expanded = []
+    for light in lights:
+        if isinstance(light, AreaLight):
+            expanded.extend(expand_area_light(light))
+        else:
+            expanded.append(light)
+    return expanded
+
+
+def expand_area_light(light):
+    cells = light.usteps * light.vsteps
+    intensity = light.intensity / cells
+    positions = build_area_light_positions(light)
+    return [PointLight(intensity, position) for position in positions]
+
+
+def build_area_light_positions(light):
+    cells = light.usteps * light.vsteps
+    u = jp.tile(jp.arange(light.usteps), light.vsteps)[:, None]
+    v = jp.repeat(jp.arange(light.vsteps), light.usteps)[:, None]
+    offsets = build_jitter_offsets(light, cells)
+    u_step = light.edge1 / light.usteps
+    v_step = light.edge2 / light.vsteps
+    positions = light.corner + u_step * (u + offsets[:, :1])
+    positions = positions + v_step * (v + offsets[:, 1:])
+    return list(positions)
+
+
+def build_jitter_offsets(light, cells):
+    if light.key is None:
+        return jp.full((cells, 2), 0.5)
+    return jax.random.uniform(light.key, (cells, 2))
 
 
 def prepare_mask(mask, num_shapes, scene):
