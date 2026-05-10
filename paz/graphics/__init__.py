@@ -1,5 +1,6 @@
 from paz.graphics.types import (
     PointLight,
+    AreaLight,
     Material,
     CookTorranceMaterial,
     Pattern,
