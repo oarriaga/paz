@@ -26,8 +26,19 @@ ClosestHit = namedtuple("ClosestHit", CLOSEST_NAMES.split())
 ShadowColorArgs = namedtuple("ShadowColorArgs", SHADOW_COLOR_NAMES.split())
 
 
-def render(shape, y_FOV, pose, scene, mask, lights, tiles, chunk_size,
-           shadows=False, shadow_mask=None, num_bounces=1):
+def render(
+    shape,
+    y_FOV,
+    pose,
+    scene,
+    mask,
+    lights,
+    tiles,
+    chunk_size,
+    shadows=False,
+    shadow_mask=None,
+    num_bounces=1,
+):
     args = shape, y_FOV, pose, scene, mask, lights, tiles, chunk_size
     args += shadows, shadow_mask, num_bounces
     args = RenderArgs(*args)
@@ -36,9 +47,20 @@ def render(shape, y_FOV, pose, scene, mask, lights, tiles, chunk_size,
     return assemble_image(args, image), assemble_depth(args, depth)
 
 
-def render_masks(shape, y_FOV, pose, scene, lights, depth, tiles, chunk_size,
-                 num_objects=None, shadows=False, shadow_mask=None,
-                 num_bounces=1):
+def render_masks(
+    shape,
+    y_FOV,
+    pose,
+    scene,
+    lights,
+    depth,
+    tiles,
+    chunk_size,
+    num_objects=None,
+    shadows=False,
+    shadow_mask=None,
+    num_bounces=1,
+):
     if num_objects is None:
         num_objects = len(scene.nodes)
     min_depth, max_depth = depth
@@ -82,8 +104,8 @@ def render_tile_step(carry, tile_arg, args):
     rays = paz.graphics.mesh.build_tile_rays(*tile_args, tile_arg)
     tile_H, tile_W = H // H_tiles, W // W_tiles
     trace_args = args.scene, args.lights, args.mask, args.shadows
-    trace_args += args.shadow_mask,
-    trace_args += args.num_bounces,
+    trace_args += (args.shadow_mask,)
+    trace_args += (args.num_bounces,)
     hit_mask, depth, color = trace_chunks(rays, trace_args, args.chunk_size)
     post_args = hit_mask, depth, color, args.pose, rays, tile_H, tile_W
     image, depth = postprocess(*post_args)
@@ -161,7 +183,7 @@ def unpack_args(container, inputs, options, defaults=None):
     values = list(inputs)
     if len(values) > len(names):
         raise TypeError("too many positional arguments")
-    for name in names[len(values):]:
+    for name in names[len(values) :]:
         values.append(resolve_argument(name, options, defaults))
     if options:
         name = next(iter(options))
@@ -266,10 +288,10 @@ def gather_closest(hit_masks, depths, points, normals, indices, eyes):
     closest_args = find_closest_intersection_args(hit_masks, depths)
     args = take_closest(hit_masks, closest_args)
     args = args, take_closest(depths, closest_args)
-    args += take_closest(points, closest_args),
-    args += take_closest(normals, closest_args),
-    args += take_closest(eyes, closest_args),
-    args += indices[closest_args],
+    args += (take_closest(points, closest_args),)
+    args += (take_closest(normals, closest_args),)
+    args += (take_closest(eyes, closest_args),)
+    args += (indices[closest_args],)
     return ClosestHit(*args)
 
 
@@ -384,9 +406,13 @@ def compute_soft_occlusion(hit_masks, depths, light_lengths, slope=0.01):
 def color_with_shadows(args):
     transparencies = compute_transparencies(args.shapes)
     colors = jp.zeros((len(args.points[0]), 3))
-    for light in args.lights:
-        colors = colors + compute_light_colors(args, light, transparencies)
-    return colors
+    lights = paz.graphics.shapes.merge(*args.lights)
+    body = paz.lock(scan_light_step, args, transparencies)
+    return jax.lax.scan(body, colors, lights)[0]
+
+
+def scan_light_step(colors, light, args, transparencies):
+    return colors + compute_light_colors(args, light, transparencies), None
 
 
 def compute_transparencies(shapes):
@@ -404,7 +430,7 @@ def compute_light_colors(args, light, transparencies):
     masks, depths = select_shadow_depths(*select_args)
     is_shadow = compute_soft_occlusion(masks, depths, distance)
     color_args = args.shapes, light, args.points, args.normals, args.eyes
-    color_args += is_shadow,
+    color_args += (is_shadow,)
     colors = compute_shadowed_colors(*color_args)
     return take_closest(colors, args.indices)
 
@@ -516,7 +542,7 @@ def update_state(state, shapes, closest, intersected_colors):
     color_args += intersected_colors, reflectivities, transparencies
     color = accumulate_color(*color_args)
     args = state.rays[1], state.refractive_index, closest.normal
-    args += refractivities,
+    args += (refractivities,)
     normal, eye, n1, n2, n_ratio = prepare_computations(*args)
     reflectance = schlick(normal, eye, n1, n2)
     ray_args = normal, eye, n_ratio, closest.point, transparencies, reflectance

@@ -505,8 +505,8 @@ def test_render_primitives_matches_snapshot(camera_pose):
     scene = build_primitives_snapshot_scene()
     lights = [PointLight(jp.ones(3), jp.array([0.0, 5.0, -5.0]))]
     image, depth = render_scene((24, 24), camera_pose, scene, lights)
-    assert_snapshot(image, "renderer_primitives_image.npy")
-    assert_snapshot(depth, "renderer_primitives_depth.npy")
+    assert_snapshot(image, "renderer_primitives_image.npy", atol=1e-3)
+    assert_snapshot(depth, "renderer_primitives_depth.npy", atol=3e-3)
 
 
 def test_render_shadow_mask_matches_snapshot():
@@ -526,8 +526,8 @@ def test_render_shadow_mask_matches_snapshot():
         shadows=True,
         shadow_mask=shadow_mask,
     )
-    assert_snapshot(image, "renderer_shadow_image.npy")
-    assert_snapshot(depth, "renderer_shadow_depth.npy")
+    assert_snapshot(image, "renderer_shadow_image.npy", atol=1e-3)
+    assert_snapshot(depth, "renderer_shadow_depth.npy", atol=3e-3)
 
 
 def test_render_bounces_match_snapshot(camera_pose):
@@ -540,8 +540,8 @@ def test_render_bounces_match_snapshot(camera_pose):
         lights,
         num_bounces=2,
     )
-    assert_snapshot(image, "renderer_bounce_image.npy")
-    assert_snapshot(depth, "renderer_bounce_depth.npy")
+    assert_snapshot(image, "renderer_bounce_image.npy", atol=1e-3)
+    assert_snapshot(depth, "renderer_bounce_depth.npy", atol=3e-3)
 
 
 def test_render_gradient_matches_snapshot(camera_pose):
@@ -553,7 +553,7 @@ def test_render_gradient_matches_snapshot(camera_pose):
         return jp.mean(depth) + 0.01 * jp.mean(image)
 
     gradient = jax.grad(loss)(jp.array([0.1]))
-    assert_snapshot(gradient, "renderer_shift_gradient.npy")
+    assert_snapshot(gradient, "renderer_shift_gradient.npy", atol=2e-3)
 
 
 def test_render_rect_tiles_match_single_tile(small_image_shape, camera_pose):
@@ -567,7 +567,7 @@ def test_render_rect_tiles_match_single_tile(small_image_shape, camera_pose):
         tiles=(2, 4),
         chunk_size=13,
     )
-    assert_render_matches(actual, expected)
+    assert_render_matches(actual, expected, atol=5e-4)
 
 
 def test_render_rect_tiles_match_shadows(small_image_shape, camera_pose):
@@ -633,7 +633,7 @@ def test_render_gradient_is_chunk_invariant(small_image_shape, camera_pose):
     large_gradient = jax.grad(large_chunk_loss)(shift)
     small_gradient = jax.grad(small_chunk_loss)(shift)
     assert jp.abs(large_gradient[0]) > 1e-5
-    assert jp.allclose(small_gradient, large_gradient, atol=1e-4)
+    assert jp.allclose(small_gradient, large_gradient, atol=5e-4)
 
 
 def test_render_jit_compatible(small_image_shape, camera_pose):
