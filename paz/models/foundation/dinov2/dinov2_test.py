@@ -65,7 +65,6 @@ class TestFixtures:
                 Attention,
                 DropPath,
                 LayerScale,
-                MLP,
                 NestedTensorBlock,
             )
             from paz.models.foundation.dinov2.models.vision_transformer import (
@@ -78,7 +77,6 @@ class TestFixtures:
                 "BlockChunk": BlockChunk,
                 "NestedTensorBlock": NestedTensorBlock,
                 "Attention": Attention,
-                "MLP": MLP,
                 "LayerScale": LayerScale,
                 "DropPath": DropPath,
             }
@@ -244,7 +242,7 @@ class TestModelLoading:
 
     def test_keras_backend_configured(self):
         """Test that Keras backend is properly configured."""
-        assert keras.backend.backend() == "jax"
+        assert os.environ.get("KERAS_BACKEND") == "jax"
 
     def test_model_architectures_match(self, pytorch_model, keras_model, model_config):
         """Test that model architectures have expected dimensions."""
