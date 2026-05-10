@@ -7,7 +7,7 @@ import paz
 
 SHADOW_ORIGIN_EPSILON = 1e-3
 SHADOW_SELF_HIT_EPSILON = 1e-3
-BOUNCE_ORIGIN_EPSILON = 1e-3
+BOUNCE_ORIGIN_EPSILON = 1e-2
 RENDER_NAMES = "shape y_FOV pose scene mask lights tiles chunk_size shadows "
 RENDER_NAMES += "shadow_mask num_bounces"
 STATE_NAMES = "color depth hit_mask throughput active_mask "
