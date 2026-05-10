@@ -1,5 +1,3 @@
-# TODO consider that the acne could be inside the renderer
-# i.e. rays from scene to lights being tiny (floor hitting base).
 from collections import namedtuple
 
 import jax
@@ -9,10 +7,9 @@ import paz
 
 SHADOW_ORIGIN_EPSILON = 1e-3
 SHADOW_SELF_HIT_EPSILON = 1e-3
+BOUNCE_ORIGIN_EPSILON = 1e-3
 RENDER_NAMES = "shape y_FOV pose scene mask lights tiles chunk_size shadows "
 RENDER_NAMES += "shadow_mask num_bounces"
-BOUNCED_NAMES = "H W world_to_camera rays shapes lights mask shadows "
-BOUNCED_NAMES += "shadow_mask num_bounces"
 STATE_NAMES = "color depth hit_mask throughput active_mask "
 STATE_NAMES += "refractive_index rays"
 CLOSEST_NAMES = "hit_mask depth point normal eye shape_idx"
@@ -20,7 +17,6 @@ SHADOW_COLOR_NAMES = "rays shapes lights indices mask shadow_mask "
 SHADOW_COLOR_NAMES += "point normal points normals eyes"
 
 RenderArgs = namedtuple("RenderArgs", RENDER_NAMES.split())
-RenderBouncedArgs = namedtuple("RenderBouncedArgs", BOUNCED_NAMES.split())
 RenderState = namedtuple("RenderState", STATE_NAMES.split())
 ClosestHit = namedtuple("ClosestHit", CLOSEST_NAMES.split())
 ShadowColorArgs = namedtuple("ShadowColorArgs", SHADOW_COLOR_NAMES.split())
@@ -167,38 +163,6 @@ def flatten_chunk_array(array, num_rays):
     return array.reshape(shape)[:num_rays]
 
 
-def render_bounced(*inputs, **options):
-    args = unpack_args(RenderBouncedArgs, inputs, options)
-    inputs = args.rays, args.shapes, args.lights, args.mask, args.shadows
-    inputs += args.shadow_mask, args.num_bounces
-    hit_mask, depth, color = trace_bounces(*inputs)
-    post_args = hit_mask, depth, color, args.world_to_camera, args.rays
-    return postprocess(*post_args, args.H, args.W)
-
-
-def unpack_args(container, inputs, options, defaults=None):
-    if defaults is None:
-        defaults = {}
-    names = container._fields
-    values = list(inputs)
-    if len(values) > len(names):
-        raise TypeError("too many positional arguments")
-    for name in names[len(values) :]:
-        values.append(resolve_argument(name, options, defaults))
-    if options:
-        name = next(iter(options))
-        raise TypeError(f"unexpected keyword argument: {name}")
-    return container(*values)
-
-
-def resolve_argument(name, options, defaults):
-    if name in options:
-        return options.pop(name)
-    if name in defaults:
-        return defaults[name]
-    raise TypeError(f"missing required argument: {name}")
-
-
 def trace_bounces(rays, shapes, lights, mask, shadows, shadow_mask, bounces):
     state = initialize_state(rays)
     bounce = paz.lock(bounce_step, shapes, lights, mask, shadows, shadow_mask)
@@ -340,11 +304,6 @@ def intersect_shape_groups(shapes, origins, directions, intersect_shape):
         intersections.append(process_group(group, rays, start_arg))
         start_arg = start_arg + len(group)
     return concatenate(intersections)
-
-
-def intersect_groups(shapes, origins, directions):
-    args = (shapes, origins, directions, paz.graphics.shapes.intersect)
-    return intersect_shape_groups(*args)
 
 
 def intersect_shadow_groups(shapes, origins, directions):
@@ -578,8 +537,8 @@ def flip_normal_if_inside(eye, normal):
 
 
 def displace_by_normal(point, normal):
-    upper_point = point + normal * (paz.graphics.EPSILON / 2.0)
-    lower_point = point - normal * (paz.graphics.EPSILON / 2.0)
+    upper_point = point + normal * BOUNCE_ORIGIN_EPSILON
+    lower_point = point - normal * BOUNCE_ORIGIN_EPSILON
     return lower_point, upper_point
 
 
@@ -609,8 +568,6 @@ def schlick(normal, eye, n1, n2):
 
 def reflect_or_refract(transparancies, reflectance):
     is_transparent = transparancies > 0.0
-    # is_total_internal_reflection = reflectance >= 1.0
-    # do_reflect = (~is_transparent) | is_total_internal_reflection
     do_reflect = ~is_transparent
     return jp.expand_dims(do_reflect, -1)
 
