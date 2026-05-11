@@ -6,7 +6,6 @@ import jax.numpy as jp
 import jax
 import paz
 
-
 # --- Configuration ---
 # Set to True for a floor with a pattern of squares.
 # Set to False for a floor with the classical white material.
@@ -229,17 +228,18 @@ lights = [
 
 H, W = 1024 // 2, 1024 // 2
 y_FOV = jp.pi / 3.5
-rays = paz.graphics.camera.build_rays((H, W), y_FOV, camera_pose)
 
 # --- Rendering ---
 
 render = jax.jit(
     paz.partial(
         paz.graphics.render,
-        image_shape=(H, W),
-        world_to_camera=camera_pose,
-        rays=rays,
+        shape=(H, W),
+        y_FOV=y_FOV,
+        pose=camera_pose,
         lights=lights,
+        tiles=(1, 1),
+        chunk_size=1024,
         shadows=True,
         # shadows=False,
         num_bounces=5,
@@ -251,8 +251,8 @@ print(
 )
 image, depth = render(scene=scene, mask=None)
 image = paz.image.denormalize(image)
-paz.image.show(image)
+# paz.image.show(image)
 paz.image.write("cornell_box_mirror.png", image)
 
 # Interactive Viewer
-paz.graphics.viewer(scene, camera_pose, True, lights)
+# paz.graphics.viewer(scene, camera_pose, True, lights)
