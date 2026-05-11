@@ -5,8 +5,9 @@ import jax.numpy as jp
 
 import paz
 
-SHADOW_ORIGIN_EPSILON = 1e-3
-SHADOW_SELF_HIT_EPSILON = 1e-3
+SHADOW_ORIGIN_EPSILON = 1e-5
+SHADOW_SELF_HIT_EPSILON = 1e-5
+# BOUNCE_ORIGIN_EPSILON = 3e-3
 BOUNCE_ORIGIN_EPSILON = 1e-2
 RENDER_NAMES = "shape y_FOV pose scene mask lights tiles chunk_size shadows "
 RENDER_NAMES += "shadow_mask num_bounces"

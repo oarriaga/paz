@@ -47,9 +47,10 @@ def compute_quadratic_depths(depths_A, depths_B):
     # Returns
         depth: Array
     """
-    choose_A = jp.logical_and((depths_A > EPSILON), (depths_A < depths_B))
-    depth = jp.where(choose_A, depths_A, depths_B)
-    return depth
+    smaller = jp.minimum(depths_A, depths_B)
+    larger = jp.maximum(depths_A, depths_B)
+    pick_smaller = smaller > EPSILON
+    return jp.where(pick_smaller, smaller, larger)
 
 
 def replace_misses(depth, hit_mask):
