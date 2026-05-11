@@ -1,0 +1,72 @@
+import os
+
+# Keep the prototype examples portable and light on memory.
+os.environ.setdefault("JAX_PLATFORMS", "cpu")
+
+from .bijectors import (
+    Chain,
+    Exp,
+    Identity,
+    Invert,
+    Scale,
+    Shift,
+    Sigmoid,
+    SoftmaxCentered,
+    Softplus,
+)
+from .distributions import (
+    Beta,
+    Bernoulli,
+    Categorical,
+    Deterministic,
+    Distribution,
+    Independent,
+    Laplace,
+    LogNormal,
+    MixtureSameFamily,
+    MultivariateNormalDiag,
+    MultivariateNormalFullCovariance,
+    Normal,
+    Poisson,
+    QuantizedDistribution,
+    RelaxedOneHotCategorical,
+    StudentT,
+    TransformedDistribution,
+    TruncatedNormal,
+    Uniform,
+    VonMises,
+)
+from .fitting import fit_bijector
+
+__all__ = [
+    "Beta",
+    "Bernoulli",
+    "Chain",
+    "Categorical",
+    "Deterministic",
+    "Distribution",
+    "Exp",
+    "Identity",
+    "Independent",
+    "Invert",
+    "Laplace",
+    "LogNormal",
+    "MixtureSameFamily",
+    "MultivariateNormalDiag",
+    "MultivariateNormalFullCovariance",
+    "Normal",
+    "Poisson",
+    "QuantizedDistribution",
+    "RelaxedOneHotCategorical",
+    "Scale",
+    "Shift",
+    "Sigmoid",
+    "SoftmaxCentered",
+    "Softplus",
+    "StudentT",
+    "TransformedDistribution",
+    "TruncatedNormal",
+    "Uniform",
+    "VonMises",
+    "fit_bijector",
+]
