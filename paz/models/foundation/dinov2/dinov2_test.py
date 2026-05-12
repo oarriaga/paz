@@ -372,6 +372,10 @@ class TestLayerByLayerVerification:
         if patch_embedding_layers:
             return patch_embedding_layers[0]
 
+        for layer in keras_model.layers:
+            if hasattr(layer, "number_of_patches"):
+                return layer.name
+
         raise ValueError(
             f"No patch_embed layer found for variant {variant}. Available layers: {available_layers}"
         )
@@ -714,7 +718,11 @@ class TestDeepVerification:
         }
 
         if variant in layer_names:
-            return layer_names[variant]
+            try:
+                keras_model.get_layer(layer_names[variant])
+                return layer_names[variant]
+            except Exception:
+                pass
 
         available_layers = [layer.name for layer in keras_model.layers]
         patch_embedding_layers = [
@@ -723,6 +731,10 @@ class TestDeepVerification:
 
         if patch_embedding_layers:
             return patch_embedding_layers[0]
+
+        for layer in keras_model.layers:
+            if hasattr(layer, "number_of_patches"):
+                return layer.name
 
         raise ValueError(
             f"No patch_embed layer found for variant {variant}. Available layers: {available_layers}"
