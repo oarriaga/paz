@@ -63,8 +63,6 @@ class TestFixtures:
         if keras_path not in cls._keras_models:
             from paz.models.foundation.dinov2.layers import (
                 Attention,
-                DropPath,
-                LayerScale,
                 NestedTensorBlock,
             )
             from paz.models.foundation.dinov2.models.vision_transformer import (
@@ -77,8 +75,6 @@ class TestFixtures:
                 "BlockChunk": BlockChunk,
                 "NestedTensorBlock": NestedTensorBlock,
                 "Attention": Attention,
-                "LayerScale": LayerScale,
-                "DropPath": DropPath,
             }
             cls._keras_models[keras_path] = keras.models.load_model(
                 keras_path, custom_objects=custom_objects

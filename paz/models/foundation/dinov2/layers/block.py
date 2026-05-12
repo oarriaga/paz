@@ -738,7 +738,7 @@ class NestedTensorBlock(Block):
                 self.sample_drop_ratio,
                 (
                     self.layer_scale_1.gamma
-                    if isinstance(self.layer_scale_1, LayerScale)
+                    if hasattr(self.layer_scale_1, "gamma")
                     else None
                 ),
             )
@@ -748,7 +748,7 @@ class NestedTensorBlock(Block):
                 self.sample_drop_ratio,
                 (
                     self.layer_scale_2.gamma
-                    if isinstance(self.layer_scale_2, LayerScale)
+                    if hasattr(self.layer_scale_2, "gamma")
                     else None
                 ),
             )
