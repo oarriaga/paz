@@ -63,6 +63,9 @@ class TestFixtures:
         if keras_path not in cls._keras_models:
             from paz.models.foundation.dinov2.layers import (
                 Attention,
+                DropPath,
+                LayerScale,
+                MLP,
                 NestedTensorBlock,
             )
             from paz.models.foundation.dinov2.models.vision_transformer import (
@@ -75,6 +78,9 @@ class TestFixtures:
                 "BlockChunk": BlockChunk,
                 "NestedTensorBlock": NestedTensorBlock,
                 "Attention": Attention,
+                "MLP": MLP,
+                "LayerScale": LayerScale,
+                "DropPath": DropPath,
             }
             cls._keras_models[keras_path] = keras.models.load_model(
                 keras_path, custom_objects=custom_objects
@@ -238,7 +244,7 @@ class TestModelLoading:
 
     def test_keras_backend_configured(self):
         """Test that Keras backend is properly configured."""
-        assert os.environ.get("KERAS_BACKEND") == "jax"
+        assert keras.backend.backend() == "jax"
 
     def test_model_architectures_match(self, pytorch_model, keras_model, model_config):
         """Test that model architectures have expected dimensions."""
@@ -371,10 +377,6 @@ class TestLayerByLayerVerification:
 
         if patch_embedding_layers:
             return patch_embedding_layers[0]
-
-        for layer in keras_model.layers:
-            if hasattr(layer, "number_of_patches"):
-                return layer.name
 
         raise ValueError(
             f"No patch_embed layer found for variant {variant}. Available layers: {available_layers}"
@@ -718,11 +720,7 @@ class TestDeepVerification:
         }
 
         if variant in layer_names:
-            try:
-                keras_model.get_layer(layer_names[variant])
-                return layer_names[variant]
-            except Exception:
-                pass
+            return layer_names[variant]
 
         available_layers = [layer.name for layer in keras_model.layers]
         patch_embedding_layers = [
@@ -731,10 +729,6 @@ class TestDeepVerification:
 
         if patch_embedding_layers:
             return patch_embedding_layers[0]
-
-        for layer in keras_model.layers:
-            if hasattr(layer, "number_of_patches"):
-                return layer.name
 
         raise ValueError(
             f"No patch_embed layer found for variant {variant}. Available layers: {available_layers}"
