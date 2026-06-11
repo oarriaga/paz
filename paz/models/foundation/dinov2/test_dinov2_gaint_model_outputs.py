@@ -86,6 +86,16 @@ class TestLayerByLayerVerification:
     def test_transformer_block_outputs(self, keras_outputs, pytorch_outputs, block_idx):
         """Verify the output of specific transformer blocks."""
         layer_name = f"blocks.{block_idx}"
+        if layer_name not in pytorch_outputs.files:
+            pytest.skip(
+                f"{layer_name} missing from pytorch_outputs.npz "
+                "(regenerate giant outputs to enable)"
+            )
+        if layer_name not in keras_outputs.files:
+            pytest.skip(
+                f"{layer_name} missing from keras_outputs.npz "
+                "(regenerate giant outputs to enable)"
+            )
         pytorch_tensor = pytorch_outputs[layer_name]
         keras_tensor = keras_outputs[layer_name]
 

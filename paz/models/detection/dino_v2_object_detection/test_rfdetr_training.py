@@ -216,6 +216,16 @@ def mock_keras_model():
         yield mock_cls, mock_model_instance
 
 
+@pytest.fixture(autouse=True)
+def mock_evaluate():
+    """Skip real COCO evaluation when training loops run with mocks."""
+    with patch(
+        "paz.models.detection.dino_v2_object_detection.engine.evaluate",
+        return_value=({}, MagicMock()),
+    ) as mock_eval:
+        yield mock_eval
+
+
 @pytest.fixture
 def mock_pt_model():
     """Patch the reference Model class to avoid building a real network."""

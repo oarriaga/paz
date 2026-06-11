@@ -2009,7 +2009,7 @@ class TestAllVariantsParity:
         k_out = facade.model.model(k_input, training=False)
 
         k_pp = K_PostProcess(num_select=facade.model_config.num_select)
-        k_scores, k_labels, _ = k_pp(
+        k_scores, k_labels, *_ = k_pp(
             k_out,
             ops.convert_to_tensor(np.array([[H, W]], dtype="float32")),
         )

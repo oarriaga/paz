@@ -14,11 +14,10 @@ import keras
 import torch
 import numpy as np
 from paz.models.foundation.dinov2.models.vision_transformer import (
-    vit_small,
-    vit_large,
-    vit_base,
-    vit_giant2,
-    PatchEmbed,
+    DINOV2Small,
+    DINOV2Base,
+    DINOV2Large,
+    DINOV2Giant2,
 )
 import torch.nn.functional
 import logging
@@ -42,23 +41,27 @@ def port_weights_from_state_dict(keras_model, state_dict):
     """
     logging.info(f"Starting weight porting for Keras model '{keras_model.name}'...")
 
-    keras_model.classification_token.assign(state_dict["cls_token"].numpy())
+    cls_token_layer = keras_model.get_layer("cls_token")
+    embedding_dimension = cls_token_layer.embeddings.shape[-1]
+    cls_torch = state_dict["cls_token"].numpy().reshape(1, embedding_dimension)
+    cls_token_layer.embeddings.assign(cls_torch)
     logging.info("✓ Ported classification_token.")
 
+    pos_embed_layer = keras_model.get_layer("pos_embed")
     torch_positional_embedding = state_dict["pos_embed"]
-    keras_positional_embedding_shape = keras_model.positional_embedding.shape
+    target_length = pos_embed_layer.embeddings.shape[0]
+    target_shape = (1, target_length, embedding_dimension)
 
-    if torch_positional_embedding.shape != keras_positional_embedding_shape:
+    if tuple(torch_positional_embedding.shape) != target_shape:
         logging.info(
-            f"  - Resizing positional embedding from {list(torch_positional_embedding.shape)} to {list(keras_positional_embedding_shape)}..."
+            f"  - Resizing positional embedding from {list(torch_positional_embedding.shape)} to {list(target_shape)}..."
         )
         torch_cls_position_embedding = torch_positional_embedding[:, :1, :]
         torch_patch_position_embedding = torch_positional_embedding[:, 1:, :]
         number_of_source_patches = torch_patch_position_embedding.shape[1]
-        number_of_target_patches = keras_positional_embedding_shape[1] - 1
+        number_of_target_patches = target_length - 1
         source_grid_size = int(np.sqrt(number_of_source_patches))
         target_grid_size = int(np.sqrt(number_of_target_patches))
-        embedding_dimension = keras_positional_embedding_shape[2]
         torch_patch_position_embedding_grid = torch_patch_position_embedding.reshape(
             1, source_grid_size, source_grid_size, embedding_dimension
         ).permute(0, 3, 1, 2)
@@ -76,57 +79,52 @@ def port_weights_from_state_dict(keras_model, state_dict):
         final_positional_embedding = torch.cat(
             [torch_cls_position_embedding, resized_patch_position_embedding], dim=1
         )
-        keras_model.positional_embedding.assign(final_positional_embedding.numpy())
+        pos_embed_layer.embeddings.assign(
+            final_positional_embedding.numpy().reshape(
+                target_length, embedding_dimension
+            )
+        )
     else:
-        keras_model.positional_embedding.assign(torch_positional_embedding.numpy())
+        pos_embed_layer.embeddings.assign(
+            torch_positional_embedding.numpy().reshape(
+                target_length, embedding_dimension
+            )
+        )
     logging.info("✓ Ported positional_embedding.")
 
-    patch_embedding_layer = None
-    for layer in keras_model.layers:
-        if isinstance(layer, PatchEmbed):
-            patch_embedding_layer = layer
-            logging.info(
-                f"Found PatchEmbed layer by its class: '{patch_embedding_layer.name}'"
-            )
-            break
+    patch_embedding_w = (
+        state_dict["patch_embed.proj.weight"].permute(2, 3, 1, 0).numpy()
+    )
+    patch_embedding_b = state_dict["patch_embed.proj.bias"].numpy()
+    keras_model.get_layer("patch_embed_proj").set_weights(
+        [patch_embedding_w, patch_embedding_b]
+    )
+    logging.info("✓ Ported patch_embed weights.")
 
-    if patch_embedding_layer:
-        patch_embedding_w = (
-            state_dict["patch_embed.proj.weight"].permute(2, 3, 1, 0).numpy()
-        )
-        patch_embedding_b = state_dict["patch_embed.proj.bias"].numpy()
-        patch_embedding_layer.projection_layer.set_weights(
-            [patch_embedding_w, patch_embedding_b]
-        )
-        logging.info("✓ Ported patch_embed weights.")
-    else:
-        raise RuntimeError("Could not find the PatchEmbed layer in the Keras model.")
-
-    chunk_layer = keras_model.get_layer("chunk_0")
-    number_of_blocks = len(chunk_layer.blocks)
+    number_of_blocks = count_blocks(keras_model)
     logging.info(f"Found {number_of_blocks} transformer blocks to port...")
 
     for i in range(number_of_blocks):
-        block = chunk_layer.blocks[i]
-        block.normalization1.set_weights(
+        block_prefix = f"block_{i}"
+        keras_model.get_layer(f"{block_prefix}_norm1").set_weights(
             [
                 state_dict[f"blocks.{i}.norm1.weight"].numpy(),
                 state_dict[f"blocks.{i}.norm1.bias"].numpy(),
             ]
         )
-        block.normalization2.set_weights(
+        keras_model.get_layer(f"{block_prefix}_norm2").set_weights(
             [
                 state_dict[f"blocks.{i}.norm2.weight"].numpy(),
                 state_dict[f"blocks.{i}.norm2.bias"].numpy(),
             ]
         )
-        block.attention.predict_query_key_value.set_weights(
+        keras_model.get_layer(f"{block_prefix}_qkv").set_weights(
             [
                 state_dict[f"blocks.{i}.attn.qkv.weight"].T.numpy(),
                 state_dict[f"blocks.{i}.attn.qkv.bias"].numpy(),
             ]
         )
-        block.attention.projection_layer.set_weights(
+        keras_model.get_layer(f"{block_prefix}_proj").set_weights(
             [
                 state_dict[f"blocks.{i}.attn.proj.weight"].T.numpy(),
                 state_dict[f"blocks.{i}.attn.proj.bias"].numpy(),
@@ -135,13 +133,13 @@ def port_weights_from_state_dict(keras_model, state_dict):
 
         mlp_fully_connected_layer_1_key = f"blocks.{i}.mlp.fc1.weight"
         if mlp_fully_connected_layer_1_key in state_dict:
-            block.mlp.fully_connected_layer_1.set_weights(
+            keras_model.get_layer(f"{block_prefix}_mlp_fc1").set_weights(
                 [
                     state_dict[f"blocks.{i}.mlp.fc1.weight"].T.numpy(),
                     state_dict[f"blocks.{i}.mlp.fc1.bias"].numpy(),
                 ]
             )
-            block.mlp.fully_connected_layer_2.set_weights(
+            keras_model.get_layer(f"{block_prefix}_mlp_fc2").set_weights(
                 [
                     state_dict[f"blocks.{i}.mlp.fc2.weight"].T.numpy(),
                     state_dict[f"blocks.{i}.mlp.fc2.bias"].numpy(),
@@ -151,7 +149,9 @@ def port_weights_from_state_dict(keras_model, state_dict):
             swiglu_fused_gate_and_value_projection_key = f"blocks.{i}.mlp.w12.weight"
             swiglu_output_projection_key = f"blocks.{i}.mlp.w3.weight"
             if swiglu_fused_gate_and_value_projection_key in state_dict:
-                block.mlp.fused_gate_and_value_projection.set_weights(
+                fused_layer_name = f"{block_prefix}_mlp_fused_gate_and_value_projection"
+                output_layer_name = f"{block_prefix}_mlp_output_projection"
+                keras_model.get_layer(fused_layer_name).set_weights(
                     [
                         state_dict[
                             swiglu_fused_gate_and_value_projection_key
@@ -159,7 +159,7 @@ def port_weights_from_state_dict(keras_model, state_dict):
                         state_dict[f"blocks.{i}.mlp.w12.bias"].numpy(),
                     ]
                 )
-                block.mlp.output_projection.set_weights(
+                keras_model.get_layer(output_layer_name).set_weights(
                     [
                         state_dict[swiglu_output_projection_key].T.numpy(),
                         state_dict[f"blocks.{i}.mlp.w3.bias"].numpy(),
@@ -172,38 +172,83 @@ def port_weights_from_state_dict(keras_model, state_dict):
                 )
         layer_scale_1_key = f"blocks.{i}.ls1.gamma"
         layer_scale_2_key = f"blocks.{i}.ls2.gamma"
-        if layer_scale_1_key in state_dict and hasattr(block, "layer_scale_1"):
-            block.layer_scale_1.gamma.assign(state_dict[layer_scale_1_key].numpy())
-        if layer_scale_2_key in state_dict and hasattr(block, "layer_scale_2"):
-            block.layer_scale_2.gamma.assign(state_dict[layer_scale_2_key].numpy())
+        ls1_layer = keras_model.get_layer(f"{block_prefix}_ls1")
+        ls2_layer = keras_model.get_layer(f"{block_prefix}_ls2")
+        if layer_scale_1_key in state_dict and hasattr(ls1_layer, "kernel"):
+            ls1_layer.kernel.assign(state_dict[layer_scale_1_key].numpy())
+        if layer_scale_2_key in state_dict and hasattr(ls2_layer, "kernel"):
+            ls2_layer.kernel.assign(state_dict[layer_scale_2_key].numpy())
 
     logging.info("✓ Ported all transformer blocks.")
 
     final_normalization_layer = keras_model.get_layer("norm")
-    if final_normalization_layer:
-        final_normalization_layer.set_weights(
-            [state_dict["norm.weight"].numpy(), state_dict["norm.bias"].numpy()]
-        )
-        logging.info("✓ Ported final LayerNormalization.")
+    final_normalization_layer.set_weights(
+        [state_dict["norm.weight"].numpy(), state_dict["norm.bias"].numpy()]
+    )
+    logging.info("✓ Ported final LayerNormalization.")
 
     logging.info("\n--- Weight porting complete! ---")
     return keras_model
 
 
+def count_blocks(keras_model):
+    layer_names = [layer.name for layer in keras_model.layers]
+    block_indices = [
+        int(name.split("_")[1])
+        for name in layer_names
+        if name.startswith("block_") and name.endswith("_norm1")
+    ]
+    return max(block_indices) + 1
+
+
 if __name__ == "__main__":
+    import argparse
+    import gc
+
     MODEL_CONSTRUCTORS = {
-        "dinov2_vits14": vit_small,
-        "dinov2_vitb14": vit_base,
-        "dinov2_vitl14": vit_large,
-        "dinov2_vitg14": vit_giant2,
+        "dinov2_vits14": DINOV2Small,
+        "dinov2_vitb14": DINOV2Base,
+        "dinov2_vitl14": DINOV2Large,
+        # "dinov2_vitg14": DINOV2Giant2,
     }
+    DEFAULT_VARIANTS = ["dinov2_vits14", "dinov2_vitb14", "dinov2_vitl14"]
+
+    parser = argparse.ArgumentParser(
+        description=(
+            "Port DINOv2 PyTorch weights to native Keras .keras files. "
+            "The giant variant (dinov2_vitg14) is heavy (>4GB) and is OFF by "
+            "default; opt in with --variants dinov2_vitg14 or --all."
+        )
+    )
+    parser.add_argument(
+        "--variants",
+        nargs="+",
+        choices=list(MODEL_CONSTRUCTORS.keys()),
+        default=None,
+        help="Subset of variants to port. Default: 3 small/base/large.",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Port all variants including the giant. May exhaust RAM.",
+    )
+    args = parser.parse_args()
+
+    if args.all:
+        selected = list(MODEL_CONSTRUCTORS.keys())
+    elif args.variants:
+        selected = args.variants
+    else:
+        selected = DEFAULT_VARIANTS
 
     output_dir = "weights"
     os.makedirs(output_dir, exist_ok=True)
     logging.info(f"Output directory set to: '{output_dir}'")
+    logging.info(f"Variants to port: {selected}")
 
-    for model_name, model_constructor in MODEL_CONSTRUCTORS.items():
+    for model_name in selected:
         print("-" * 80)
+        model_constructor = MODEL_CONSTRUCTORS[model_name]
         logging.info(f"Processing model: {model_name}")
         logging.info(f"Using Keras backend: {keras.backend.backend()}")
 
@@ -212,32 +257,42 @@ if __name__ == "__main__":
             "facebookresearch/dinov2", model_name, verbose=False
         )
         pytorch_model.eval()
-        pytorch_state_dict = pytorch_model.state_dict()
-        logging.info("✓ PyTorch model and weights loaded successfully.")
+        pytorch_state_dict = {
+            key: value.detach().cpu()
+            for key, value in pytorch_model.state_dict().items()
+        }
+        del pytorch_model
+        gc.collect()
+        logging.info("✓ PyTorch weights extracted; model object released.")
 
         logging.info("Instantiating Keras 3 DINOv2 model architecture...")
         keras_dinov2_model = model_constructor(
             img_size=518,
             patch_size=14,
             init_values=1.0e-5,
-            number_of_register_tokens=0,
+            num_reg_tokens=0,
             name=f"dino_{model_name}",
         )
 
-        logging.info("Building Keras model to initialize weights...")
-        dummy_input = np.zeros((1, 518, 518, 3), dtype="float32")
-        _ = keras_dinov2_model(dummy_input)
-
-        keras_dinov2_model_with_weights = port_weights_from_state_dict(
-            keras_dinov2_model, pytorch_state_dict
-        )
+        port_weights_from_state_dict(keras_dinov2_model, pytorch_state_dict)
+        del pytorch_state_dict
+        gc.collect()
 
         final_keras_model_path = os.path.join(output_dir, f"{model_name}_ported.keras")
         logging.info(
             f"Saving final native Keras model to '{final_keras_model_path}'..."
         )
-        keras_dinov2_model_with_weights.save(final_keras_model_path)
+        keras_dinov2_model.save(final_keras_model_path)
         logging.info("✓ Save complete.")
+
+        del keras_dinov2_model
+        gc.collect()
+        try:
+            import jax
+
+            jax.clear_caches()
+        except Exception:
+            pass
         print("-" * 80 + "\n")
 
-    print("All models have been successfully ported and saved.")
+    print("All requested models have been successfully ported and saved.")

@@ -53,6 +53,7 @@ def _make_train_config(**overrides):
         batch_size=2,
         grad_accum_steps=3,
         segmentation_head=False,
+        num_workers=0,
     )
     defaults.update(overrides)
     return TrainConfig(**defaults)
@@ -590,8 +591,9 @@ class TestBuildDataLoaderIntegration:
         loader = RFDETR._build_data_loader(
             config, "train", {"resolution": 560}
         )
-        # 4 images / batch_size 2, drop_last=True → 2 batches
-        assert len(loader) == 2
+        # 4 < effective_bs 2 * min_batches 5 → oversampled to 10 samples;
+        # 10 / batch_size 2, drop_last=True → 5 batches
+        assert len(loader) == 5
 
     def test_val_loader_no_shuffle_deterministic(self, tmp_path):
         """Val loader with shuffle=False should yield the same order twice."""
@@ -662,7 +664,7 @@ class TestBuildDataLoaderIntegration:
             break
 
     def test_batch_size_larger_than_dataset_train_drops(self, tmp_path):
-        """batch > n_images with drop_last=True → zero batches."""
+        """Tiny train dataset oversamples to min_batches instead of zero."""
         _create_mini_coco_dataset(tmp_path, n_images=2)
 
         config = _make_train_config(
@@ -677,9 +679,11 @@ class TestBuildDataLoaderIntegration:
             config, "train", {"resolution": 560}
         )
         assert loader is not None
-        assert len(loader) == 0
+        # 2 < effective_bs 10 * min_batches 5 → oversampled to 50 samples;
+        # 50 / batch_size 10, drop_last=True → 5 batches
+        assert len(loader) == 5
         batches = list(loader)
-        assert len(batches) == 0
+        assert len(batches) == 5
 
     def test_batch_size_larger_than_dataset_val_keeps(self, tmp_path):
         """batch > n_images with drop_last=False → one partial batch."""
@@ -828,7 +832,7 @@ class TestBuildDataLoaderIntegration:
             count += 1
             assert images_np.shape[0] == 2
             assert len(targets) == 2
-        assert count == 2  # 4 images / bs=2, drop_last=True
+        assert count == 5  # 4 < 10 → oversampled to 10 / bs=2 → 5 batches
 
     def test_grad_accum_increases_effective_batch(self, tmp_path):
         """grad_accum_steps>1 multiplies the effective batch size."""
@@ -846,8 +850,9 @@ class TestBuildDataLoaderIntegration:
             config, "train", {"resolution": 560}
         )
         assert loader.batch_size == 6
-        # 6 images / effective_bs=6, drop_last=True → 1 batch
-        assert len(loader) == 1
+        # 6 < effective_bs 6 * min_batches 5 → oversampled to 30 samples;
+        # 30 / batch_size 6, drop_last=True → 5 batches
+        assert len(loader) == 5
 
     def test_wide_image(self, tmp_path):
         """Very wide image should be resized correctly."""

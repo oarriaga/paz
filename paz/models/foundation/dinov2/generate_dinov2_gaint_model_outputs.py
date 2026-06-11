@@ -14,25 +14,47 @@ import sys
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from paz.models.foundation.dinov2.models.vision_transformer import (
-    DinoVisionTransformer,
-    BlockChunk,
+from paz.models.foundation.dinov2.layers.attention import (
+    split_query_key_value,
+    compute_scores,
+    apply_attention,
+    merge_heads,
+    flatten_heads,
 )
-from paz.models.foundation.dinov2.layers.block import NestedTensorBlock
-from paz.models.foundation.dinov2.layers.attention import Attention
-from paz.models.foundation.dinov2.layers.swiglu_ffn import SwiGLUFFNFused
-from paz.models.foundation.dinov2.layers.layer_scale import LayerScale
-from paz.models.foundation.dinov2.layers.drop_path import DropPath
 
+MODEL_NAME = sys.argv[1] if len(sys.argv) > 1 else "dinov2_vitg14"
 MODEL_CONFIG = {
-    "name": "dinov2_vitg14",
-    "keras_path": "weights/dinov2_vitg14_ported.keras",
-    "pytorch_name": "dinov2_vitg14",
+    "name": MODEL_NAME,
+    "keras_path": f"weights/{MODEL_NAME}_ported.keras",
+    "pytorch_name": MODEL_NAME,
+}
+VARIANT_NUM_HEADS = {
+    "dinov2_vits14": 6,
+    "dinov2_vitb14": 12,
+    "dinov2_vitl14": 16,
+    "dinov2_vitg14": 24,
 }
 DEFAULT_INPUT_SIZE = 518
 PYTORCH_HUB_REPO = "facebookresearch/dinov2"
 OUTPUT_DIR = "test_outputs"
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+
+def count_blocks(keras_model):
+    indices = []
+    for layer in keras_model.layers:
+        name = layer.name
+        if name.startswith("block_") and name.endswith("_norm1"):
+            indices.append(int(name.split("_")[1]))
+    return max(indices) + 1
+
+
+def has_layer(keras_model, name):
+    try:
+        keras_model.get_layer(name)
+        return True
+    except Exception:
+        return False
 
 
 
@@ -114,65 +136,109 @@ def perform_keras_step_by_step_forward(
     print("Performing Keras step-by-step forward pass...")
     keras_outputs = {}
 
+    embed_dim = keras_model.get_layer("cls_token").embeddings.shape[-1]
+    depth = count_blocks(keras_model)
+    num_heads = VARIANT_NUM_HEADS[MODEL_NAME]
+    head_dim = embed_dim // num_heads
+    scale = head_dim**-0.5
+    patch_size = 14
+    is_swiglu = has_layer(
+        keras_model, "block_0_mlp_fused_gate_and_value_projection"
+    )
 
-    raw_patch_embed = keras_model.patch_embedding(keras_input)
+    proj_layer = keras_model.get_layer("patch_embed_proj")
+    projected = proj_layer(keras_input)
+    B = keras.ops.shape(keras_input)[0]
+    H = keras.ops.shape(keras_input)[1]
+    W = keras.ops.shape(keras_input)[2]
+    num_patches = (H // patch_size) * (W // patch_size)
+    raw_patch_embed = keras.ops.reshape(projected, (B, num_patches, embed_dim))
     keras_outputs["patch_embed"] = raw_patch_embed
 
-    B, H, W, C = keras.ops.shape(keras_input)
     x = raw_patch_embed
 
+    cls_table = keras_model.get_layer("cls_token").embeddings
     classification_tokens = keras.ops.broadcast_to(
-        keras_model.classification_token, (B, 1, keras_model.embedding_dimension)
+        keras.ops.expand_dims(cls_table, axis=0), (B, 1, embed_dim)
     )
     x = keras.ops.concatenate([classification_tokens, x], axis=1)
 
-    x = keras.ops.add(x, keras_model.interpolate_positional_encoding(x, H, W))
+    pos_table = keras_model.get_layer("pos_embed").embeddings
+    x = keras.ops.add(x, keras.ops.expand_dims(pos_table, axis=0))
 
-    if (
-        hasattr(keras_model, "register_tokens")
-        and keras_model.register_tokens is not None
-    ):
+    try:
+        register_layer = keras_model.get_layer("register_tokens")
+    except Exception:
+        register_layer = None
+    if register_layer is not None:
+        register_table = register_layer.embeddings
+        num_register = register_table.shape[0]
         register_tokens = keras.ops.broadcast_to(
-            keras_model.register_tokens,
-            (B, keras_model.number_of_register_tokens, keras_model.embedding_dimension),
+            keras.ops.expand_dims(register_table, axis=0),
+            (B, num_register, embed_dim),
         )
         x = keras.ops.concatenate([x[:, :1], register_tokens, x[:, 1:]], axis=1)
 
+    for block_idx in range(depth):
+        prefix = f"block_{block_idx}"
 
-    for i, chunk in enumerate(keras_model.blocks):
-        for j, block in enumerate(chunk.blocks):
-            block_idx = i * len(chunk.blocks) + j
+        norm1_layer = keras_model.get_layer(f"{prefix}_norm1")
+        qkv_layer = keras_model.get_layer(f"{prefix}_qkv")
+        proj_out_layer = keras_model.get_layer(f"{prefix}_proj")
+        ls1_layer = keras_model.get_layer(f"{prefix}_ls1")
+        norm2_layer = keras_model.get_layer(f"{prefix}_norm2")
+        ls2_layer = keras_model.get_layer(f"{prefix}_ls2")
 
-            normalized_x_1 = block.normalization1(x)
-            attention_output = block.attention(normalized_x_1, training=False)
-            scaled_attention = block.layer_scale_1(attention_output, training=False)
-            x = keras.ops.add(x, scaled_attention)
+        normalized_x_1 = norm1_layer(x)
+        qkv_out = qkv_layer(normalized_x_1)
+        q, k, v = split_query_key_value(qkv_out, num_heads, head_dim)
+        scores = compute_scores(q, k, scale)
+        attended = apply_attention(scores, v, 0.0, name=prefix)
+        merged = merge_heads(attended)
+        flat = flatten_heads(merged)
+        attention_output = proj_out_layer(flat)
+        scaled_attention = ls1_layer(attention_output)
+        x = keras.ops.add(x, scaled_attention)
 
-            keras_outputs[f"blocks.{block_idx}.norm1"] = normalized_x_1
-            keras_outputs[f"blocks.{block_idx}.attn"] = attention_output
-            keras_outputs[f"blocks.{block_idx}.ls1"] = scaled_attention
+        keras_outputs[f"blocks.{block_idx}.norm1"] = normalized_x_1
+        keras_outputs[f"blocks.{block_idx}.attn"] = attention_output
+        keras_outputs[f"blocks.{block_idx}.ls1"] = scaled_attention
 
-            normalized_x_2 = block.normalization2(x)
+        normalized_x_2 = norm2_layer(x)
 
-            mlp = block.mlp
-            gate_and_value = mlp.fused_gate_and_value_projection(normalized_x_2)
-            value, gate = keras.ops.split(gate_and_value, 2, axis=-1)
-            activated_value = mlp.activation_layer(value)
-            hidden = activated_value * gate
-            mlp_output = mlp.output_projection(hidden)
-
-            scaled_mlp = block.layer_scale_2(mlp_output, training=False)
-            x = keras.ops.add(x, scaled_mlp)
-
-            keras_outputs[f"blocks.{block_idx}.norm2"] = normalized_x_2
-            keras_outputs[f"blocks.{block_idx}.mlp.fused_gate_and_value_projection"] = (
-                gate_and_value
+        if is_swiglu:
+            fused_layer = keras_model.get_layer(
+                f"{prefix}_mlp_fused_gate_and_value_projection"
             )
+            output_proj_layer = keras_model.get_layer(
+                f"{prefix}_mlp_output_projection"
+            )
+            gate_and_value = fused_layer(normalized_x_2)
+            value, gate = keras.ops.split(gate_and_value, 2, axis=-1)
+            activated_value = keras.activations.silu(value)
+            hidden = activated_value * gate
+            mlp_output = output_proj_layer(hidden)
+            keras_outputs[
+                f"blocks.{block_idx}.mlp.fused_gate_and_value_projection"
+            ] = gate_and_value
             keras_outputs[f"blocks.{block_idx}.mlp.activation"] = activated_value
             keras_outputs[f"blocks.{block_idx}.mlp.output_projection"] = mlp_output
-            keras_outputs[f"blocks.{block_idx}.mlp"] = mlp_output
-            keras_outputs[f"blocks.{block_idx}.ls2"] = scaled_mlp
-            keras_outputs[f"blocks.{block_idx}"] = x
+        else:
+            fc1_layer = keras_model.get_layer(f"{prefix}_mlp_fc1")
+            act_layer = keras_model.get_layer(f"{prefix}_mlp_act")
+            fc2_layer = keras_model.get_layer(f"{prefix}_mlp_fc2")
+            hidden_pre = fc1_layer(normalized_x_2)
+            hidden = act_layer(hidden_pre)
+            mlp_output = fc2_layer(hidden)
+            keras_outputs[f"blocks.{block_idx}.mlp.activation"] = hidden
+
+        scaled_mlp = ls2_layer(mlp_output)
+        x = keras.ops.add(x, scaled_mlp)
+
+        keras_outputs[f"blocks.{block_idx}.norm2"] = normalized_x_2
+        keras_outputs[f"blocks.{block_idx}.mlp"] = mlp_output
+        keras_outputs[f"blocks.{block_idx}.ls2"] = scaled_mlp
+        keras_outputs[f"blocks.{block_idx}"] = x
 
     final_norm_out = keras_model.get_layer("norm")(x)
     keras_outputs["norm"] = final_norm_out
@@ -195,18 +261,7 @@ if __name__ == "__main__":
     del pytorch_model, pytorch_outputs
 
     print("\n--- Processing Keras Model ---")
-    custom_objects = {
-        "DinoVisionTransformer": DinoVisionTransformer,
-        "BlockChunk": BlockChunk,
-        "NestedTensorBlock": NestedTensorBlock,
-        "Attention": Attention,
-        "LayerScale": LayerScale,
-        "DropPath": DropPath,
-        "SwiGLUFFNFused": SwiGLUFFNFused,
-    }
-    keras_model = keras.models.load_model(
-        MODEL_CONFIG["keras_path"], custom_objects=custom_objects
-    )
+    keras_model = keras.models.load_model(MODEL_CONFIG["keras_path"])
     keras_outputs = perform_keras_step_by_step_forward(keras_model, keras_input)
 
     keras_final_only = np.array(keras_model(keras_input, training=False))

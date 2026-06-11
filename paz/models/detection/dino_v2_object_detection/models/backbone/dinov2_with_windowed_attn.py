@@ -1,16 +1,97 @@
 import math
-from functools import partial
 
 import keras
 from keras import layers, ops, initializers, Model
 
 from paz.models.foundation.dinov2.layers import (
-    MLP,
-    LayerScale,
-    DropPath,
-    SwiGLUFFNFused,
-    Attention,
+    attend,
+    mlp,
+    apply_layer_scale,
+    swiglu_ffn_fused,
 )
+
+# ─────────────────────────────────────────────────────────────
+#  Sub-model builders using the functional foundation API
+# ─────────────────────────────────────────────────────────────
+#
+# Each builder invokes a foundation helper inside a tiny
+# ``keras.Model`` and attaches the attribute aliases expected by
+# ``backbone_weights_porting_utils``:
+#
+#   * Attention:  ``predict_query_key_value``, ``projection_layer``
+#   * MLP:        ``fully_connected_layer_1``, ``fully_connected_layer_2``
+#   * SwiGLU:     ``fused_gate_and_value_projection``, ``output_projection``
+#   * LayerScale: ``gamma``
+
+
+def build_attention_submodel(hidden_size, num_heads, name):
+    head_dim = hidden_size // num_heads
+    x_in = keras.Input(shape=(None, hidden_size))
+    args = dict(
+        num_heads=num_heads,
+        head_dim=head_dim,
+        attn_drop_rate=0.0,
+        proj_drop_rate=0.0,
+        use_qkv_bias=True,
+        use_proj_bias=True,
+        name=name,
+    )
+    y = attend(x_in, **args)
+    submodel = Model(x_in, y, name=name)
+    submodel.predict_query_key_value = submodel.get_layer(f"{name}_qkv")
+    submodel.projection_layer = submodel.get_layer(f"{name}_proj")
+    return submodel
+
+
+def build_layer_scale_submodel(dim, init_values, name):
+    x_in = keras.Input(shape=(None, dim))
+    y = apply_layer_scale(x_in, dim, init_values, name)
+    submodel = Model(x_in, y, name=name)
+    submodel.gamma = submodel.get_layer(name).kernel
+    return submodel
+
+
+def build_drop_path_layer(rate, name):
+    if rate > 0.0:
+        layer = layers.Dropout(rate, noise_shape=(None, 1, 1), name=name)
+    else:
+        layer = layers.Identity(name=name)
+    return layer
+
+
+def build_mlp_submodel(input_features, hidden_features, name):
+    x_in = keras.Input(shape=(None, input_features))
+    args = dict(
+        hidden_features=hidden_features,
+        output_features=input_features,
+        drop_rate=0.0,
+        use_bias=True,
+        name=name,
+    )
+    y = mlp(x_in, **args)
+    submodel = Model(x_in, y, name=name)
+    submodel.fully_connected_layer_1 = submodel.get_layer(f"{name}_fc1")
+    submodel.fully_connected_layer_2 = submodel.get_layer(f"{name}_fc2")
+    return submodel
+
+
+def build_swiglu_submodel(input_features, hidden_features, name):
+    x_in = keras.Input(shape=(None, input_features))
+    args = dict(
+        input_features=input_features,
+        hidden_features=hidden_features,
+        output_features=input_features,
+        use_bias=True,
+        drop_rate=0.0,
+        name=name,
+    )
+    y = swiglu_ffn_fused(x_in, **args)
+    submodel = Model(x_in, y, name=name)
+    fused_name = f"{name}_fused_gate_and_value_projection"
+    output_name = f"{name}_output_projection"
+    submodel.fused_gate_and_value_projection = submodel.get_layer(fused_name)
+    submodel.output_projection = submodel.get_layer(output_name)
+    return submodel
 
 
 @keras.saving.register_keras_serializable(package="backbone")
@@ -176,9 +257,7 @@ class WindowedDinov2PatchEmbeddings(layers.Layer):
 
         # Patch Embeddings
         embeddings = self.projection(pixel_values)
-        embeddings = ops.reshape(
-            embeddings, (batch_size, -1, self.hidden_size)
-        )
+        embeddings = ops.reshape(embeddings, (batch_size, -1, self.hidden_size))
 
         # Add CLS Token
         cls_tokens = ops.broadcast_to(self.cls_token, (batch_size, 1, self.hidden_size))
@@ -306,45 +385,27 @@ class WindowedDinov2Layer(layers.Layer):
 
         self.norm1 = layers.LayerNormalization(epsilon=layer_norm_eps, name="norm1")
 
-        self.attention = Attention(
-            dimension=hidden_size,
-            number_of_heads=num_attention_heads,
-            use_query_key_value_bias=True,
-            use_projection_bias=True,
-            name="attention",
+        self.attention = build_attention_submodel(
+            hidden_size, num_attention_heads, name="attention"
         )
 
-        self.layer_scale1 = LayerScale(hidden_size, init_values=init_values, name="ls1")
-        self.drop_path1 = (
-            DropPath(drop_path_rate, name="drop_path1")
-            if drop_path_rate > 0
-            else layers.Identity()
+        self.layer_scale1 = build_layer_scale_submodel(
+            hidden_size, init_values, name="ls1"
         )
+        self.drop_path1 = build_drop_path_layer(drop_path_rate, name="drop_path1")
 
         self.norm2 = layers.LayerNormalization(epsilon=layer_norm_eps, name="norm2")
 
         mlp_hidden_dim = int(hidden_size * mlp_ratio)
         if use_swiglu_ffn:
-            self.mlp = SwiGLUFFNFused(
-                input_features=hidden_size,
-                hidden_features=mlp_hidden_dim,
-                use_bias=True,
-                name="mlp",
-            )
+            self.mlp = build_swiglu_submodel(hidden_size, mlp_hidden_dim, name="mlp")
         else:
-            self.mlp = MLP(
-                input_features=hidden_size,
-                hidden_features=mlp_hidden_dim,
-                activation_layer=layers.Activation("gelu"),
-                use_bias=True,
-            )
+            self.mlp = build_mlp_submodel(hidden_size, mlp_hidden_dim, name="mlp")
 
-        self.layer_scale2 = LayerScale(hidden_size, init_values=init_values, name="ls2")
-        self.drop_path2 = (
-            DropPath(drop_path_rate, name="drop_path2")
-            if drop_path_rate > 0
-            else layers.Identity()
+        self.layer_scale2 = build_layer_scale_submodel(
+            hidden_size, init_values, name="ls2"
         )
+        self.drop_path2 = build_drop_path_layer(drop_path_rate, name="drop_path2")
 
     def get_config(self):
         config = super().get_config()
