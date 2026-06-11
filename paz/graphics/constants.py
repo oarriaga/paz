@@ -1,7 +1,7 @@
 import numpy as np
 
 FARAWAY = 1000.0
-EPSILON = 1e-4
+EPSILON = 1e-5
 
 RED = np.array([1.0, 0.0, 0.0])
 GREEN = np.array([0.0, 1.0, 0.0])
