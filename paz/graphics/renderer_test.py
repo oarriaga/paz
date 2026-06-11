@@ -249,7 +249,7 @@ def test_select_shadow_depths_discard_front_side_same_shape_hits():
 def test_select_shadow_depths_keep_back_side_second_root():
     depths = jp.array(
         [
-            [[1e-4], [0.2]],
+            [[1e-6], [0.2]],
             [[5e-4], [1000.0]],
         ]
     )

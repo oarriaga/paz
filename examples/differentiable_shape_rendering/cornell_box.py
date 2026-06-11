@@ -1,10 +1,13 @@
 # shadows (262144, 3)
 import os
 
-os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".90"
+os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".80"
+from jax.experimental.compilation_cache.compilation_cache import set_cache_dir
 import jax.numpy as jp
 import jax
 import paz
+
+set_cache_dir(paz.logger.make_directory("cache"))
 
 # --- Configuration ---
 # Set to True for a floor with a pattern of squares.
@@ -78,10 +81,10 @@ gold_material = paz.graphics.Material(
 )
 
 
-shape_material = mirror_material
+# shape_material = mirror_material
 # shape_material = glass_material
 # shape_material = clear_glass_material
-# shape_material = gold_material
+shape_material = gold_material
 
 # Cornell Box Materials
 white_wall_material = paz.graphics.Material(
@@ -255,4 +258,4 @@ image = paz.image.denormalize(image)
 paz.image.write("cornell_box_mirror.png", image)
 
 # Interactive Viewer
-# paz.graphics.viewer(scene, camera_pose, True, lights)
+paz.graphics.viewer(scene, camera_pose, True, lights)

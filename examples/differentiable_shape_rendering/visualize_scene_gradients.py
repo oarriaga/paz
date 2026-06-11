@@ -8,7 +8,7 @@ import paz.utils.plot as plot
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 plot.configure()
-H, W = 1028 // 2, 1028 // 2
+H, W = 2**10, 2**10
 image_shape = (H, W)
 y_FOV = jp.pi / 4.0
 camera_args = (
@@ -113,11 +113,11 @@ def plot_jacobian(function, args):
     hide_ticks(axis)
     num_channels = jacobian.shape[-1]
     for channel_arg in range(num_channels):
-        name = f"{channel_arg}-channel_color_translation_gradients.pdf"
+        name = f"{channel_arg}-axis_translation_color_gradients.pdf"
         show_gradients(jp.array(jacobian[..., channel_arg]), name)
 
 
-image, _ = render(scene=scene, shadows=False)
+image, _ = render(scene=scene, shadows=True)
 image = paz.image.resize(image, (H // 2, W // 2), "bilinear")
 paz.image.write("color_gradients_scene.png", paz.image.denormalize(image))
 plot_jacobian(build_renderer(paz.SE3.translation), jp.zeros(3))

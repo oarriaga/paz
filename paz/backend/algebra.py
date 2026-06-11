@@ -179,6 +179,12 @@ def solve_quadratic(a, b, c):
     sqrt_discriminator = jp.sqrt(discriminator)
     solution_A = (-b - sqrt_discriminator) / (2.0 * a)
     solution_B = (-b + sqrt_discriminator) / (2.0 * a)
+    # sign_b = jp.where(b >= 0.0, 1.0, -1.0)
+    # q = -0.5 * (b + sign_b * sqrt_discriminator)
+    # safe_q = jp.where(q == 0.0, 1.0, q)
+    # safe_a = jp.where(a == 0.0, 1.0, a)
+    # solution_A = q / safe_a
+    # solution_B = c / safe_q
     return solution_A, solution_B, valid_mask
 
 
