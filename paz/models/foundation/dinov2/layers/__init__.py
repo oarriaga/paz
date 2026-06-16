@@ -12,12 +12,3 @@ from paz.models.foundation.dinov2.layers.drop_path import (
     apply_drop_path,
     drop_path,
 )
-from paz.models.foundation.dinov2.layers.legacy_wrappers import (
-    Attention,
-    LayerScale,
-    MLP,
-    DropPath,
-    SwiGLUFFN,
-    SwiGLUFFNFused,
-    SwiGLUFFNAligned,
-)
