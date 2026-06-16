@@ -1,7 +1,14 @@
-from paz.models.foundation.dinov2.layers.layer_scale import LayerScale
-from paz.models.foundation.dinov2.layers.mlp import MLP
-from paz.models.foundation.dinov2.layers.patch_embed import PatchEmbed
-from paz.models.foundation.dinov2.layers.swiglu_ffn import SwiGLUFFN, SwiGLUFFNFused, SwiGLUFFNAligned
-from paz.models.foundation.dinov2.layers.block import NestedTensorBlock
-from paz.models.foundation.dinov2.layers.attention import Attention
-from paz.models.foundation.dinov2.layers.drop_path import DropPath
+from paz.models.foundation.dinov2.layers.layer_scale import apply_layer_scale
+from paz.models.foundation.dinov2.layers.mlp import mlp
+from paz.models.foundation.dinov2.layers.patch_embed import build_patch_embedding
+from paz.models.foundation.dinov2.layers.swiglu_ffn import swiglu_ffn_fused
+from paz.models.foundation.dinov2.layers.block import (
+    block,
+    AttentionArgs,
+    FFNArgs,
+)
+from paz.models.foundation.dinov2.layers.attention import attend
+from paz.models.foundation.dinov2.layers.drop_path import (
+    apply_drop_path,
+    drop_path,
+)

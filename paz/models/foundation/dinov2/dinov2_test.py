@@ -2,11 +2,31 @@ import os
 
 os.environ["KERAS_BACKEND"] = "jax"
 
+import gc
 import numpy as np
 import torch
 import keras
+import jax
 import pytest
 from typing import Dict, Any, Tuple, Optional, List
+
+
+def _evict_other_entries(cache: Dict[str, Any], keep_key: str) -> None:
+    other_keys = [key for key in cache.keys() if key != keep_key]
+    for key in other_keys:
+        del cache[key]
+    if other_keys:
+        gc.collect()
+        jax.clear_caches()
+
+
+from paz.models.foundation.dinov2.layers.attention import (
+    split_query_key_value,
+    compute_scores,
+    apply_attention,
+    merge_heads,
+    flatten_heads,
+)
 
 KERAS_MODEL_PATHS = [
     r"weights\dinov2_vits14_ported.keras",
@@ -49,7 +69,8 @@ class TestFixtures:
 
     @classmethod
     def get_pytorch_model(cls, model_name: str):
-        """Lazy loading of PyTorch model."""
+        """Lazy loading of PyTorch model (single-entry cache)."""
+        _evict_other_entries(cls._pytorch_models, model_name)
         if model_name not in cls._pytorch_models:
             cls._pytorch_models[model_name] = torch.hub.load(
                 PYTORCH_HUB_REPO, model_name, force_reload=False
@@ -59,32 +80,10 @@ class TestFixtures:
 
     @classmethod
     def get_keras_model(cls, keras_path: str):
-        """Lazy loading of Keras model."""
+        """Lazy loading of Keras model (single-entry cache)."""
+        _evict_other_entries(cls._keras_models, keras_path)
         if keras_path not in cls._keras_models:
-            from paz.models.foundation.dinov2.layers import (
-                Attention,
-                DropPath,
-                LayerScale,
-                MLP,
-                NestedTensorBlock,
-            )
-            from paz.models.foundation.dinov2.models.vision_transformer import (
-                BlockChunk,
-                DinoVisionTransformer,
-            )
-
-            custom_objects = {
-                "DinoVisionTransformer": DinoVisionTransformer,
-                "BlockChunk": BlockChunk,
-                "NestedTensorBlock": NestedTensorBlock,
-                "Attention": Attention,
-                "MLP": MLP,
-                "LayerScale": LayerScale,
-                "DropPath": DropPath,
-            }
-            cls._keras_models[keras_path] = keras.models.load_model(
-                keras_path, custom_objects=custom_objects
-            )
+            cls._keras_models[keras_path] = keras.models.load_model(keras_path)
         return cls._keras_models[keras_path]
 
     @classmethod
@@ -103,7 +102,8 @@ class TestFixtures:
     def get_pytorch_intermediate_outputs(
         cls, model, input_tensor, model_name: str
     ) -> Dict[str, np.ndarray]:
-        """Get cached PyTorch intermediate outputs."""
+        """Get cached PyTorch intermediate outputs (single-entry cache)."""
+        _evict_other_entries(cls._pytorch_intermediates, model_name)
         if model_name not in cls._pytorch_intermediates:
             cls._pytorch_intermediates[model_name] = cls._extract_pytorch_intermediates(
                 model, input_tensor
@@ -257,13 +257,12 @@ class TestModelLoading:
         }
 
         expected_dimension = expected_embedding_dimensions[variant]
+        cls_layer = keras_model.get_layer("cls_token")
+        embedding_dimension = cls_layer.embeddings.shape[-1]
 
-        assert hasattr(
-            keras_model, "embedding_dimension"
-        ), f"Keras model missing embedding_dimension attribute"
         assert (
-            keras_model.embedding_dimension == expected_dimension
-        ), f"Expected embedding_dimension {expected_dimension}, got {keras_model.embedding_dimension}"
+            embedding_dimension == expected_dimension
+        ), f"Expected embedding_dimension {expected_dimension}, got {embedding_dimension}"
 
         print(
             f"✅ {variant} architecture verified: embedding_dimension={expected_dimension}"
@@ -356,23 +355,16 @@ class TestLayerByLayerVerification:
         return is_close, mean_diff, max_diff
 
     def get_patch_embedding_layer_name(self, keras_model, variant: str) -> str:
-        """Get the correct patch embed layer name for the variant."""
-        layer_names = {
-            "vits14": "patch_embed",
-            "vitb14": "patch_embed_1",
-            "vitl14": "patch_embed_2",
-        }
-
-        if variant in layer_names:
-            try:
-                keras_model.get_layer(layer_names[variant])
-                return layer_names[variant]
-            except:
-                pass
+        """Get the correct patch embed conv layer name for the variant."""
+        try:
+            keras_model.get_layer("patch_embed_proj")
+            return "patch_embed_proj"
+        except Exception:
+            pass
 
         available_layers = [layer.name for layer in keras_model.layers]
         patch_embedding_layers = [
-            name for name in available_layers if "patch_embed" in name
+            name for name in available_layers if "patch_embed_proj" in name
         ]
 
         if patch_embedding_layers:
@@ -388,89 +380,114 @@ class TestLayerByLayerVerification:
         """Perform detailed step-by-step forward pass through Keras model."""
         keras_outputs = {}
 
-        patch_embedding_layer_name = self.get_patch_embedding_layer_name(
-            keras_model, variant
-        )
-        patch_embedded = keras_model.get_layer(patch_embedding_layer_name)(keras_input)
-        keras_outputs["patch_embed"] = patch_embedded
+        embedding_dimensions = {"vits14": 384, "vitb14": 768, "vitl14": 1024}
+        head_counts = {"vits14": 6, "vitb14": 12, "vitl14": 16}
+        depth_counts = {"vits14": 12, "vitb14": 12, "vitl14": 24}
+        embed_dim = embedding_dimensions[variant]
+        num_heads = head_counts[variant]
+        depth = depth_counts[variant]
+        head_dim = embed_dim // num_heads
+        scale = head_dim**-0.5
+        patch_size = 14
 
+        proj_layer = keras_model.get_layer(
+            self.get_patch_embedding_layer_name(keras_model, variant)
+        )
+        projected = proj_layer(keras_input)
         B = keras.ops.shape(keras_input)[0]
         H = keras.ops.shape(keras_input)[1]
         W = keras.ops.shape(keras_input)[2]
-        classification_tokens = keras.ops.broadcast_to(
-            keras_model.classification_token, (B, 1, keras_model.embedding_dimension)
+        num_patches = (H // patch_size) * (W // patch_size)
+        patch_embedded = keras.ops.reshape(projected, (B, num_patches, embed_dim))
+        keras_outputs["patch_embed"] = patch_embedded
+
+        cls_layer = keras_model.get_layer("cls_token")
+        cls_table = cls_layer.embeddings
+        cls_tokens = keras.ops.broadcast_to(
+            keras.ops.expand_dims(cls_table, axis=0), (B, 1, embed_dim)
         )
-        x = keras.ops.concatenate([classification_tokens, patch_embedded], axis=1)
-        x = keras.ops.add(x, keras_model.interpolate_positional_encoding(x, H, W))
+        x = keras.ops.concatenate([cls_tokens, patch_embedded], axis=1)
 
-        if (
-            hasattr(keras_model, "register_tokens")
-            and keras_model.register_tokens is not None
-        ):
+        pos_layer = keras_model.get_layer("pos_embed")
+        pos_table = pos_layer.embeddings
+        pos = keras.ops.expand_dims(pos_table, axis=0)
+        x = keras.ops.add(x, pos)
+
+        try:
+            register_layer = keras_model.get_layer("register_tokens")
+        except Exception:
+            register_layer = None
+        if register_layer is not None:
+            register_table = register_layer.embeddings
+            num_register = register_table.shape[0]
             register_tokens = keras.ops.broadcast_to(
-                keras_model.register_tokens,
-                (B, keras_model.num_register_tokens, keras_model.embedding_dimension),
+                keras.ops.expand_dims(register_table, axis=0),
+                (B, num_register, embed_dim),
             )
-            x = keras.ops.concatenate([x[:, :1], reg_tokens, x[:, 1:]], axis=1)
+            x = keras.ops.concatenate([x[:, :1], register_tokens, x[:, 1:]], axis=1)
 
-        for i, chunk in enumerate(keras_model.blocks):
-            for j, block in enumerate(chunk.blocks):
-                block_idx = i * len(chunk.blocks) + j
+        for block_idx in range(depth):
+            prefix = f"block_{block_idx}"
 
-                residual1 = x
+            norm1_layer = keras_model.get_layer(f"{prefix}_norm1")
+            qkv_layer = keras_model.get_layer(f"{prefix}_qkv")
+            proj_out_layer = keras_model.get_layer(f"{prefix}_proj")
+            ls1_layer = keras_model.get_layer(f"{prefix}_ls1")
+            norm2_layer = keras_model.get_layer(f"{prefix}_norm2")
+            mlp_fc1_layer = keras_model.get_layer(f"{prefix}_mlp_fc1")
+            mlp_fc2_layer = keras_model.get_layer(f"{prefix}_mlp_fc2")
+            ls2_layer = keras_model.get_layer(f"{prefix}_ls2")
 
-                x_normalization1 = block.normalization1(x)
-                keras_outputs[f"blocks.{block_idx}.normalization1"] = x_normalization1
+            residual1 = x
 
-                attention_output = block.attention(x_normalization1, training=False)
-                keras_outputs[f"blocks.{block_idx}.attention"] = attention_output
+            x_normalization1 = norm1_layer(x)
+            keras_outputs[f"blocks.{block_idx}.normalization1"] = x_normalization1
 
-                x_after_layer_scale_1 = block.layer_scale_1(
-                    attention_output, training=False
-                )
-                keras_outputs[f"blocks.{block_idx}.layer_scale_1"] = (
-                    x_after_layer_scale_1
-                )
+            qkv_out = qkv_layer(x_normalization1)
+            q, k, v = split_query_key_value(qkv_out, num_heads, head_dim)
+            scores = compute_scores(q, k, scale)
+            attended = apply_attention(scores, v, 0.0, name=prefix)
+            merged = merge_heads(attended)
+            flat = flatten_heads(merged)
+            attention_output = proj_out_layer(flat)
+            keras_outputs[f"blocks.{block_idx}.attention"] = attention_output
 
-                x_after_drop1 = block.drop_path1(x_after_layer_scale_1, training=False)
-                keras_outputs[f"blocks.{block_idx}.drop_path1"] = x_after_drop1
+            x_after_layer_scale_1 = ls1_layer(attention_output)
+            keras_outputs[f"blocks.{block_idx}.layer_scale_1"] = x_after_layer_scale_1
 
-                x = keras.ops.add(residual1, x_after_drop1)
+            x_after_drop1 = x_after_layer_scale_1
+            keras_outputs[f"blocks.{block_idx}.drop_path1"] = x_after_drop1
 
-                residual2 = x
+            x = keras.ops.add(residual1, x_after_drop1)
 
-                x_normalization2 = block.normalization2(x)
-                keras_outputs[f"blocks.{block_idx}.normalization2"] = x_normalization2
+            residual2 = x
 
-                mlp_fully_connected_layer_1_out = block.mlp.fully_connected_layer_1(
-                    x_normalization2
-                )
-                keras_outputs[f"blocks.{block_idx}.mlp.fully_connected_layer_1"] = (
-                    mlp_fully_connected_layer_1_out
-                )
+            x_normalization2 = norm2_layer(x)
+            keras_outputs[f"blocks.{block_idx}.normalization2"] = x_normalization2
 
-                mlp_activation_out = block.mlp.activation(
-                    mlp_fully_connected_layer_1_out
-                )
-                keras_outputs[f"blocks.{block_idx}.mlp.activation"] = mlp_activation_out
+            mlp_fully_connected_layer_1_out = mlp_fc1_layer(x_normalization2)
+            keras_outputs[f"blocks.{block_idx}.mlp.fully_connected_layer_1"] = (
+                mlp_fully_connected_layer_1_out
+            )
 
-                mlp_output = block.mlp.fully_connected_layer_2(mlp_activation_out)
-                keras_outputs[f"blocks.{block_idx}.mlp.fully_connected_layer_2"] = (
-                    mlp_output
-                )
-                keras_outputs[f"blocks.{block_idx}.mlp"] = mlp_output
+            mlp_activation_out = keras.activations.gelu(mlp_fully_connected_layer_1_out)
+            keras_outputs[f"blocks.{block_idx}.mlp.activation"] = mlp_activation_out
 
-                x_after_layer_scale_2 = block.layer_scale_2(mlp_output, training=False)
-                keras_outputs[f"blocks.{block_idx}.layer_scale_2"] = (
-                    x_after_layer_scale_2
-                )
+            mlp_output = mlp_fc2_layer(mlp_activation_out)
+            keras_outputs[f"blocks.{block_idx}.mlp.fully_connected_layer_2"] = (
+                mlp_output
+            )
+            keras_outputs[f"blocks.{block_idx}.mlp"] = mlp_output
 
-                x_after_drop2 = block.drop_path2(x_after_layer_scale_2, training=False)
-                keras_outputs[f"blocks.{block_idx}.drop_path2"] = x_after_drop2
+            x_after_layer_scale_2 = ls2_layer(mlp_output)
+            keras_outputs[f"blocks.{block_idx}.layer_scale_2"] = x_after_layer_scale_2
 
-                x = keras.ops.add(residual2, x_after_drop2)
+            x_after_drop2 = x_after_layer_scale_2
+            keras_outputs[f"blocks.{block_idx}.drop_path2"] = x_after_drop2
 
-                keras_outputs[f"blocks.{block_idx}"] = x
+            x = keras.ops.add(residual2, x_after_drop2)
+
+            keras_outputs[f"blocks.{block_idx}"] = x
 
         final_norm_out = keras_model.get_layer("norm")(x)
         keras_outputs["norm"] = final_norm_out
@@ -499,7 +516,7 @@ class TestLayerByLayerVerification:
         total_layers = 0
         passed_layers = 0
 
-        for layer_name, pytorch_output in pytorch_intermediates.items():
+        for layer_name, pytorch_output in list(pytorch_intermediates.items()):
             if layer_name not in keras_outputs:
                 print(f"  ⚠️  Layer '{layer_name}' not found in Keras outputs")
                 continue
@@ -517,6 +534,9 @@ class TestLayerByLayerVerification:
                 print(
                     f"  ❌ {layer_name}: FAIL (mean_diff={mean_diff:.8f}, max_diff={max_diff:.8f})"
                 )
+
+            del keras_outputs[layer_name]
+            gc.collect()
 
         print(f"\n📊 {variant.upper()} Layer-by-Layer Summary:")
         print(f"  Total layers tested: {total_layers}")
@@ -544,6 +564,10 @@ class TestLayerByLayerVerification:
             keras_model, variant
         )
         patch_embedded = keras_model.get_layer(patch_embedding_layer_name)(keras_input)
+        patch_embedded = np.reshape(
+            np.array(patch_embedded),
+            (patch_embedded.shape[0], -1, patch_embedded.shape[-1]),
+        )
 
         is_close, mean_diff, max_diff = self.compare_tensors(
             pytorch_intermediates["patch_embed"], patch_embedded, "patch_embed"
@@ -712,24 +736,13 @@ class TestDeepVerification:
 
     @staticmethod
     def get_patch_embedding_layer_name(keras_model, variant: str) -> str:
-        """Get the correct patch embed layer name for the variant."""
-        layer_names = {
-            "vits14": "patch_embed",
-            "vitb14": "patch_embed_1",
-            "vitl14": "patch_embed_2",
-        }
-
-        if variant in layer_names:
-            return layer_names[variant]
-
+        """Get the correct patch embed conv layer name for the variant."""
         available_layers = [layer.name for layer in keras_model.layers]
         patch_embedding_layers = [
-            name for name in available_layers if "patch_embed" in name
+            name for name in available_layers if "patch_embed_proj" in name
         ]
-
         if patch_embedding_layers:
             return patch_embedding_layers[0]
-
         raise ValueError(
             f"No patch_embed layer found for variant {variant}. Available layers: {available_layers}"
         )
@@ -770,6 +783,10 @@ class TestDeepVerification:
             keras_model, variant
         )
         patch_embedded = keras_model.get_layer(patch_embedding_layer_name)(keras_input)
+        patch_embedded = np.reshape(
+            np.array(patch_embedded),
+            (patch_embedded.shape[0], -1, patch_embedded.shape[-1]),
+        )
 
         is_close, mean_diff, max_diff = self.compare_tensors(
             pytorch_intermediates["patch_embed"], patch_embedded
