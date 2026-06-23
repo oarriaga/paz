@@ -62,14 +62,43 @@ def build_inputs():
     return values, positions[None]
 
 
-def test_vision_encoder_matches_keras_hub():
-    reference = build_reference()
-    encoder = build_vision_encoder(CONFIG)
-    transfer(reference, encoder)
-    values, positions = build_inputs()
+def build_rectangular_inputs():
+    rows, columns = 4, 6
+    grid_x = np.tile(np.arange(columns), rows)
+    grid_y = np.repeat(np.arange(rows), columns)
+    positions = np.stack([grid_x, grid_y], -1).astype("int32")
+    real = rows * columns
+    pad = CONFIG.max_patches - real
+    pad_positions = -np.ones((pad, 2), dtype="int32")
+    positions = np.concatenate([positions, pad_positions], axis=0)
+    patch_dim = 3 * CONFIG.patch_size ** 2
+    values = np.random.default_rng(1).standard_normal(
+        (1, real, patch_dim)).astype("float32")
+    values = np.concatenate(
+        [values, np.zeros((1, pad, patch_dim), "float32")], axis=1)
+    return values, positions[None]
+
+
+def compare(reference, encoder, values, positions):
     paz_out = np.array(encoder(
         {"pixel_values": values, "pixel_position_ids": positions}))
     kh_inputs = {"pixel_values": values[:, None],
                  "pixel_position_ids": positions[:, None]}
     kh_out = np.array(reference(kh_inputs)).reshape(paz_out.shape)
-    assert float(np.max(np.abs(paz_out - kh_out))) < 1e-4
+    return float(np.max(np.abs(paz_out - kh_out)))
+
+
+def test_vision_encoder_matches_keras_hub():
+    reference = build_reference()
+    encoder = build_vision_encoder(CONFIG)
+    transfer(reference, encoder)
+    values, positions = build_inputs()
+    assert compare(reference, encoder, values, positions) < 1e-4
+
+
+def test_vision_encoder_matches_keras_hub_rectangular():
+    reference = build_reference()
+    encoder = build_vision_encoder(CONFIG)
+    transfer(reference, encoder)
+    values, positions = build_rectangular_inputs()
+    assert compare(reference, encoder, values, positions) < 1e-4

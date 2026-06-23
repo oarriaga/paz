@@ -146,14 +146,15 @@ def build_real_patch_mask(position_ids):
 
 
 def build_average_pooling(hidden, position_ids, config):
-    # hidden (images, num_patches, dim); square-image geometry is static.
+    # hidden (images, max_patches, dim). The pooled-grid width is derived from
+    # the patch positions, so rectangular/padded images pool correctly.
     k = config.pool_size
-    side = config.image_size // config.patch_size
-    pooled_length = (side // k) ** 2
+    pooled_length = config.max_patches // (k * k)
     clamped = ops.maximum(position_ids, 0)
     kernel_x = clamped[..., 0] // k
     kernel_y = clamped[..., 1] // k
-    kernel_index = kernel_x + (side // k) * kernel_y
+    width = (ops.max(clamped[..., 0]) + 1) // k
+    kernel_index = kernel_x + width * kernel_y
     is_padding = ops.all(ops.equal(position_ids, -1), axis=-1, keepdims=True)
     hidden = hidden * (1.0 - ops.cast(is_padding, hidden.dtype))
     weights = ops.cast(ops.one_hot(kernel_index, pooled_length), hidden.dtype)

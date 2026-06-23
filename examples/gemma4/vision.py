@@ -12,7 +12,8 @@ VISION_ENCODER_NAME = "gemma4_vision_encoder"
 VISION_ENCODER_FIELDS = (
     "image_size patch_size pool_size hidden_dim num_layers num_heads "
     "num_key_value_heads head_dim intermediate_dim output_dim "
-    "position_embedding_size rope_wavelength layer_norm_epsilon dropout dtype"
+    "position_embedding_size rope_wavelength layer_norm_epsilon dropout "
+    "max_patches dtype"
 )
 VisionEncoderArgs = namedtuple("VisionEncoderArgs", VISION_ENCODER_FIELDS)
 
@@ -36,11 +37,13 @@ def build_vision_encoder_args(**overrides):
         "dtype": "float32",
     }
     values.update(overrides)
+    side = values["image_size"] // values["patch_size"]
+    values.setdefault("max_patches", side * side)
     return VisionEncoderArgs(**values)
 
 
 def num_patches(config):
-    return (config.image_size // config.patch_size) ** 2
+    return config.max_patches
 
 
 def build_vision_encoder(config, weights_path=None, name=VISION_ENCODER_NAME):
