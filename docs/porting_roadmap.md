@@ -55,7 +55,7 @@ VVAD (visual voice activity, cnn2Plus1).
 |-------|-----------|----------------|-------------|-------------|------|
 | DetNet | ✅ | ✅ produced, awaiting upload | ✅ round-trip | ✅ | ☐ upload |
 | IKNet | ✅ | ✅ produced, awaiting upload | ✅ round-trip | ✅ | ☐ upload |
-| HigherHRNet (model) | ✅ | loads existing by name | ✅ bit-exact | postprocess pending | ☐ |
+| HigherHRNet | ✅ | loads existing by name | ✅ bit-exact (model) | ✅ | ✅ |
 | SimpleBaselines | ☐ | ☐ | ☐ | ☐ | ☐ |
 
 ### HigherHRNet notes
@@ -64,9 +64,17 @@ VVAD (visual voice activity, cnn2Plus1).
 - Loads the existing `v0.10/HigherHRNet_weights.hdf5` **by layer name** (the
   clean model orders branches differently than the legacy save order), so it
   needs **no weight re-host**.
-- Remaining: multi-person postprocessing (heatmap+tag extraction, top-k,
-  associative-embedding grouping via `scipy.optimize.linear_sum_assignment`,
-  refinement, inverse affine) + the `HigherHRNetHumanPose2D` application.
+- Multi-person postprocessing ported as clean functional numpy in
+  `paz/backend/heatmaps.py` (NMS via `scipy.ndimage.maximum_filter`,
+  associative-embedding grouping via `scipy.optimize.linear_sum_assignment`),
+  with the `HigherHRNetHumanPose2D` application in
+  `paz/applications/human_pose_estimators.py`.
+- Verified end-to-end on COCO images: correct single-person and 4-person
+  grouped skeletons. The master postprocessing depends on the old-paz
+  framework (not runnable here), so postprocessing is verified structurally +
+  visually + unit-tested on the grouping, not bit-exact.
+- `with_flip` test-time augmentation is omitted (single tag channel); it is an
+  accuracy refinement, not required for correct multi-person output.
 
 ### Hand estimation — remaining upload step
 Ported Keras-3 weights are produced and verified to round-trip exactly
