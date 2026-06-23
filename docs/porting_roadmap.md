@@ -32,7 +32,7 @@ Update the status table as work lands. Keep it terse.
 | 1 | Minimal Hand (DetNet + IKNet) | single-hand 2D/3D keypoints + joint angles | v0.14 detnet/iknet | ✅ done |
 | 2 | HigherHRNet | 2D multi-person human pose | v0.10 | ✅ done |
 | 3 | SimpleBaselines | 3D human pose (2D→3D lift) | v0.17 | ✅ done |
-| 4 | EfficientPose | 6D object pose (LINEMOD) | altamira-data | next |
+| 4 | EfficientPose | 6D object pose (LINEMOD) | altamira-data | in progress |
 | 5 | Pix2Pose | 6D object pose (YCB / power drill) | altamira-data | backlog |
 
 ### Tier 2 — high value, partially started
@@ -49,6 +49,18 @@ eigenfaces.
 ### Lower priority / niche
 SSD512 hand-detection, SSD512-YCBVideo, SSD300-FAT, UNet pretrained pipeline,
 VVAD (visual voice activity, cnn2Plus1).
+
+## Training scripts (cross-cutting workstream)
+All ports so far are **inference-only** (load pretrained weights, run, draw).
+A parallel workstream is to add **training scripts** so these models can be
+retrained/fine-tuned in the JAX/Keras-3 stack. Per model this means: dataset
+loader, data augmentation pipeline, loss(es), optimizer + schedule, and a
+`train.py`. Prioritize where retraining is most useful:
+- EfficientPose (LINEMOD 6D) — losses + LINEMOD loader + train loop.
+- EfficientDet / SSD — detection losses (focal + smooth-L1), anchors matching.
+- HigherHRNet / SimpleBaselines — heatmap/AE losses, H36M/COCO loaders.
+- Hand (DetNet/IKNet) — keypoint + IK losses.
+Track each model's training status alongside its inference status as it lands.
 
 ## Detailed status (active work)
 All four load ported Keras-3 native `*_paz_jax.weights.h5` assets, verified by

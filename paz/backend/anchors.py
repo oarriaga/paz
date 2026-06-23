@@ -296,3 +296,41 @@ def compute_anchor_centres(stride_y, stride_x, image_shape):
     normalized_center_x = center_x.flatten() / W
     normalized_center_y = center_y.flatten() / H
     return normalized_center_x, normalized_center_y
+
+
+def build_translation_anchors(image_shape, branches, num_scales,
+                              aspect_ratios):
+    """Builds EfficientPose translation anchors as `(center_x, center_y,
+    stride)` rows, one per detection anchor."""
+    num_scale_aspect = num_scales * len(aspect_ratios)
+    args = (branches, num_scale_aspect)
+    translation_anchors = []
+    for branch_arg in range(len(branches)):
+        strides = build_strides(branch_arg, image_shape, *args)
+        anchors = make_branch_anchors(*strides, branch_arg, *args)
+        translation_anchors.append(anchors)
+    translation_anchors = np.concatenate(translation_anchors, axis=0)
+    return translation_anchors.astype("float32")
+
+
+def make_branch_anchors(strides_y, strides_x, branch_arg, branches,
+                        num_scale_aspect):
+    centers = compute_translation_centers(strides_y, strides_x, branch_arg,
+                                          branches)
+    return append_stride_to_centre(centers, strides_x, num_scale_aspect)
+
+
+def compute_translation_centers(strides_y, strides_x, branch_arg, branches):
+    feature_H, feature_W = branches[branch_arg].shape[1:3]
+    center_x = (np.arange(0, feature_H) + 0.5) * strides_x[0]
+    center_y = (np.arange(0, feature_W) + 0.5) * strides_y[0]
+    center_x, center_y = np.meshgrid(center_x, center_y)
+    center_x = center_x.reshape(-1, 1)
+    center_y = center_y.reshape(-1, 1)
+    return np.concatenate((center_x, center_y), axis=1)
+
+
+def append_stride_to_centre(centers, strides_x, num_scale_aspect):
+    centers = np.repeat(centers, num_scale_aspect, axis=0)
+    strides = np.full((centers.shape[0], 1), strides_x[0])
+    return np.concatenate((centers, strides), axis=-1)

@@ -20,6 +20,7 @@ from .keypoint.detnet import DetNet
 from .keypoint.iknet import IKNet
 from .keypoint.simplebaselines import SimpleBaseline
 from .pose_estimation.higher_hrnet import HigherHRNet
+from .pose_estimation.efficientpose import EfficientPosePhi0
 from .foundation.dinov3.models.vision_transformer import DINOV3VITS
 from .foundation.dinov3.models.vision_transformer import DINOV3VITB
 from .foundation.dinov3.models.vision_transformer import DINOV3VITL
