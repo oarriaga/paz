@@ -56,14 +56,20 @@ A parallel workstream is to add **training scripts** so these models can be
 retrained/fine-tuned in the JAX/Keras-3 stack. Per model this means: dataset
 loader, data augmentation pipeline, loss(es), optimizer + schedule, and a
 `train.py`. Prioritize where retraining is most useful:
-- EfficientPose (LINEMOD 6D) — **in progress**. Done: clean Keras-3 6D
-  transformation/ADD loss (`paz.losses.MultiPoseLoss`, jit-friendly fixed-K
-  positive selection, per-anchor sym/asym, verified differentiable on
-  synthetic data); box loss reused from `paz.losses.multibox`. Remaining:
-  target/anchor matching (`match_poses`, rotation→axis-angle), LINEMOD loader
-  (gt.yml + `.ply` model points), 6D-aware augmentation, and `train.py`
-  wiring Keras-3 `compile`/`fit`. Needs the LINEMOD dataset + object `.ply`
-  models to actually run training.
+- EfficientPose (LINEMOD 6D) — training pipeline ported & smoke-verified.
+  - 6D transformation/ADD loss `paz.losses.MultiPoseLoss` (jit-friendly
+    fixed-K positive selection, per-anchor sym/asym), box loss reused from
+    `paz.losses.multibox`.
+  - Target generation `paz.poses` (`match_poses`, `rotation_matrix_to_axis_angle`,
+    `concatenate_scale`) + box-target encoding via `paz.detection`.
+  - LINEMOD loader + `train.py` in `examples/efficientpose/` wiring Keras-3
+    `compile`/`fit` (Adam 1e-4, clipnorm 0.001; loss weights boxes 1.0 /
+    transformation 0.02), with a `--smoke` synthetic mode.
+  - **Verified:** `python examples/efficientpose/train.py --smoke` runs a full
+    fit step end-to-end (loss ≈ 5.7).
+  - Remaining for real training: the LINEMOD_preprocessed dataset + object
+    `.ply` models (`pip install plyfile`), and 6D-aware geometric augmentation
+    (currently color/none); ADD evaluation callback.
 - EfficientDet / SSD — detection losses (focal + smooth-L1), anchors matching.
 - HigherHRNet / SimpleBaselines — heatmap/AE losses, H36M/COCO loaders.
 - Hand (DetNet/IKNet) — keypoint + IK losses.
