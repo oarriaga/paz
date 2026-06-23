@@ -7,6 +7,7 @@
 !*.sh
 !requirements.txt
 !README.md
+!*.md
 
 # extend exceptions to subdirectories
 !*/

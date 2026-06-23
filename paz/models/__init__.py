@@ -16,6 +16,8 @@ from .classification.protonet import ProtoNet
 from .attention.stn import STN
 from .keypoint.keypointnet import KeypointNet2D
 from .keypoint.keypointnet import FaceKeypointNet2D32
+from .keypoint.detnet import DetNet
+from .keypoint.iknet import IKNet
 from .foundation.dinov3.models.vision_transformer import DINOV3VITS
 from .foundation.dinov3.models.vision_transformer import DINOV3VITB
 from .foundation.dinov3.models.vision_transformer import DINOV3VITL

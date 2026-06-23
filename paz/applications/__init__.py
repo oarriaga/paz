@@ -6,4 +6,7 @@ from paz.models.detection.haar_cascade import HaarCascadeEyeDetector
 from paz.applications.classifiers import ClassifyMiniXceptionFER
 from paz.applications.keypoint_estimators import DetectFaceKeypointNet2D32
 from paz.applications.keypoint_estimators import FaceKeypointNet2D32
+from paz.applications.keypoint_estimators import DetNetHandKeypoints
+from paz.applications.keypoint_estimators import IKNetHandJointAngles
+from paz.applications.keypoint_estimators import MinimalHandPoseEstimation
 from paz.applications.pose_estimators import HeadPoseKeypointNet2D32

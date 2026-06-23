@@ -8,7 +8,9 @@ from paz.datasets import (
     deepfish,
     omniglot,
     fsclvr,
+    hands,
 )
+from paz.datasets.hands import MPIIHandJoints, MANOHandJoints
 
 
 def load(name, *args, **kwargs):
