@@ -1,5 +1,6 @@
 import os
 
+os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
 os.environ["KERAS_BACKEND"] = "jax"
 
 import argparse
@@ -31,6 +32,10 @@ from examples.speech_to_text.tokenizer import decode_whisper_tokens
 from examples.speech_to_text.tokenizer import find_special_token_id
 
 
+SAMPLE_RATE = 16000
+MAX_AUDIO_SECONDS = 30
+
+
 def transcribe(wav_path, models, max_tokens=64):
     waveform, sample_rate = load(wav_path)
     waveform = preprocess(waveform, sample_rate)
@@ -45,19 +50,54 @@ def preprocess(waveform, sample_rate, target=16000):
     return ops.convert_to_tensor(waveform, dtype="float32")
 
 
+def preprocess_fixed(waveform, sample_rate, target=16000, duration=30):
+    waveform = to_float(waveform)
+    waveform = to_mono(waveform)
+    waveform = resample(waveform, sample_rate, target)
+    waveform = np.clip(waveform, -1.0, 1.0)
+    waveform = pad_or_trim_waveform(waveform, target * duration)
+    return ops.convert_to_tensor(waveform, dtype="float32")
+
+
+def pad_or_trim_waveform(waveform, num_samples):
+    waveform = np.asarray(waveform, dtype="float32")
+    if len(waveform) >= num_samples:
+        return waveform[:num_samples]
+    padded = np.zeros((num_samples,), dtype="float32")
+    padded[: len(waveform)] = waveform
+    return padded
+
+
 def transcribe_waveform(waveform, models, max_tokens=64):
+    decoder_state = build_decoder_state(models[3], max_tokens)
+    return transcribe_waveform_with_state(waveform, models, decoder_state)
+
+
+def transcribe_waveform_with_state(waveform, models, decoder_state):
     frontend_model, encoder, cross_model, decoder_step = models
     if len(waveform.shape) == 1:
         waveform = ops.expand_dims(waveform, axis=0)
     features = frontend_model(waveform)
     encoder_output = encoder(features)
+    token_ids, text_ids, text = decode_encoder_output(
+        encoder_output, cross_model, decoder_state
+    )
+    return token_ids, text_ids, text
+
+
+def build_decoder_state(decoder_step, max_tokens=64):
     prompt_ids = build_whisper_prompt_token_ids()
     stop_id = find_special_token_id("<|endoftext|>")
     cache_shape = decoder_step.input_shape[1]
     decoder = KVDecoder(decoder_step, prompt_ids, max_tokens)
+    return decoder, cache_shape, stop_id, len(prompt_ids)
+
+
+def decode_encoder_output(encoder_output, cross_model, decoder_state):
+    decoder, cache_shape, stop_id, prompt_length = decoder_state
     args = (decoder, cache_shape, cross_model, encoder_output, stop_id)
     token_ids = kv_decode(*args)
-    text_ids = extract_text_token_ids(token_ids, len(prompt_ids), stop_id)
+    text_ids = extract_text_token_ids(token_ids, prompt_length, stop_id)
     text = decode_whisper_tokens(text_ids)
     return token_ids, text_ids, text
 
@@ -70,8 +110,12 @@ def build_models(model_name, models_path=WHISPER_MODELS_DIR):
     decoder_name = f"{model_name}_decoder_step"
     frontend_model = WhisperFrontend()
     encoder = WhisperEncoder(*encoder_args, name=encoder_name, **kwargs)
-    cross_cache = WhisperCrossCache(*cross_cache_args, name=cross_name, **kwargs)
-    decoder_step = WhisperDecoderStep(*decoder_args, name=decoder_name, **kwargs)
+    cross_cache = WhisperCrossCache(
+        *cross_cache_args, name=cross_name, **kwargs
+    )
+    decoder_step = WhisperDecoderStep(
+        *decoder_args, name=decoder_name, **kwargs
+    )
     return frontend_model, encoder, cross_cache, decoder_step
 
 
