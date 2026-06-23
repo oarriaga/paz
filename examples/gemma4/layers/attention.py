@@ -16,7 +16,7 @@ AttendArgs = namedtuple(
 CachedAttendArgs = namedtuple(
     "CachedAttendArgs",
     "x cache index head_dim num_query_heads num_kv_heads epsilon wavelength "
-    "scaling_factor partial_rotary soft_cap dtype name cache_head_dim",
+    "scaling_factor partial_rotary soft_cap dtype name cache_head_dim window",
 )
 
 
@@ -82,7 +82,7 @@ def cached_attend(args, shared_kv_cache=None):
     if head_dim < cache_head_dim:
         full_key = full_key[..., :head_dim]
         full_value = full_value[..., :head_dim]
-    mask = build_cache_mask(full_key, args.index)
+    mask = build_cache_mask(full_key, args.index, args.window)
     output = compute_attention(query, full_key, full_value, mask, args)
     return project_output(output, x.shape[-1], dtype, name), updated_cache
 
@@ -93,12 +93,15 @@ def pad_to_cache_dim(tensor, pad_size):
     return ops.pad(tensor, padding)
 
 
-def build_cache_mask(full_key, cache_index):
+def build_cache_mask(full_key, cache_index, window=None):
     ones = ops.ones_like(full_key[:, :, 0, 0], dtype="int32")
     positions = ops.cumsum(ones, axis=1) - 1
     threshold = ops.reshape(cache_index, (1, 1))
-    mask = ops.cast(ops.less_equal(positions, threshold), "bool")
-    return ops.expand_dims(mask, axis=1)
+    mask = ops.less_equal(positions, threshold)
+    if window is not None:
+        recent = ops.less(threshold - positions, window)
+        mask = ops.logical_and(mask, recent)
+    return ops.expand_dims(ops.cast(mask, "bool"), axis=1)
 
 
 def build_cache_positions(cache_index):

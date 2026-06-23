@@ -2,7 +2,6 @@ from .causal_lm import Gemma4CausalLM
 from .decoding import KVDecoder
 from .inference import Gemma4DecoderStep
 from .inference import build_empty_cache
-from .model import Gemma4TextBackbone
 from .model import TextBackboneArgs
 from .model import build_text_backbone
 from .model import build_text_backbone_args

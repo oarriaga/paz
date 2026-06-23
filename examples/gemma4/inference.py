@@ -9,6 +9,7 @@ from .model import (build_cache_head_dim,
                     build_per_layer_embedding,
                     build_per_layer_model_projection,
                     build_token_embedding,
+                    scale_per_layer_embedding,
                     scale_token_embeddings)
 
 
@@ -89,11 +90,6 @@ def Gemma4DecoderStep(config, name="gemma4_decoder_step"):
         inputs.append(per_layer_full_embedding)
     outputs = [logits, updated_cache]
     return Model(inputs, outputs, name=name)
-
-
-def scale_per_layer_embedding(full_embedding, per_layer_dim, dtype):
-    scale = ops.cast(float(per_layer_dim) ** 0.5, dtype)
-    return ops.cast(full_embedding, dtype) * scale
 
 
 def extract_cache_index(cache_index):

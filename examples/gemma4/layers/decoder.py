@@ -147,8 +147,12 @@ def cached_attention_path(x, cache, cache_index, config, layer_index, name,
 def build_cached_attend_args(hidden, cache, index, config, layer_index, name):
     from ..model import (is_global_attention_layer, build_head_dim,
                          build_rope_wavelength, build_rope_scaling_factor,
-                         build_partial_rotary_factor, build_cache_head_dim)
+                         build_partial_rotary_factor, build_cache_head_dim,
+                         use_sliding_window)
     is_global = is_global_attention_layer(config, layer_index)
+    window = None
+    if use_sliding_window(config, is_global):
+        window = config.sliding_window_size
     attn_name = "{}_attention".format(name)
     return CachedAttendArgs(
         hidden,
@@ -165,6 +169,7 @@ def build_cached_attend_args(hidden, cache, index, config, layer_index, name):
         config.dtype,
         attn_name,
         build_cache_head_dim(config),
+        window,
     )
 
 
