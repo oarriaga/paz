@@ -19,6 +19,7 @@ def HigherHRNetHumanPose2D(max_people=30, detection_thresh=0.2,
         draw = draw_human_skeletons
 
     def preprocess(image):
+        image = np.asarray(image)
         center, scale, size = compute_transform_params(image)
         transform = build_affine(center, scale, size, inverse=False)
         warped = cv2.warpAffine(image, transform, tuple(int(v) for v in size))
