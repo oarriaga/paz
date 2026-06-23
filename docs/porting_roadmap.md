@@ -56,7 +56,14 @@ A parallel workstream is to add **training scripts** so these models can be
 retrained/fine-tuned in the JAX/Keras-3 stack. Per model this means: dataset
 loader, data augmentation pipeline, loss(es), optimizer + schedule, and a
 `train.py`. Prioritize where retraining is most useful:
-- EfficientPose (LINEMOD 6D) — losses + LINEMOD loader + train loop.
+- EfficientPose (LINEMOD 6D) — **in progress**. Done: clean Keras-3 6D
+  transformation/ADD loss (`paz.losses.MultiPoseLoss`, jit-friendly fixed-K
+  positive selection, per-anchor sym/asym, verified differentiable on
+  synthetic data); box loss reused from `paz.losses.multibox`. Remaining:
+  target/anchor matching (`match_poses`, rotation→axis-angle), LINEMOD loader
+  (gt.yml + `.ply` model points), 6D-aware augmentation, and `train.py`
+  wiring Keras-3 `compile`/`fit`. Needs the LINEMOD dataset + object `.ply`
+  models to actually run training.
 - EfficientDet / SSD — detection losses (focal + smooth-L1), anchors matching.
 - HigherHRNet / SimpleBaselines — heatmap/AE losses, H36M/COCO loaders.
 - Hand (DetNet/IKNet) — keypoint + IK losses.
