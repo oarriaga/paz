@@ -20,22 +20,26 @@ CachedAttendArgs = namedtuple(
 )
 
 
-def attend(args):
+def attend(args, shared_kv=None):
     x = args.x
     dtype = args.dtype
     name = args.name
     query = project_query(
         x, args.num_query_heads, args.head_dim, args.epsilon, dtype, name)
-    key = project_key(
-        x, args.num_kv_heads, args.head_dim, args.epsilon, dtype, name)
-    value = project_value(
-        x, args.num_kv_heads, args.head_dim, args.epsilon, dtype, name)
     rope_args = (args.wavelength, args.scaling_factor, args.partial_rotary)
     query = apply_partial_rotary_embedding(query, *rope_args)
-    key = apply_partial_rotary_embedding(key, *rope_args)
+    if shared_kv is not None:
+        key, value = shared_kv[:, 0, ...], shared_kv[:, 1, ...]
+    else:
+        key = project_key(
+            x, args.num_kv_heads, args.head_dim, args.epsilon, dtype, name)
+        value = project_value(
+            x, args.num_kv_heads, args.head_dim, args.epsilon, dtype, name)
+        key = apply_partial_rotary_embedding(key, *rope_args)
+    kv = ops.stack((key, value), axis=1)
     output = compute_attention(query, key, value, args.mask, args)
     output = zero_masked_positions(output, args.mask)
-    return project_output(output, x.shape[-1], dtype, name)
+    return project_output(output, x.shape[-1], dtype, name), kv
 
 
 def cached_attend(args, shared_kv_cache=None):

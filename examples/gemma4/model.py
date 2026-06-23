@@ -69,13 +69,18 @@ def build_text_backbone(config, weights_path=None, name=BACKBONE_NAME):
     embedding_output = hidden
     per_layer = build_backbone_per_layer_embeddings(
         config, token_ids, embedding)
-    block_outputs = []
+    kv_source = build_kv_source_map(config)
+    block_outputs, layer_kvs = [], []
     for layer_index in range(config.num_layers):
         block_name = "decoder_block_{}".format(layer_index)
+        source = kv_source.get(layer_index)
+        shared_kv = layer_kvs[source] if source is not None else None
         args = (hidden, padding_mask, config, layer_index, block_name)
-        kwargs = {"per_layer_embedding": per_layer[layer_index]}
-        hidden = decoder_block(*args, **kwargs)
+        kwargs = {"per_layer_embedding": per_layer[layer_index],
+                  "shared_kv": shared_kv}
+        hidden, kv = decoder_block(*args, **kwargs)
         block_outputs.append(hidden)
+        layer_kvs.append(kv)
     norm_args = (config.layer_norm_epsilon, config.dtype,
                  "final_normalization")
     final_output = build_rms_norm(*norm_args)(hidden)
