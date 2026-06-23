@@ -16,6 +16,7 @@ TEXT_BACKBONE_FIELDS = (
     "attention_logit_soft_cap final_logit_soft_cap "
     "use_sliding_window_attention sliding_window_size "
     "sliding_window_pattern global_head_dim "
+    "local_rope_wavelength global_rope_wavelength "
     "local_rope_scaling_factor global_rope_scaling_factor "
     "global_rope_partial_rotary_factor "
     "use_bidirectional_attention layer_norm_epsilon dropout dtype "
@@ -44,6 +45,8 @@ def build_text_backbone_args(**overrides):
         "sliding_window_size": 16,
         "sliding_window_pattern": 6,
         "global_head_dim": None,
+        "local_rope_wavelength": 10_000.0,
+        "global_rope_wavelength": 1_000_000.0,
         "local_rope_scaling_factor": 1.0,
         "global_rope_scaling_factor": 1.0,
         "global_rope_partial_rotary_factor": 1.0,
@@ -263,10 +266,10 @@ def use_sliding_window(config, is_global):
     return config.use_sliding_window_attention and not is_global
 
 
-def build_rope_wavelength(is_global):
+def build_rope_wavelength(config, is_global):
     if is_global:
-        return 1_000_000.0
-    return 10_000.0
+        return config.global_rope_wavelength
+    return config.local_rope_wavelength
 
 
 def build_rope_scaling_factor(config, is_global):
