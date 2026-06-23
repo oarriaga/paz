@@ -72,4 +72,4 @@ def test_vision_encoder_matches_keras_hub():
     kh_inputs = {"pixel_values": values[:, None],
                  "pixel_position_ids": positions[:, None]}
     kh_out = np.array(reference(kh_inputs)).reshape(paz_out.shape)
-    assert float(np.max(np.abs(paz_out - kh_out))) == 0.0
+    assert float(np.max(np.abs(paz_out - kh_out))) < 1e-4

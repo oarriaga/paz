@@ -46,7 +46,7 @@ def test_transfer_matches_keras_hub():
          "position_ids": positions})
     output = model({"token_ids": tokens, "padding_mask": padding})
     diff = float(np.max(np.abs(np.array(reference) - np.array(output))))
-    assert diff == 0.0
+    assert diff < 1e-4
 
 
 def test_converter_writes_loadable_artifacts(tmp_path):

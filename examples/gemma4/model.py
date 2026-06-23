@@ -68,6 +68,13 @@ def build_text_backbone(config, weights_path=None, name=BACKBONE_NAME):
     token_ids = Input((None,), dtype="int32", name="token_ids")
     padding_mask = Input((None,), dtype="int32", name="padding_mask")
     embedding = token_embedding(token_ids)
+    inputs = {"token_ids": token_ids, "padding_mask": padding_mask}
+    return build_backbone_from_embedding(
+        embedding, token_ids, padding_mask, inputs, config, name, weights_path)
+
+
+def build_backbone_from_embedding(embedding, token_ids, padding_mask, inputs,
+                                  config, name, weights_path=None):
     hidden = scale_token_embeddings(embedding, config.hidden_dim)
     embedding_output = hidden
     per_layer = build_backbone_per_layer_embeddings(
@@ -87,7 +94,6 @@ def build_text_backbone(config, weights_path=None, name=BACKBONE_NAME):
     norm_args = (config.layer_norm_epsilon, config.dtype,
                  "final_normalization")
     final_output = build_rms_norm(*norm_args)(hidden)
-    inputs = {"token_ids": token_ids, "padding_mask": padding_mask}
     model = Model(inputs, final_output, name=name)
     attach_intermediates(model, embedding_output, block_outputs, final_output)
     if weights_path is not None:
