@@ -51,19 +51,19 @@ SSD512 hand-detection, SSD512-YCBVideo, SSD300-FAT, UNet pretrained pipeline,
 VVAD (visual voice activity, cnn2Plus1).
 
 ## Detailed status (active work)
-| Model | Model code | Weights ported | Parity test | Application | Done |
+All four load ported Keras-3 native `*_paz_jax.weights.h5` assets, verified by
+downloading fresh from the releases (sha256 match + load + run):
+
+| Model | Model code | Native weights | Parity test | Application | Done |
 |-------|-----------|----------------|-------------|-------------|------|
-| DetNet | ✅ | ✅ produced, awaiting upload | ✅ round-trip | ✅ | ☐ upload |
-| IKNet | ✅ | ✅ produced, awaiting upload | ✅ round-trip | ✅ | ☐ upload |
-| HigherHRNet | ✅ | loads existing by name | ✅ bit-exact (model) | ✅ | ✅ |
-| SimpleBaselines | ✅ | loads existing by name | ✅ bit-exact | ✅ | ✅ |
+| DetNet | ✅ | v0.14 ✅ verified | ✅ round-trip | ✅ | ✅ |
+| IKNet | ✅ | v0.14 ✅ verified | ✅ round-trip | ✅ | ✅ |
+| HigherHRNet | ✅ | v0.10 ✅ verified | ✅ bit-exact | ✅ | ✅ |
+| SimpleBaselines | ✅ | v0.17 ✅ verified | ✅ bit-exact | ✅ | ✅ |
 
 ### SimpleBaselines notes
-- Clean Keras-3 MLP, **bit-exact** vs the master (0.0 diff). The saved weights
-  use explicit layer names (`linear1_`, `linear2_0`, `batch_normalization10`,
-  …) that the clean model reproduces, so it loads the existing v0.17 weights
-  **by name** (shared `paz.standard.load_weights_by_name`, also used by
-  HigherHRNet) — no re-host.
+- Clean Keras-3 MLP, **bit-exact** vs the master (0.0 diff). Loads the ported
+  native `v0.17/simple_baseline_paz_jax.weights.h5` via `model.load_weights`.
 - Human3.6M normalization constants copied verbatim into
   `paz/datasets/human36m.py`.
 - Applications `EstimateHumanPose3D` (2D→3D lift) and `EstimateHumanPose`
@@ -75,9 +75,10 @@ VVAD (visual voice activity, cnn2Plus1).
 ### HigherHRNet notes
 - Clean Keras-3 port is **bit-exact** vs the master model (0.0 diff on both
   outputs), verified against the master code run as an independent reference.
-- Loads the existing `v0.10/HigherHRNet_weights.hdf5` **by layer name** (the
-  clean model orders branches differently than the legacy save order), so it
-  needs **no weight re-host**.
+- Loads the ported native `v0.10/higher_hrnet_paz_jax.weights.h5` via
+  `model.load_weights`. (The native file was regenerated from the fixed model;
+  an earlier upload saved before the fuse fix did not native-load and was
+  replaced.)
 - Multi-person postprocessing ported as clean functional numpy in
   `paz/backend/heatmaps.py` (NMS via `scipy.ndimage.maximum_filter`,
   associative-embedding grouping via `scipy.optimize.linear_sum_assignment`),
@@ -90,14 +91,10 @@ VVAD (visual voice activity, cnn2Plus1).
 - `with_flip` test-time augmentation is omitted (single tag channel); it is an
   accuracy refinement, not required for correct multi-person output.
 
-### Hand estimation — remaining upload step
-Ported Keras-3 weights are produced and verified to round-trip exactly
-against the legacy `.hdf5` (xyz/uv/quaternion match to 1e-6):
-- `~/.keras/paz/models/detnet_paz_jax.weights.h5` (50 MB)
-- `~/.keras/paz/models/iknet_paz_jax.weights.h5` (22 MB)
-Upload these to a new altamira-data release, then repoint `WEIGHT_PATH` in
-`detnet.py` / `iknet.py` to the new `*.weights.h5` URLs and switch loading to
-the native Keras-3 file. Until then, models load the working legacy `.hdf5`.
+### Hand estimation weights
+DetNet and IKNet load ported native `v0.14/{detnet,iknet}_paz_jax.weights.h5`
+via `model.load_weights`, verified to round-trip exactly against the legacy
+`.hdf5` (xyz/uv/quaternion match to 1e-6) and downloaded fresh from the release.
 
 ## Locked decisions
 - Hand: **single-hand pose only** (`MinimalHandPoseEstimation`) — no hand

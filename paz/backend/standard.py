@@ -2,28 +2,8 @@ from functools import wraps, partial
 from collections import namedtuple
 import argparse
 
-import h5py
 import numpy as np
 import jax.numpy as jp
-
-
-def load_weights_by_name(model, weights_path):
-    """Loads legacy HDF5 weights into a model by matching layer names.
-
-    Used when a clean model builds its layers in a different order than the
-    original save, so loading by save order would misalign weights.
-    """
-    with h5py.File(weights_path, "r") as weights:
-        for layer_name in decode_strings(weights.attrs["layer_names"]):
-            group = weights[layer_name]
-            weight_names = decode_strings(group.attrs.get("weight_names", []))
-            if weight_names:
-                arrays = [np.array(group[name]) for name in weight_names]
-                model.get_layer(layer_name).set_weights(arrays)
-
-
-def decode_strings(names):
-    return [n.decode() if isinstance(n, bytes) else n for n in names]
 
 
 def merge_dicts(a, b):

@@ -10,10 +10,8 @@ from keras.layers import UpSampling2D
 from keras.layers import ZeroPadding2D
 from keras.utils import get_file
 
-from paz.backend.standard import load_weights_by_name
 
-
-WEIGHT_PATH = "https://github.com/oarriaga/altamira-data/releases/download/v0.10/HigherHRNet_weights.hdf5"  # fmt: skip
+WEIGHT_PATH = "https://github.com/oarriaga/altamira-data/releases/download/v0.10/higher_hrnet_paz_jax.weights.h5"  # fmt: skip
 
 
 def HigherHRNet(weights="COCO", input_shape=(None, None, 3), num_keypoints=17,
@@ -256,7 +254,7 @@ def load_weights(model, weights):
     filename = WEIGHT_PATH.rsplit("/", 1)[-1]
     weights_path = get_file(filename, WEIGHT_PATH, cache_subdir="paz/models")
     print("Loading %s model weights" % weights_path)
-    load_weights_by_name(model, weights_path)
+    model.load_weights(weights_path)
 
 
 def validate_weights(weights):

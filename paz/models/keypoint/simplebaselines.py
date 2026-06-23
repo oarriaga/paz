@@ -9,10 +9,8 @@ from keras.layers import ReLU
 from keras.layers import Reshape
 from keras.utils import get_file
 
-from paz.backend.standard import load_weights_by_name
 
-
-WEIGHT_PATH = "https://github.com/oarriaga/altamira-data/releases/download/v0.17/SIMPLE-BASELINES.hdf5"  # fmt: skip
+WEIGHT_PATH = "https://github.com/oarriaga/altamira-data/releases/download/v0.17/simple_baseline_paz_jax.weights.h5"  # fmt: skip
 
 
 def SimpleBaseline(input_shape=(32,), num_keypoints=16, keypoints_dim=3,
@@ -55,7 +53,7 @@ def load_weights(model, weights):
     filename = WEIGHT_PATH.rsplit("/", 1)[-1]
     weights_path = get_file(filename, WEIGHT_PATH, cache_subdir="paz/models")
     print("Loading %s model weights" % weights_path)
-    load_weights_by_name(model, weights_path)
+    model.load_weights(weights_path)
 
 
 def validate_weights(weights):

@@ -10,7 +10,7 @@ from keras.regularizers import l2
 from keras.utils import get_file
 
 
-WEIGHT_PATH = "https://github.com/oarriaga/altamira-data/releases/download/v0.14/iknet_weight.hdf5"  # fmt: skip
+WEIGHT_PATH = "https://github.com/oarriaga/altamira-data/releases/download/v0.14/iknet_paz_jax.weights.h5"  # fmt: skip
 
 
 def IKNet(input_shape=(84, 3), num_keypoints=21, depth=6, width=1024,

@@ -16,7 +16,7 @@ from keras.regularizers import l2
 from keras.utils import get_file
 
 
-WEIGHT_PATH = "https://github.com/oarriaga/altamira-data/releases/download/v0.14/detnet_weights.hdf5"  # fmt: skip
+WEIGHT_PATH = "https://github.com/oarriaga/altamira-data/releases/download/v0.14/detnet_paz_jax.weights.h5"  # fmt: skip
 
 
 def DetNet(input_shape=(128, 128, 3), num_keypoints=21, weights=None):
