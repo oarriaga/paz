@@ -55,8 +55,18 @@ VVAD (visual voice activity, cnn2Plus1).
 |-------|-----------|----------------|-------------|-------------|------|
 | DetNet | ✅ | ✅ produced, awaiting upload | ✅ round-trip | ✅ | ☐ upload |
 | IKNet | ✅ | ✅ produced, awaiting upload | ✅ round-trip | ✅ | ☐ upload |
-| HigherHRNet | ☐ | ☐ | ☐ | ☐ | ☐ |
+| HigherHRNet (model) | ✅ | loads existing by name | ✅ bit-exact | postprocess pending | ☐ |
 | SimpleBaselines | ☐ | ☐ | ☐ | ☐ | ☐ |
+
+### HigherHRNet notes
+- Clean Keras-3 port is **bit-exact** vs the master model (0.0 diff on both
+  outputs), verified against the master code run as an independent reference.
+- Loads the existing `v0.10/HigherHRNet_weights.hdf5` **by layer name** (the
+  clean model orders branches differently than the legacy save order), so it
+  needs **no weight re-host**.
+- Remaining: multi-person postprocessing (heatmap+tag extraction, top-k,
+  associative-embedding grouping via `scipy.optimize.linear_sum_assignment`,
+  refinement, inverse affine) + the `HigherHRNetHumanPose2D` application.
 
 ### Hand estimation — remaining upload step
 Ported Keras-3 weights are produced and verified to round-trip exactly
