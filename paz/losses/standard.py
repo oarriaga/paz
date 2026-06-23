@@ -34,6 +34,17 @@ def mean_absolute_error(y_true, y_pred, axis=None, reduction="mean"):
     return result
 
 
+def soft_half_quadratic(values, axis=None, reduction="sum"):
+    """One-sided quadratic penalty for soft inequality constraints.
+
+    Values less than or equal to zero are treated as satisfied constraints
+    and incur zero loss. Positive values are interpreted as violations and
+    penalized quadratically.
+    """
+    loss = jp.maximum(values, 0.0) ** 2
+    return _reduce_loss(loss, axis=axis, reduction=reduction)
+
+
 def _expand_masks(y_true, masks):
     H, W = y_true.shape[:2]
     masks = jp.array(masks)

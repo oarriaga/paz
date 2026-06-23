@@ -9,4 +9,5 @@ from paz.losses.standard import masked_bce
 from paz.losses.standard import masked_mae
 from paz.losses.standard import masked_mse
 from paz.losses.standard import soft_box_barrier
+from paz.losses.standard import soft_half_quadratic
 from paz.losses.standard import weight
