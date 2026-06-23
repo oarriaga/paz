@@ -1,5 +1,6 @@
 from .detnet import DetNet
 from .iknet import IKNet
+from .simplebaselines import SimpleBaseline
 from .keypointnet import FaceKeypointNet2D32
 from .keypointnet import KeypointNet
 from .keypointnet import KeypointNet2D

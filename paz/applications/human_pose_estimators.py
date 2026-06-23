@@ -4,6 +4,7 @@ import paz
 from paz.backend import heatmaps
 from paz.datasets.human_pose import COCO_KEYPOINT_ORDER
 from paz.datasets.human_pose import human_links, link_colors
+from paz.datasets import human36m
 
 
 IMAGENET_MEAN = np.array([0.485, 0.456, 0.406])
@@ -131,6 +132,58 @@ def transform_to_image(people, center, scale, shape):
             keypoint[0:2] = np.dot(transform, point)[:2]
         transformed.append(person[:, :3])
     return transformed
+
+
+def EstimateHumanPose3D():
+    model = paz.models.SimpleBaseline(weights="human36m")
+
+    def call(keypoints2D):
+        keypoints2D = np.array(keypoints2D)
+        merged = merge_into_mean(keypoints2D, human36m.args_to_mean)
+        filtered = filter_to_human36m(merged)
+        standardized = standardize(filtered, human36m.data_mean2D,
+                                   human36m.data_stdev2D)
+        predicted = np.array(model(standardized))
+        keypoints3D = destandardize_pose(predicted)
+        return keypoints3D.reshape(-1, 32, 3)
+
+    return call
+
+
+def EstimateHumanPose():
+    estimate_keypoints2D = HigherHRNetHumanPose2D(draw=False)
+    estimate_keypoints3D = EstimateHumanPose3D()
+
+    def call(image):
+        keypoints2D, scores = estimate_keypoints2D(image)
+        if len(keypoints2D) == 0:
+            return keypoints2D, []
+        return keypoints2D, estimate_keypoints3D(keypoints2D)
+
+    return call
+
+
+def merge_into_mean(keypoints2D, args_to_mean):
+    keypoints2D = keypoints2D.copy()
+    for joint, (first, second) in args_to_mean.items():
+        keypoints2D[:, joint] = (keypoints2D[:, first] + keypoints2D[:, second]) / 2  # fmt: skip
+    return keypoints2D
+
+
+def filter_to_human36m(keypoints2D):
+    selected = keypoints2D[:, human36m.h36m_to_coco_joints2D, :]
+    return selected.reshape(selected.shape[0], -1)
+
+
+def standardize(data, mean, stdev):
+    return (data - mean) / stdev
+
+
+def destandardize_pose(predicted):
+    data = predicted.reshape(-1, 48)
+    rearranged = np.zeros((len(data), len(human36m.data_mean3D)))
+    rearranged[:, human36m.dim_to_use3D] = data
+    return rearranged * human36m.data_stdev3D + human36m.data_mean3D
 
 
 def draw_human_skeletons(image, people, link_width=2, radius=3):

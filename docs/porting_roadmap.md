@@ -56,7 +56,21 @@ VVAD (visual voice activity, cnn2Plus1).
 | DetNet | ✅ | ✅ produced, awaiting upload | ✅ round-trip | ✅ | ☐ upload |
 | IKNet | ✅ | ✅ produced, awaiting upload | ✅ round-trip | ✅ | ☐ upload |
 | HigherHRNet | ✅ | loads existing by name | ✅ bit-exact (model) | ✅ | ✅ |
-| SimpleBaselines | ☐ | ☐ | ☐ | ☐ | ☐ |
+| SimpleBaselines | ✅ | loads existing by name | ✅ bit-exact | ✅ | ✅ |
+
+### SimpleBaselines notes
+- Clean Keras-3 MLP, **bit-exact** vs the master (0.0 diff). The saved weights
+  use explicit layer names (`linear1_`, `linear2_0`, `batch_normalization10`,
+  …) that the clean model reproduces, so it loads the existing v0.17 weights
+  **by name** (shared `paz.standard.load_weights_by_name`, also used by
+  HigherHRNet) — no re-host.
+- Human3.6M normalization constants copied verbatim into
+  `paz/datasets/human36m.py`.
+- Applications `EstimateHumanPose3D` (2D→3D lift) and `EstimateHumanPose`
+  (HigherHRNet 2D → SimpleBaseline 3D) in `human_pose_estimators.py`. Verified
+  end-to-end: produces an anatomically-correct 3D skeleton. The master's
+  `EstimateHumanPose` additionally runs a 6D-pose optimization (camera/solver)
+  that is out of scope for the lift and deferred.
 
 ### HigherHRNet notes
 - Clean Keras-3 port is **bit-exact** vs the master model (0.0 diff on both

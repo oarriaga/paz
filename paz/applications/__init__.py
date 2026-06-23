@@ -11,3 +11,5 @@ from paz.applications.keypoint_estimators import IKNetHandJointAngles
 from paz.applications.keypoint_estimators import MinimalHandPoseEstimation
 from paz.applications.pose_estimators import HeadPoseKeypointNet2D32
 from paz.applications.human_pose_estimators import HigherHRNetHumanPose2D
+from paz.applications.human_pose_estimators import EstimateHumanPose3D
+from paz.applications.human_pose_estimators import EstimateHumanPose

@@ -1,6 +1,3 @@
-import h5py
-import numpy as np
-
 from keras import Model
 from keras.layers import Add
 from keras.layers import BatchNormalization
@@ -12,6 +9,8 @@ from keras.layers import ReLU
 from keras.layers import UpSampling2D
 from keras.layers import ZeroPadding2D
 from keras.utils import get_file
+
+from paz.backend.standard import load_weights_by_name
 
 
 WEIGHT_PATH = "https://github.com/oarriaga/altamira-data/releases/download/v0.10/HigherHRNet_weights.hdf5"  # fmt: skip
@@ -258,22 +257,6 @@ def load_weights(model, weights):
     weights_path = get_file(filename, WEIGHT_PATH, cache_subdir="paz/models")
     print("Loading %s model weights" % weights_path)
     load_weights_by_name(model, weights_path)
-
-
-# The legacy weights load by layer name, not by save order, because the clean
-# model builds its branches in a different order than the original graph.
-def load_weights_by_name(model, weights_path):
-    with h5py.File(weights_path, "r") as weights:
-        for layer_name in decode(weights.attrs["layer_names"]):
-            group = weights[layer_name]
-            weight_names = decode(group.attrs.get("weight_names", []))
-            if weight_names:
-                arrays = [np.array(group[name]) for name in weight_names]
-                model.get_layer(layer_name).set_weights(arrays)
-
-
-def decode(names):
-    return [n.decode() if isinstance(n, bytes) else n for n in names]
 
 
 def validate_weights(weights):
