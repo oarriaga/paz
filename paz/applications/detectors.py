@@ -75,6 +75,34 @@ def SSD512HandDetection(score_thresh=0.40, IOU_thresh=0.45, top_k=100, draw=None
     return SSD(model, score_thresh, boxes, variances, apply_NMS, draw)
 
 
+def SSD512YCBVideo(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
+    model = paz.models.detection.SSD512(22, "COCO", "YCBVideo", (512, 512, 3))
+    build = paz.models.detection.single_shot_detector.build_prior_boxes
+    boxes = build("YCBVideo")
+    names = paz.datasets.labels("YCBVideo")
+    label_colors = paz.draw.lincolor(len(names))
+    if draw is None:
+        draw = paz.partial(paz.draw.boxes2D, names=names, colors=label_colors)
+    variances = [0.1, 0.1, 0.2, 0.2]
+    apply_NMS = (len(names), IOU_thresh, top_k)
+    apply_NMS = paz.lock(paz.detection.apply_per_class_NMS, *apply_NMS)
+    return SSD(model, score_thresh, boxes, variances, apply_NMS, draw)
+
+
+def SSD300FAT(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
+    model = paz.models.detection.SSD300(22, "FAT", "FAT", (300, 300, 3))
+    build = paz.models.detection.single_shot_detector.build_prior_boxes
+    boxes = build("FAT")
+    names = paz.datasets.labels("FAT")
+    label_colors = paz.draw.lincolor(len(names))
+    if draw is None:
+        draw = paz.partial(paz.draw.boxes2D, names=names, colors=label_colors)
+    variances = [0.1, 0.1, 0.2, 0.2]
+    apply_NMS = (len(names), IOU_thresh, top_k)
+    apply_NMS = paz.lock(paz.detection.apply_per_class_NMS, *apply_NMS)
+    return SSD(model, score_thresh, boxes, variances, apply_NMS, draw)
+
+
 def EFFICIENTDETD0COCO(**kwargs):
     return EfficientDetCOCO(paz.models.EFFICIENTDETD0, **kwargs)
 

@@ -28,6 +28,8 @@ the bottom.
 | Face/Head KeypointNet2D32 | ✅ | v0.7 | head_pose / keypoint | ✅ |
 | Minimal Hand (DetNet+IKNet) | ✅ | v0.14 | — | ✅ end-to-end |
 | **Hand detection (SSD512 OIV6Hand)** | ✅ | v0.1 | hand_detection | ✅ boxes on hands |
+| **SSD512-YCBVideo** | ✅ | v0.1 | — | ✅ YCB objects (DOPE img) |
+| **SSD300-FAT** | ✅ | **not hosted** | — | wiring only (404 weights) |
 | **DetectMinimalHand** (detect+pose) | ✅ | v0.1+v0.14 | hand_detection | ✅ |
 | HigherHRNet 2D | ✅ | v0.10 | human_pose_estimation_2D | ✅ bit-exact + multi-person |
 | SimpleBaselines 3D | ✅ | v0.17 | — | ✅ bit-exact |
@@ -62,7 +64,10 @@ the bottom.
   heads, train + demos. Heaviest port. Not started.
 - **EfficientDet-VOC** (`EFFICIENTDETD0VOC`) and **EfficientDet train.py /
   evaluate_mAP** — only COCO inference is done.
-- **Extra SSD heads**: `SSD512-YCBVideo`, `SSD300-FAT` (weights + apps).
+- **Extra SSD heads**: apps done. `SSD512-YCBVideo` verified end-to-end (v0.1
+  weights). `SSD300-FAT` is wired and shape-verified but its weights file
+  (`SSD300_FAT-FAT_weights.hdf5`) is **not hosted** on altamira-data (404 across
+  all releases) — needs upload or a trained checkpoint.
 - **Semantic segmentation (UNet)**: model is ported, but there is **no
   application, example, or train.py** (master had `train.py` + cityscapes + demo).
 
