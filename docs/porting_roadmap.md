@@ -29,16 +29,16 @@ Update the status table as work lands. Keep it terse.
 ### Tier 1 — core robot-vision domain capabilities
 | Rank | Model | Task | Legacy weights | Status |
 |------|-------|------|----------------|--------|
-| 1 | Minimal Hand (DetNet + IKNet) | single-hand 2D/3D keypoints + joint angles | v0.14 detnet/iknet | in progress |
-| 2 | HigherHRNet | 2D multi-person human pose | v0.10 | queued |
-| 3 | SimpleBaselines | 3D human pose (2D→3D lift) | v0.17 | queued |
-| 4 | EfficientPose | 6D object pose (LINEMOD) | altamira-data | backlog |
+| 1 | Minimal Hand (DetNet + IKNet) | single-hand 2D/3D keypoints + joint angles | v0.14 detnet/iknet | ✅ done |
+| 2 | HigherHRNet | 2D multi-person human pose | v0.10 | ✅ done |
+| 3 | SimpleBaselines | 3D human pose (2D→3D lift) | v0.17 | ✅ done |
+| 4 | EfficientPose | 6D object pose (LINEMOD) | altamira-data | next |
 | 5 | Pix2Pose | 6D object pose (YCB / power drill) | altamira-data | backlog |
 
 ### Tier 2 — high value, partially started
 | Rank | Model | Task | Legacy weights | Status |
 |------|-------|------|----------------|--------|
-| 6 | EfficientDet D0–D7 | object detection (COCO/VOC) | altamira-data | arch ported; weights+app pending |
+| 6 | EfficientDet D0–D7 | object detection (COCO) | v0.16 | ✅ done (COCO); VOC variant deferred |
 | 7 | Mask R-CNN | instance segmentation | altamira-data | backlog |
 
 ### Already ported (no action)
@@ -90,6 +90,18 @@ downloading fresh from the releases (sha256 match + load + run):
   visually + unit-tested on the grouping, not bit-exact.
 - `with_flip` test-time augmentation is omitted (single tag channel); it is an
   accuracy refinement, not required for correct multi-person output.
+
+### EfficientDet notes
+- Model + anchors were already ported and load v0.16 COCO weights. Added the
+  clean detection applications `EFFICIENTDETD0COCO`..`EFFICIENTDETD7COCO` in
+  `paz/applications/detectors.py`: ImageNet-normalize + aspect-preserving
+  `scaled_resize`, `change_box_coordinates`, decode with `model.prior_boxes`
+  (variances `[1,1,1,1]`), scale boxes back, per-class NMS — reusing the
+  existing `paz.detection` helpers. Added `COCO_EFFICIENTDET` (90) labels.
+- Verified end-to-end on COCO images (D0 and D1): correct, well-localized
+  detections (people, cars, baseball bat/glove). The engine is size-agnostic
+  (reads input size + priors from the model), so D0–D7 share one code path.
+- VOC variant (`EFFICIENTDETD0VOC`) deferred — different class set/weights.
 
 ### Hand estimation weights
 DetNet and IKNet load ported native `v0.14/{detnet,iknet}_paz_jax.weights.h5`

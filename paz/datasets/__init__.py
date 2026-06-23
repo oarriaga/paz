@@ -46,6 +46,8 @@ def labels(name):
         class_names = ferplus.get_class_names()
     elif name == "COCO":
         class_names = coco.get_class_names()
+    elif name == "COCO_EFFICIENTDET":
+        class_names = coco.get_efficientdet_class_names()
     else:
         raise ValueError(f"Invalid dataset name: {name}")
     return class_names
