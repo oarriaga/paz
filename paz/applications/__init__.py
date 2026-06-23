@@ -1,5 +1,6 @@
 from paz.applications.detectors import SSD300VOC
 from paz.applications.detectors import SSD512COCO
+from paz.applications.detectors import SSD512HandDetection
 from paz.applications.detectors import EFFICIENTDETD0COCO
 from paz.applications.detectors import EFFICIENTDETD1COCO
 from paz.applications.detectors import EFFICIENTDETD2COCO
@@ -17,6 +18,7 @@ from paz.applications.keypoint_estimators import FaceKeypointNet2D32
 from paz.applications.keypoint_estimators import DetNetHandKeypoints
 from paz.applications.keypoint_estimators import IKNetHandJointAngles
 from paz.applications.keypoint_estimators import MinimalHandPoseEstimation
+from paz.applications.keypoint_estimators import DetectMinimalHand
 from paz.applications.pose_estimators import HeadPoseKeypointNet2D32
 from paz.applications.human_pose_estimators import HigherHRNetHumanPose2D
 from paz.applications.human_pose_estimators import EstimateHumanPose3D

@@ -51,11 +51,24 @@ def SSD300VOC(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
 
 def SSD512COCO(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
     model = paz.models.detection.SSD512(81, "COCO", "COCO", (512, 512, 3))
-    boxes = paz.models.detection.single_shot_detector.build_prior_boxes("VOC")
+    boxes = paz.models.detection.single_shot_detector.build_prior_boxes("COCO")
     names = paz.datasets.labels("COCO")
     label_colors = paz.draw.lincolor(len(names))
     if draw is None:
         draw = paz.partial(paz.draw.boxes2D, names=names, colors=label_colors)
+    variances = [0.1, 0.1, 0.2, 0.2]
+    apply_NMS = (len(names), IOU_thresh, top_k)
+    apply_NMS = paz.lock(paz.detection.apply_per_class_NMS, *apply_NMS)
+    return SSD(model, score_thresh, boxes, variances, apply_NMS, draw)
+
+
+def SSD512HandDetection(score_thresh=0.40, IOU_thresh=0.45, top_k=100, draw=None):  # fmt: skip
+    model = paz.models.detection.SSD512(2, "OIV6Hand", "OIV6Hand", (512, 512, 3))  # fmt: skip
+    boxes = paz.models.detection.single_shot_detector.build_prior_boxes("COCO")
+    names = ["hand"]
+    colors = paz.draw.lincolor(len(names))
+    if draw is None:
+        draw = paz.partial(paz.draw.boxes2D, names=names, colors=colors)
     variances = [0.1, 0.1, 0.2, 0.2]
     apply_NMS = (len(names), IOU_thresh, top_k)
     apply_NMS = paz.lock(paz.detection.apply_per_class_NMS, *apply_NMS)
