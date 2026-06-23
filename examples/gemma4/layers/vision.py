@@ -1,11 +1,56 @@
 import keras
 from keras import ops
-from keras.layers import Dense, Layer
+from keras.layers import Dense, EinsumDense, Layer
 
-from .attention import (AttendArgs, compute_attention, project_key,
-                        project_output, project_query, project_value)
-from .decoder import build_einsum_dense
+from .attention import AttendArgs, compute_attention
 from .normalization import build_rms_norm, build_v_norm
+
+
+@keras.saving.register_keras_serializable(package="gemma4")
+class ClippableEinsumDense(Layer):
+    """EinsumDense whose input and output are clipped to learned ranges.
+
+    Matches keras_hub's Gemma4ClippableEinsumDense (Gemma4 vision). The clip
+    buffers default to +-65504 (no clipping) and are loaded from a checkpoint.
+    """
+
+    def __init__(self, equation, output_shape, **kwargs):
+        super().__init__(**kwargs)
+        self.equation = equation
+        self.target_shape = output_shape
+
+    def get_config(self):
+        config = super().get_config()
+        config["equation"] = self.equation
+        config["output_shape"] = self.target_shape
+        return config
+
+    def build(self, input_shape):
+        self.dense = EinsumDense(
+            self.equation, self.target_shape, dtype=self.dtype, name="dense")
+        self.dense.build(input_shape)
+        bounds = (("input_min", -65504.0), ("input_max", 65504.0),
+                  ("output_min", -65504.0), ("output_max", 65504.0))
+        for name, value in bounds:
+            weight = self.add_weight(
+                name=name, shape=(), trainable=False,
+                initializer=keras.initializers.Constant(value))
+            setattr(self, name, weight)
+        self.built = True
+
+    def call(self, x):
+        x = ops.clip(x, ops.cast(self.input_min, x.dtype),
+                     ops.cast(self.input_max, x.dtype))
+        x = ops.einsum(self.equation, x, self.dense.kernel)
+        return ops.clip(x, ops.cast(self.output_min, x.dtype),
+                        ops.cast(self.output_max, x.dtype))
+
+    def compute_output_shape(self, input_shape):
+        return self.dense.compute_output_shape(input_shape)
+
+
+def build_clippable_einsum_dense(equation, output_shape, dtype, name):
+    return ClippableEinsumDense(equation, output_shape, dtype=dtype, name=name)
 
 
 @keras.saving.register_keras_serializable(package="gemma4")
@@ -70,23 +115,41 @@ def vision_decoder_block(x, mask, position_ids, config, name):
 
 
 def vision_attend(x, mask, position_ids, config, name):
-    epsilon, dtype = config.layer_norm_epsilon, config.dtype
     attn_name = "{}_attention".format(name)
     args = build_vision_attend_args(mask, config, attn_name)
-    query = project_query(
-        x, config.num_heads, config.head_dim, epsilon, dtype, attn_name)
-    key = project_key(
-        x, config.num_key_value_heads, config.head_dim, epsilon, dtype,
-        attn_name)
-    value = project_value(
-        x, config.num_key_value_heads, config.head_dim, epsilon, dtype,
-        attn_name)
+    query = vision_project(x, "query", config.num_heads, config, attn_name)
+    key = vision_project(
+        x, "key", config.num_key_value_heads, config, attn_name)
+    value = vision_value(x, config, attn_name)
     query = apply_vision_rotary_embedding(
         query, position_ids, config.rope_wavelength)
     key = apply_vision_rotary_embedding(
         key, position_ids, config.rope_wavelength)
     output = compute_attention(query, key, value, mask, args)
-    return project_output(output, x.shape[-1], dtype, attn_name)
+    proj = build_clippable_einsum_dense(
+        "btnh,nhd->btd", (None, x.shape[-1]), config.dtype,
+        "{}_attention_output".format(attn_name))
+    return proj(output)
+
+
+def vision_project(x, role, num_heads, config, name):
+    equation = "btd,ndh->btnh" if role == "query" else "btd,kdh->btkh"
+    shape = (None, num_heads, config.head_dim)
+    proj = build_clippable_einsum_dense(
+        equation, shape, config.dtype, "{}_{}".format(name, role))
+    norm = build_rms_norm(
+        config.layer_norm_epsilon, config.dtype,
+        "{}_{}_norm".format(name, role))
+    return norm(proj(x))
+
+
+def vision_value(x, config, name):
+    shape = (None, config.num_key_value_heads, config.head_dim)
+    proj = build_clippable_einsum_dense(
+        "btd,kdh->btkh", shape, config.dtype, "{}_value".format(name))
+    norm = build_v_norm(
+        config.layer_norm_epsilon, config.dtype, "{}_value_norm".format(name))
+    return norm(proj(x))
 
 
 def build_vision_attend_args(mask, config, name):
@@ -99,16 +162,15 @@ def build_vision_attend_args(mask, config, name):
 
 def vision_feedforward(x, config, name):
     dtype = config.dtype
-    gate_name = "{}_ffw_gating".format(name)
-    gate = build_einsum_dense(
-        "btd,df->btf", config.intermediate_dim, dtype, gate_name)(x)
-    value_name = "{}_ffw_gating_2".format(name)
-    value = build_einsum_dense(
-        "btd,df->btf", config.intermediate_dim, dtype, value_name)(x)
+    up_shape = (None, config.intermediate_dim)
+    gate = build_clippable_einsum_dense(
+        "btd,df->btf", up_shape, dtype, "{}_ffw_gating".format(name))(x)
+    value = build_clippable_einsum_dense(
+        "btd,df->btf", up_shape, dtype, "{}_ffw_gating_2".format(name))(x)
     hidden = keras.activations.gelu(gate, approximate=True) * value
-    linear_name = "{}_ffw_linear".format(name)
-    return build_einsum_dense(
-        "btf,fd->btd", config.hidden_dim, dtype, linear_name)(hidden)
+    return build_clippable_einsum_dense(
+        "btf,fd->btd", (None, config.hidden_dim), dtype,
+        "{}_ffw_linear".format(name))(hidden)
 
 
 def apply_vision_rotary_embedding(inputs, position_ids, wavelength):

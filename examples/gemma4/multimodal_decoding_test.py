@@ -18,6 +18,7 @@ VISION = build_vision_encoder_args(output_dim=TEXT.hidden_dim)
 
 
 def last2(path):
+    path = path.replace("/dense/", "/")  # unwrap clippable einsum
     return "/".join(path.split("/")[-2:])
 
 

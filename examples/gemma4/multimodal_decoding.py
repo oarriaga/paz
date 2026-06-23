@@ -7,7 +7,6 @@ Decoding after the prompt is text-only. Uses Gemma4MultimodalDecoderStep, which
 takes a precomputed input embedding.
 """
 import jax.numpy as jnp
-from keras import ops
 
 from .inference import build_empty_cache
 
@@ -40,9 +39,11 @@ def text_per_layer(per_layer_step, token):
 
 
 def zero_per_layer(per_layer_step, token):
+    # Image positions use the pad-token (id 0) per-layer embedding, matching
+    # keras_hub which zeroes the per-layer token ids at vision positions.
     if per_layer_step is None:
         return None
-    return ops.zeros_like(per_layer_step(as_token(token)))
+    return per_layer_step(as_token(0))
 
 
 def decode_step(step_model, row, cache, index):
