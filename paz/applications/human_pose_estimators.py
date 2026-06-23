@@ -151,17 +151,45 @@ def EstimateHumanPose3D():
     return call
 
 
-def EstimateHumanPose():
+def EstimateHumanPose(solver, camera_intrinsics, draw=None):
     estimate_keypoints2D = HigherHRNetHumanPose2D(draw=False)
     estimate_keypoints3D = EstimateHumanPose3D()
+    if draw is None:
+        draw = draw_human_pose6D
 
     def call(image):
         keypoints2D, scores = estimate_keypoints2D(image)
         if len(keypoints2D) == 0:
-            return keypoints2D, []
-        return keypoints2D, estimate_keypoints3D(keypoints2D)
+            return keypoints2D, [], []
+        keypoints3D = estimate_keypoints3D(keypoints2D)
+        poses3D, projection2D = paz.poses.optimize_human_pose3D(
+            keypoints3D, np.array(keypoints2D), solver, camera_intrinsics)
+        pose6D = paz.poses.human_pose3D_to_pose6D(poses3D[0])
+        return keypoints2D, poses3D, pose6D
 
-    return call
+    def call_and_draw(image):
+        keypoints2D, poses3D, pose6D = call(image)
+        if len(keypoints2D) == 0:
+            return (keypoints2D, poses3D, pose6D), image
+        rotation, translation = pose6D
+        image = draw(image, rotation, translation, camera_intrinsics)
+        return (keypoints2D, poses3D, pose6D), image
+
+    return call_and_draw if callable(draw) else call
+
+
+def draw_human_pose6D(image, rotation, translation, camera_intrinsics,
+                      length=60, offset=(50, 50)):
+    image = np.array(image)
+    points2D = paz.poses.project_to_image(
+        rotation, np.array(translation), np.eye(3), camera_intrinsics)
+    colors = [[255, 0, 0], [0, 255, 0], [0, 0, 255]]
+    offset = np.array(offset)
+    for point, color in zip(points2D, colors):
+        unit = (point / np.linalg.norm(point) * length).astype("int32")
+        image = paz.draw.line(image, offset.tolist(),
+                              (unit + offset).tolist(), color, 4)
+    return image
 
 
 def merge_into_mean(keypoints2D, args_to_mean):
