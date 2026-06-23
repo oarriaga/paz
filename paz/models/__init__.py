@@ -16,6 +16,7 @@ from .classification.protonet import ProtoNet
 from .attention.stn import STN
 from .keypoint.keypointnet import KeypointNet2D
 from .keypoint.keypointnet import FaceKeypointNet2D32
+from .keypoint.gaussian_mixture import GaussianMixtureModel
 from .keypoint.detnet import DetNet
 from .keypoint.iknet import IKNet
 from .keypoint.simplebaselines import SimpleBaseline

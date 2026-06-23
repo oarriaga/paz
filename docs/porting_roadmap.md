@@ -30,6 +30,7 @@ the bottom.
 | **Hand detection (SSD512 OIV6Hand)** | ✅ | v0.1 | hand_detection | ✅ boxes on hands |
 | **SSD512-YCBVideo** | ✅ | v0.1 | — | ✅ YCB objects (DOPE img) |
 | **SSD300-FAT** | ✅ | **not hosted** | — | wiring only (404 weights) |
+| **Probabilistic keypoints (GMM)** | ✅ | **not hosted** | probabilistic_keypoint_estimation | model+math+loss+train verified |
 | **DetectMinimalHand** (detect+pose) | ✅ | v0.1+v0.14 | hand_detection | ✅ |
 | HigherHRNet 2D | ✅ | v0.10 | human_pose_estimation_2D | ✅ bit-exact + multi-person |
 | SimpleBaselines 3D | ✅ | v0.17 | — | ✅ bit-exact |
@@ -74,8 +75,6 @@ the bottom.
 ### Other domain capabilities not ported
 - **implicit_orientation_learning** — augmented autoencoder for object
   orientation (train + demo).
-- **probabilistic_keypoint_estimation** — Gaussian/probabilistic facial
-  keypoints (train + demo).
 - **visual_voice_activity_detection (VVAD)** — `cnn2Plus1` video model + demos.
 - **discovery_of_latent_keypoints** — self-supervised 3D keypoint discovery.
 - **images_synthesis** — synthetic data generation for pose.
@@ -104,6 +103,13 @@ H36M loader), **Minimal Hand** (DetNet/IKNet keypoint + IK losses),
   `with_flip` TTA omitted (accuracy-only).
 - **Action scores:** `ScalarActionScore` + `FeatureExtractor` Keras-3 callbacks
   in `examples/action_scores/`.
+- **Probabilistic keypoints:** the legacy model embedded a
+  `tensorflow_probability` mixture via `DistributionLambda`; the JAX port keeps
+  the net convolutional (emits raw mixture maps) and moves the GMM math (mean,
+  density, NLL) to `paz.backend.gaussian_mixture` + `paz.losses`
+  `gaussian_mixture_nll`. `GMMKeypointNet2D` / `DetectGMMKeypointNet2D` apps;
+  `examples/probabilistic_keypoint_estimation/` has the Kaggle loader, NLL
+  `train.py`, and demo. No weights hosted — train to produce them.
 
 ## Locked decisions
 - Weights hosting: `oarriaga/altamira-data`; we produce + verify

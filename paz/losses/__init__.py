@@ -2,6 +2,7 @@ from paz.losses import depth
 from paz.losses import multibox
 from paz.losses import pose
 from paz.losses.pose import MultiPoseLoss
+from paz.losses.gaussian_mixture import gaussian_mixture_nll
 from paz.losses.mesh import laplacian_smoothing
 from paz.losses.mesh import volume_matching
 from paz.losses.standard import bce
