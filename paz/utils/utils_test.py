@@ -498,6 +498,26 @@ def test_jit_and_cache_loads_from_cache_on_second_call(temp_cache_dir):
     assert len(cache_files_before) == len(cache_files_after)
 
 
+def test_jit_and_cache_recovers_from_empty_cache_file(temp_cache_dir):
+    """Empty cache files should be discarded and rebuilt."""
+
+    @paz.jit_and_cache(cache_dir=temp_cache_dir)
+    def add_one(x):
+        return x + 1
+
+    value = jp.array([1.0, 2.0, 3.0])
+    cache_key = paz.utils._cache_key(value)
+    module_name = __name__.replace(".", "_")
+    filename = f"{module_name}_add_one_{cache_key}.bin"
+    cache_path = temp_cache_dir / filename
+    cache_path.write_bytes(b"")
+
+    result = add_one(value)
+
+    assert jp.allclose(result, jp.array([2.0, 3.0, 4.0]))
+    assert cache_path.stat().st_size > 0
+
+
 def test_jit_and_cache_different_shapes_create_different_cache(temp_cache_dir):
     """Different input shapes should create separate cache entries."""
 
