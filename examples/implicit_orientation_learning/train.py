@@ -59,28 +59,29 @@ def render_dataset(mesh_path, num_views, image_size, distance, root, seed):
     return views, masks
 
 
-parser = argparse.ArgumentParser(description="AutoEncoder AAE training")
-parser.add_argument("--mesh", default=None)
-parser.add_argument("--backgrounds", default=None)
-parser.add_argument("--root", default="experiments")
-parser.add_argument("--image_size", default=128, type=int)
-parser.add_argument("--distance", default=0.9, type=float)
-parser.add_argument("--num_views", default=2000, type=int)
-parser.add_argument("--batch_size", default=32, type=int)
-parser.add_argument("--epochs", default=300, type=int)
-args = parser.parse_args()
-os.makedirs(args.root, exist_ok=True)
-pack = (args.mesh, args.num_views, args.image_size, args.distance)
-views, masks = render_dataset(*pack, args.root, seed=0)
-backgrounds = load_backgrounds(args.backgrounds, args.image_size)
-sequence = OrientationSequence(views, masks, args.batch_size, backgrounds)
-model = paz.models.AutoEncoder((args.image_size, args.image_size, 3))
-optimizer = keras.optimizers.Adam(1e-3, amsgrad=True)
-model.compile(optimizer, "binary_crossentropy")
-weights = os.path.join(args.root, "aae.weights.h5")
-callbacks = [
-    keras.callbacks.CSVLogger(os.path.join(args.root, "log.csv")),
-    keras.callbacks.ModelCheckpoint(weights, save_weights_only=True),
-    keras.callbacks.ReduceLROnPlateau("loss", patience=10),
-]
-model.fit(sequence, epochs=args.epochs, callbacks=callbacks)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="AutoEncoder AAE training")
+    parser.add_argument("--mesh", default=None)
+    parser.add_argument("--backgrounds", default=None)
+    parser.add_argument("--root", default="experiments")
+    parser.add_argument("--image_size", default=128, type=int)
+    parser.add_argument("--distance", default=0.9, type=float)
+    parser.add_argument("--num_views", default=2000, type=int)
+    parser.add_argument("--batch_size", default=32, type=int)
+    parser.add_argument("--epochs", default=300, type=int)
+    args = parser.parse_args()
+    os.makedirs(args.root, exist_ok=True)
+    pack = (args.mesh, args.num_views, args.image_size, args.distance)
+    views, masks = render_dataset(*pack, args.root, seed=0)
+    backgrounds = load_backgrounds(args.backgrounds, args.image_size)
+    sequence = OrientationSequence(views, masks, args.batch_size, backgrounds)
+    model = paz.models.AutoEncoder((args.image_size, args.image_size, 3))
+    optimizer = keras.optimizers.Adam(1e-3, amsgrad=True)
+    model.compile(optimizer, "binary_crossentropy")
+    weights = os.path.join(args.root, "aae.weights.h5")
+    callbacks = [
+        keras.callbacks.CSVLogger(os.path.join(args.root, "log.csv")),
+        keras.callbacks.ModelCheckpoint(weights, save_weights_only=True),
+        keras.callbacks.ReduceLROnPlateau("loss", patience=10),
+    ]
+    model.fit(sequence, epochs=args.epochs, callbacks=callbacks)
