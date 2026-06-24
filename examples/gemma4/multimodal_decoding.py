@@ -58,6 +58,33 @@ def call_step(step_model, embeds, cache, start, positions, per_layer):
 
 def generate(step_model, per_layer_step, vision_embeddings, config,
              prompt_ids, vision_indices, stop_id, max_tokens):
+    """Single-sequence jitted greedy generation."""
+    return run_cached_generate(
+        step_model, per_layer_step, vision_embeddings, config, prompt_ids,
+        vision_indices, stop_id, max_tokens, jax.random.PRNGKey(0),
+        select_greedy_token)
+
+
+def generate_sample(step_model, per_layer_step, vision_embeddings, config,
+                    prompt_ids, vision_indices, stop_id, max_tokens, key,
+                    sampling):
+    """Single-sequence jitted sampling generation seeded by `key`."""
+    return run_cached_generate(
+        step_model, per_layer_step, vision_embeddings, config, prompt_ids,
+        vision_indices, stop_id, max_tokens, key, build_token_sampler(sampling))
+
+
+def select_greedy_token(logits, key):
+    return jnp.argmax(logits[0]).astype("int32")
+
+
+def build_token_sampler(sampling):
+    return lambda logits, key: sample_logits(logits, key, sampling)[0]
+
+
+def run_cached_generate(step_model, per_layer_step, vision_embeddings, config,
+                        prompt_ids, vision_indices, stop_id, max_tokens, key,
+                        select):
     embeds, per_layer = build_prompt_rows(
         step_model, vision_embeddings, prompt_ids, vision_indices,
         per_layer_step)
@@ -67,13 +94,34 @@ def generate(step_model, per_layer_step, vision_embeddings, config,
     positions = jnp.arange(length, dtype="int32")[None]
     logits, cache = call_step(
         step_model, embeds, cache, 0, positions, per_layer)
-    first = jnp.argmax(logits[0, -1]).astype("int32")
-    decode = build_decode_loop(step_model, per_layer_step, max_length,
-                               max_tokens)
+    key, first_key = jax.random.split(key)
+    first = select(logits[:, -1], first_key)
+    decode = build_decode_loop(
+        step_model, per_layer_step, max_length, max_tokens, select)
+    variables = (
+        snapshot_variables(step_model),
+        snapshot_variables(step_model.get_layer("token_embedding")),
+        snapshot_variables(per_layer_step))
     buffer, count = decode(cache, first, jnp.array(length, "int32"),
-                           jnp.array(stop_id, "int32"))
+                           jnp.array(stop_id, "int32"), key, variables)
     generated = ops.convert_to_numpy(buffer[:int(count)]).tolist()
     return trim_to_stop(generated, stop_id)
+
+
+def snapshot_variables(model):
+    if model is None:
+        return None
+    train = [variable.value for variable in model.trainable_variables]
+    nontrain = [variable.value for variable in model.non_trainable_variables]
+    return train, nontrain
+
+
+def stateless_forward(model, variables, *inputs):
+    # Run the model from variables passed as inputs, so jax.jit treats the
+    # weights as arguments instead of constant-folding the multi-GB embedding
+    # tables into the compiled executable (which would exhaust host memory).
+    output, _ = model.stateless_call(variables[0], variables[1], *inputs)
+    return output
 
 
 def trim_to_stop(tokens, stop_id):
@@ -82,18 +130,20 @@ def trim_to_stop(tokens, stop_id):
     return tokens
 
 
-def build_decode_loop(step_model, per_layer_step, max_length, max_tokens):
+def build_decode_loop(step_model, per_layer_step, max_length, max_tokens,
+                      select):
     embedding = step_model.get_layer("token_embedding")
 
     @jax.jit
-    def decode(cache, first_token, start_index, stop_id):
+    def decode(cache, first_token, start_index, stop_id, key, variables):
         buffer = jnp.zeros((max_tokens,), dtype="int32").at[0].set(first_token)
         count = jnp.array(1, dtype="int32")
         state = (buffer, first_token, start_index, cache, count,
-                 first_token == stop_id)
+                 first_token == stop_id, key)
         cont = build_should_continue(max_tokens, max_length)
-        step = build_decode_step(step_model, embedding, per_layer_step, stop_id)
-        buffer, _, _, _, count, _ = jax.lax.while_loop(cont, step, state)
+        step = build_decode_step(
+            step_model, embedding, per_layer_step, stop_id, select, variables)
+        buffer, _, _, _, count, _, _ = jax.lax.while_loop(cont, step, state)
         return buffer, count
 
     return decode
@@ -101,25 +151,31 @@ def build_decode_loop(step_model, per_layer_step, max_length, max_tokens):
 
 def build_should_continue(max_tokens, max_length):
     def check(state):
-        _, _, index, _, count, finished = state
+        _, _, index, _, count, finished, _ = state
         return (~finished) & (count < max_tokens) & (index < max_length)
     return check
 
 
-def build_decode_step(step_model, embedding, per_layer_step, stop_id):
+def build_decode_step(step_model, embedding, per_layer_step, stop_id, select,
+                      variables):
+    step_vars, embedding_vars, per_layer_vars = variables
+
     def step(state):
-        buffer, token, index, cache, count, _ = state
+        buffer, token, index, cache, count, _, key = state
         token2d = jnp.reshape(token, (1, 1))
         positions = jnp.reshape(index, (1, 1)).astype("int32")
-        per_layer = None
-        if per_layer_step is not None:
-            per_layer = per_layer_step(token2d)
-        logits, cache = call_step(
-            step_model, embedding(token2d), cache, index, positions, per_layer)
-        next_id = jnp.argmax(logits[:, 0, :], axis=-1).astype("int32")[0]
+        embeds = stateless_forward(embedding, embedding_vars, token2d)
+        inputs = [embeds, cache, jnp.reshape(index, (1,)).astype("int32"),
+                  positions]
+        if per_layer_vars is not None:
+            inputs.append(
+                stateless_forward(per_layer_step, per_layer_vars, token2d))
+        logits, cache = stateless_forward(step_model, step_vars, inputs)
+        key, step_key = jax.random.split(key)
+        next_id = select(logits[:, 0, :], step_key)
         buffer = buffer.at[count].set(next_id)
         finished = next_id == stop_id
-        return (buffer, next_id, index + 1, cache, count + 1, finished)
+        return (buffer, next_id, index + 1, cache, count + 1, finished, key)
     return step
 
 

@@ -13,9 +13,10 @@ import jax
 
 from .multimodal import build_multimodal_backbone
 from .inference import Gemma4MultimodalDecoderStep, build_empty_cache
-from .multimodal_decoding import (prefill_logits, generate, generate_batch,
-                                  generate_batch_greedy, build_prompt_rows,
-                                  call_step, trim_to_stop, as_token)
+from .multimodal_decoding import (prefill_logits, generate, generate_sample,
+                                  generate_batch, generate_batch_greedy,
+                                  build_prompt_rows, call_step, trim_to_stop,
+                                  as_token)
 from .sampling import SamplingArgs
 
 TEXT = build_text_backbone_args(num_layers=2, sliding_window_pattern=2)
@@ -134,6 +135,23 @@ def test_generate_batch_greedy_matches_single_sequence():
     rows = generate_batch_greedy(step, None, TEXT, prompts, stop, 6)
     assert rows[0] == single
     assert rows[1] == single and rows[2] == single
+
+
+def test_generate_sample_peaked_matches_greedy_and_is_seeded():
+    step = build_text_step()
+    prompt = [2, 5, 9, 11, 7]
+    stop = int(TEXT.vocabulary_size - 1)
+    nov = np.zeros((0, TEXT.hidden_dim), "float32")
+    greedy = generate(step, None, nov, TEXT, prompt, [], stop, 6)
+    peaked = generate_sample(step, None, nov, TEXT, prompt, [], stop, 6,
+                             jax.random.PRNGKey(0), SamplingArgs(1.0, 1, 1.0))
+    assert peaked == greedy  # top_k=1 == argmax (no float32 ties here)
+    args = SamplingArgs(temperature=1.0, top_k=0, top_p=1.0)
+    a = generate_sample(step, None, nov, TEXT, prompt, [], stop, 8,
+                        jax.random.PRNGKey(5), args)
+    b = generate_sample(step, None, nov, TEXT, prompt, [], stop, 8,
+                        jax.random.PRNGKey(5), args)
+    assert a == b
 
 
 def test_generate_batch_sampling_is_seeded_and_valid():
