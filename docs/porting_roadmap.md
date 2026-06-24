@@ -38,7 +38,7 @@ the bottom.
 | EfficientDet D0–D7 (COCO) | ✅ | v0.16 | efficientdet | ✅ |
 | **EfficientDet-D0 VOC** | ✅ | v0.16 | efficientdet | ✅ persons + table |
 | **ClassifyHandClosure** (open/closed) | ✅ | reuses v0.1+v0.14 | — | ✅ open/close |
-| **IMDB face attribute** (`ClassifyMiniXceptionIMDB`) | ✅ | extracted (pending host) | imdb_classifier | ✅ faithful weights + faces |
+| **IMDB face attribute** (`ClassifyMiniXceptionIMDB`) | ✅ | v0.22 | imdb_classifier | ✅ fresh download + faces |
 | EfficientPose (model) | model only | **not hosted** | — | architecture only |
 | STN, ProtoNet, Xception, PCA, kNN/DBSCAN, MAML, eigenfaces | ✅ | n/a | various | ✅ |
 
@@ -92,9 +92,9 @@ the bottom.
   Master never fully shipped this, so `build_mini_xception_imdb` faithfully
   reproduces the original `oarriaga/face_classification` mini_XCEPTION and the
   released `gender_mini_XCEPTION` weights were converted to
-  `imdb_mini_XCEPTION_paz_jax.weights.h5` (bit-identical, verified on real
-  faces). Remaining: host the converted file on `altamira-data` so
-  `MiniXceptionIMDB` resolves its URL.
+  `imdb_mini_XCEPTION_paz_jax.weights.h5` (bit-identical), hosted on
+  `altamira-data` **v0.22**, and verified by a fresh download + run on real
+  faces. Fully wired and verifiable end-to-end.
 - **fine-tuning_object_detection** — SSD fine-tuning workflow (largely covered by
   `object_detection/train.py`).
 - **tutorials** — bounding boxes, augmentation, controlmap, detection pipeline.

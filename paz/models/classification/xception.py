@@ -337,7 +337,7 @@ def MiniXceptionIMDB():
     """
     model = build_mini_xception_imdb((64, 64, 1), 2)
     filename = "imdb_mini_XCEPTION_paz_jax.weights.h5"
-    URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.18/"
+    URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.22/"
     path = get_file(filename, URL + filename, cache_subdir="paz/models")
     model.load_weights(path)
     return model
