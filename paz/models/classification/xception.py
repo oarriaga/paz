@@ -301,21 +301,21 @@ def build_mini_xception_imdb(input_shape, num_classes, l2_reg=0.01):
     # by topological order. Rescaling maps the [0, 1] classifier input to the
     # [-1, 1] training range.
     reg = l2(l2_reg)
+    conv = dict(use_bias=False, kernel_regularizer=reg)
+    down = dict(strides=2, padding="same", use_bias=False)
+    sep = dict(padding="same", use_bias=False, depthwise_regularizer=reg)
     image = Input(input_shape)
     x = Rescaling(scale=2.0, offset=-1.0)(image)
-    x = Conv2D(8, 3, kernel_regularizer=reg, use_bias=False)(x)
+    x = Conv2D(8, 3, **conv)(x)
     x = Activation("relu")(BatchNormalization()(x))
-    x = Conv2D(8, 3, kernel_regularizer=reg, use_bias=False)(x)
+    x = Conv2D(8, 3, **conv)(x)
     x = Activation("relu")(BatchNormalization()(x))
     for num_kernels in [16, 32, 64, 128]:
-        residual = Conv2D(num_kernels, 1, strides=2, padding="same",
-                          use_bias=False)(x)
+        residual = Conv2D(num_kernels, 1, **down)(x)
         residual = BatchNormalization()(residual)
-        x = SeparableConv2D(num_kernels, 3, padding="same",
-                            depthwise_regularizer=reg, use_bias=False)(x)
+        x = SeparableConv2D(num_kernels, 3, **sep)(x)
         x = Activation("relu")(BatchNormalization()(x))
-        x = SeparableConv2D(num_kernels, 3, padding="same",
-                            depthwise_regularizer=reg, use_bias=False)(x)
+        x = SeparableConv2D(num_kernels, 3, **sep)(x)
         x = BatchNormalization()(x)
         x = MaxPooling2D(3, strides=2, padding="same")(x)
         x = layers.add([x, residual])
