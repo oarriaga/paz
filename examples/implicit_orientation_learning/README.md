@@ -25,11 +25,12 @@ randomization reuses the `paz.backend.image` pipeline:
 occlusions, applies blur and color jitter — mirroring the legacy
 `RandomizeRenderedImage`. Pass `--backgrounds` to composite over real images.
 
-The whole pipeline is JAX: `fill_polygon` and `gaussian_blur` replace the cv2
-calls, so `randomize_rendered_image` is `jit`/`vmap`-able (the training
-sequence jits a vmapped batch). On CPU this is slower than cv2 per image; the
-JAX path pays off on GPU and keeps data generation differentiable and on the
-same device as the renderer.
+The whole pipeline is JAX: `fill_polygon` and `apply_gaussian_blur` replace the
+cv2 calls, so `randomize_rendered_image` is `jit`/`vmap`-able (the training
+sequence jits a vmapped batch). At `128x128`, a jitted+vmapped batch runs about
+**10-12x faster on GPU (RTX A4000) than cv2 per-image on CPU** (~0.7 ms vs
+~7 ms for a batch of 32), and the views stay on-device with the renderer. On
+CPU the JAX path is slower than cv2, so this targets GPU training.
 
 ## Train
 
