@@ -115,13 +115,14 @@ def merge_padding_mask(padding_mask):
 def apply_partial_rotary_embedding(
         inputs, wavelength, scaling_factor,
         partial_rotary_factor, positions=None):
-    raw_dim = int(inputs.shape[-1] * partial_rotary_factor)
+    head_dim = inputs.shape[-1]
+    raw_dim = int(head_dim * partial_rotary_factor)
     rotary_dim = max(2, raw_dim - raw_dim % 2)
-    if rotary_dim >= inputs.shape[-1]:
+    if rotary_dim >= head_dim:
         return apply_rotary_embedding(
-            inputs, wavelength, scaling_factor, positions)
+            inputs, wavelength, scaling_factor, head_dim, positions)
     half_rotary = rotary_dim // 2
-    half_head = inputs.shape[-1] // 2
+    half_head = head_dim // 2
     first_half = inputs[..., :half_head]
     second_half = inputs[..., half_head:]
     first_rotary = first_half[..., :half_rotary]
@@ -130,7 +131,7 @@ def apply_partial_rotary_embedding(
     second_static = second_half[..., half_rotary:]
     rotary = ops.concatenate((first_rotary, second_rotary), axis=-1)
     rotary = apply_rotary_embedding(
-        rotary, wavelength, scaling_factor, positions)
+        rotary, wavelength, scaling_factor, head_dim, positions)
     first_rotary, second_rotary = ops.split(rotary, 2, axis=-1)
     first_half = ops.concatenate(
         (first_rotary, first_static), axis=-1)
@@ -140,9 +141,9 @@ def apply_partial_rotary_embedding(
 
 
 def apply_rotary_embedding(
-        inputs, wavelength, scaling_factor, positions=None):
+        inputs, wavelength, scaling_factor, denominator, positions=None):
     cosine, sine = build_rotary_embedding(
-        inputs, wavelength, scaling_factor, positions)
+        inputs, wavelength, scaling_factor, denominator, positions)
     first_half, second_half = ops.split(inputs, 2, axis=-1)
     rotated = ops.stack((-second_half, first_half), axis=-2)
     rotated = MergeDims(axis=-2)(rotated)
@@ -150,9 +151,9 @@ def apply_rotary_embedding(
 
 
 def build_rotary_embedding(
-        inputs, wavelength, scaling_factor, positions=None):
+        inputs, wavelength, scaling_factor, denominator, positions=None):
     rotary_dim = inputs.shape[-1]
-    args = (rotary_dim, wavelength, scaling_factor)
+    args = (rotary_dim, denominator, wavelength, scaling_factor)
     inverse = build_inverse_frequencies(*args)
     if positions is None:
         positions = build_rotary_positions(inputs)
@@ -176,10 +177,11 @@ def build_rotary_positions(inputs):
     return ops.expand_dims(positions, axis=1)
 
 
-def build_inverse_frequencies(rotary_dim, wavelength, scaling_factor):
+def build_inverse_frequencies(rotary_dim, denominator, wavelength,
+                              scaling_factor):
     indices = ops.arange(0, rotary_dim, 2, dtype="float32")
-    rotary_dim = ops.cast(rotary_dim, "float32")
-    frequency = indices / rotary_dim
+    denominator = ops.cast(denominator, "float32")
+    frequency = indices / denominator
     inverse = ops.power(
         ops.cast(wavelength, "float32"), -frequency)
     scale = ops.cast(scaling_factor, "float32")

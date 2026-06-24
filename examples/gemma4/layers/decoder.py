@@ -8,17 +8,19 @@ from .normalization import build_rms_norm, build_scalar_multiply
 
 
 def decoder_block(x, padding_mask, config, layer_index, name,
-                  per_layer_embedding=None):
+                  per_layer_embedding=None, shared_kv=None):
     dtype = keras.backend.standardize_dtype(x.dtype)
     if dtype == "float16":
         x = clip_float16(x)
-    hidden = attention_path(x, padding_mask, config, layer_index, name)
+    hidden, kv = attention_path(
+        x, padding_mask, config, layer_index, name, shared_kv=shared_kv)
     hidden = feedforward_path(hidden, config, name, layer_index=layer_index)
     # Per-layer input applied AFTER FFW, BEFORE layer scalar.
     if per_layer_embedding is not None:
         hidden = per_layer_input_path(
             hidden, per_layer_embedding, config, name)
-    return build_scalar_multiply("{}_layer_scalar".format(name))(hidden)
+    scaled = build_scalar_multiply("{}_layer_scalar".format(name))(hidden)
+    return scaled, kv
 
 
 def per_layer_input_path(x, per_layer_embed, config, name):
@@ -37,19 +39,20 @@ def per_layer_input_path(x, per_layer_embed, config, name):
     return add_residual(x, hidden)
 
 
-def attention_path(x, padding_mask, config, layer_index, name):
+def attention_path(x, padding_mask, config, layer_index, name,
+                   shared_kv=None):
     epsilon, dtype = config.layer_norm_epsilon, config.dtype
     norm_name = "{}_pre_attention_norm".format(name)
     hidden = build_rms_norm(epsilon, dtype, norm_name)(x)
     mask = build_block_attention_mask(padding_mask, config, layer_index)
     attn_args = build_attend_args(hidden, mask, config, layer_index, name)
-    hidden = attend(attn_args)
+    hidden, kv = attend(attn_args, shared_kv=shared_kv)
     post_name = "{}_post_attention_norm".format(name)
     hidden = build_rms_norm(epsilon, dtype, post_name)(hidden)
     if config.dropout:
         drop_name = "{}_attention_dropout".format(name)
         hidden = Dropout(config.dropout, dtype=dtype, name=drop_name)(hidden)
-    return add_residual(x, hidden)
+    return add_residual(x, hidden), kv
 
 
 def feedforward_path(x, config, name, layer_index=None):
@@ -100,7 +103,7 @@ def build_attend_args(hidden, mask, config, layer_index, name):
         config.num_query_heads,
         config.num_key_value_heads,
         config.layer_norm_epsilon,
-        build_rope_wavelength(is_global),
+        build_rope_wavelength(config, is_global),
         build_rope_scaling_factor(config, is_global),
         build_partial_rotary_factor(config, is_global),
         config.attention_logit_soft_cap,
@@ -113,13 +116,13 @@ def build_attend_args(hidden, mask, config, layer_index, name):
 def cached_decoder_block(x, cache, cache_index, config,
                           layer_index, name,
                           per_layer_embedding=None,
-                          shared_kv_cache=None):
+                          shared_kv_cache=None, positions=None):
     dtype = keras.backend.standardize_dtype(x.dtype)
     if dtype == "float16":
         x = clip_float16(x)
     hidden, cache = cached_attention_path(
         x, cache, cache_index, config, layer_index, name,
-        shared_kv_cache=shared_kv_cache)
+        shared_kv_cache=shared_kv_cache, positions=positions)
     hidden = feedforward_path(
         hidden, config, name, layer_index=layer_index)
     # Per-layer input applied AFTER FFW, BEFORE layer scalar.
@@ -132,23 +135,28 @@ def cached_decoder_block(x, cache, cache_index, config,
 
 
 def cached_attention_path(x, cache, cache_index, config, layer_index, name,
-                           shared_kv_cache=None):
+                           shared_kv_cache=None, positions=None):
     epsilon, dtype = config.layer_norm_epsilon, config.dtype
     norm_name = "{}_pre_attention_norm".format(name)
     hidden = build_rms_norm(epsilon, dtype, norm_name)(x)
     attn_args = build_cached_attend_args(
-        hidden, cache, cache_index, config, layer_index, name)
+        hidden, cache, cache_index, config, layer_index, name, positions)
     hidden, cache = cached_attend(attn_args, shared_kv_cache=shared_kv_cache)
     post_name = "{}_post_attention_norm".format(name)
     hidden = build_rms_norm(epsilon, dtype, post_name)(hidden)
     return add_residual(x, hidden), cache
 
 
-def build_cached_attend_args(hidden, cache, index, config, layer_index, name):
+def build_cached_attend_args(hidden, cache, index, config, layer_index, name,
+                             positions=None):
     from ..model import (is_global_attention_layer, build_head_dim,
                          build_rope_wavelength, build_rope_scaling_factor,
-                         build_partial_rotary_factor, build_cache_head_dim)
+                         build_partial_rotary_factor, build_cache_head_dim,
+                         use_sliding_window)
     is_global = is_global_attention_layer(config, layer_index)
+    window = None
+    if use_sliding_window(config, is_global):
+        window = config.sliding_window_size
     attn_name = "{}_attention".format(name)
     return CachedAttendArgs(
         hidden,
@@ -158,13 +166,15 @@ def build_cached_attend_args(hidden, cache, index, config, layer_index, name):
         config.num_query_heads,
         config.num_key_value_heads,
         config.layer_norm_epsilon,
-        build_rope_wavelength(is_global),
+        build_rope_wavelength(config, is_global),
         build_rope_scaling_factor(config, is_global),
         build_partial_rotary_factor(config, is_global),
         config.attention_logit_soft_cap,
         config.dtype,
         attn_name,
         build_cache_head_dim(config),
+        window,
+        positions,
     )
 
 

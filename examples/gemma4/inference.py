@@ -9,6 +9,7 @@ from .model import (build_cache_head_dim,
                     build_per_layer_embedding,
                     build_per_layer_model_projection,
                     build_token_embedding,
+                    scale_per_layer_embedding,
                     scale_token_embeddings)
 
 
@@ -38,62 +39,87 @@ def Gemma4PerLayerEmbeddingStep(
 
 
 def Gemma4DecoderStep(config, name="gemma4_decoder_step"):
-    num_kv_heads = config.num_key_value_heads
-    cache_head_dim = build_cache_head_dim(config)
-    cache_shape = (
-        config.num_layers, 2, None, num_kv_heads, cache_head_dim)
+    cache, cache_index = build_cache_inputs(config)
     token_ids = Input((1,), dtype="int32", name="token_ids")
-    cache = Input(
-        cache_shape, dtype=config.dtype,
-        name="self_attention_cache")
-    cache_index = Input(
-        (), dtype="int32", name="cache_update_index")
-    index_scalar = extract_cache_index(cache_index)
     embedding = build_token_embedding(
         config.vocabulary_size, config.hidden_dim, config.dtype)
     hidden = embedding(token_ids)
+    per_layer = build_per_layer_input(config)
+    outputs = build_cached_step(
+        hidden, embedding, cache, cache_index, per_layer, config)
+    inputs = [token_ids, cache, cache_index]
+    if per_layer is not None:
+        inputs.append(per_layer)
+    return Model(inputs, list(outputs), name=name)
+
+
+def Gemma4MultimodalDecoderStep(
+        config, name="gemma4_multimodal_decoder_step"):
+    """Cached decoder step fed a precomputed (unscaled) input embedding.
+
+    Image positions feed the vision embedding (pre-scaled by hidden_dim**-0.5);
+    text positions feed the token embedding. Otherwise identical to
+    Gemma4DecoderStep.
+    """
+    cache, cache_index = build_cache_inputs(config)
+    input_embedding = Input(
+        (None, config.hidden_dim), dtype=config.dtype, name="input_embedding")
+    positions = Input((None,), dtype="int32", name="positions")
+    embedding = build_token_embedding(
+        config.vocabulary_size, config.hidden_dim, config.dtype)
+    per_layer = None
     if config.hidden_size_per_layer_input:
+        dim = config.hidden_size_per_layer_input * config.num_layers
+        per_layer = Input(
+            (None, dim), dtype=config.dtype, name="per_layer_full_embedding")
+    outputs = build_cached_step(
+        input_embedding, embedding, cache, cache_index, per_layer, config,
+        positions=positions)
+    inputs = [input_embedding, cache, cache_index, positions]
+    if per_layer is not None:
+        inputs.append(per_layer)
+    return Model(inputs, list(outputs), name=name)
+
+
+def build_cache_inputs(config):
+    cache_head_dim = build_cache_head_dim(config)
+    cache_shape = (config.num_layers, 2, None,
+                   config.num_key_value_heads, cache_head_dim)
+    cache = Input(cache_shape, dtype=config.dtype, name="self_attention_cache")
+    cache_index = Input((), dtype="int32", name="cache_update_index")
+    return cache, cache_index
+
+
+def build_per_layer_input(config):
+    if not config.hidden_size_per_layer_input:
+        return None
+    dim = config.hidden_size_per_layer_input * config.num_layers
+    return Input((1, dim), dtype=config.dtype, name="per_layer_full_embedding")
+
+
+def build_cached_step(hidden, embedding, cache, cache_index, per_layer, config,
+                      positions=None):
+    index_scalar = extract_cache_index(cache_index)
+    per_layer_embeddings = None
+    if per_layer is not None:
         p = config.hidden_size_per_layer_input
-        # Per-layer token embeddings come from
-        # Gemma4PerLayerEmbeddingStep, keeping the 4.7 GB table
-        # out of this model.
-        per_layer_full_embedding = Input(
-            (1, p * config.num_layers),
-            dtype=config.dtype,
-            name="per_layer_full_embedding")
-        # Per-layer model projection of the UNSCALED token
-        # embedding (27 MB weight). Must be computed before
-        # scale_token_embeddings.
+        # Per-layer model projection of the UNSCALED embedding (before scaling).
         projection_full = build_per_layer_model_projection(
             hidden, config.num_layers, p, config.dtype)
         per_layer_embeddings = build_per_layer_combined_inputs(
-            projection_full, per_layer_full_embedding,
-            config.num_layers, p,
+            projection_full, per_layer, config.num_layers, p,
             config.layer_norm_epsilon, config.dtype)
-    else:
-        per_layer_full_embedding = None
-        per_layer_embeddings = None
     hidden = scale_token_embeddings(hidden, config.hidden_dim)
     hidden, updated_cache = build_cached_decoder_blocks(
         hidden, cache, index_scalar, config,
-        per_layer_embeddings=per_layer_embeddings)
+        per_layer_embeddings=per_layer_embeddings, positions=positions)
     updated_cache = ops.cast(updated_cache, config.dtype)
     norm_args = (config.layer_norm_epsilon, config.dtype,
                  "final_normalization")
     hidden = build_rms_norm(*norm_args)(hidden)
     logits = embedding(hidden, reverse=True)
-    logits = apply_tanh_soft_cap(
-        logits, config.final_logit_soft_cap)
-    inputs = [token_ids, cache, cache_index]
-    if per_layer_full_embedding is not None:
-        inputs.append(per_layer_full_embedding)
-    outputs = [logits, updated_cache]
-    return Model(inputs, outputs, name=name)
-
-
-def scale_per_layer_embedding(full_embedding, per_layer_dim, dtype):
-    scale = ops.cast(float(per_layer_dim) ** 0.5, dtype)
-    return ops.cast(full_embedding, dtype) * scale
+    logits = apply_tanh_soft_cap(logits, config.final_logit_soft_cap)
+    return logits, updated_cache
 
 
 def extract_cache_index(cache_index):
@@ -117,7 +143,7 @@ def concat_layer_caches(caches):
 
 
 def build_cached_decoder_blocks(hidden, cache, index, config,
-                                 per_layer_embeddings=None):
+                                 per_layer_embeddings=None, positions=None):
     from .model import build_kv_source_map
     kv_source_map = build_kv_source_map(config)
     updated_caches = []
@@ -137,6 +163,7 @@ def build_cached_decoder_blocks(hidden, cache, index, config,
         kwargs = {
             "per_layer_embedding": per_layer_embedding,
             "shared_kv_cache": shared_kv_cache,
+            "positions": positions,
         }
         hidden, layer_cache = cached_decoder_block(
             *args, **kwargs)

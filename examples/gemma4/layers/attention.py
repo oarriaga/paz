@@ -16,26 +16,31 @@ AttendArgs = namedtuple(
 CachedAttendArgs = namedtuple(
     "CachedAttendArgs",
     "x cache index head_dim num_query_heads num_kv_heads epsilon wavelength "
-    "scaling_factor partial_rotary soft_cap dtype name cache_head_dim",
+    "scaling_factor partial_rotary soft_cap dtype name cache_head_dim window "
+    "positions",
 )
 
 
-def attend(args):
+def attend(args, shared_kv=None):
     x = args.x
     dtype = args.dtype
     name = args.name
     query = project_query(
         x, args.num_query_heads, args.head_dim, args.epsilon, dtype, name)
-    key = project_key(
-        x, args.num_kv_heads, args.head_dim, args.epsilon, dtype, name)
-    value = project_value(
-        x, args.num_kv_heads, args.head_dim, args.epsilon, dtype, name)
     rope_args = (args.wavelength, args.scaling_factor, args.partial_rotary)
     query = apply_partial_rotary_embedding(query, *rope_args)
-    key = apply_partial_rotary_embedding(key, *rope_args)
+    if shared_kv is not None:
+        key, value = shared_kv[:, 0, ...], shared_kv[:, 1, ...]
+    else:
+        key = project_key(
+            x, args.num_kv_heads, args.head_dim, args.epsilon, dtype, name)
+        value = project_value(
+            x, args.num_kv_heads, args.head_dim, args.epsilon, dtype, name)
+        key = apply_partial_rotary_embedding(key, *rope_args)
+    kv = ops.stack((key, value), axis=1)
     output = compute_attention(query, key, value, args.mask, args)
     output = zero_masked_positions(output, args.mask)
-    return project_output(output, x.shape[-1], dtype, name)
+    return project_output(output, x.shape[-1], dtype, name), kv
 
 
 def cached_attend(args, shared_kv_cache=None):
@@ -51,7 +56,7 @@ def cached_attend(args, shared_kv_cache=None):
     cache_head_dim = args.cache_head_dim or head_dim
     query = project_query(
         x, args.num_query_heads, head_dim, args.epsilon, dtype, name)
-    positions = build_cache_positions(args.index)
+    positions = build_cache_positions(args)
     rope_args = (
         args.wavelength,
         args.scaling_factor,
@@ -82,7 +87,7 @@ def cached_attend(args, shared_kv_cache=None):
     if head_dim < cache_head_dim:
         full_key = full_key[..., :head_dim]
         full_value = full_value[..., :head_dim]
-    mask = build_cache_mask(full_key, args.index)
+    mask = build_cache_mask(full_key, args)
     output = compute_attention(query, full_key, full_value, mask, args)
     return project_output(output, x.shape[-1], dtype, name), updated_cache
 
@@ -93,17 +98,29 @@ def pad_to_cache_dim(tensor, pad_size):
     return ops.pad(tensor, padding)
 
 
-def build_cache_mask(full_key, cache_index):
+def build_cache_mask(full_key, args):
+    # Causal (+ optional sliding-window) mask between the query positions and
+    # the cache positions. Works for one query (decode) or many (prefill);
+    # cumsum avoids arange so the cache length and query count stay dynamic.
     ones = ops.ones_like(full_key[:, :, 0, 0], dtype="int32")
-    positions = ops.cumsum(ones, axis=1) - 1
-    threshold = ops.reshape(cache_index, (1, 1))
-    mask = ops.cast(ops.less_equal(positions, threshold), "bool")
-    return ops.expand_dims(mask, axis=1)
+    key_pos = ops.cumsum(ones, axis=1) - 1
+    query_pos = query_positions(args)
+    mask = ops.less_equal(key_pos[:, None, :], query_pos[:, :, None])
+    if args.window is not None:
+        recent = ops.less(query_pos[:, :, None] - key_pos[:, None, :],
+                          args.window)
+        mask = ops.logical_and(mask, recent)
+    return ops.cast(mask, "bool")
 
 
-def build_cache_positions(cache_index):
-    position = ops.cast(cache_index, "float32")
-    return ops.reshape(position, (1, 1))
+def query_positions(args):
+    if args.positions is None:
+        return ops.reshape(args.index, (1, 1))
+    return ops.reshape(args.positions, (1, -1))
+
+
+def build_cache_positions(args):
+    return ops.cast(ops.transpose(query_positions(args)), "float32")
 
 
 def update_kv_cache(cache, index, key_update, value_update, dtype=None):
