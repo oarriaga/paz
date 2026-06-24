@@ -293,3 +293,24 @@ def MiniXceptionFER():
     path = get_file(filename, URL + filename, cache_subdir="paz/models")
     model.load_weights(path)
     return model
+
+
+def MiniXceptionIMDB():
+    """Build MiniXception for the IMDB two-class face attribute.
+
+    Weights are not hosted yet; train with examples/imdb_classifier and
+    upload the produced file to enable this loader.
+
+    # Returns
+        Keras model.
+
+    # References
+       - [Real-time Convolutional Neural Networks for Emotion and
+            Gender Classification](https://arxiv.org/abs/1710.07557)
+    """
+    model = MiniXception((48, 48, 1), 2)
+    filename = "imdb_mini_XCEPTION_paz_jax.weights.h5"
+    URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.18/"
+    path = get_file(filename, URL + filename, cache_subdir="paz/models")
+    model.load_weights(path)
+    return model

@@ -38,6 +38,7 @@ the bottom.
 | EfficientDet D0–D7 (COCO) | ✅ | v0.16 | efficientdet | ✅ |
 | **EfficientDet-D0 VOC** | ✅ | v0.16 | efficientdet | ✅ persons + table |
 | **ClassifyHandClosure** (open/closed) | ✅ | reuses v0.1+v0.14 | — | ✅ open/close |
+| **IMDB face attribute** (`ClassifyMiniXceptionIMDB`) | wiring | **not hosted** | imdb_classifier | model+apps+train smoke |
 | EfficientPose (model) | model only | **not hosted** | — | architecture only |
 | STN, ProtoNet, Xception, PCA, kNN/DBSCAN, MAML, eigenfaces | ✅ | n/a | various | ✅ |
 
@@ -50,6 +51,7 @@ the bottom.
 | **Hand detection** (`hand_detection/train.py`) | wired (reuses SSD pipeline) | Open Images V6 |
 | **MiniXception FER** (`emotion_classifier/train.py`) | ✅ synthetic | FER |
 | **UNet segmentation** (`semantic_segmentation/train.py`) | ✅ smoke (dice↓) | Shapes (synthetic) |
+| **IMDB classifier** (`imdb_classifier/train.py`) | ✅ smoke (loss↓) | IMDB face arrays (`.npy`) |
 
 ## Still missing / not yet ported
 
@@ -84,8 +86,13 @@ the bottom.
 - **structure_from_motion** — classical SfM example; likely superseded by the
   new differentiable-graphics direction (`zero_shot_scene_reconstruction`,
   `differentiable_rendering`) rather than a direct port.
-- **Gender classification** — master `face_classification` shipped emotion **and**
-  gender (IMDB) classifiers; only the emotion (FER MiniXception) path is ported.
+- **Gender classification** — ported as a neutrally-named two-class IMDB face
+  attribute: `MiniXceptionIMDB` model, `ClassifyMiniXceptionIMDB` /
+  `DetectMiniXceptionIMDB` apps, and `examples/imdb_classifier/` (train + demo).
+  Master never fully shipped this (only `MiniXception` + `['man','woman']`
+  labels), so it was built fresh on the ported architecture. **No weights are
+  hosted** — train to produce `imdb_mini_XCEPTION_paz_jax.weights.h5`, upload,
+  then `MiniXceptionIMDB` loads it.
 - **fine-tuning_object_detection** — SSD fine-tuning workflow (largely covered by
   `object_detection/train.py`).
 - **tutorials** — bounding boxes, augmentation, controlmap, detection pipeline.

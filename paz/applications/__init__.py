@@ -13,9 +13,13 @@ from paz.applications.detectors import EFFICIENTDETD6COCO
 from paz.applications.detectors import EFFICIENTDETD7COCO
 from paz.applications.detectors import EFFICIENTDETD0VOC
 from paz.applications.detectors import DetectMiniXceptionFER
+from paz.applications.detectors import DetectMiniXceptionIMDB
+from paz.applications.detectors import DetectMiniXception
 from paz.models.detection.haar_cascade import HaarCascadeFrontalFaceDetector
 from paz.models.detection.haar_cascade import HaarCascadeEyeDetector
 from paz.applications.classifiers import ClassifyMiniXceptionFER
+from paz.applications.classifiers import ClassifyMiniXceptionIMDB
+from paz.applications.classifiers import ClassifyMiniXception
 from paz.applications.keypoint_estimators import DetectFaceKeypointNet2D32
 from paz.applications.keypoint_estimators import FaceKeypointNet2D32
 from paz.applications.keypoint_estimators import GMMKeypointNet2D
