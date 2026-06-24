@@ -419,3 +419,11 @@ def overlay_masks(image, class_map, colors, alpha=0.5):
     masks = masks_to_colors(class_map, colors).astype("float32")
     blended = (1.0 - alpha) * image + alpha * masks
     return blended.astype("uint8")
+
+
+def text(image, message, point, scale=0.7, color=WHITE, thickness=2):
+    """Draws a text message on an image at the given (x, y) point."""
+    image = np.array(image)
+    font = cv2.FONT_HERSHEY_DUPLEX
+    cv2.putText(image, message, point, font, scale, color, thickness)
+    return image
