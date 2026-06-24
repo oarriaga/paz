@@ -1,6 +1,8 @@
 import tempfile
 from pathlib import Path
 
+import cv2
+import numpy as np
 import jax
 import jax.numpy as jp
 
@@ -80,3 +82,33 @@ def test_randomize_rendered_image_keeps_shape():
     key = jax.random.PRNGKey(2)
     output = paz.image.randomize_rendered_image(key, image, mask)
     assert output.shape == (32, 32, 3)
+
+
+def test_fill_polygon_matches_cv2():
+    polygon = jp.array([[12, 10], [50, 16], [55, 48], [28, 58], [10, 38]],
+                       jp.float32)
+    image = jp.full((64, 64, 3), 200, jp.uint8)
+    filled = paz.image.fill_polygon(image, polygon, jp.zeros(3, jp.uint8))
+    reference = np.full((64, 64, 3), 200, np.uint8)
+    cv2.fillPoly(reference, [np.asarray(polygon).astype(np.int32)], (0, 0, 0))
+    jax_mask = np.asarray((filled == 0).all(-1))
+    reference_mask = (reference == 0).all(-1)
+    assert (jax_mask == reference_mask).mean() > 0.95
+
+
+def test_gaussian_blur_matches_cv2_interior():
+    image = np.random.default_rng(0).integers(0, 255, (64, 64, 3), np.uint8)
+    blurred = paz.image.gaussian_blur(jp.array(image), 9, 2.0)
+    blurred = np.asarray(blurred).astype(np.int16)
+    reference = cv2.GaussianBlur(image, (9, 9), 2.0).astype(np.int16)
+    interior = np.abs(blurred[8:-8, 8:-8] - reference[8:-8, 8:-8]).mean()
+    assert interior < 2.0
+
+
+def test_randomize_rendered_image_jits_without_recompilation():
+    randomize = jax.jit(paz.image.randomize_rendered_image)
+    image = jp.full((32, 32, 3), 128, jp.uint8)
+    mask = jp.ones((32, 32))
+    randomize(jax.random.PRNGKey(0), image, mask).block_until_ready()
+    randomize(jax.random.PRNGKey(1), image, mask).block_until_ready()
+    assert randomize._cache_size() == 1

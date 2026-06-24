@@ -3,9 +3,11 @@ import os
 os.environ["KERAS_BACKEND"] = "jax"
 
 import argparse
+from functools import partial
 
 import numpy as np
 import jax
+import jax.numpy as jp
 import keras
 
 import paz
@@ -15,11 +17,13 @@ import scenes
 class OrientationSequence(keras.utils.PyDataset):
     def __init__(self, views, masks, batch_size, backgrounds=None, seed=0):
         super().__init__()
-        self.views = views
-        self.masks = masks
+        self.views = jp.asarray(views)
+        self.masks = jp.asarray(masks)
         self.batch_size = batch_size
-        self.backgrounds = backgrounds
         self.key = jax.random.PRNGKey(seed)
+        randomize = partial(paz.image.randomize_rendered_image,
+                            backgrounds=backgrounds)
+        self.randomize = jax.jit(jax.vmap(randomize, in_axes=(0, 0, 0)))
 
     def __len__(self):
         return len(self.views) // self.batch_size
@@ -27,17 +31,9 @@ class OrientationSequence(keras.utils.PyDataset):
     def __getitem__(self, index):
         chunk = slice(index * self.batch_size, (index + 1) * self.batch_size)
         clean = self.views[chunk]
-        targets = clean.astype("float32") / 255.0
-        offset = index * self.batch_size
-        inputs = [self.randomize(offset + arg, view, mask)
-                  for arg, (view, mask) in enumerate(zip(clean, self.masks[chunk]))]  # fmt: skip
-        return np.stack(inputs), targets
-
-    def randomize(self, sample_arg, view, mask):
-        key = jax.random.fold_in(self.key, sample_arg)
-        randomize = paz.image.randomize_rendered_image
-        image = randomize(key, view, mask, self.backgrounds)
-        return np.asarray(image, "float32") / 255.0
+        keys = jax.random.split(jax.random.fold_in(self.key, index), len(clean))
+        inputs = self.randomize(keys, clean, self.masks[chunk])
+        return np.asarray(inputs, "float32") / 255.0, np.asarray(clean) / 255.0
 
 
 def load_backgrounds(path, image_size):
@@ -56,14 +52,14 @@ def render_dataset(mesh_path, num_views, image_size, distance, root, seed):
         return data["views"], data["masks"]
     mesh = scenes.build_mesh(mesh_path)
     render = scenes.build_renderer(mesh, image_size, distance)
-    poses = scenes.random_poses(num_views, distance, False, seed)
+    poses = scenes.random_poses(jax.random.PRNGKey(seed), num_views, distance)
     views = scenes.render_views(render, poses)
     masks = (views < 230).any(axis=-1)
     np.savez(cache, views=views, masks=masks)
     return views, masks
 
 
-def parse_arguments():
+def main():
     parser = argparse.ArgumentParser(description="AutoEncoder AAE training")
     parser.add_argument("--mesh", default=None)
     parser.add_argument("--backgrounds", default=None)
@@ -73,11 +69,7 @@ def parse_arguments():
     parser.add_argument("--num_views", default=2000, type=int)
     parser.add_argument("--batch_size", default=32, type=int)
     parser.add_argument("--epochs", default=300, type=int)
-    return parser.parse_args()
-
-
-def main():
-    args = parse_arguments()
+    args = parser.parse_args()
     os.makedirs(args.root, exist_ok=True)
     pack = (args.mesh, args.num_views, args.image_size, args.distance)
     views, masks = render_dataset(*pack, args.root, seed=0)

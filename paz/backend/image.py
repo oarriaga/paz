@@ -411,12 +411,11 @@ def make_random_plain_image(key, shape):
 
 def random_crop(key, image, size):
     """Crops a random `size` window from an image at least that large."""
-    H, W = image.shape[:2]
     H_crop, W_crop = size
-    key_y, key_x = jax.random.split(key)
-    y = int(jax.random.randint(key_y, (), 0, max(H - H_crop, 0) + 1))
-    x = int(jax.random.randint(key_x, (), 0, max(W - W_crop, 0) + 1))
-    return image[y:y + H_crop, x:x + W_crop]
+    limits = jp.array([image.shape[0] - H_crop, image.shape[1] - W_crop])
+    offset = jax.random.randint(key, (2,), 0, jp.maximum(limits, 0) + 1)
+    start = (offset[0], offset[1], 0)
+    return lax.dynamic_slice(image, start, (H_crop, W_crop, image.shape[2]))
 
 
 def blend_background(image, background, mask):
@@ -430,30 +429,64 @@ def blend_background(image, background, mask):
     return paz.cast(blended, jp.uint8)
 
 
-def add_occlusion(key, image, max_radius_scale=0.5):
-    """Draws one random filled polygon over the image."""
-    image = np.array(paz.to_numpy(image))
-    H, W = image.shape[:2]
-    keys = jax.random.split(key, 5)
-    num_vertices = int(jax.random.randint(keys[0], (), 4, 9))
-    center = np.asarray(jax.random.uniform(keys[1], (2,))) * np.array([W, H])
+def points_in_polygon(grid_x, grid_y, polygon):
+    """Even-odd point-in-polygon test for a grid of pixel coordinates."""
+    vertex_x, vertex_y = polygon[:, 0], polygon[:, 1]
+    next_x, next_y = jp.roll(vertex_x, -1), jp.roll(vertex_y, -1)
+    x = grid_x[..., jp.newaxis]
+    y = grid_y[..., jp.newaxis]
+    straddles = (vertex_y > y) != (next_y > y)
+    slope = (next_x - vertex_x) * (y - vertex_y) / (next_y - vertex_y + 1e-9)
+    crosses = straddles & (x < slope + vertex_x)
+    return (jp.sum(crosses, axis=-1) % 2) == 1
+
+
+def fill_polygon(image, polygon, color):
+    """Fills a polygon in an image (JAX replacement for cv2.fillPoly)."""
+    grid_y, grid_x = jp.meshgrid(jp.arange(image.shape[0]),
+                                 jp.arange(image.shape[1]), indexing="ij")
+    inside = points_in_polygon(grid_x, grid_y, polygon)
+    color = paz.cast(color, image.dtype)
+    return jp.where(inside[..., jp.newaxis], color, image)
+
+
+def gaussian_blur(image, kernel_size=9, sigma=2.0):
+    """Gaussian blur for a multi-channel image via depthwise convolution."""
+    num_channels = image.shape[-1]
+    coordinates = jp.arange(kernel_size) - kernel_size // 2
+    kernel_1d = jp.exp(-(coordinates**2) / (2.0 * sigma**2))
+    kernel = jp.outer(kernel_1d, kernel_1d)
+    kernel = kernel / jp.sum(kernel)
+    kernel = jp.reshape(kernel, (kernel_size, kernel_size, 1, 1))
+    kernel = jp.tile(kernel, (1, 1, 1, num_channels))
+    image_4d = paz.cast(image, jp.float32)[jp.newaxis]
+    numbers = lax.conv_dimension_numbers(
+        image_4d.shape, kernel.shape, ("NHWC", "HWIO", "NHWC"))
+    blurred = lax.conv_general_dilated(
+        image_4d, kernel, (1, 1), "SAME", feature_group_count=num_channels,
+        dimension_numbers=numbers)
+    return paz.cast(blurred[0], image.dtype)
+
+
+def add_occlusion(key, image, num_vertices=6, max_radius_scale=0.5):
+    """Draws one random filled polygon over the image (jittable)."""
+    key_center, key_radii, key_angle, key_color = jax.random.split(key, 4)
+    H, W = image.shape[0], image.shape[1]
+    center = jax.random.uniform(key_center, (2,)) * jp.array([W, H])
     max_radius = max_radius_scale * max(H, W)
-    radii = np.asarray(jax.random.uniform(keys[2], (num_vertices,)))
-    angles = np.sort(np.asarray(jax.random.uniform(keys[3], (num_vertices,))))
-    offsets = np.stack([np.cos(angles * 2.0 * np.pi),
-                        np.sin(angles * 2.0 * np.pi)], axis=1)
-    points = (center + (radii * max_radius)[:, np.newaxis] * offsets)
-    color = np.asarray(jax.random.randint(keys[4], (3,), 0, 256)).tolist()
-    cv2.fillPoly(image, [points.astype(np.int32)], color)
-    return image
+    radii = jax.random.uniform(key_radii, (num_vertices,)) * max_radius
+    angles = jp.sort(jax.random.uniform(key_angle, (num_vertices,))) * 2 * jp.pi
+    offsets = jp.stack([jp.cos(angles), jp.sin(angles)], axis=1)
+    polygon = center + radii[:, jp.newaxis] * offsets
+    color = jax.random.randint(key_color, (3,), 0, 256)
+    return fill_polygon(image, polygon, color)
 
 
 def random_blur(key, image, kernel_size=9):
-    """Applies Gaussian blur with probability one half."""
-    if not bool(jax.random.uniform(key, ()) < 0.5):
-        return image
-    image = np.array(paz.to_numpy(image))
-    return cv2.GaussianBlur(image, (kernel_size, kernel_size), 0)
+    """Applies Gaussian blur with probability one half (jittable)."""
+    apply = jax.random.uniform(key, ()) < 0.5
+    return lax.cond(apply, lambda x: gaussian_blur(x, kernel_size),
+                    lambda x: x, image)
 
 
 def randomize_rendered_image(key, image, mask, backgrounds=None,
@@ -464,7 +497,8 @@ def randomize_rendered_image(key, image, mask, backgrounds=None,
     background = sample_background(keys[0], image.shape, backgrounds)
     image = blend_background(image, background, mask)
     for occlusion_arg in range(num_occlusions):
-        image = add_occlusion(keys[1 + occlusion_arg], image, max_radius_scale)
+        image = add_occlusion(keys[1 + occlusion_arg], image,
+                              max_radius_scale=max_radius_scale)
     image = random_blur(keys[1 + num_occlusions], image)
     return random_color_transform(keys[2 + num_occlusions], image)
 
@@ -473,7 +507,7 @@ def sample_background(key, shape, backgrounds):
     if backgrounds is None:
         return make_random_plain_image(key, shape)
     key_pick, key_crop = jax.random.split(key)
-    index = int(jax.random.randint(key_pick, (), 0, len(backgrounds)))
+    index = jax.random.randint(key_pick, (), 0, len(backgrounds))
     return random_crop(key_crop, backgrounds[index], shape[:2])
 
 

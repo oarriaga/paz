@@ -1,4 +1,5 @@
 import numpy as np
+import jax
 import jax.numpy as jp
 
 import paz
@@ -43,28 +44,27 @@ def build_renderer(mesh, image_size, distance, y_FOV=jp.pi / 4.0):
     return mesh_renderer(meshes, mask, H, W, y_FOV, lights, 1024 * 8, (2, 2))
 
 
-def view_pose(theta, phi, distance):
-    x = distance * np.sin(theta) * np.cos(phi)
-    y = distance * np.cos(theta)
-    z = distance * np.sin(theta) * np.sin(phi)
-    origin = jp.array([x, y, z])
-    up = jp.array([0.0, 1.0, 0.0])
-    return paz.SE3.view_transform(origin, jp.zeros(3), up)
+def camera_pose(rotation, distance):
+    origin = rotation @ jp.array([0.0, 0.0, distance])
+    world_up = rotation @ jp.array([0.0, 1.0, 0.0])
+    return paz.SE3.view_transform(origin, jp.zeros(3), world_up)
 
 
-def random_poses(num_views, distance, top_only, seed):
-    rng = np.random.default_rng(seed)
-    upper = (np.pi / 2.0) if top_only else np.pi
-    thetas = rng.uniform(0.2, upper - 0.2, num_views)
-    phis = rng.uniform(0.0, 2.0 * np.pi, num_views)
-    return [view_pose(t, p, distance) for t, p in zip(thetas, phis)]
+def random_poses(key, num_views, distance):
+    keys = jax.random.split(key, num_views)
+    return [camera_pose(paz.SO3.sample(view_key), distance)
+            for view_key in keys]
 
 
-def grid_poses(theta_steps, phi_steps, distance, top_only):
-    upper = (np.pi / 2.0) if top_only else np.pi
-    thetas = np.linspace(0.2, upper - 0.2, theta_steps)
-    phis = np.linspace(0.0, 2.0 * np.pi, phi_steps, endpoint=False)
-    return [view_pose(t, p, distance) for t in thetas for p in phis]
+def grid_poses(theta_steps, phi_steps, distance):
+    thetas = jp.linspace(0.2, jp.pi - 0.2, theta_steps)
+    phis = jp.linspace(0.0, 2.0 * jp.pi, phi_steps, endpoint=False)
+    poses = []
+    for theta in thetas:
+        for phi in phis:
+            rotation = paz.SO3.rotation_y(phi) @ paz.SO3.rotation_x(theta)
+            poses.append(camera_pose(rotation, distance))
+    return poses
 
 
 def render_views(render_fn, poses):

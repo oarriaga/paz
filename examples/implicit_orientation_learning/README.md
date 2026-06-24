@@ -18,11 +18,18 @@ brightness). `scenes.build_mesh` normalizes any mesh to unit extent, so the
 default camera distance frames any object. With no `--mesh`, a colored cube is
 used so the example runs offline.
 
-Domain randomization reuses the `paz.backend.image` augmentation pipeline:
+Camera poses are sampled with `paz.SO3.sample` (uniform rotations), and domain
+randomization reuses the `paz.backend.image` pipeline:
 `paz.image.randomize_rendered_image` blends the object over a background
 (plain random color, or a random crop of a provided image), adds random
 occlusions, applies blur and color jitter — mirroring the legacy
 `RandomizeRenderedImage`. Pass `--backgrounds` to composite over real images.
+
+The whole pipeline is JAX: `fill_polygon` and `gaussian_blur` replace the cv2
+calls, so `randomize_rendered_image` is `jit`/`vmap`-able (the training
+sequence jits a vmapped batch). On CPU this is slower than cv2 per image; the
+JAX path pays off on GPU and keeps data generation differentiable and on the
+same device as the renderer.
 
 ## Train
 
