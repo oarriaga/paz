@@ -13,10 +13,10 @@ import jax
 
 from .multimodal import build_multimodal_backbone
 from .inference import Gemma4MultimodalDecoderStep, build_empty_cache
-from .multimodal_decoding import (prefill_logits, generate, generate_sample,
-                                  generate_batch, generate_batch_greedy,
-                                  build_prompt_rows, call_step, trim_to_stop,
-                                  as_token)
+from .multimodal_decoding import (prefill_logits, generate, generate_eager,
+                                  generate_sample, generate_batch,
+                                  generate_batch_greedy, build_prompt_rows,
+                                  call_step, trim_to_stop, as_token)
 from .sampling import SamplingArgs
 
 TEXT = build_text_backbone_args(num_layers=2, sliding_window_pattern=2)
@@ -79,21 +79,21 @@ def test_cached_multimodal_matches_full_sequence():
 
 def reference_decode(step, per_layer_step, image, config, prompt_ids,
                      vision_indices, stop_id, max_tokens):
-    import jax.numpy as jnp
+    import jax.numpy as jp
     embeds, per_layer = build_prompt_rows(
         step, image, prompt_ids, vision_indices, per_layer_step)
     length = embeds.shape[1]
-    cache = jnp.asarray(build_empty_cache(config, length + max_tokens))
-    positions = jnp.arange(length, dtype="int32")[None]
+    cache = jp.asarray(build_empty_cache(config, length + max_tokens))
+    positions = jp.arange(length, dtype="int32")[None]
     logits, cache = call_step(step, embeds, cache, 0, positions, per_layer)
-    token = int(jnp.argmax(logits[0, -1]))
+    token = int(jp.argmax(logits[0, -1]))
     embedding = step.get_layer("token_embedding")
     out, index = [token], length
     while token != stop_id and len(out) < max_tokens:
-        positions = jnp.array([[index]], dtype="int32")
+        positions = jp.array([[index]], dtype="int32")
         logits, cache = call_step(
             step, embedding(as_token(token)), cache, index, positions, None)
-        token = int(jnp.argmax(logits[0, -1]))
+        token = int(jp.argmax(logits[0, -1]))
         out.append(token)
         index += 1
     return trim_to_stop(out, stop_id)
@@ -135,6 +135,16 @@ def test_generate_batch_greedy_matches_single_sequence():
     rows = generate_batch_greedy(step, None, TEXT, prompts, stop, 6)
     assert rows[0] == single
     assert rows[1] == single and rows[2] == single
+
+
+def test_generate_eager_matches_jitted_greedy():
+    step = build_text_step()
+    prompt = [2, 5, 9, 11, 7]
+    stop = int(TEXT.vocabulary_size - 1)
+    nov = np.zeros((0, TEXT.hidden_dim), "float32")
+    jitted = generate(step, None, nov, TEXT, prompt, [], stop, 6)
+    eager = generate_eager(step, None, nov, TEXT, prompt, [], stop, 6)
+    assert eager == jitted
 
 
 def test_generate_sample_peaked_matches_greedy_and_is_seeded():

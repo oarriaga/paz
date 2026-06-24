@@ -10,7 +10,7 @@ import argparse
 import sys
 from pathlib import Path
 
-import jax.numpy as jnp
+import numpy as np
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -19,10 +19,10 @@ if str(ROOT) not in sys.path:
 
 from examples.gemma4.configuration import load_config
 from examples.gemma4.inference import (
-    Gemma4DecoderStep,
+    Gemma4MultimodalDecoderStep,
     Gemma4PerLayerEmbeddingStep,
-    build_empty_cache,
 )
+from examples.gemma4.multimodal_decoding import generate_eager
 from examples.gemma4.tokenizer import Gemma4Tokenizer
 
 WEIGHTS_DIR = Path(__file__).resolve().with_name("weights")
@@ -42,35 +42,21 @@ def build_models(weights_dir):
     embedding_model = Gemma4PerLayerEmbeddingStep(config)
     embedding_model.load_weights(str(weights_dir / "embedding_step.weights.h5"))
     gc.collect()
-    step_model = Gemma4DecoderStep(config)
+    step_model = Gemma4MultimodalDecoderStep(config)
     step_model.load_weights(str(weights_dir / "decoder_step.weights.h5"))
     gc.collect()
     return embedding_model, step_model, config
 
 
 def generate(prompt, models, tokenizer, max_tokens=256):
+    # Parallel prefill (whole prompt in one forward) + eager greedy decode,
+    # mirroring demo_image.py. No vision embeddings on the text-only path.
     embedding_model, step_model, config = models
     token_ids = tokenizer.tokenize_generation_prompt(prompt)
-    stop_ids = set(tokenizer.get_stop_token_ids())
-    max_len = len(token_ids) + max_tokens
-    cache = jnp.array(build_empty_cache(config, max_len))
-    for index in range(len(token_ids) - 1):
-        token = jnp.array([[token_ids[index]]], dtype=jnp.int32)
-        cache_index = jnp.array([index], dtype=jnp.int32)
-        per_layer = embedding_model([token])
-        _, cache = step_model([token, cache, cache_index, per_layer])
-    generated = []
-    token = jnp.array([[token_ids[-1]]], dtype=jnp.int32)
-    cache_index = jnp.array([len(token_ids) - 1], dtype=jnp.int32)
-    for _ in range(max_tokens):
-        per_layer = embedding_model([token])
-        logits, cache = step_model([token, cache, cache_index, per_layer])
-        next_id = int(jnp.argmax(logits[0, 0]))
-        if next_id in stop_ids:
-            break
-        generated.append(next_id)
-        token = jnp.array([[next_id]], dtype=jnp.int32)
-        cache_index = cache_index + 1
+    stop = tokenizer.get_stop_token_ids()[-1]
+    no_vision = np.zeros((0, config.hidden_dim), "float32")
+    generated = generate_eager(step_model, embedding_model, no_vision, config,
+                               token_ids, [], stop, max_tokens)
     return tokenizer.detokenize(generated)
 
 
