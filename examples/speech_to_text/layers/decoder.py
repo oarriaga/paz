@@ -1,7 +1,7 @@
+import paz
 from keras import ops
 from keras.layers import LayerNormalization, Dropout
 
-from examples.speech_to_text.layers.utils import build_gelu_dense, build_dense
 from examples.speech_to_text.layers.attention import kv_attend
 
 
@@ -26,10 +26,10 @@ def attend_self(x, cache, index, config, name):
 
 
 def build_self_attention_mask(cache, index):
-    positions = ops.ones_like(cache[:, 0, :, 0, 0], dtype="int32")
-    positions = ops.cumsum(positions, axis=1) - 1
-    positions = ops.expand_dims(positions, axis=1)
-    return ops.cast(positions <= index, "int32")
+    key_positions = ops.ones_like(cache[:, 0, :, 0, 0], dtype="int32")
+    key_positions = ops.cumsum(key_positions, axis=1) - 1
+    query_positions = ops.reshape(index, (1, 1))
+    return paz.transformers.mask.causal(query_positions, key_positions)
 
 
 def attend_cross(x, cross_cache, config, name):
@@ -46,7 +46,8 @@ def feedforward(x, config, name):
     dropout = config["dropout"]
     norm_name = f"{name}_layer_norm"
     delta = LayerNormalization(epsilon=1e-5, name=norm_name)(x)
-    delta = build_gelu_dense(dim, f"{name}_intermediate_dense")(delta)
-    delta = build_dense(x.shape[-1], f"{name}_output_dense")(delta)
+    delta = paz.transformers.feedforward.gelu(
+        delta, dim, x.shape[-1], f"{name}_intermediate_dense",
+        f"{name}_output_dense")
     delta = Dropout(dropout, name=f"{name}_dropout")(delta)
     return x + delta

@@ -1,5 +1,6 @@
 import string
 
+import paz
 from keras import ops
 from keras.layers import Dropout, EinsumDense
 
@@ -52,9 +53,11 @@ def build_cache(value, key, num_heads, key_dim, name):
 
 
 def update_cache(cache, index, value, key, num_heads, key_dim, name):
-    update = build_cache(value, key, num_heads, key_dim, name)
-    start = [0, 0, index, 0, 0]
-    return ops.slice_update(cache, start, update)
+    if key is None:
+        key = value
+    k = project_key(key, num_heads, key_dim, name)
+    v = project_value(value, num_heads, key_dim, name)
+    return paz.transformers.cache.update(cache, index, k, v)
 
 
 def project_query(query, num_heads, key_dim, name):

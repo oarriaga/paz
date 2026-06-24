@@ -7,6 +7,7 @@ import argparse
 import sys
 from pathlib import Path
 
+import jax
 import numpy as np
 from keras import ops
 
@@ -14,6 +15,8 @@ ROOT = Path(__file__).resolve().parents[2]
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+import paz
 
 from examples.speech_to_text.audio import load, resample
 from examples.speech_to_text.audio import to_float, to_mono
@@ -36,10 +39,10 @@ SAMPLE_RATE = 16000
 MAX_AUDIO_SECONDS = 30
 
 
-def transcribe(wav_path, models, max_tokens=64):
+def transcribe(wav_path, models, max_tokens=64, select=None, key=None):
     waveform, sample_rate = load(wav_path)
     waveform = preprocess(waveform, sample_rate)
-    return transcribe_waveform(waveform, models, max_tokens)
+    return transcribe_waveform(waveform, models, max_tokens, select, key)
 
 
 def preprocess(waveform, sample_rate, target=16000):
@@ -68,34 +71,34 @@ def pad_or_trim_waveform(waveform, num_samples):
     return padded
 
 
-def transcribe_waveform(waveform, models, max_tokens=64):
-    decoder_state = build_decoder_state(models[3], max_tokens)
-    return transcribe_waveform_with_state(waveform, models, decoder_state)
+def transcribe_waveform(waveform, models, max_tokens=64, select=None, key=None):
+    decoder_state = build_decoder_state(models[3], max_tokens, select)
+    return transcribe_waveform_with_state(waveform, models, decoder_state, key)
 
 
-def transcribe_waveform_with_state(waveform, models, decoder_state):
+def transcribe_waveform_with_state(waveform, models, decoder_state, key=None):
     frontend_model, encoder, cross_model, decoder_step = models
     if len(waveform.shape) == 1:
         waveform = ops.expand_dims(waveform, axis=0)
     features = frontend_model(waveform)
     encoder_output = encoder(features)
     token_ids, text_ids, text = decode_encoder_output(
-        encoder_output, cross_model, decoder_state
+        encoder_output, cross_model, decoder_state, key
     )
     return token_ids, text_ids, text
 
 
-def build_decoder_state(decoder_step, max_tokens=64):
+def build_decoder_state(decoder_step, max_tokens=64, select=None):
     prompt_ids = build_whisper_prompt_token_ids()
     stop_id = find_special_token_id("<|endoftext|>")
     cache_shape = decoder_step.input_shape[1]
-    decoder = KVDecoder(decoder_step, prompt_ids, max_tokens)
+    decoder = KVDecoder(decoder_step, prompt_ids, max_tokens, select=select)
     return decoder, cache_shape, stop_id, len(prompt_ids)
 
 
-def decode_encoder_output(encoder_output, cross_model, decoder_state):
+def decode_encoder_output(encoder_output, cross_model, decoder_state, key=None):
     decoder, cache_shape, stop_id, prompt_length = decoder_state
-    args = (decoder, cache_shape, cross_model, encoder_output, stop_id)
+    args = (decoder, cache_shape, cross_model, encoder_output, stop_id, key)
     token_ids = kv_decode(*args)
     text_ids = extract_text_token_ids(token_ids, prompt_length, stop_id)
     text = decode_whisper_tokens(text_ids)
@@ -119,6 +122,16 @@ def build_models(model_name, models_path=WHISPER_MODELS_DIR):
     return frontend_model, encoder, cross_cache, decoder_step
 
 
+def build_sampling(args):
+    # Greedy by default; passing --temperature routes selection through the
+    # shared paz.transformers sampler, seeded by --seed for reproducibility.
+    if args.temperature is None:
+        return None, None
+    select = paz.transformers.search.build_sampler(
+        args.temperature, args.top_k, args.top_p)
+    return select, jax.random.PRNGKey(args.seed)
+
+
 if __name__ == "__main__":
     description = "Whisper speech-to-text demo"
     parser = argparse.ArgumentParser(description=description)
@@ -128,7 +141,13 @@ if __name__ == "__main__":
     add("--audio_path", default=default_audio)
     add("--model_name", default="whisper_base_en", choices=model_names)
     add("--max_tokens", default=64, type=int)
+    add("--temperature", default=None, type=float)
+    add("--top_k", default=0, type=int)
+    add("--top_p", default=1.0, type=float)
+    add("--seed", default=0, type=int)
     args = parser.parse_args()
+    select, key = build_sampling(args)
     models = build_models(args.model_name)
-    _, _, text = transcribe(Path(args.audio_path), models, args.max_tokens)
+    text = transcribe(Path(args.audio_path), models, args.max_tokens,
+                      select, key)[2]
     print(text)
