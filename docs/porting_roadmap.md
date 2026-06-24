@@ -110,9 +110,11 @@ H36M loader), **Minimal Hand** (DetNet/IKNet keypoint + IK losses),
   in `examples/action_scores/`.
 - **Semantic segmentation:** Shapes-based example trains `UNET_VGG16`
   (`num_classes=4`, softmax) with `paz.losses.dice`; `paz.draw.overlay_masks`
-  blends per-class colors. Restored a latent break: `paz.datasets.shapes.load`
-  called a missing `paz.detection.non_max_suppression`, now added (greedy NMS
-  reusing `paz.boxes.compute_IOU`).
+  blends per-class colors. Fixed a latent break: `paz.datasets.shapes.load`
+  called a missing NMS — `remove_overlaps` now uses the JAX
+  `paz.detection.apply_NMS`.
+- **NMS is JAX everywhere:** the numpy `apply_per_class_NMS` was removed and the
+  JAX implementation took its (clean) name; SSD and EfficientDet apps jit it.
 - **Probabilistic keypoints:** the legacy model embedded a
   `tensorflow_probability` mixture via `DistributionLambda`; the JAX port keeps
   the net convolutional (emits raw mixture maps) and moves the GMM math (mean,

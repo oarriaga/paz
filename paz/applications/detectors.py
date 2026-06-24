@@ -46,7 +46,7 @@ def SSD300VOC(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
         draw = paz.partial(paz.draw.boxes2D, names=names, colors=label_colors)
     variances = [0.1, 0.1, 0.2, 0.2]
     apply_NMS = (len(names), IOU_thresh, top_k)
-    apply_NMS = paz.lock(paz.detection.jp_apply_per_class_NMS, *apply_NMS)
+    apply_NMS = paz.lock(paz.detection.apply_per_class_NMS, *apply_NMS)
     return SSD(model, score_thresh, boxes, variances, apply_NMS, draw)
 
 
@@ -59,7 +59,7 @@ def SSD512COCO(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
         draw = paz.partial(paz.draw.boxes2D, names=names, colors=label_colors)
     variances = [0.1, 0.1, 0.2, 0.2]
     apply_NMS = (len(names), IOU_thresh, top_k)
-    apply_NMS = paz.lock(paz.detection.jp_apply_per_class_NMS, *apply_NMS)
+    apply_NMS = paz.lock(paz.detection.apply_per_class_NMS, *apply_NMS)
     return SSD(model, score_thresh, boxes, variances, apply_NMS, draw)
 
 
@@ -72,7 +72,7 @@ def SSD512HandDetection(score_thresh=0.40, IOU_thresh=0.45, top_k=100, draw=None
         draw = paz.partial(paz.draw.boxes2D, names=names, colors=colors)
     variances = [0.1, 0.1, 0.2, 0.2]
     apply_NMS = (len(names), IOU_thresh, top_k)
-    apply_NMS = paz.lock(paz.detection.jp_apply_per_class_NMS, *apply_NMS)
+    apply_NMS = paz.lock(paz.detection.apply_per_class_NMS, *apply_NMS)
     return SSD(model, score_thresh, boxes, variances, apply_NMS, draw)
 
 
@@ -86,7 +86,7 @@ def SSD512YCBVideo(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
         draw = paz.partial(paz.draw.boxes2D, names=names, colors=label_colors)
     variances = [0.1, 0.1, 0.2, 0.2]
     apply_NMS = (len(names), IOU_thresh, top_k)
-    apply_NMS = paz.lock(paz.detection.jp_apply_per_class_NMS, *apply_NMS)
+    apply_NMS = paz.lock(paz.detection.apply_per_class_NMS, *apply_NMS)
     return SSD(model, score_thresh, boxes, variances, apply_NMS, draw)
 
 
@@ -100,7 +100,7 @@ def SSD300FAT(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
         draw = paz.partial(paz.draw.boxes2D, names=names, colors=label_colors)
     variances = [0.1, 0.1, 0.2, 0.2]
     apply_NMS = (len(names), IOU_thresh, top_k)
-    apply_NMS = paz.lock(paz.detection.jp_apply_per_class_NMS, *apply_NMS)
+    apply_NMS = paz.lock(paz.detection.apply_per_class_NMS, *apply_NMS)
     return SSD(model, score_thresh, boxes, variances, apply_NMS, draw)
 
 
@@ -149,7 +149,7 @@ def EfficientDet(model, names, score_thresh=0.60, nms_thresh=0.45,
     priors = jp.array(model.prior_boxes) * input_size
     variances = [1.0, 1.0, 1.0, 1.0]
     apply_NMS = (len(names), nms_thresh, top_k)
-    apply_NMS = paz.lock(paz.detection.apply_per_class_NMS, *apply_NMS)
+    apply_NMS = jax.jit(paz.lock(paz.detection.apply_per_class_NMS, *apply_NMS))
     if draw is None:
         colors = paz.draw.lincolor(len(names))
         draw = paz.partial(paz.draw.boxes2D, names=names, colors=colors)
