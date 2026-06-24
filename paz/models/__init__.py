@@ -28,6 +28,8 @@ from .segmentation.unet import UNET
 from .segmentation.unet import UNET_VGG16
 from .segmentation.unet import UNET_VGG19
 from .segmentation.unet import UNET_RESNET50
+from .autoencoder.autoencoder import AutoEncoder
+from .autoencoder.autoencoder import extract_encoder
 from .foundation.dinov3.models.vision_transformer import DINOV3VITS
 from .foundation.dinov3.models.vision_transformer import DINOV3VITB
 from .foundation.dinov3.models.vision_transformer import DINOV3VITL

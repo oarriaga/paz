@@ -52,6 +52,7 @@ the bottom.
 | **MiniXception FER** (`emotion_classifier/train.py`) | ✅ synthetic | FER |
 | **UNet segmentation** (`semantic_segmentation/train.py`) | ✅ smoke (dice↓) | Shapes (synthetic) |
 | **IMDB classifier** (`imdb_classifier/train.py`) | ✅ smoke (loss↓) | IMDB face arrays (`.npy`) |
+| **Implicit orientation (AAE)** (`implicit_orientation_learning/train.py`) | ✅ smoke (loss↓ + codebook retrieval) | `paz.graphics` renders (synthetic) |
 
 ## Still missing / not yet ported
 
@@ -78,8 +79,6 @@ the bottom.
   (data-gated, not verifiable here).
 
 ### Other domain capabilities not ported
-- **implicit_orientation_learning** — augmented autoencoder for object
-  orientation (train + demo).
 - **visual_voice_activity_detection (VVAD)** — `cnn2Plus1` video model + demos.
 - **discovery_of_latent_keypoints** — self-supervised 3D keypoint discovery.
 - **images_synthesis** — synthetic data generation for pose.
@@ -124,6 +123,14 @@ H36M loader), **Minimal Hand** (DetNet/IKNet keypoint + IK losses),
   blends per-class colors. Fixed a latent break: `paz.datasets.shapes.load`
   called a missing NMS — `remove_overlaps` now uses the JAX
   `paz.detection.apply_NMS`.
+- **Implicit orientation (AAE):** `paz.models.AutoEncoder` (conv encoder →
+  latent → conv decoder, sigmoid) is trained to reconstruct clean object views
+  from augmented ones; `extract_encoder` slices the encoder and orientation is
+  read out by cosine nearest-neighbor against a codebook of rendered views
+  (`examples/implicit_orientation_learning/codebook.py`). Views are rendered
+  with `paz.graphics` and cached to `views.npz`; training augments the cached
+  views (background composite via the constant-background mask, occlusion,
+  brightness). 128x128 input; no weights hosted (train to produce them).
 - **NMS is JAX everywhere:** the numpy `apply_per_class_NMS` was removed and the
   JAX implementation took its (clean) name; SSD and EfficientDet apps jit it.
 - **Probabilistic keypoints:** the legacy model embedded a
