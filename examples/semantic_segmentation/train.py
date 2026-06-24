@@ -29,7 +29,7 @@ class ShapesSequence(keras.utils.PyDataset):
         return self.images[chunk], self.targets[chunk]
 
 
-def parse_arguments():
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="UNet Shapes segmentation")
     parser.add_argument("--save_path", default="experiments")
     parser.add_argument("--image_size", default=128, type=int)
@@ -38,11 +38,7 @@ def parse_arguments():
     parser.add_argument("--learning_rate", default=0.001, type=float)
     parser.add_argument("--epochs", default=100, type=int)
     parser.add_argument("--validation_split", default=0.2, type=float)
-    return parser.parse_args()
-
-
-def main():
-    args = parse_arguments()
+    args = parser.parse_args()
     os.makedirs(args.save_path, exist_ok=True)
     H = W = args.image_size
     num_classes = len(shapes.get_class_names()) + 1
@@ -66,7 +62,3 @@ def main():
     ]
     model.fit(train, validation_data=valid, epochs=args.epochs,
               callbacks=callbacks)
-
-
-if __name__ == "__main__":
-    main()
