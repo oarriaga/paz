@@ -18,7 +18,14 @@ from generator import Generator
 from pipeline2 import preprocess_batch
 
 
-def parse_arguments():
+def build_generator(args, key, split, batch_args, workers, augment=True):
+    images, detections = OpenImagesV6Hand(args.data_path, split).load_data()
+    pipeline = paz.lock(preprocess_batch, *batch_args, split == "train")
+    return Generator(key, images, detections, args.batch_size, pipeline,
+                     workers, args.max_queue_size)
+
+
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SSD512 hand detection train")
     parser.add_argument("--data_path", default="open-images-v6/")
     parser.add_argument("--root", default="experiments", type=str)
@@ -32,11 +39,7 @@ def parse_arguments():
     parser.add_argument("--num_workers", default="max")
     parser.add_argument("--max_queue_size", default=50, type=int)
     parser.add_argument("--box_variances", nargs="+", default=[0.1, 0.1, 0.2, 0.2])  # fmt: skip
-    return parser.parse_args()
-
-
-def main():
-    args = parse_arguments()
+    args = parser.parse_args()
     root, key = paz.logger.setup(args)
     prior_boxes = paz.models.detection.single_shot_detector.build_prior_boxes("COCO")  # fmt: skip
     num_classes = 1  # foreground hand class; SSD512 adds the background class
@@ -60,14 +63,3 @@ def main():
                      save_best_only=True)]
     model.fit(train, epochs=args.num_epochs, validation_data=valid,
               callbacks=callbacks)
-
-
-def build_generator(args, key, split, batch_args, workers, augment=True):
-    images, detections = OpenImagesV6Hand(args.data_path, split).load_data()
-    pipeline = paz.lock(preprocess_batch, *batch_args, split == "train")
-    return Generator(key, images, detections, args.batch_size, pipeline,
-                     workers, args.max_queue_size)
-
-
-if __name__ == "__main__":
-    main()

@@ -35,16 +35,12 @@ def augment_batch(images):
     return np.clip(images * brightness, 0.0, 1.0)
 
 
-def parse_arguments():
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="MiniXception FER training")
     parser.add_argument("--root", default="experiments")
     parser.add_argument("--batch_size", default=32, type=int)
     parser.add_argument("--epochs", default=100, type=int)
-    return parser.parse_args()
-
-
-def main():
-    args = parse_arguments()
+    args = parser.parse_args()
     os.makedirs(args.root, exist_ok=True)
     train_images, train_labels = fer.load("train")
     valid_images, valid_labels = fer.load("validation")
@@ -61,7 +57,3 @@ def main():
     ]
     model.fit(train, validation_data=valid, epochs=args.epochs,
               callbacks=callbacks)
-
-
-if __name__ == "__main__":
-    main()

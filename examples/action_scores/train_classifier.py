@@ -33,16 +33,12 @@ def find_feature_layer(model):
     return adds[-1]
 
 
-def parse_arguments():
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="FER + action scores")
     parser.add_argument("--root", default="experiments")
     parser.add_argument("--batch_size", default=32, type=int)
     parser.add_argument("--epochs", default=100, type=int)
-    return parser.parse_args()
-
-
-def main():
-    args = parse_arguments()
+    args = parser.parse_args()
     os.makedirs(args.root, exist_ok=True)
     train_images, train_labels = fer.load("train")
     valid_images, valid_labels = fer.load("validation")
@@ -58,7 +54,3 @@ def main():
     log = keras.callbacks.CSVLogger(os.path.join(args.root, "log.csv"))
     model.fit(train, epochs=args.epochs, validation_data=valid,
               callbacks=[log, scores, features])
-
-
-if __name__ == "__main__":
-    main()

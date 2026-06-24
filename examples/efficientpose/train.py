@@ -155,16 +155,12 @@ class LinemodSequence(keras.utils.PyDataset):
         return np.asarray(resized, "float32") - self.mean, scale
 
 
-def parse_arguments():
+if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--smoke", action="store_true")
     parser.add_argument("--data_path", default="Linemod_preprocessed/")
     parser.add_argument("--object_id", default="08")
     parser.add_argument("--batch_size", default=1, type=int)
     parser.add_argument("--num_epochs", default=500, type=int)
-    return parser.parse_args()
-
-
-if __name__ == "__main__":
-    args = parse_arguments()
+    args = parser.parse_args()
     smoke_train() if args.smoke else train_linemod(args)

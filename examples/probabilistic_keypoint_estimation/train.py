@@ -36,7 +36,7 @@ def augment_batch(images):
     return np.clip(images * brightness, 0.0, 1.0)
 
 
-def parse_arguments():
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Probabilistic keypoints")
     parser.add_argument("--root", default="dataset")
     parser.add_argument("--save_path", default="experiments")
@@ -44,11 +44,7 @@ def parse_arguments():
     parser.add_argument("--learning_rate", default=0.001, type=float)
     parser.add_argument("--epochs", default=10000, type=int)
     parser.add_argument("--validation_split", default=0.2, type=float)
-    return parser.parse_args()
-
-
-def main():
-    args = parse_arguments()
+    args = parser.parse_args()
     os.makedirs(args.save_path, exist_ok=True)
     images, keypoints = facial_keypoints.load(args.root, "train")
     split = int(len(images) * (1 - args.validation_split))
@@ -70,7 +66,3 @@ def main():
     ]
     model.fit(train, validation_data=valid, epochs=args.epochs,
               callbacks=callbacks)
-
-
-if __name__ == "__main__":
-    main()
