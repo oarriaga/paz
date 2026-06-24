@@ -11,7 +11,6 @@ from pathlib import Path
 
 import cv2
 import jax
-import jax.numpy as jnp
 import numpy as np
 from keras import ops
 
@@ -23,9 +22,7 @@ from examples.gemma4.configuration import load_config
 from examples.gemma4.image_converter import preprocess_images
 from examples.gemma4.inference import (Gemma4MultimodalDecoderStep,
                                        Gemma4PerLayerEmbeddingStep)
-from examples.gemma4.inference import build_empty_cache
-from examples.gemma4.multimodal_decoding import (as_token, build_prompt_rows,
-                                                 call_step, trim_to_stop)
+from examples.gemma4.multimodal_decoding import generate_eager
 from examples.gemma4.tokenizer import Gemma4Tokenizer
 from examples.gemma4.vision import VisionEncoderArgs, build_vision_encoder
 
@@ -64,34 +61,6 @@ def build_text(config, weights_dir):
     return step, per_layer
 
 
-def decode_eager(step, per_layer_step, embeddings, config, tokens, indices,
-                 stop, max_tokens):
-    # Eager parallel prefill + Python decode loop, mirroring demo_e2b.generate.
-    # The full-program jit (multimodal_decoding.generate) constant-folds the
-    # multi-GB embedding tables into the executable, which a 31 GB host cannot
-    # afford alongside the resident E2B weights; keras already compiles each
-    # step, so this is equally fast for short captions.
-    embeds, per_layer = build_prompt_rows(
-        step, embeddings, tokens, indices, per_layer_step)
-    length = embeds.shape[1]
-    cache = jnp.asarray(build_empty_cache(config, length + max_tokens))
-    positions = jnp.arange(length, dtype="int32")[None]
-    logits, cache = call_step(step, embeds, cache, 0, positions, per_layer)
-    token = int(jnp.argmax(logits[0, -1]))
-    embedding = step.get_layer("token_embedding")
-    out, index = [token], length
-    while token != stop and len(out) < max_tokens:
-        per_layer = None if per_layer_step is None else per_layer_step(
-            as_token(token))
-        logits, cache = call_step(
-            step, embedding(as_token(token)), cache, index,
-            jnp.array([[index]], dtype="int32"), per_layer)
-        token = int(jnp.argmax(logits[0, -1]))
-        out.append(token)
-        index += 1
-    return trim_to_stop(out, stop)
-
-
 def build_prompt(tokenizer, num_image_tokens, question):
     head = tokenizer.tokenize("<|turn>user\n")[1:]
     tail = tokenizer.tokenize("{}<turn|>\n<|turn>model\n".format(question))[1:]
@@ -114,8 +83,8 @@ def caption(image_path, question, max_tokens, weights_dir=WEIGHTS):
     tokenizer = Gemma4Tokenizer(weights_dir / "tokenizer.json", add_bos=True)
     tokens, indices = build_prompt(tokenizer, len(embeddings), question)
     stop = tokenizer.get_stop_token_ids()[-1]
-    generated = decode_eager(step, per_layer, embeddings, config, tokens,
-                             indices, stop, max_tokens)
+    generated = generate_eager(step, per_layer, embeddings, config, tokens,
+                               indices, stop, max_tokens)
     return tokenizer.detokenize(generated)
 
 

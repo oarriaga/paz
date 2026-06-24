@@ -65,6 +65,44 @@ def generate(step_model, per_layer_step, vision_embeddings, config,
         select_greedy_token)
 
 
+def generate_eager(step_model, per_layer_step, vision_embeddings, config,
+                   prompt_ids, vision_indices, stop_id, max_tokens):
+    """Eager parallel prefill + Python greedy decode loop.
+
+    Prefills the whole prompt in ONE forward, then decodes token-by-token. The
+    full-program jit in `generate` constant-folds the multi-GB embedding tables
+    into the executable, which a modest host cannot afford alongside the
+    resident weights; keras compiles each step, so this is equally fast for
+    short outputs while staying within budget on the real E2B/E4B weights.
+    """
+    embeds, per_layer = build_prompt_rows(
+        step_model, vision_embeddings, prompt_ids, vision_indices,
+        per_layer_step)
+    length = embeds.shape[1]
+    cache = jnp.asarray(build_empty_cache(config, length + max_tokens))
+    positions = jnp.arange(length, dtype="int32")[None]
+    logits, cache = call_step(step_model, embeds, cache, 0, positions,
+                              per_layer)
+    token = int(jnp.argmax(logits[0, -1]))
+    embedding = step_model.get_layer("token_embedding")
+    out, index = [token], length
+    while token != stop_id and len(out) < max_tokens:
+        per_layer = decode_per_layer(per_layer_step, token)
+        logits, cache = call_step(
+            step_model, embedding(as_token(token)), cache, index,
+            jnp.array([[index]], dtype="int32"), per_layer)
+        token = int(jnp.argmax(logits[0, -1]))
+        out.append(token)
+        index += 1
+    return trim_to_stop(out, stop_id)
+
+
+def decode_per_layer(per_layer_step, token):
+    if per_layer_step is None:
+        return None
+    return per_layer_step(as_token(token))
+
+
 def generate_sample(step_model, per_layer_step, vision_embeddings, config,
                     prompt_ids, vision_indices, stop_id, max_tokens, key,
                     sampling):
