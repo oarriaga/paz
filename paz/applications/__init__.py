@@ -11,6 +11,7 @@ from paz.applications.detectors import EFFICIENTDETD4COCO
 from paz.applications.detectors import EFFICIENTDETD5COCO
 from paz.applications.detectors import EFFICIENTDETD6COCO
 from paz.applications.detectors import EFFICIENTDETD7COCO
+from paz.applications.detectors import EFFICIENTDETD0VOC
 from paz.applications.detectors import DetectMiniXceptionFER
 from paz.models.detection.haar_cascade import HaarCascadeFrontalFaceDetector
 from paz.models.detection.haar_cascade import HaarCascadeEyeDetector
