@@ -79,21 +79,21 @@ def test_cached_multimodal_matches_full_sequence():
 
 def reference_decode(step, per_layer_step, image, config, prompt_ids,
                      vision_indices, stop_id, max_tokens):
-    import jax.numpy as jnp
+    import jax.numpy as jp
     embeds, per_layer = build_prompt_rows(
         step, image, prompt_ids, vision_indices, per_layer_step)
     length = embeds.shape[1]
-    cache = jnp.asarray(build_empty_cache(config, length + max_tokens))
-    positions = jnp.arange(length, dtype="int32")[None]
+    cache = jp.asarray(build_empty_cache(config, length + max_tokens))
+    positions = jp.arange(length, dtype="int32")[None]
     logits, cache = call_step(step, embeds, cache, 0, positions, per_layer)
-    token = int(jnp.argmax(logits[0, -1]))
+    token = int(jp.argmax(logits[0, -1]))
     embedding = step.get_layer("token_embedding")
     out, index = [token], length
     while token != stop_id and len(out) < max_tokens:
-        positions = jnp.array([[index]], dtype="int32")
+        positions = jp.array([[index]], dtype="int32")
         logits, cache = call_step(
             step, embedding(as_token(token)), cache, index, positions, None)
-        token = int(jnp.argmax(logits[0, -1]))
+        token = int(jp.argmax(logits[0, -1]))
         out.append(token)
         index += 1
     return trim_to_stop(out, stop_id)
