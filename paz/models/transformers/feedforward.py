@@ -10,19 +10,21 @@ from keras.layers import Dense
 
 
 def gelu(x, inner_dim, output_dim, intermediate_name, output_name):
-    kernel = keras.initializers.TruncatedNormal(stddev=0.02)
-    hidden = Dense(inner_dim, activation=activations.gelu,
-                   kernel_initializer=kernel, bias_initializer="zeros",
-                   name=intermediate_name)(x)
-    return Dense(output_dim, kernel_initializer=kernel,
-                 bias_initializer="zeros", name=output_name)(hidden)
+    inner = build_dense(inner_dim, intermediate_name, activations.gelu, True)
+    outer = build_dense(output_dim, output_name, None, True)
+    return outer(inner(x))
 
 
 def glu(x, inner_dim, output_dim, gate_name, up_name, down_name):
+    gate = build_dense(inner_dim, gate_name, activations.gelu, False)
+    up = build_dense(inner_dim, up_name, None, False)
+    down = build_dense(output_dim, down_name, None, False)
+    return down(gate(x) * up(x))
+
+
+def build_dense(units, name, activation, use_bias):
     kernel = keras.initializers.TruncatedNormal(stddev=0.02)
-    gate = Dense(inner_dim, activation=activations.gelu, use_bias=False,
-                 kernel_initializer=kernel, name=gate_name)(x)
-    up = Dense(inner_dim, use_bias=False, kernel_initializer=kernel,
-               name=up_name)(x)
-    return Dense(output_dim, use_bias=False, kernel_initializer=kernel,
-                 name=down_name)(gate * up)
+    keys = ("activation", "use_bias", "kernel_initializer", "name")
+    values = (activation, use_bias, kernel, name)
+    kwargs = dict(zip(keys, values))
+    return Dense(units, **kwargs)

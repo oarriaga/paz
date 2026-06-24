@@ -1,8 +1,7 @@
 import keras
-from keras import ops
 from keras.layers import Dropout, EinsumDense
 
-from .attention import AttendArgs, CachedAttendArgs, attend, cached_attend
+from .attention import attend, cached_attend
 from .core import add_residual, build_attention_mask, clip_float16
 from .normalization import build_rms_norm, build_scalar_multiply
 
@@ -46,7 +45,7 @@ def attention_path(x, padding_mask, config, layer_index, name,
     hidden = build_rms_norm(epsilon, dtype, norm_name)(x)
     mask = build_block_attention_mask(padding_mask, config, layer_index)
     attn_args = build_attend_args(hidden, mask, config, layer_index, name)
-    hidden, kv = attend(attn_args, shared_kv=shared_kv)
+    hidden, kv = attend(*attn_args, shared_kv=shared_kv)
     post_name = "{}_post_attention_norm".format(name)
     hidden = build_rms_norm(epsilon, dtype, post_name)(hidden)
     if config.dropout:
@@ -96,7 +95,7 @@ def build_attend_args(hidden, mask, config, layer_index, name):
                          build_partial_rotary_factor)
     is_global = is_global_attention_layer(config, layer_index)
     attn_name = "{}_attention".format(name)
-    return AttendArgs(
+    return (
         hidden,
         mask,
         build_head_dim(config, is_global),
@@ -141,7 +140,8 @@ def cached_attention_path(x, cache, cache_index, config, layer_index, name,
     hidden = build_rms_norm(epsilon, dtype, norm_name)(x)
     attn_args = build_cached_attend_args(
         hidden, cache, cache_index, config, layer_index, name, positions)
-    hidden, cache = cached_attend(attn_args, shared_kv_cache=shared_kv_cache)
+    hidden, cache = cached_attend(
+        *attn_args, shared_kv_cache=shared_kv_cache)
     post_name = "{}_post_attention_norm".format(name)
     hidden = build_rms_norm(epsilon, dtype, post_name)(hidden)
     return add_residual(x, hidden), cache
@@ -158,7 +158,7 @@ def build_cached_attend_args(hidden, cache, index, config, layer_index, name,
     if use_sliding_window(config, is_global):
         window = config.sliding_window_size
     attn_name = "{}_attention".format(name)
-    return CachedAttendArgs(
+    return (
         hidden,
         cache,
         index,

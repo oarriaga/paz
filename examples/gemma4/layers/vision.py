@@ -2,7 +2,7 @@ import keras
 from keras import ops
 from keras.layers import Dense, EinsumDense, Layer
 
-from .attention import AttendArgs, compute_attention
+from .attention import compute_attention
 from .normalization import build_rms_norm, build_v_norm
 
 
@@ -116,7 +116,6 @@ def vision_decoder_block(x, mask, position_ids, config, name):
 
 def vision_attend(x, mask, position_ids, config, name):
     attn_name = "{}_attention".format(name)
-    args = build_vision_attend_args(mask, config, attn_name)
     query = vision_project(x, "query", config.num_heads, config, attn_name)
     key = vision_project(
         x, "key", config.num_key_value_heads, config, attn_name)
@@ -125,7 +124,10 @@ def vision_attend(x, mask, position_ids, config, name):
         query, position_ids, config.rope_wavelength)
     key = apply_vision_rotary_embedding(
         key, position_ids, config.rope_wavelength)
-    output = compute_attention(query, key, value, mask, args)
+    args = (query, key, value, mask, config.num_heads,
+            config.num_key_value_heads, config.head_dim, None, config.dropout,
+            config.dtype, attn_name)
+    output = compute_attention(*args)
     proj = build_clippable_einsum_dense(
         "btnh,nhd->btd", (None, x.shape[-1]), config.dtype,
         "{}_attention_output".format(attn_name))
@@ -150,14 +152,6 @@ def vision_value(x, config, name):
     norm = build_v_norm(
         config.layer_norm_epsilon, config.dtype, "{}_value_norm".format(name))
     return norm(proj(x))
-
-
-def build_vision_attend_args(mask, config, name):
-    return AttendArgs(
-        None, mask, config.head_dim, config.num_heads,
-        config.num_key_value_heads, config.layer_norm_epsilon,
-        config.rope_wavelength, 1.0, 1.0, None, config.dropout,
-        config.dtype, name)
 
 
 def vision_feedforward(x, config, name):
