@@ -402,3 +402,20 @@ def poses(image, transforms, camera_matrix, thickness=2, radius=4, colors=None):
         points2D = project_points(camera_matrix, points3D)
         image = paz.draw.cube(image, points2D, color, thickness, radius)
     return image
+
+
+def masks_to_colors(class_map, colors):
+    """Map a (H, W) class-index image to an (H, W, 3) uint8 color image."""
+    class_map = np.asarray(class_map)
+    image = np.zeros((*class_map.shape, 3), "uint8")
+    for class_arg, color in enumerate(colors):
+        image[class_map == class_arg] = color
+    return image
+
+
+def overlay_masks(image, class_map, colors, alpha=0.5):
+    """Blend a class-index map over an image using per-class colors."""
+    image = np.asarray(image).astype("float32")
+    masks = masks_to_colors(class_map, colors).astype("float32")
+    blended = (1.0 - alpha) * image + alpha * masks
+    return blended.astype("uint8")
