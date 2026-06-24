@@ -2,6 +2,7 @@ from keras import ops
 from keras.layers import Dropout, EinsumDense, Softmax
 
 from paz.layers import MergeDims, SplitDim
+from paz.models.transformers import cache as kv_cache
 from paz.models.transformers.embeddings import rotary
 
 from .core import apply_tanh_soft_cap
@@ -54,7 +55,7 @@ def cached_attend(x, cache, index, head_dim, num_query_heads, num_kv_heads,
         if head_dim < cache_head_dim:
             key = pad_to_cache_dim(key, cache_head_dim - head_dim)
             value = pad_to_cache_dim(value, cache_head_dim - head_dim)
-        updated_cache = update_kv_cache(cache, index, key, value, dtype)
+        updated_cache = kv_cache.update(cache, index, key, value)
         kv_src = updated_cache
     full_key, full_value = ops.split(kv_src, 2, axis=1)
     full_key = ops.squeeze(full_key, axis=1)
@@ -98,18 +99,6 @@ def query_positions(index, positions):
 def build_cache_positions(index, positions):
     transposed = ops.transpose(query_positions(index, positions))
     return ops.cast(transposed, "float32")
-
-
-def update_kv_cache(cache, index, key_update, value_update, dtype=None):
-    key_cache = cache[:, 0, ...]
-    value_cache = cache[:, 1, ...]
-    if dtype is not None:
-        key_cache = ops.cast(key_cache, dtype)
-        value_cache = ops.cast(value_cache, dtype)
-    start = [0, index, 0, 0]
-    key_cache = ops.slice_update(key_cache, start, key_update)
-    value_cache = ops.slice_update(value_cache, start, value_update)
-    return ops.stack((key_cache, value_cache), axis=1)
 
 
 def project_query(x, num_heads, head_dim, epsilon, dtype, name):
