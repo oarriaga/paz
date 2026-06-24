@@ -6,6 +6,7 @@ It writes the split inference artifacts that demo_e2b.py loads: config.json,
 decoder_step.weights.h5 and embedding_step.weights.h5.
 """
 import argparse
+import gc
 import re
 import sys
 from pathlib import Path
@@ -32,7 +33,10 @@ ROLE_SYNONYMS = {
 
 def convert(preset, output_dir):
     from keras_hub.src.models.gemma4.gemma4_backbone import Gemma4Backbone
-    backbone = Gemma4Backbone.from_preset(preset)
+    # Gemma4 checkpoints are natively bfloat16; loading as bf16 is lossless and
+    # halves peak host memory versus the float32 default, so the larger E4B
+    # backbone plus the paz target both fit on a 31 GB host.
+    backbone = Gemma4Backbone.from_preset(preset, dtype="bfloat16")
     return save_paz_models(backbone, output_dir)
 
 
@@ -44,6 +48,8 @@ def save_paz_models(backbone, output_dir):
     decoder_step = Gemma4DecoderStep(config)
     transfer(backbone, decoder_step)
     decoder_step.save_weights(str(output_dir / "decoder_step.weights.h5"))
+    del decoder_step
+    gc.collect()
     embedding_step = Gemma4PerLayerEmbeddingStep(config)
     transfer(backbone, embedding_step)
     embedding_step.save_weights(str(output_dir / "embedding_step.weights.h5"))
@@ -51,12 +57,14 @@ def save_paz_models(backbone, output_dir):
 
 
 def transfer(source, target):
-    weights = {role(w.path): to_numpy(w) for w in source.weights}
+    # Map roles to source variables by reference (no bulk numpy copy), then
+    # convert one weight at a time so peak memory stays near a single tensor.
+    sources = {role(w.path): w for w in source.weights}
     for variable in target.weights:
         key = role(variable.path)
-        if key not in weights:
+        if key not in sources:
             raise KeyError("no source weight for {}".format(variable.path))
-        variable.assign(weights[key].reshape(variable.shape))
+        variable.assign(to_numpy(sources[key]).reshape(variable.shape))
 
 
 def role(path):
@@ -94,7 +102,7 @@ def read_text_config(config):
         "local_rope_scaling_factor global_rope_scaling_factor "
         "global_rope_partial_rotary_factor use_bidirectional_attention "
         "layer_norm_epsilon dropout hidden_size_per_layer_input "
-        "num_kv_shared_layers"
+        "num_kv_shared_layers use_double_wide_mlp"
     ).split()
     values = {key: config[key] for key in keys}
     values["dtype"] = extract_dtype(config)

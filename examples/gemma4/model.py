@@ -20,7 +20,8 @@ TEXT_BACKBONE_FIELDS = (
     "local_rope_scaling_factor global_rope_scaling_factor "
     "global_rope_partial_rotary_factor "
     "use_bidirectional_attention layer_norm_epsilon dropout dtype "
-    "hidden_size_per_layer_input num_kv_shared_layers global_layer_indices"
+    "hidden_size_per_layer_input num_kv_shared_layers global_layer_indices "
+    "use_double_wide_mlp"
 )
 TextBackboneArgs = namedtuple("TextBackboneArgs", TEXT_BACKBONE_FIELDS)
 TextIntermediates = namedtuple(
@@ -57,6 +58,7 @@ def build_text_backbone_args(**overrides):
         "hidden_size_per_layer_input": None,
         "num_kv_shared_layers": 0,
         "global_layer_indices": None,
+        "use_double_wide_mlp": False,
     }
     values.update(overrides)
     return TextBackboneArgs(**values)
@@ -257,7 +259,9 @@ def build_kv_source_map(config):
 
 
 def build_feedforward_dim(config, layer_index):
-    if is_kv_shared_layer(config, layer_index):
+    double_wide = config.use_double_wide_mlp and is_kv_shared_layer(
+        config, layer_index)
+    if double_wide:
         return config.intermediate_dim * 2
     return config.intermediate_dim
 

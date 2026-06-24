@@ -30,6 +30,7 @@ CONFIGS = {
         "hidden_size_per_layer_input": 256,
         "num_kv_shared_layers": 20,
         "global_layer_indices": None,
+        "use_double_wide_mlp": True,
     },
     "gemma4_4b": {
         "vocabulary_size": 262_144,
@@ -56,8 +57,9 @@ CONFIGS = {
         "dropout": 0.0,
         "dtype": "bfloat16",
         "hidden_size_per_layer_input": 256,
-        "num_kv_shared_layers": 0,
+        "num_kv_shared_layers": 18,
         "global_layer_indices": None,
+        "use_double_wide_mlp": False,
     },
 }
 
@@ -66,6 +68,8 @@ CONFIGS = {
 LEGACY_DEFAULTS = {
     "local_rope_wavelength": 10_000.0,
     "global_rope_wavelength": 1_000_000.0,
+    # Only the E2B config predates this field, and E2B uses double-wide MLPs.
+    "use_double_wide_mlp": True,
 }
 
 
