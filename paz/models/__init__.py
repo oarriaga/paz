@@ -12,6 +12,8 @@ from .detection import HaarCascadeEyeDetector
 from .detection import HaarCascadeFrontalFaceDetector
 from .classification.xception import MiniXception
 from .classification.xception import MiniXceptionFER
+from .classification.xception import MiniXceptionIMDB
+from .classification.xception import build_mini_xception_imdb
 from .classification.protonet import ProtoNet
 from .attention.stn import STN
 from .keypoint.keypointnet import KeypointNet2D

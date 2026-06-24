@@ -214,9 +214,19 @@ def scale_boxes(detections, scale):
 
 def DetectMiniXceptionFER(box_scale=1.2, draw=None):
     # TODO add buffer window prediction
-    detect = paz.models.HaarCascadeFrontalFaceDetector(draw=None)
     classify = paz.applications.ClassifyMiniXceptionFER()
     names = paz.datasets.labels("FER")
+    return DetectMiniXception(classify, names, box_scale, draw)
+
+
+def DetectMiniXceptionIMDB(box_scale=1.2, draw=None):
+    classify = paz.applications.ClassifyMiniXceptionIMDB()
+    names = paz.datasets.labels("IMDB")
+    return DetectMiniXception(classify, names, box_scale, draw)
+
+
+def DetectMiniXception(classify, names, box_scale, draw):
+    detect = paz.models.HaarCascadeFrontalFaceDetector(draw=None)
     colors = paz.draw.lincolor(len(names))
     if draw is None:
         draw = paz.partial(paz.draw.boxes2D, names=names, colors=colors)

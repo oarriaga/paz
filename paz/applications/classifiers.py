@@ -4,7 +4,14 @@ import paz
 
 
 def ClassifyMiniXceptionFER():
-    model = paz.models.MiniXceptionFER()
+    return ClassifyMiniXception(paz.models.MiniXceptionFER())
+
+
+def ClassifyMiniXceptionIMDB():
+    return ClassifyMiniXception(paz.models.MiniXceptionIMDB())
+
+
+def ClassifyMiniXception(model):
     resize = paz.lock(paz.image.resize_opencv, paz.image.get_input_size(model))
 
     def preprocess(image):

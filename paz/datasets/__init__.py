@@ -45,6 +45,8 @@ def labels(name):
         class_names = fer.get_class_names()
     elif name == "FERPlus":
         class_names = ferplus.get_class_names()
+    elif name == "IMDB":
+        class_names = ["man", "woman"]
     elif name == "COCO":
         class_names = coco.get_class_names()
     elif name == "COCO_EFFICIENTDET":
