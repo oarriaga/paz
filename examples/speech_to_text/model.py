@@ -4,7 +4,8 @@ from keras import ops
 from keras import Model
 from keras.activations import gelu
 from keras.layers import Input, Conv1D, Dropout, Add, Lambda
-from keras.layers import LayerNormalization, ReversibleEmbedding
+from keras.layers import LayerNormalization
+from keras_hub.layers import ReversibleEmbedding
 
 from examples.speech_to_text.layers.frontend import frontend
 from examples.speech_to_text.layers.frontend import build_mel_filters

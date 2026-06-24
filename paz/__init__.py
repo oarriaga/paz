@@ -42,6 +42,7 @@ from paz.backend.standard import (
 from paz import losses
 from paz.abstract import Model, Node, Input, Sequential, Tree
 from paz.models.decomposition import pca as PCA
+from paz.models import transformers
 from paz import applications
 from paz import utils
 from paz.utils import pytree
