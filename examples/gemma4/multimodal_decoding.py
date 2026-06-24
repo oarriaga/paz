@@ -13,6 +13,8 @@ import jax.numpy as jp
 import numpy as np
 from keras import ops
 
+from paz import call_stateless, snapshot_variables
+
 from .inference import build_empty_cache
 from .sampling import sample_logits
 
@@ -146,22 +148,6 @@ def run_cached_generate(step_model, per_layer_step, vision_embeddings, config,
     return trim_to_stop(generated, stop_id)
 
 
-def snapshot_variables(model):
-    if model is None:
-        return None
-    train = [variable.value for variable in model.trainable_variables]
-    nontrain = [variable.value for variable in model.non_trainable_variables]
-    return train, nontrain
-
-
-def stateless_forward(model, variables, *inputs):
-    # Run the model from variables passed as inputs, so jax.jit treats the
-    # weights as arguments instead of constant-folding the multi-GB embedding
-    # tables into the compiled executable (which would exhaust host memory).
-    output, _ = model.stateless_call(variables[0], variables[1], *inputs)
-    return output
-
-
 def trim_to_stop(tokens, stop_id):
     if stop_id in tokens:
         tokens = tokens[:tokens.index(stop_id)]
@@ -202,13 +188,13 @@ def build_decode_step(step_model, embedding, per_layer_step, stop_id, select,
         buffer, token, index, cache, count, _, key = state
         token2d = jp.reshape(token, (1, 1))
         positions = jp.reshape(index, (1, 1)).astype("int32")
-        embeds = stateless_forward(embedding, embedding_vars, token2d)
+        embeds = call_stateless(embedding, embedding_vars, token2d)
         inputs = [embeds, cache, jp.reshape(index, (1,)).astype("int32"),
                   positions]
         if per_layer_vars is not None:
             inputs.append(
-                stateless_forward(per_layer_step, per_layer_vars, token2d))
-        logits, cache = stateless_forward(step_model, step_vars, inputs)
+                call_stateless(per_layer_step, per_layer_vars, token2d))
+        logits, cache = call_stateless(step_model, step_vars, inputs)
         key, step_key = jax.random.split(key)
         next_id = select(logits[:, 0, :], step_key)
         buffer = buffer.at[count].set(next_id)

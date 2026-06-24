@@ -38,6 +38,8 @@ from paz.backend.standard import (
     to_jax,
     to_numpy,
     NamedTuple,
+    snapshot_variables,
+    call_stateless,
 )
 from paz import losses
 from paz.abstract import Model, Node, Input, Sequential, Tree
