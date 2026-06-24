@@ -5,6 +5,8 @@ os.environ["KERAS_BACKEND"] = "jax"
 import argparse
 
 import numpy as np
+import jax
+import jax.numpy as jp
 import keras
 
 import paz
@@ -12,28 +14,28 @@ import facial_keypoints
 
 
 class KeypointSequence(keras.utils.PyDataset):
-    def __init__(self, images, keypoints, batch_size, augment=False):
+    def __init__(self, images, keypoints, batch_size, augment=False, seed=0):
         super().__init__()
-        self.images = np.asarray(images, "float32") / 255.0
+        self.images = np.asarray(images, "uint8")
         self.keypoints = paz.gaussian_mixture.normalize_points(
             np.asarray(keypoints, "float32"), 96, 96)
         self.batch_size = batch_size
         self.augment = augment
+        self.key = jax.random.PRNGKey(seed)
+        self.augment_images = jax.jit(jax.vmap(paz.image.random_brightness))
 
     def __len__(self):
         return len(self.images) // self.batch_size
 
     def __getitem__(self, index):
         chunk = slice(index * self.batch_size, (index + 1) * self.batch_size)
-        images = self.images[chunk][..., None].copy()
+        images = self.images[chunk][..., None]
         if self.augment:
-            images = augment_batch(images)
+            key = jax.random.fold_in(self.key, index)
+            keys = jax.random.split(key, len(images))
+            images = self.augment_images(keys, jp.asarray(images))
+        images = np.asarray(images, "float32") / 255.0
         return images, np.asarray(self.keypoints[chunk])
-
-
-def augment_batch(images):
-    brightness = np.random.uniform(0.9, 1.1, (len(images), 1, 1, 1))
-    return np.clip(images * brightness, 0.0, 1.0)
 
 
 if __name__ == "__main__":
