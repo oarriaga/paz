@@ -3,9 +3,10 @@ from collections import namedtuple
 from keras import ops
 from keras.layers import Dropout, EinsumDense, Softmax
 
-from .core import apply_partial_rotary_embedding
+from paz.layers import MergeDims, SplitDim
+from paz.models.transformers.embeddings import rotary
+
 from .core import apply_tanh_soft_cap
-from .core import MergeDims, SplitDim
 from .normalization import build_rms_norm, build_v_norm
 
 AttendArgs = namedtuple(
@@ -28,7 +29,7 @@ def attend(args, shared_kv=None):
     query = project_query(
         x, args.num_query_heads, args.head_dim, args.epsilon, dtype, name)
     rope_args = (args.wavelength, args.scaling_factor, args.partial_rotary)
-    query = apply_partial_rotary_embedding(query, *rope_args)
+    query = rotary.apply_partial(query, *rope_args)
     if shared_kv is not None:
         key, value = shared_kv[:, 0, ...], shared_kv[:, 1, ...]
     else:
@@ -36,7 +37,7 @@ def attend(args, shared_kv=None):
             x, args.num_kv_heads, args.head_dim, args.epsilon, dtype, name)
         value = project_value(
             x, args.num_kv_heads, args.head_dim, args.epsilon, dtype, name)
-        key = apply_partial_rotary_embedding(key, *rope_args)
+        key = rotary.apply_partial(key, *rope_args)
     kv = ops.stack((key, value), axis=1)
     output = compute_attention(query, key, value, args.mask, args)
     output = zero_masked_positions(output, args.mask)
@@ -63,7 +64,7 @@ def cached_attend(args, shared_kv_cache=None):
         args.partial_rotary,
         positions,
     )
-    query = apply_partial_rotary_embedding(query, *rope_args)
+    query = rotary.apply_partial(query, *rope_args)
     if shared_kv_cache is not None:
         kv_src = shared_kv_cache
         updated_cache = args.cache
@@ -72,7 +73,7 @@ def cached_attend(args, shared_kv_cache=None):
             x, args.num_kv_heads, head_dim, args.epsilon, dtype, name)
         value = project_value(
             x, args.num_kv_heads, head_dim, args.epsilon, dtype, name)
-        key = apply_partial_rotary_embedding(key, *rope_args)
+        key = rotary.apply_partial(key, *rope_args)
         key = ops.cast(key, dtype)
         value = ops.cast(value, dtype)
         if head_dim < cache_head_dim:
