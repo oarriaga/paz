@@ -21,9 +21,9 @@ training range, so callers feed plain `[0, 1]` grayscale.
 
 The pretrained weights are the gender model from `oarriaga/face_classification`
 (`gender_mini_XCEPTION`), converted to Keras-3 as
-`imdb_mini_XCEPTION_paz_jax.weights.h5` (bit-identical outputs). Once that file
-is hosted on `oarriaga/altamira-data`, `paz.models.MiniXceptionIMDB` loads it
-directly. Until then, point the demo at a local copy.
+`imdb_mini_XCEPTION_paz_jax.weights.h5` (bit-identical outputs) and hosted on
+`oarriaga/altamira-data` (v0.22). `paz.models.MiniXceptionIMDB` wires that URL,
+so the applications load it automatically — no local file needed.
 
 ## Data (for retraining)
 
@@ -48,10 +48,15 @@ This writes `experiments/imdb_mini_XCEPTION_paz_jax.weights.h5`.
 ## Demo
 
 ```bash
-KERAS_BACKEND=jax python demo.py \
-    --weights experiments/imdb_mini_XCEPTION_paz_jax.weights.h5
+KERAS_BACKEND=jax python demo.py
 ```
 
-The demo loads a local checkpoint through the shared
-`paz.applications.ClassifyMiniXception` / `DetectMiniXception` helpers, so it
-runs without any hosted weights.
+Uses the hosted weights via `paz.applications.DetectMiniXceptionIMDB`, like
+every other application. To run a checkpoint you trained yourself, build the
+model and feed it to the shared helper:
+
+```python
+model = paz.models.build_mini_xception_imdb((64, 64, 1), 2)
+model.load_weights("experiments/imdb_mini_XCEPTION_paz_jax.weights.h5")
+classify = paz.applications.ClassifyMiniXception(model)
+```
