@@ -36,6 +36,8 @@ the bottom.
 | SimpleBaselines 3D | ✅ | v0.17 | — | ✅ bit-exact |
 | **Human pose 3D + 6D** (`EstimateHumanPose`) | ✅ | — | human_pose_estimation_3D | ✅ 6D opt + viz |
 | EfficientDet D0–D7 (COCO) | ✅ | v0.16 | efficientdet | ✅ |
+| **EfficientDet-D0 VOC** | ✅ | v0.16 | efficientdet | ✅ persons + table |
+| **ClassifyHandClosure** (open/closed) | ✅ | reuses v0.1+v0.14 | — | ✅ open/close |
 | EfficientPose (model) | model only | **not hosted** | — | architecture only |
 | STN, ProtoNet, Xception, PCA, kNN/DBSCAN, MAML, eigenfaces | ✅ | n/a | various | ✅ |
 
@@ -64,8 +66,9 @@ the bottom.
 ### Tier 2 — instance segmentation / detection variants
 - **Mask R-CNN** (`examples/mask_rcnn`): RPN, ROIAlign, proposal/detection/mask
   heads, train + demos. Heaviest port. Not started.
-- **EfficientDet-VOC** (`EFFICIENTDETD0VOC`) and **EfficientDet train.py /
-  evaluate_mAP** — only COCO inference is done.
+- **EfficientDet train.py / evaluate_mAP** — inference is done for both COCO
+  (D0–D7) and VOC (`EFFICIENTDETD0VOC`, v0.16 weights, SSD-style decode); no
+  training/eval script yet.
 - **Semantic segmentation (UNet)**: done for the synthetic **Shapes** dataset —
   `examples/semantic_segmentation/` (train + demo), Dice/Jaccard/Focal losses in
   `paz.losses`, mask-overlay draw helpers, `UNET_*` exported. **Cityscapes**
@@ -86,7 +89,6 @@ the bottom.
 - **fine-tuning_object_detection** — SSD fine-tuning workflow (largely covered by
   `object_detection/train.py`).
 - **tutorials** — bounding boxes, augmentation, controlmap, detection pipeline.
-- **Hand**: `ClassifyHandClosure` (open/closed hand) not ported.
 
 ### Remaining training scripts (cross-cutting)
 Inference is ported for these, but no train.py yet: **HigherHRNet** (heatmap +
