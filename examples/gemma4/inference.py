@@ -1,6 +1,8 @@
 from keras import Model, ops
 from keras.layers import Input
 
+from paz.models.transformers import cache as kv_cache
+
 from .layers.core import apply_tanh_soft_cap
 from .layers.decoder import cached_decoder_block
 from .layers.normalization import build_rms_norm
@@ -175,6 +177,6 @@ def build_cached_decoder_blocks(hidden, cache, index, config,
 def build_empty_cache(config, max_length, batch_size=1):
     num_kv_heads = config.num_key_value_heads
     cache_head_dim = build_cache_head_dim(config)
-    shape = (batch_size, config.num_layers, 2, max_length,
-             num_kv_heads, cache_head_dim)
-    return ops.zeros(shape, dtype=config.dtype)
+    args = (batch_size, config.num_layers, max_length, num_kv_heads,
+            cache_head_dim, config.dtype)
+    return kv_cache.build(*args)
