@@ -249,6 +249,26 @@ def to_boxes2D(detections):
     return boxes.astype("int32"), label.astype("int32"), score
 
 
+def non_max_suppression(boxes, scores, iou_thresh=0.45, top_k=200):
+    """Greedy NMS over corner-form boxes; returns (indices, num_selected)."""
+    selected = np.zeros(len(scores), "int32")
+    if boxes is None or len(boxes) == 0:
+        return selected, 0
+    boxes = jp.asarray(boxes, "float32")
+    remaining = np.argsort(scores)[-top_k:]
+    count = 0
+    while len(remaining) > 0:
+        best = remaining[-1]
+        selected[count] = best
+        count = count + 1
+        remaining = remaining[:-1]
+        if len(remaining) == 0:
+            break
+        ious = np.asarray(paz.boxes.compute_IOU(boxes[best], boxes[remaining]))
+        remaining = remaining[ious <= iou_thresh]
+    return selected, count
+
+
 def apply_per_class_NMS(detections, num_classes, iou_thresh=0.45, top_k=200):
 
     def compute_IOU(box_A, boxes_B):

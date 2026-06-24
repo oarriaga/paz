@@ -22,6 +22,10 @@ from .keypoint.iknet import IKNet
 from .keypoint.simplebaselines import SimpleBaseline
 from .pose_estimation.higher_hrnet import HigherHRNet
 from .pose_estimation.efficientpose import EfficientPosePhi0
+from .segmentation.unet import UNET
+from .segmentation.unet import UNET_VGG16
+from .segmentation.unet import UNET_VGG19
+from .segmentation.unet import UNET_RESNET50
 from .foundation.dinov3.models.vision_transformer import DINOV3VITS
 from .foundation.dinov3.models.vision_transformer import DINOV3VITB
 from .foundation.dinov3.models.vision_transformer import DINOV3VITL

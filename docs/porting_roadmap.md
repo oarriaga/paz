@@ -47,6 +47,7 @@ the bottom.
 | **Action scores** (`action_scores/train_classifier.py`) | ✅ synthetic | FER |
 | **Hand detection** (`hand_detection/train.py`) | wired (reuses SSD pipeline) | Open Images V6 |
 | **MiniXception FER** (`emotion_classifier/train.py`) | ✅ synthetic | FER |
+| **UNet segmentation** (`semantic_segmentation/train.py`) | ✅ smoke (dice↓) | Shapes (synthetic) |
 
 ## Still missing / not yet ported
 
@@ -65,9 +66,11 @@ the bottom.
   heads, train + demos. Heaviest port. Not started.
 - **EfficientDet-VOC** (`EFFICIENTDETD0VOC`) and **EfficientDet train.py /
   evaluate_mAP** — only COCO inference is done.
-- **Semantic segmentation (UNet)**: model is ported (`paz/models/segmentation/
-  unet.py`), but there is **no application, example, or train.py** (master had
-  `train.py` + cityscapes + demo).
+- **Semantic segmentation (UNet)**: done for the synthetic **Shapes** dataset —
+  `examples/semantic_segmentation/` (train + demo), Dice/Jaccard/Focal losses in
+  `paz.losses`, mask-overlay draw helpers, `UNET_*` exported. **Cityscapes**
+  (loader + 34-ID→8-class mapping + `train_cityscapes.py`) is still pending
+  (data-gated, not verifiable here).
 
 ### Other domain capabilities not ported
 - **implicit_orientation_learning** — augmented autoencoder for object
@@ -105,6 +108,11 @@ H36M loader), **Minimal Hand** (DetNet/IKNet keypoint + IK losses),
   `with_flip` TTA omitted (accuracy-only).
 - **Action scores:** `ScalarActionScore` + `FeatureExtractor` Keras-3 callbacks
   in `examples/action_scores/`.
+- **Semantic segmentation:** Shapes-based example trains `UNET_VGG16`
+  (`num_classes=4`, softmax) with `paz.losses.dice`; `paz.draw.overlay_masks`
+  blends per-class colors. Restored a latent break: `paz.datasets.shapes.load`
+  called a missing `paz.detection.non_max_suppression`, now added (greedy NMS
+  reusing `paz.boxes.compute_IOU`).
 - **Probabilistic keypoints:** the legacy model embedded a
   `tensorflow_probability` mixture via `DistributionLambda`; the JAX port keeps
   the net convolutional (emits raw mixture maps) and moves the GMM math (mean,
