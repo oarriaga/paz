@@ -91,7 +91,14 @@ def build_affine(center, scale, size, inverse):
     source, destination = source_destination_points(center, scale, size)
     if inverse:
         source, destination = destination, source
-    return cv2.getAffineTransform(source, destination)
+    return solve_affine(source, destination)
+
+
+def solve_affine(source, destination):
+    source = np.asarray(source, np.float64)
+    destination = np.asarray(destination, np.float64)
+    homogeneous = np.concatenate([source, np.ones((3, 1))], axis=1)
+    return np.linalg.solve(homogeneous, destination).T
 
 
 def source_destination_points(center, scale, size, factor=200):
