@@ -954,19 +954,3 @@ def test_match_logic_with_padded_boxes():
     # It has low IOU with all real boxes and is not a forced match.
     # It should be assigned a background class of 0.
     assert matched_boxes[2, 4] == 0, "Prior 2 should be background (class 0)"
-
-
-def test_non_max_suppression_suppresses_overlap():
-    boxes = jp.array([[0.0, 0.0, 1.0, 1.0],
-                      [0.1, 0.1, 1.1, 1.1],
-                      [5.0, 5.0, 6.0, 6.0]])
-    scores = jp.array([0.9, 0.8, 0.7])
-    indices, count = paz.detection.non_max_suppression(boxes, scores, 0.45)
-    assert count == 2
-    assert set(indices[:count].tolist()) == {0, 2}
-
-
-def test_non_max_suppression_empty():
-    boxes = jp.zeros((0, 4))
-    indices, count = paz.detection.non_max_suppression(boxes, jp.zeros(0))
-    assert count == 0

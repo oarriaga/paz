@@ -249,26 +249,6 @@ def to_boxes2D(detections):
     return boxes.astype("int32"), label.astype("int32"), score
 
 
-def non_max_suppression(boxes, scores, iou_thresh=0.45, top_k=200):
-    """Greedy NMS over corner-form boxes; returns (indices, num_selected)."""
-    selected = np.zeros(len(scores), "int32")
-    if boxes is None or len(boxes) == 0:
-        return selected, 0
-    boxes = jp.asarray(boxes, "float32")
-    remaining = np.argsort(scores)[-top_k:]
-    count = 0
-    while len(remaining) > 0:
-        best = remaining[-1]
-        selected[count] = best
-        count = count + 1
-        remaining = remaining[:-1]
-        if len(remaining) == 0:
-            break
-        ious = np.asarray(paz.boxes.compute_IOU(boxes[best], boxes[remaining]))
-        remaining = remaining[ious <= iou_thresh]
-    return selected, count
-
-
 def apply_per_class_NMS(detections, num_classes, iou_thresh=0.45, top_k=200):
 
     def compute_IOU(box_A, boxes_B):
@@ -417,7 +397,6 @@ def apply_NMS(detections, iou_thresh, top_k):
 
 
 def jp_apply_per_class_NMS(detections, num_classes, iou_thresh=0.45, top_k=200):
-    # TODO JAX version of apply_per_class_NMS is slower than the numpy version
 
     def apply_NMS(detections, class_arg):
         class_detections = paz.detection.to_score(detections, class_arg)
@@ -468,7 +447,12 @@ def jp_apply_per_class_NMS(detections, num_classes, iou_thresh=0.45, top_k=200):
         keep_mask = jp.expand_dims(jp.logical_not(suppressed_mask), axis=-1)
         return jp.where(keep_mask, class_detections, -1)
 
-    return jax.vmap(paz.partial(apply_NMS, detections))(jp.arange(num_classes))
+    suppressed = jax.vmap(paz.partial(apply_NMS, detections))(
+        jp.arange(num_classes)
+    )
+    suppressed = suppressed.reshape(-1, 5)
+    labels = jp.repeat(jp.arange(num_classes), top_k).astype("float32")
+    return jp.concatenate([suppressed, jp.expand_dims(labels, -1)], axis=-1)
 
 
 def original_match(boxes_with_class_arg, prior_boxes, IOU_threshold=0.5):
