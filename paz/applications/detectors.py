@@ -199,17 +199,15 @@ def scaled_resize(image, size):
 
 
 def change_box_coordinates(outputs):
-    outputs = np.asarray(outputs[0])
-    boxes, classes = outputs[:, :4], outputs[:, 4:]
-    s1, s2, s3, s4 = np.split(boxes, 4, axis=1)
-    boxes = np.concatenate([s2, s1, s4, s3], axis=1)
-    return np.concatenate([boxes, classes], axis=1)[np.newaxis]
+    boxes, classes = outputs[0][:, :4], outputs[0][:, 4:]
+    s1, s2, s3, s4 = jp.split(boxes, 4, axis=1)
+    boxes = jp.concatenate([s2, s1, s4, s3], axis=1)
+    return jp.concatenate([boxes, classes], axis=1)[jp.newaxis]
 
 
 def scale_boxes(detections, scale):
-    detections = np.asarray(detections)
     boxes = detections[:, :4] * scale
-    return np.concatenate([boxes, detections[:, 4:]], axis=1)
+    return jp.concatenate([boxes, detections[:, 4:]], axis=1)
 
 
 def DetectMiniXceptionFER(box_scale=1.2, draw=None):
