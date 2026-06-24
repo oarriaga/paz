@@ -63,13 +63,19 @@ def Gemma4MultimodalDecoderStep(
     """
     cache, cache_index = build_cache_inputs(config)
     input_embedding = Input(
-        (1, config.hidden_dim), dtype=config.dtype, name="input_embedding")
+        (None, config.hidden_dim), dtype=config.dtype, name="input_embedding")
+    positions = Input((None,), dtype="int32", name="positions")
     embedding = build_token_embedding(
         config.vocabulary_size, config.hidden_dim, config.dtype)
-    per_layer = build_per_layer_input(config)
+    per_layer = None
+    if config.hidden_size_per_layer_input:
+        dim = config.hidden_size_per_layer_input * config.num_layers
+        per_layer = Input(
+            (None, dim), dtype=config.dtype, name="per_layer_full_embedding")
     outputs = build_cached_step(
-        input_embedding, embedding, cache, cache_index, per_layer, config)
-    inputs = [input_embedding, cache, cache_index]
+        input_embedding, embedding, cache, cache_index, per_layer, config,
+        positions=positions)
+    inputs = [input_embedding, cache, cache_index, positions]
     if per_layer is not None:
         inputs.append(per_layer)
     return Model(inputs, list(outputs), name=name)
@@ -91,7 +97,8 @@ def build_per_layer_input(config):
     return Input((1, dim), dtype=config.dtype, name="per_layer_full_embedding")
 
 
-def build_cached_step(hidden, embedding, cache, cache_index, per_layer, config):
+def build_cached_step(hidden, embedding, cache, cache_index, per_layer, config,
+                      positions=None):
     index_scalar = extract_cache_index(cache_index)
     per_layer_embeddings = None
     if per_layer is not None:
@@ -105,7 +112,7 @@ def build_cached_step(hidden, embedding, cache, cache_index, per_layer, config):
     hidden = scale_token_embeddings(hidden, config.hidden_dim)
     hidden, updated_cache = build_cached_decoder_blocks(
         hidden, cache, index_scalar, config,
-        per_layer_embeddings=per_layer_embeddings)
+        per_layer_embeddings=per_layer_embeddings, positions=positions)
     updated_cache = ops.cast(updated_cache, config.dtype)
     norm_args = (config.layer_norm_epsilon, config.dtype,
                  "final_normalization")
@@ -136,7 +143,7 @@ def concat_layer_caches(caches):
 
 
 def build_cached_decoder_blocks(hidden, cache, index, config,
-                                 per_layer_embeddings=None):
+                                 per_layer_embeddings=None, positions=None):
     from .model import build_kv_source_map
     kv_source_map = build_kv_source_map(config)
     updated_caches = []
@@ -156,6 +163,7 @@ def build_cached_decoder_blocks(hidden, cache, index, config,
         kwargs = {
             "per_layer_embedding": per_layer_embedding,
             "shared_kv_cache": shared_kv_cache,
+            "positions": positions,
         }
         hidden, layer_cache = cached_decoder_block(
             *args, **kwargs)

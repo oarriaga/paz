@@ -116,13 +116,13 @@ def build_attend_args(hidden, mask, config, layer_index, name):
 def cached_decoder_block(x, cache, cache_index, config,
                           layer_index, name,
                           per_layer_embedding=None,
-                          shared_kv_cache=None):
+                          shared_kv_cache=None, positions=None):
     dtype = keras.backend.standardize_dtype(x.dtype)
     if dtype == "float16":
         x = clip_float16(x)
     hidden, cache = cached_attention_path(
         x, cache, cache_index, config, layer_index, name,
-        shared_kv_cache=shared_kv_cache)
+        shared_kv_cache=shared_kv_cache, positions=positions)
     hidden = feedforward_path(
         hidden, config, name, layer_index=layer_index)
     # Per-layer input applied AFTER FFW, BEFORE layer scalar.
@@ -135,19 +135,20 @@ def cached_decoder_block(x, cache, cache_index, config,
 
 
 def cached_attention_path(x, cache, cache_index, config, layer_index, name,
-                           shared_kv_cache=None):
+                           shared_kv_cache=None, positions=None):
     epsilon, dtype = config.layer_norm_epsilon, config.dtype
     norm_name = "{}_pre_attention_norm".format(name)
     hidden = build_rms_norm(epsilon, dtype, norm_name)(x)
     attn_args = build_cached_attend_args(
-        hidden, cache, cache_index, config, layer_index, name)
+        hidden, cache, cache_index, config, layer_index, name, positions)
     hidden, cache = cached_attend(attn_args, shared_kv_cache=shared_kv_cache)
     post_name = "{}_post_attention_norm".format(name)
     hidden = build_rms_norm(epsilon, dtype, post_name)(hidden)
     return add_residual(x, hidden), cache
 
 
-def build_cached_attend_args(hidden, cache, index, config, layer_index, name):
+def build_cached_attend_args(hidden, cache, index, config, layer_index, name,
+                             positions=None):
     from ..model import (is_global_attention_layer, build_head_dim,
                          build_rope_wavelength, build_rope_scaling_factor,
                          build_partial_rotary_factor, build_cache_head_dim,
@@ -173,6 +174,7 @@ def build_cached_attend_args(hidden, cache, index, config, layer_index, name):
         attn_name,
         build_cache_head_dim(config),
         window,
+        positions,
     )
 
 
