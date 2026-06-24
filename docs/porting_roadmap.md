@@ -65,11 +65,9 @@ the bottom.
   heads, train + demos. Heaviest port. Not started.
 - **EfficientDet-VOC** (`EFFICIENTDETD0VOC`) and **EfficientDet train.py /
   evaluate_mAP** — only COCO inference is done.
-- **Extra SSD heads**: done. `SSD512-YCBVideo` verified end-to-end (v0.1
-  weights) and `SSD300-FAT` verified end-to-end (`SSD300-FAT-FAT_weights.hdf5`
-  at v0.2). Both detect YCB objects on the DOPE image.
-- **Semantic segmentation (UNet)**: model is ported, but there is **no
-  application, example, or train.py** (master had `train.py` + cityscapes + demo).
+- **Semantic segmentation (UNet)**: model is ported (`paz/models/segmentation/
+  unet.py`), but there is **no application, example, or train.py** (master had
+  `train.py` + cityscapes + demo).
 
 ### Other domain capabilities not ported
 - **implicit_orientation_learning** — augmented autoencoder for object
@@ -77,6 +75,11 @@ the bottom.
 - **visual_voice_activity_detection (VVAD)** — `cnn2Plus1` video model + demos.
 - **discovery_of_latent_keypoints** — self-supervised 3D keypoint discovery.
 - **images_synthesis** — synthetic data generation for pose.
+- **structure_from_motion** — classical SfM example; likely superseded by the
+  new differentiable-graphics direction (`zero_shot_scene_reconstruction`,
+  `differentiable_rendering`) rather than a direct port.
+- **Gender classification** — master `face_classification` shipped emotion **and**
+  gender (IMDB) classifiers; only the emotion (FER MiniXception) path is ported.
 - **fine-tuning_object_detection** — SSD fine-tuning workflow (largely covered by
   `object_detection/train.py`).
 - **tutorials** — bounding boxes, augmentation, controlmap, detection pipeline.
