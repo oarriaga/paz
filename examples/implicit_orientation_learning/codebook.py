@@ -9,7 +9,8 @@ Codebook = namedtuple("Codebook", ["views", "poses", "latents"])
 
 def build_codebook(encoder, render_fn, poses):
     views = scenes.render_views(render_fn, poses)
-    latents = np.asarray(encoder.predict(views, verbose=0))
+    images = views.astype("float32") / 255.0
+    latents = np.asarray(encoder.predict(images, verbose=0))
     return Codebook(views, np.stack([np.asarray(p) for p in poses]),
                     unit_rows(latents))
 

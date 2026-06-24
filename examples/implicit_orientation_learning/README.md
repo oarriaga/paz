@@ -18,6 +18,12 @@ brightness). `scenes.build_mesh` normalizes any mesh to unit extent, so the
 default camera distance frames any object. With no `--mesh`, a colored cube is
 used so the example runs offline.
 
+Domain randomization reuses the `paz.backend.image` augmentation pipeline:
+`paz.image.randomize_rendered_image` blends the object over a background
+(plain random color, or a random crop of a provided image), adds random
+occlusions, applies blur and color jitter — mirroring the legacy
+`RandomizeRenderedImage`. Pass `--backgrounds` to composite over real images.
+
 ## Train
 
 ```bash

@@ -38,7 +38,7 @@ def build_pipeline(args):
         crop = paz.image.resize_opencv(image, size)
         crop = paz.image.normalize(np.asarray(crop, "float32"))
         view, pose = codebook.closest_view(encoder, crop, book)
-        return paz.image.resize_opencv(paz.image.denormalize(view), size)
+        return paz.image.resize_opencv(view, size)
 
     return call
 

@@ -403,6 +403,80 @@ def random_color_transform(key, image):
     return image
 
 
+def make_random_plain_image(key, shape):
+    """Plain image of a single random RGB color."""
+    color = jax.random.randint(key, (shape[-1],), 0, 256)
+    return jp.broadcast_to(color, shape).astype(jp.uint8)
+
+
+def random_crop(key, image, size):
+    """Crops a random `size` window from an image at least that large."""
+    H, W = image.shape[:2]
+    H_crop, W_crop = size
+    key_y, key_x = jax.random.split(key)
+    y = int(jax.random.randint(key_y, (), 0, max(H - H_crop, 0) + 1))
+    x = int(jax.random.randint(key_x, (), 0, max(W - W_crop, 0) + 1))
+    return image[y:y + H_crop, x:x + W_crop]
+
+
+def blend_background(image, background, mask):
+    """Composites a foreground over a background using a foreground mask."""
+    mask = jp.asarray(mask, jp.float32)
+    if mask.ndim == 2:
+        mask = mask[..., jp.newaxis]
+    foreground = paz.cast(image, jp.float32)
+    background = paz.cast(background, jp.float32)
+    blended = mask * foreground + (1.0 - mask) * background
+    return paz.cast(blended, jp.uint8)
+
+
+def add_occlusion(key, image, max_radius_scale=0.5):
+    """Draws one random filled polygon over the image."""
+    image = np.array(paz.to_numpy(image))
+    H, W = image.shape[:2]
+    keys = jax.random.split(key, 5)
+    num_vertices = int(jax.random.randint(keys[0], (), 4, 9))
+    center = np.asarray(jax.random.uniform(keys[1], (2,))) * np.array([W, H])
+    max_radius = max_radius_scale * max(H, W)
+    radii = np.asarray(jax.random.uniform(keys[2], (num_vertices,)))
+    angles = np.sort(np.asarray(jax.random.uniform(keys[3], (num_vertices,))))
+    offsets = np.stack([np.cos(angles * 2.0 * np.pi),
+                        np.sin(angles * 2.0 * np.pi)], axis=1)
+    points = (center + (radii * max_radius)[:, np.newaxis] * offsets)
+    color = np.asarray(jax.random.randint(keys[4], (3,), 0, 256)).tolist()
+    cv2.fillPoly(image, [points.astype(np.int32)], color)
+    return image
+
+
+def random_blur(key, image, kernel_size=9):
+    """Applies Gaussian blur with probability one half."""
+    if not bool(jax.random.uniform(key, ()) < 0.5):
+        return image
+    image = np.array(paz.to_numpy(image))
+    return cv2.GaussianBlur(image, (kernel_size, kernel_size), 0)
+
+
+def randomize_rendered_image(key, image, mask, backgrounds=None,
+                             num_occlusions=2, max_radius_scale=0.5):
+    """Domain-randomizes a rendered object view: background blending, random
+    occlusions, blur and color jitter. Mirrors the legacy pipeline."""
+    keys = jax.random.split(key, 3 + num_occlusions)
+    background = sample_background(keys[0], image.shape, backgrounds)
+    image = blend_background(image, background, mask)
+    for occlusion_arg in range(num_occlusions):
+        image = add_occlusion(keys[1 + occlusion_arg], image, max_radius_scale)
+    image = random_blur(keys[1 + num_occlusions], image)
+    return random_color_transform(keys[2 + num_occlusions], image)
+
+
+def sample_background(key, shape, backgrounds):
+    if backgrounds is None:
+        return make_random_plain_image(key, shape)
+    key_pick, key_crop = jax.random.split(key)
+    index = int(jax.random.randint(key_pick, (), 0, len(backgrounds)))
+    return random_crop(key_crop, backgrounds[index], shape[:2])
+
+
 def affine_transform(image, matrix, order=1, mode="nearest", cval=0.0):
 
     def build_image_indices(image):

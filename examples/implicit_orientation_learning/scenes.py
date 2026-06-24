@@ -69,4 +69,4 @@ def grid_poses(theta_steps, phi_steps, distance, top_only):
 
 def render_views(render_fn, poses):
     views = [np.asarray(render_fn(pose)) for pose in poses]
-    return np.stack(views).astype("float32") / 255.0
+    return np.stack(views).astype("uint8")

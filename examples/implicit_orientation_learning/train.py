@@ -5,6 +5,7 @@ os.environ["KERAS_BACKEND"] = "jax"
 import argparse
 
 import numpy as np
+import jax
 import keras
 
 import paz
@@ -18,42 +19,25 @@ class OrientationSequence(keras.utils.PyDataset):
         self.masks = masks
         self.batch_size = batch_size
         self.backgrounds = backgrounds
-        self.rng = np.random.default_rng(seed)
+        self.key = jax.random.PRNGKey(seed)
 
     def __len__(self):
         return len(self.views) // self.batch_size
 
     def __getitem__(self, index):
         chunk = slice(index * self.batch_size, (index + 1) * self.batch_size)
-        targets = self.views[chunk]
-        inputs = [self.randomize(v, m)
-                  for v, m in zip(targets, self.masks[chunk])]
-        return np.stack(inputs).astype("float32"), targets
+        clean = self.views[chunk]
+        targets = clean.astype("float32") / 255.0
+        offset = index * self.batch_size
+        inputs = [self.randomize(offset + arg, view, mask)
+                  for arg, (view, mask) in enumerate(zip(clean, self.masks[chunk]))]  # fmt: skip
+        return np.stack(inputs), targets
 
-    def randomize(self, view, mask):
-        image = view.copy()
-        image[~mask] = self.background(view.shape)[~mask]
-        image = add_occlusions(image, self.rng)
-        return jitter_brightness(image, self.rng)
-
-    def background(self, shape):
-        if self.backgrounds is None:
-            color = self.rng.uniform(0.0, 1.0, (1, 1, 3))
-            return np.broadcast_to(color, shape).astype("float32")
-        return self.backgrounds[self.rng.integers(len(self.backgrounds))]
-
-
-def add_occlusions(image, rng, num_occlusions=2):
-    H, W = image.shape[:2]
-    for _ in range(num_occlusions):
-        x, y = rng.integers(0, W), rng.integers(0, H)
-        w, h = rng.integers(4, W // 3), rng.integers(4, H // 3)
-        image[y:y + h, x:x + w] = rng.uniform(0.0, 1.0, 3)
-    return image
-
-
-def jitter_brightness(image, rng):
-    return np.clip(image * rng.uniform(0.7, 1.3), 0.0, 1.0)
+    def randomize(self, sample_arg, view, mask):
+        key = jax.random.fold_in(self.key, sample_arg)
+        randomize = paz.image.randomize_rendered_image
+        image = randomize(key, view, mask, self.backgrounds)
+        return np.asarray(image, "float32") / 255.0
 
 
 def load_backgrounds(path, image_size):
@@ -62,7 +46,7 @@ def load_backgrounds(path, image_size):
     files = [os.path.join(path, f) for f in os.listdir(path)]
     crops = [paz.image.resize_opencv(paz.image.load(f), (image_size,) * 2)
              for f in files]
-    return np.stack(crops).astype("float32") / 255.0
+    return np.stack(crops).astype("uint8")
 
 
 def render_dataset(mesh_path, num_views, image_size, distance, root, seed):
@@ -74,7 +58,7 @@ def render_dataset(mesh_path, num_views, image_size, distance, root, seed):
     render = scenes.build_renderer(mesh, image_size, distance)
     poses = scenes.random_poses(num_views, distance, False, seed)
     views = scenes.render_views(render, poses)
-    masks = (views < 0.9).any(axis=-1)
+    masks = (views < 230).any(axis=-1)
     np.savez(cache, views=views, masks=masks)
     return views, masks
 

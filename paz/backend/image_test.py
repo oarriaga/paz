@@ -50,3 +50,33 @@ def test_forward_differences_batches_images():
     expected = jax.vmap(legacy_forward_differences)(batch)
     assert jp.allclose(dy, expected[0])
     assert jp.allclose(dx, expected[1])
+
+
+def test_make_random_plain_image_is_uniform_color():
+    image = paz.image.make_random_plain_image(jax.random.PRNGKey(0), (8, 8, 3))
+    assert image.shape == (8, 8, 3)
+    assert jp.all(image[0, 0] == image[5, 4])
+
+
+def test_blend_background_respects_mask():
+    foreground = jp.full((4, 4, 3), 200, jp.uint8)
+    background = jp.zeros((4, 4, 3), jp.uint8)
+    mask = jp.zeros((4, 4)).at[0, 0].set(1.0)
+    blended = paz.image.blend_background(foreground, background, mask)
+    assert int(blended[0, 0, 0]) == 200
+    assert int(blended[1, 1, 0]) == 0
+
+
+def test_add_occlusion_changes_image_and_keeps_shape():
+    image = jp.full((32, 32, 3), 200, jp.uint8)
+    occluded = paz.image.add_occlusion(jax.random.PRNGKey(1), image)
+    assert occluded.shape == (32, 32, 3)
+    assert not bool(jp.all(occluded == 200))
+
+
+def test_randomize_rendered_image_keeps_shape():
+    image = jp.full((32, 32, 3), 128, jp.uint8)
+    mask = jp.ones((32, 32))
+    key = jax.random.PRNGKey(2)
+    output = paz.image.randomize_rendered_image(key, image, mask)
+    assert output.shape == (32, 32, 3)
