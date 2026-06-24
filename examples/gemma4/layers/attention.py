@@ -21,9 +21,9 @@ def attend(x, mask, head_dim, num_query_heads, num_kv_heads, epsilon,
         value = project_value(x, num_kv_heads, head_dim, epsilon, dtype, name)
         key = rotary.apply_partial(key, *rope_args)
     kv = ops.stack((key, value), axis=1)
-    output = compute_attention(query, key, value, mask, num_query_heads,
-                               num_kv_heads, head_dim, soft_cap, dropout,
-                               dtype, name)
+    args = (query, key, value, mask, num_query_heads, num_kv_heads, head_dim,
+            soft_cap, dropout, dtype, name)
+    output = compute_attention(*args)
     output = zero_masked_positions(output, mask)
     return project_output(output, x.shape[-1], dtype, name), kv
 
@@ -63,9 +63,9 @@ def cached_attend(x, cache, index, head_dim, num_query_heads, num_kv_heads,
         full_key = full_key[..., :head_dim]
         full_value = full_value[..., :head_dim]
     mask = build_cache_mask(full_key, index, positions, window)
-    output = compute_attention(query, full_key, full_value, mask,
-                               num_query_heads, num_kv_heads, head_dim,
-                               soft_cap, 0.0, dtype, name)
+    args = (query, full_key, full_value, mask, num_query_heads, num_kv_heads,
+            head_dim, soft_cap, 0.0, dtype, name)
+    output = compute_attention(*args)
     return project_output(output, x.shape[-1], dtype, name), updated_cache
 
 
@@ -96,8 +96,8 @@ def query_positions(index, positions):
 
 
 def build_cache_positions(index, positions):
-    return ops.cast(ops.transpose(query_positions(index, positions)),
-                    "float32")
+    transposed = ops.transpose(query_positions(index, positions))
+    return ops.cast(transposed, "float32")
 
 
 def update_kv_cache(cache, index, key_update, value_update, dtype=None):

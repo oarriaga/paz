@@ -5,8 +5,8 @@ from paz.layers import MergeDims
 
 
 def apply(inputs, wavelength, scaling_factor, denominator, positions=None):
-    cosine, sine = build(inputs, wavelength, scaling_factor, denominator,
-                         positions)
+    args = (inputs, wavelength, scaling_factor, denominator, positions)
+    cosine, sine = build(*args)
     first_half, second_half = ops.split(inputs, 2, axis=-1)
     rotated = ops.stack((-second_half, first_half), axis=-2)
     rotated = MergeDims(axis=-2)(rotated)

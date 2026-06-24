@@ -2,8 +2,7 @@ import keras
 from keras import ops
 
 
-def build_attention_mask(
-        padding_mask, bidirectional, sliding_window_size):
+def build_attention_mask(padding_mask, bidirectional, sliding_window_size):
     if padding_mask is None:
         return None
     if bidirectional:
@@ -11,8 +10,8 @@ def build_attention_mask(
     positions = build_positions(padding_mask)
     causal_mask = compute_causal_mask(positions)
     if sliding_window_size is not None:
-        window_mask = compute_sliding_window_mask(
-            positions, sliding_window_size)
+        args = (positions, sliding_window_size)
+        window_mask = compute_sliding_window_mask(*args)
         causal_mask = ops.logical_and(causal_mask, window_mask)
     decoder_mask = merge_padding_mask(padding_mask)
     return ops.logical_and(causal_mask, decoder_mask)

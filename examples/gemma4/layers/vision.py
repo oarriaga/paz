@@ -124,10 +124,10 @@ def vision_attend(x, mask, position_ids, config, name):
         query, position_ids, config.rope_wavelength)
     key = apply_vision_rotary_embedding(
         key, position_ids, config.rope_wavelength)
-    output = compute_attention(
-        query, key, value, mask, config.num_heads,
-        config.num_key_value_heads, config.head_dim, None, config.dropout,
-        config.dtype, attn_name)
+    args = (query, key, value, mask, config.num_heads,
+            config.num_key_value_heads, config.head_dim, None, config.dropout,
+            config.dtype, attn_name)
+    output = compute_attention(*args)
     proj = build_clippable_einsum_dense(
         "btnh,nhd->btd", (None, x.shape[-1]), config.dtype,
         "{}_attention_output".format(attn_name))
