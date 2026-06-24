@@ -15,7 +15,7 @@ args = parser.parse_args()
 
 
 names = paz.datasets.labels("IMDB")
-model = paz.models.MiniXception((48, 48, 1), len(names))
+model = paz.models.build_mini_xception_imdb((64, 64, 1), len(names))
 model.load_weights(args.weights)
 classify = paz.applications.ClassifyMiniXception(model)
 pipeline = paz.applications.DetectMiniXception(classify, names, 1.2, None)

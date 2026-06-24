@@ -295,11 +295,38 @@ def MiniXceptionFER():
     return model
 
 
-def MiniXceptionIMDB():
-    """Build MiniXception for the IMDB two-class face attribute.
+def build_mini_xception_imdb(input_shape, num_classes, l2_reg=0.01):
+    # Original face_classification mini_XCEPTION: 8-kernel stem and a strided,
+    # max-pooled fourth module. Kept faithful so the released IMDB weights load
+    # by topological order. Rescaling maps the [0, 1] classifier input to the
+    # [-1, 1] training range.
+    reg = l2(l2_reg)
+    image = Input(input_shape)
+    x = Rescaling(scale=2.0, offset=-1.0)(image)
+    x = Conv2D(8, 3, kernel_regularizer=reg, use_bias=False)(x)
+    x = Activation("relu")(BatchNormalization()(x))
+    x = Conv2D(8, 3, kernel_regularizer=reg, use_bias=False)(x)
+    x = Activation("relu")(BatchNormalization()(x))
+    for num_kernels in [16, 32, 64, 128]:
+        residual = Conv2D(num_kernels, 1, strides=2, padding="same",
+                          use_bias=False)(x)
+        residual = BatchNormalization()(residual)
+        x = SeparableConv2D(num_kernels, 3, padding="same",
+                            depthwise_regularizer=reg, use_bias=False)(x)
+        x = Activation("relu")(BatchNormalization()(x))
+        x = SeparableConv2D(num_kernels, 3, padding="same",
+                            depthwise_regularizer=reg, use_bias=False)(x)
+        x = BatchNormalization()(x)
+        x = MaxPooling2D(3, strides=2, padding="same")(x)
+        x = layers.add([x, residual])
+    x = Conv2D(num_classes, 3, padding="same")(x)
+    x = GlobalAveragePooling2D()(x)
+    output = Activation("softmax", name="predictions")(x)
+    return Model(image, output)
 
-    Weights are not hosted yet; train with examples/imdb_classifier and
-    upload the produced file to enable this loader.
+
+def MiniXceptionIMDB():
+    """Build mini_XCEPTION with the released IMDB two-class face weights.
 
     # Returns
         Keras model.
@@ -308,7 +335,7 @@ def MiniXceptionIMDB():
        - [Real-time Convolutional Neural Networks for Emotion and
             Gender Classification](https://arxiv.org/abs/1710.07557)
     """
-    model = MiniXception((48, 48, 1), 2)
+    model = build_mini_xception_imdb((64, 64, 1), 2)
     filename = "imdb_mini_XCEPTION_paz_jax.weights.h5"
     URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.18/"
     path = get_file(filename, URL + filename, cache_subdir="paz/models")

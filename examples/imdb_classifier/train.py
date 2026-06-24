@@ -55,7 +55,7 @@ def main():
     train_images, train_labels = load_arrays(args.data, "train")
     valid_images, valid_labels = load_arrays(args.data, "validation")
     num_classes = len(paz.datasets.labels("IMDB"))
-    model = paz.models.MiniXception((48, 48, 1), num_classes)
+    model = paz.models.build_mini_xception_imdb((64, 64, 1), num_classes)
     model.compile("adam", "categorical_crossentropy", metrics=["accuracy"])
     train = IMDBSequence(train_images, train_labels, args.batch_size, True)
     valid = IMDBSequence(valid_images, valid_labels, args.batch_size)

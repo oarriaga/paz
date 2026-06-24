@@ -38,7 +38,7 @@ the bottom.
 | EfficientDet D0–D7 (COCO) | ✅ | v0.16 | efficientdet | ✅ |
 | **EfficientDet-D0 VOC** | ✅ | v0.16 | efficientdet | ✅ persons + table |
 | **ClassifyHandClosure** (open/closed) | ✅ | reuses v0.1+v0.14 | — | ✅ open/close |
-| **IMDB face attribute** (`ClassifyMiniXceptionIMDB`) | wiring | **not hosted** | imdb_classifier | model+apps+train smoke |
+| **IMDB face attribute** (`ClassifyMiniXceptionIMDB`) | ✅ | extracted (pending host) | imdb_classifier | ✅ faithful weights + faces |
 | EfficientPose (model) | model only | **not hosted** | — | architecture only |
 | STN, ProtoNet, Xception, PCA, kNN/DBSCAN, MAML, eigenfaces | ✅ | n/a | various | ✅ |
 
@@ -89,10 +89,12 @@ the bottom.
 - **Gender classification** — ported as a neutrally-named two-class IMDB face
   attribute: `MiniXceptionIMDB` model, `ClassifyMiniXceptionIMDB` /
   `DetectMiniXceptionIMDB` apps, and `examples/imdb_classifier/` (train + demo).
-  Master never fully shipped this (only `MiniXception` + `['man','woman']`
-  labels), so it was built fresh on the ported architecture. **No weights are
-  hosted** — train to produce `imdb_mini_XCEPTION_paz_jax.weights.h5`, upload,
-  then `MiniXceptionIMDB` loads it.
+  Master never fully shipped this, so `build_mini_xception_imdb` faithfully
+  reproduces the original `oarriaga/face_classification` mini_XCEPTION and the
+  released `gender_mini_XCEPTION` weights were converted to
+  `imdb_mini_XCEPTION_paz_jax.weights.h5` (bit-identical, verified on real
+  faces). Remaining: host the converted file on `altamira-data` so
+  `MiniXceptionIMDB` resolves its URL.
 - **fine-tuning_object_detection** — SSD fine-tuning workflow (largely covered by
   `object_detection/train.py`).
 - **tutorials** — bounding boxes, augmentation, controlmap, detection pipeline.
