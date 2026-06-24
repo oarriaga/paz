@@ -96,9 +96,9 @@ def test_fill_polygon_matches_cv2():
     assert (jax_mask == reference_mask).mean() > 0.95
 
 
-def test_gaussian_blur_matches_cv2_interior():
+def test_apply_gaussian_blur_matches_cv2_interior():
     image = np.random.default_rng(0).integers(0, 255, (64, 64, 3), np.uint8)
-    blurred = paz.image.gaussian_blur(jp.array(image), 9, 2.0)
+    blurred = paz.image.apply_gaussian_blur(jp.array(image), 9, 2.0)
     blurred = np.asarray(blurred).astype(np.int16)
     reference = cv2.GaussianBlur(image, (9, 9), 2.0).astype(np.int16)
     interior = np.abs(blurred[8:-8, 8:-8] - reference[8:-8, 8:-8]).mean()

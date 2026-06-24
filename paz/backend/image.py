@@ -212,30 +212,26 @@ def apply_sobel(image):
 
 
 def apply_gaussian_blur(image, kernel_size=9, sigma=2.0):
-    """Apply Gaussian blur to a 2D or single-channel image."""
+    """Apply Gaussian blur to a 2D or multi-channel image (depthwise)."""
     if image.ndim == 2:
         image = image[..., jp.newaxis]
-    image = image.astype(jp.float32)
-    image_4d = image[jp.newaxis, ...]
+    num_channels = image.shape[-1]
+    image_4d = image.astype(jp.float32)[jp.newaxis, ...]
 
     radius = kernel_size // 2
     coords = jp.arange(-radius, radius + 1)
     x_grid, y_grid = jp.meshgrid(coords, coords)
     kernel = jp.exp(-(x_grid**2 + y_grid**2) / (2.0 * sigma**2))
     kernel = kernel / jp.sum(kernel)
-    kernel = kernel[:, :, jp.newaxis, jp.newaxis]
+    kernel = jp.reshape(kernel, (kernel_size, kernel_size, 1, 1))
+    kernel = jp.tile(kernel, (1, 1, 1, num_channels))
 
     dimension_numbers = lax.conv_dimension_numbers(
         image_4d.shape, kernel.shape, ("NHWC", "HWIO", "NHWC")
     )
     output = lax.conv_general_dilated(
-        image_4d,
-        kernel,
-        (1, 1),
-        "SAME",
-        (1, 1),
-        (1, 1),
-        dimension_numbers,
+        image_4d, kernel, (1, 1), "SAME", (1, 1), (1, 1),
+        dimension_numbers, feature_group_count=num_channels,
     )
     return output[0]
 
@@ -409,15 +405,6 @@ def make_random_plain_image(key, shape):
     return jp.broadcast_to(color, shape).astype(jp.uint8)
 
 
-def random_crop(key, image, size):
-    """Crops a random `size` window from an image at least that large."""
-    H_crop, W_crop = size
-    limits = jp.array([image.shape[0] - H_crop, image.shape[1] - W_crop])
-    offset = jax.random.randint(key, (2,), 0, jp.maximum(limits, 0) + 1)
-    start = (offset[0], offset[1], 0)
-    return lax.dynamic_slice(image, start, (H_crop, W_crop, image.shape[2]))
-
-
 def blend_background(image, background, mask):
     """Composites a foreground over a background using a foreground mask."""
     mask = jp.asarray(mask, jp.float32)
@@ -450,24 +437,6 @@ def fill_polygon(image, polygon, color):
     return jp.where(inside[..., jp.newaxis], color, image)
 
 
-def gaussian_blur(image, kernel_size=9, sigma=2.0):
-    """Gaussian blur for a multi-channel image via depthwise convolution."""
-    num_channels = image.shape[-1]
-    coordinates = jp.arange(kernel_size) - kernel_size // 2
-    kernel_1d = jp.exp(-(coordinates**2) / (2.0 * sigma**2))
-    kernel = jp.outer(kernel_1d, kernel_1d)
-    kernel = kernel / jp.sum(kernel)
-    kernel = jp.reshape(kernel, (kernel_size, kernel_size, 1, 1))
-    kernel = jp.tile(kernel, (1, 1, 1, num_channels))
-    image_4d = paz.cast(image, jp.float32)[jp.newaxis]
-    numbers = lax.conv_dimension_numbers(
-        image_4d.shape, kernel.shape, ("NHWC", "HWIO", "NHWC"))
-    blurred = lax.conv_general_dilated(
-        image_4d, kernel, (1, 1), "SAME", feature_group_count=num_channels,
-        dimension_numbers=numbers)
-    return paz.cast(blurred[0], image.dtype)
-
-
 def add_occlusion(key, image, num_vertices=6, max_radius_scale=0.5):
     """Draws one random filled polygon over the image (jittable)."""
     key_center, key_radii, key_angle, key_color = jax.random.split(key, 4)
@@ -485,8 +454,8 @@ def add_occlusion(key, image, num_vertices=6, max_radius_scale=0.5):
 def random_blur(key, image, kernel_size=9):
     """Applies Gaussian blur with probability one half (jittable)."""
     apply = jax.random.uniform(key, ()) < 0.5
-    return lax.cond(apply, lambda x: gaussian_blur(x, kernel_size),
-                    lambda x: x, image)
+    blurred = paz.cast(apply_gaussian_blur(image, kernel_size), image.dtype)
+    return jp.where(apply, blurred, image)
 
 
 def randomize_rendered_image(key, image, mask, backgrounds=None,
@@ -506,9 +475,8 @@ def randomize_rendered_image(key, image, mask, backgrounds=None,
 def sample_background(key, shape, backgrounds):
     if backgrounds is None:
         return make_random_plain_image(key, shape)
-    key_pick, key_crop = jax.random.split(key)
-    index = jax.random.randint(key_pick, (), 0, len(backgrounds))
-    return random_crop(key_crop, backgrounds[index], shape[:2])
+    index = jax.random.randint(key, (), 0, len(backgrounds))
+    return backgrounds[index]
 
 
 def affine_transform(image, matrix, order=1, mode="nearest", cval=0.0):

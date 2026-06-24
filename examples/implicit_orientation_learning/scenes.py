@@ -51,9 +51,10 @@ def camera_pose(rotation, distance):
 
 
 def random_poses(key, num_views, distance):
-    keys = jax.random.split(key, num_views)
-    return [camera_pose(paz.SO3.sample(view_key), distance)
-            for view_key in keys]
+    poses = []
+    for view_key in jax.random.split(key, num_views):
+        poses.append(camera_pose(paz.SO3.sample(view_key), distance))
+    return poses
 
 
 def grid_poses(theta_steps, phi_steps, distance):
