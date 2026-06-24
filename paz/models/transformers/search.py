@@ -15,7 +15,7 @@ from paz.models.transformers.logits import apply_top_p
 
 
 def build(step, select, max_tokens, max_length):
-    def run(buffer, token, index, cache, stop_id, key):
+    def run(key, buffer, token, index, cache, stop_id):
         count = jp.array(0, dtype=jp.int32)
         finished = jp.array(False)
         state = (buffer, token, index, cache, count, finished, key)

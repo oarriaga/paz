@@ -26,8 +26,8 @@ def run_counting(stop_id, max_tokens=4, max_length=8, seed=0):
     token = jp.reshape(jp.array(2, dtype=jp.int32), (1, 1))
     index = jp.array(0, dtype=jp.int32)
     cache = jp.zeros((1,))
-    return run(buffer, token, index, cache,
-               jp.array(stop_id, dtype=jp.int32), jax.random.PRNGKey(seed))
+    return run(jax.random.PRNGKey(seed), buffer, token, index, cache,
+               jp.array(stop_id, dtype=jp.int32))
 
 
 def test_greedy_loop_counts_up_to_max_tokens():

@@ -8,10 +8,7 @@ from examples.speech_to_text.tokenizer import find_special_token_id
 PROMPT_TOKENS = ["<|startoftranscript|>", "<|transcribe|>", "<|notimestamps|>"]
 
 
-def kv_decode(decoder, cache_shape, cross_model, encoder_output, stop_id,
-              key=None):
-    if key is None:
-        key = jax.random.PRNGKey(0)
+def kv_decode(key, decoder, cache_shape, cross_model, encoder_output, stop_id):
     max_len = decoder.max_decode_length
     batch = int(encoder_output.shape[0])
     cache = build_self_cache(cache_shape, max_len, batch)
@@ -19,7 +16,7 @@ def kv_decode(decoder, cache_shape, cross_model, encoder_output, stop_id,
     cache = jp.asarray(cache)
     cross_cache = jp.asarray(cross_cache)
     stop = jp.array(stop_id, dtype=jp.int32)
-    buffer, length = decoder(cache, cross_cache, stop, key)
+    buffer, length = decoder(key, cache, cross_cache, stop)
     return ops.convert_to_numpy(buffer[0, :length]).tolist()
 
 
@@ -39,7 +36,7 @@ def KVDecoder(decoder_step, prompt_ids, max_tokens, max_seq=448, select=None):
     prompt_len = len(prompt_ids)
 
     @jax.jit
-    def decode(self_cache, cross_cache, stop_id, key):
+    def decode(key, self_cache, cross_cache, stop_id):
         buffer = jp.zeros((1, max_len), dtype=jp.int32)
         buffer = buffer.at[0, :prompt_len].set(prompt)
         cache = self_cache
@@ -50,7 +47,7 @@ def KVDecoder(decoder_step, prompt_ids, max_tokens, max_seq=448, select=None):
         run = paz.transformers.search.build(step, select, max_tokens, max_len)
         token = jp.reshape(prompt[prompt_len - 1], (1, 1))
         index = jp.array(prompt_len - 1, dtype=jp.int32)
-        return run(buffer, token, index, cache, stop_id, key)
+        return run(key, buffer, token, index, cache, stop_id)
 
     # Python functions are objects; attributes can be set on them freely.
     decode.max_decode_length = max_len
