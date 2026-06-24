@@ -130,6 +130,24 @@ def draw_hand_skeleton(image, keypoints2D, link_width=2, radius=4):
     return image
 
 
+def draw_hand_status(image, status, keypoints2D):
+    image = draw_hand_skeleton(image, keypoints2D)
+    return paz.draw.text(image, status, (10, 30))
+
+
+def ClassifyHandClosure(right_hand=False, thresh=0.4, draw=None):
+    estimate = MinimalHandPoseEstimation(right_hand=right_hand, draw=False)
+    if draw is None:
+        draw = draw_hand_status
+
+    def call(image):
+        hand = estimate(image)
+        is_open = paz.angles.is_hand_open(hand.relative_angles, thresh)
+        return ("OPEN" if is_open else "CLOSE"), hand.keypoints2D
+
+    return (lambda x: (y := call(x), draw(x, *y))) if callable(draw) else call
+
+
 def DetNetHandKeypoints(right_hand=False, draw=None, grid=32, input_size=128):
     model = paz.models.DetNet(weights="detnet")
     if draw is None:

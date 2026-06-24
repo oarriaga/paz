@@ -73,3 +73,20 @@ def test_compute_relative_angles_finger_base_joints_are_zero():
     relative = angles.compute_relative_angles(random_unit_quaternions())
     for finger_base_joint in [1, 5, 9, 13, 17]:
         assert np.allclose(relative[finger_base_joint], 0.0)
+
+
+def test_is_hand_open_all_fingers_bent_is_closed():
+    relative_angles = np.zeros((21, 3))
+    relative_angles[angles.HAND_PIP_JOINTS] = [1.0, 0.0, 0.0]
+    assert angles.is_hand_open(relative_angles) is False
+
+
+def test_is_hand_open_extended_fingers_is_open():
+    assert angles.is_hand_open(np.zeros((21, 3))) is True
+
+
+def test_is_hand_open_single_extended_finger_is_open():
+    relative_angles = np.zeros((21, 3))
+    relative_angles[angles.HAND_PIP_JOINTS] = [1.0, 0.0, 0.0]
+    relative_angles[angles.HAND_PIP_JOINTS[0]] = [0.0, 0.0, 0.0]
+    assert angles.is_hand_open(relative_angles) is True

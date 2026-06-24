@@ -4,6 +4,16 @@ from paz.backend.lie import quaternion
 from paz.datasets.hands import MANOHandJoints
 from paz.datasets.hands import MPIIHandJoints
 
+# Index, middle, ring and pinky PIP joints in MPIIHandJoints order.
+HAND_PIP_JOINTS = [6, 10, 14, 18]
+
+
+def is_hand_open(relative_angles, thresh=0.4):
+    """True when a finger is extended (small PIP relative-angle norm)."""
+    angles = np.asarray(relative_angles)[HAND_PIP_JOINTS]
+    thetas = np.linalg.norm(angles, axis=-1)
+    return bool(np.any(thetas <= thresh))
+
 
 def compute_orientation_vector(keypoints3D, parents):
     deltas = []

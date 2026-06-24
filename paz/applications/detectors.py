@@ -143,6 +143,19 @@ def EfficientDetCOCO(build_model, **kwargs):
     return EfficientDet(model, names, **kwargs)
 
 
+def EFFICIENTDETD0VOC(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):  # fmt: skip
+    names = paz.datasets.labels("VOC")
+    model = paz.models.EFFICIENTDETD0(len(names) + 1, "VOC", "VOC")
+    boxes = model.prior_boxes
+    label_colors = paz.draw.lincolor(len(names))
+    if draw is None:
+        draw = paz.partial(paz.draw.boxes2D, names=names, colors=label_colors)
+    variances = [0.1, 0.1, 0.2, 0.2]
+    apply_NMS = (len(names), IOU_thresh, top_k)
+    apply_NMS = paz.lock(paz.detection.apply_per_class_NMS, *apply_NMS)
+    return SSD(model, score_thresh, boxes, variances, apply_NMS, draw)
+
+
 def EfficientDet(model, names, score_thresh=0.60, nms_thresh=0.45,
                  top_k=200, draw=None):
     input_size = model.input_shape[1]
