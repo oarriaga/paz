@@ -8,6 +8,25 @@ import jax.numpy as jp
 from paz.models.transformers import logits
 
 
+def test_soft_cap_none_is_identity():
+    values = jp.array([[1.0, -2.0, 30.0]])
+    out = np.asarray(logits.soft_cap(values, None))
+    assert np.allclose(out, [[1.0, -2.0, 30.0]])
+
+
+def test_soft_cap_matches_scaled_tanh():
+    values = jp.array([[0.0, 5.0, -5.0]])
+    out = np.asarray(logits.soft_cap(values, 10.0))
+    expected = 10.0 * np.tanh(np.array([0.0, 5.0, -5.0]) / 10.0)
+    assert np.allclose(out, expected)
+
+
+def test_soft_cap_saturates_at_cap():
+    values = jp.array([[1e6, -1e6]])
+    out = np.asarray(logits.soft_cap(values, 30.0))
+    assert np.allclose(out, [[30.0, -30.0]], atol=1e-3)
+
+
 def test_apply_temperature_scales():
     values = jp.array([[2.0, 4.0]])
     out = np.asarray(logits.apply_temperature(values, 2.0))

@@ -3,9 +3,10 @@ from keras.layers import Dropout, EinsumDense, Softmax
 
 from paz.layers import MergeDims, SplitDim
 from paz.models.transformers import cache as kv_cache
+from paz.models.transformers import mask as attention_mask
 from paz.models.transformers.embeddings import rotary
+from paz.models.transformers.logits import soft_cap as apply_soft_cap
 
-from .core import apply_tanh_soft_cap
 from .normalization import build_rms_norm, build_v_norm
 
 
@@ -83,9 +84,9 @@ def build_cache_mask(full_key, index, positions, window):
     ones = ops.ones_like(full_key[:, :, 0, 0], dtype="int32")
     key_pos = ops.cumsum(ones, axis=1) - 1
     query_pos = query_positions(index, positions)
-    mask = ops.less_equal(key_pos[:, None, :], query_pos[:, :, None])
+    mask = attention_mask.causal(query_pos, key_pos)
     if window is not None:
-        recent = ops.less(query_pos[:, :, None] - key_pos[:, None, :], window)
+        recent = attention_mask.sliding_window(query_pos, key_pos, window)
         mask = ops.logical_and(mask, recent)
     return ops.cast(mask, "bool")
 
@@ -132,7 +133,7 @@ def compute_attention(query, key, value, mask, num_query_heads, num_kv_heads,
                       head_dim, soft_cap, dropout, dtype, name):
     query = reshape_query(query, num_query_heads, num_kv_heads, head_dim)
     logits = ops.einsum("btkgh,bskh->bkgts", query, key)
-    logits = apply_tanh_soft_cap(logits, soft_cap)
+    logits = apply_soft_cap(logits, soft_cap)
     if mask is not None:
         mask = mask[:, None, None, :, :]
     softmax = Softmax(dtype="float32", name="{}_softmax".format(name))

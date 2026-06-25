@@ -3,7 +3,8 @@ from keras.layers import Input
 
 from paz.models.transformers import cache as kv_cache
 
-from .layers.core import apply_tanh_soft_cap
+from paz.models.transformers.logits import soft_cap as apply_soft_cap
+
 from .layers.decoder import cached_decoder_block
 from .layers.normalization import build_rms_norm
 from .model import (build_cache_head_dim,
@@ -120,7 +121,7 @@ def build_cached_step(hidden, embedding, cache, cache_index, per_layer, config,
                  "final_normalization")
     hidden = build_rms_norm(*norm_args)(hidden)
     logits = embedding(hidden, reverse=True)
-    logits = apply_tanh_soft_cap(logits, config.final_logit_soft_cap)
+    logits = apply_soft_cap(logits, config.final_logit_soft_cap)
     return logits, updated_cache
 
 

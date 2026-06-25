@@ -1,9 +1,19 @@
-"""Logit-shaping transforms over (batch, vocabulary) for sampling.
+"""Logit-shaping transforms.
 
-top_k <= 0 disables top-k; top_p >= 1 disables nucleus truncation.
+The sampling transforms run over (batch, vocabulary): top_k <= 0 disables
+top-k; top_p >= 1 disables nucleus truncation. ``soft_cap`` is an in-graph
+tanh cap on attention or output logits and uses ``keras.ops`` so it composes
+with symbolic Keras tensors.
 """
 import jax
 import jax.numpy as jp
+from keras import ops
+
+
+def soft_cap(values, cap):
+    if cap is None:
+        return values
+    return ops.multiply(ops.tanh(ops.divide(values, cap)), cap)
 
 
 def apply_temperature(logits, temperature):

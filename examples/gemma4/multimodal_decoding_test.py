@@ -6,7 +6,7 @@ import numpy as np
 import keras
 from keras import Model
 
-from .layers.core import apply_tanh_soft_cap
+from paz.models.transformers.logits import soft_cap as apply_soft_cap
 from .model import build_text_backbone_args
 from .vision import build_vision_encoder, build_vision_encoder_args, num_patches
 import jax
@@ -38,7 +38,7 @@ def transfer(source, target):
 def build_full_sequence_causal_lm():
     backbone = build_multimodal_backbone(TEXT, VISION)
     embedding = backbone.get_layer("token_embedding")
-    logits = apply_tanh_soft_cap(
+    logits = apply_soft_cap(
         embedding(backbone.output, reverse=True), TEXT.final_logit_soft_cap)
     return Model(backbone.input, logits), backbone
 
