@@ -5,7 +5,6 @@ import sys
 import os
 
 os.environ.setdefault("KERAS_BACKEND", "jax")
-import keras
 
 # Ensure project root is in path for absolute imports
 project_root = os.path.abspath(
@@ -26,7 +25,6 @@ from paz.models.detection.dino_v2_object_detection.models.backbone.dinov2 import
 
 # Weight porting helpers
 from paz.models.detection.dino_v2_object_detection.models.backbone.backbone_weights_porting_utils import (
-    to_keras,
     transfer_patch_embeddings,
     transfer_encoder,
     transfer_layernorm,
@@ -130,16 +128,16 @@ def _transfer_dinov2_weights(pt_dinov2, keras_dinov2):
       - Final layernorm
     """
     pt_encoder = pt_dinov2.encoder  # WindowedDinov2WithRegistersBackbone
-    k_encoder = keras_dinov2.encoder  # WindowedDinov2Model
+    k_model = keras_dinov2.feature_model  # WindowedDinov2Model
 
     # 1. Patch embeddings
-    transfer_patch_embeddings(pt_encoder.embeddings, k_encoder.embeddings)
+    transfer_patch_embeddings(pt_encoder.embeddings, k_model, "embeddings")
 
     # 2. Encoder layers
-    transfer_encoder(pt_encoder.encoder, k_encoder.encoder)
+    transfer_encoder(pt_encoder.encoder, k_model, "encoder")
 
     # 3. Final layernorm
-    transfer_layernorm(pt_encoder.layernorm, k_encoder.layernorm)
+    transfer_layernorm(pt_encoder.layernorm, k_model.get_layer("layernorm"))
 
 
 def _build_keras_dinov2(cfg):

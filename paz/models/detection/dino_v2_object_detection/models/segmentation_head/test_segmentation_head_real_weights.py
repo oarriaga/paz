@@ -68,6 +68,7 @@ def extract_pt_segmentation_head(model_class):
     pt_model = model.model.model
     pt_head = pt_model.segmentation_head
     pt_head.eval()
+    pt_head.cpu()
     return pt_head, model.model_config
 
 @pytest.mark.parametrize("variant_name", list(MODEL_VARIANTS.keys()))

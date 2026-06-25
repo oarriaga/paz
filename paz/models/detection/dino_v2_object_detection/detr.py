@@ -431,7 +431,7 @@ class RFDETR:
                 num_training_steps,
             )
             vit_encoder_num_layers = (
-                model.backbone.backbone.encoder.encoder.encoder.num_hidden_layers
+                model.backbone.backbone.encoder.num_hidden_layers
             )
 
         dropout_schedule = None

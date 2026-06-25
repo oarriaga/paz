@@ -1,6 +1,22 @@
 import numpy as np
 import torch
 
+from paz.models.foundation.dinov2.models.windowed_vision_transformer import (
+    EMBEDDINGS,
+    ENCODER,
+    ENCODER_LAYER,
+    NORM1,
+    NORM2,
+    ATTENTION,
+    LAYER_SCALE1,
+    LAYER_SCALE2,
+    FFN,
+    PATCH_PROJECTION,
+    CLS_TOKEN,
+    POS_EMBED,
+    REGISTER_TOKENS,
+)
+
 
 # ═══════════════════════════════════════════════════════════════════
 # General helpers
@@ -146,112 +162,93 @@ def transfer_layernorm(pt_ln, keras_ln):
     keras_ln.set_weights([to_keras(pt_ln.weight), to_keras(pt_ln.bias)])
 
 
-def transfer_layer_scale(pt_ls, keras_ls):
-    """Transfer LayerScale gamma parameter.
-
-    Args:
-        pt_ls: PyTorch LayerScale module.
-        keras_ls: Keras LayerScale layer.
-    """
-    keras_ls.gamma.assign(to_keras(pt_ls.lambda1))
+def transfer_layer_scale(pt_ls, keras_model, name):
+    keras_model.get_layer(name).kernel.assign(to_keras(pt_ls.lambda1))
 
 
-def transfer_patch_embeddings(pt_embed, keras_embed):
-    """Transfer patch embedding weights including projection, CLS token,
-    position embeddings, and register tokens.
-
-    Args:
-        pt_embed: PyTorch embedding module.
-        keras_embed: Keras embedding layer.
-    """
-    transfer_conv2d(
-        pt_embed.patch_embeddings.projection, keras_embed.projection
-    )
-    keras_embed.cls_token.assign(to_keras(pt_embed.cls_token))
-    keras_embed.position_embeddings.assign(
-        to_keras(pt_embed.position_embeddings)
-    )
-    if (
-        pt_embed.register_tokens is not None
-        and keras_embed.register_tokens is not None
-    ):
-        keras_embed.register_tokens.assign(
-            to_keras(pt_embed.register_tokens)
-        )
+def transfer_patch_embeddings(pt_embed, keras_model, prefix=EMBEDDINGS):
+    conv = keras_model.get_layer(f"{prefix}_{PATCH_PROJECTION}")
+    transfer_conv2d(pt_embed.patch_embeddings.projection, conv)
+    cls = keras_model.get_layer(f"{prefix}_{CLS_TOKEN}").embeddings
+    assign_table(cls, to_keras(pt_embed.cls_token))
+    pos = keras_model.get_layer(f"{prefix}_{POS_EMBED}").embeddings
+    assign_table(pos, to_keras(pt_embed.position_embeddings))
+    registers = _optional_table(keras_model, f"{prefix}_{REGISTER_TOKENS}")
+    if pt_embed.register_tokens is not None and registers is not None:
+        assign_table(registers, to_keras(pt_embed.register_tokens))
 
 
-def transfer_attention(pt_attn, keras_attn):
-    """Transfer attention weights, fusing separate Q/K/V into a single QKV.
+def _optional_table(keras_model, name):
+    try:
+        return keras_model.get_layer(name).embeddings
+    except ValueError:
+        return None
 
-    Args:
-        pt_attn: PyTorch attention module with separate Q/K/V.
-        keras_attn: Keras attention layer with fused QKV.
-    """
+
+def assign_table(keras_table, pt_array):
+    """Assign a (1, N, D) PyTorch token table into a (N, D) Keras Embedding."""
+    keras_table.assign(np.reshape(pt_array, keras_table.shape))
+
+
+def transfer_attention(pt_attn, keras_model, layer_name):
     q_w = to_keras(pt_attn.attention.query.weight).T
     k_w = to_keras(pt_attn.attention.key.weight).T
     v_w = to_keras(pt_attn.attention.value.weight).T
     q_b = to_keras(pt_attn.attention.query.bias)
     k_b = to_keras(pt_attn.attention.key.bias)
     v_b = to_keras(pt_attn.attention.value.bias)
-
     fused_w = np.concatenate([q_w, k_w, v_w], axis=1)
     fused_b = np.concatenate([q_b, k_b, v_b], axis=0)
-    keras_attn.predict_query_key_value.set_weights([fused_w, fused_b])
-
-    transfer_dense(pt_attn.output.dense, keras_attn.projection_layer)
-
-
-def transfer_mlp(pt_mlp, keras_mlp):
-    """Transfer MLP (fc1/fc2) weights.
-
-    Args:
-        pt_mlp: PyTorch MLP module.
-        keras_mlp: Keras MLP layer.
-    """
-    transfer_dense(pt_mlp.fc1, keras_mlp.fully_connected_layer_1)
-    transfer_dense(pt_mlp.fc2, keras_mlp.fully_connected_layer_2)
+    qkv = keras_model.get_layer(f"{layer_name}_{ATTENTION}_qkv")
+    qkv.set_weights([fused_w, fused_b])
+    proj = keras_model.get_layer(f"{layer_name}_{ATTENTION}_proj")
+    transfer_dense(pt_attn.output.dense, proj)
 
 
-def transfer_swiglu(pt_swiglu, keras_swiglu):
-    """Transfer SwiGLU FFN weights.
+def transfer_mlp(pt_mlp, keras_model, layer_name):
+    ffn = f"{layer_name}_{FFN}"
+    transfer_dense(pt_mlp.fc1, keras_model.get_layer(f"{ffn}_fc1"))
+    transfer_dense(pt_mlp.fc2, keras_model.get_layer(f"{ffn}_fc2"))
 
-    Args:
-        pt_swiglu: PyTorch SwiGLU module.
-        keras_swiglu: Keras SwiGLU layer.
-    """
-    transfer_dense(
-        pt_swiglu.weights_in, keras_swiglu.fused_gate_and_value_projection
+
+def transfer_swiglu(pt_swiglu, keras_model, layer_name):
+    ffn = f"{layer_name}_{FFN}"
+    gate = keras_model.get_layer(f"{ffn}_fused_gate_and_value_projection")
+    transfer_dense(pt_swiglu.weights_in, gate)
+    output = keras_model.get_layer(f"{ffn}_output_projection")
+    transfer_dense(pt_swiglu.weights_out, output)
+
+
+def transfer_layer(pt_layer, keras_model, layer_name):
+    transfer_layernorm(pt_layer.norm1, keras_model.get_layer(f"{layer_name}_{NORM1}"))
+    transfer_attention(pt_layer.attention, keras_model, layer_name)
+    transfer_layer_scale(
+        pt_layer.layer_scale1, keras_model, f"{layer_name}_{LAYER_SCALE1}"
     )
-    transfer_dense(pt_swiglu.weights_out, keras_swiglu.output_projection)
-
-
-def transfer_layer(pt_layer, keras_layer):
-    """Transfer all weights for a single DinoV2 encoder layer.
-
-    Args:
-        pt_layer: PyTorch encoder layer.
-        keras_layer: Keras encoder layer.
-    """
-    transfer_layernorm(pt_layer.norm1, keras_layer.norm1)
-    transfer_attention(pt_layer.attention, keras_layer.attention)
-    transfer_layer_scale(pt_layer.layer_scale1, keras_layer.layer_scale1)
-    transfer_layernorm(pt_layer.norm2, keras_layer.norm2)
+    transfer_layernorm(pt_layer.norm2, keras_model.get_layer(f"{layer_name}_{NORM2}"))
     if hasattr(pt_layer.mlp, "fc1"):
-        transfer_mlp(pt_layer.mlp, keras_layer.mlp)
+        transfer_mlp(pt_layer.mlp, keras_model, layer_name)
     else:
-        transfer_swiglu(pt_layer.mlp, keras_layer.mlp)
-    transfer_layer_scale(pt_layer.layer_scale2, keras_layer.layer_scale2)
+        transfer_swiglu(pt_layer.mlp, keras_model, layer_name)
+    transfer_layer_scale(
+        pt_layer.layer_scale2, keras_model, f"{layer_name}_{LAYER_SCALE2}"
+    )
 
 
-def transfer_encoder(pt_encoder, keras_encoder):
-    """Transfer all layers of a DinoV2 encoder.
+def transfer_encoder(pt_encoder, keras_model, prefix=ENCODER):
+    for i, pt_l in enumerate(pt_encoder.layer):
+        layer_name = f"{prefix}_{ENCODER_LAYER.format(i)}"
+        if not has_layer(keras_model, f"{layer_name}_{NORM1}"):
+            break
+        transfer_layer(pt_l, keras_model, layer_name)
 
-    Args:
-        pt_encoder: PyTorch encoder with .layer attribute.
-        keras_encoder: Keras encoder with .encoder_layers attribute.
-    """
-    for pt_l, k_l in zip(pt_encoder.layer, keras_encoder.encoder_layers):
-        transfer_layer(pt_l, k_l)
+
+def has_layer(keras_model, name):
+    try:
+        keras_model.get_layer(name)
+        return True
+    except ValueError:
+        return False
 
 
 # ═══════════════════════════════════════════════════════════════════
@@ -342,7 +339,6 @@ def port_weights_multiscale_projector(torch_model, keras_model):
         torch_model: PyTorch MultiScaleProjector.
         keras_model: Keras MultiScaleProjector.
     """
-    import keras
     from keras import layers
 
     for i in range(len(torch_model.stages_sampling)):

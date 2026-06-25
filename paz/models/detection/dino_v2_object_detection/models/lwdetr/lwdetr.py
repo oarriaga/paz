@@ -405,21 +405,24 @@ class LWDETR(keras.Model):
             drop_path_rate (float): Target drop path rate for the last layer.
             vit_encoder_num_layers (int): Number of ViT encoder layers.
         """
-        from paz.models.foundation.dinov2.layers.drop_path import DropPath
-
-        encoder = self.backbone.backbone.encoder.encoder.encoder
-        num_layers = vit_encoder_num_layers or len(encoder.encoder_layers)
+        dino = self.backbone.backbone.encoder
+        model = dino.feature_model
+        num_layers = vit_encoder_num_layers or dino.num_hidden_layers
         for i in range(num_layers):
             block_rate = (
                 drop_path_rate * i / max(1, num_layers - 1)
                 if num_layers > 1
                 else 0.0
             )
-            layer = encoder.encoder_layers[i]
-            if isinstance(layer.drop_path1, DropPath):
-                layer.drop_path1.drop_probability = block_rate
-            if isinstance(layer.drop_path2, DropPath):
-                layer.drop_path2.drop_probability = block_rate
+            try:
+                drop1 = model.get_layer(f"encoder_layer_{i}_drop_path1")
+                drop2 = model.get_layer(f"encoder_layer_{i}_drop_path2")
+            except ValueError:
+                continue
+            if isinstance(drop1, keras.layers.Dropout):
+                drop1.rate = block_rate
+            if isinstance(drop2, keras.layers.Dropout):
+                drop2.rate = block_rate
 
     def update_dropout(self, dropout_rate):
         """Update all Dropout layers in the transformer to *dropout_rate*.

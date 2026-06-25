@@ -1,13 +1,3 @@
-from .dinov2_with_windowed_attn import (
-    WindowedDinov2PatchEmbeddings,
-    WindowedDinov2Layer,
-    WindowedDinov2Encoder,
-    WindowedDinov2Model,
-    dinov2_windowed_small,
-    dinov2_windowed_base,
-    dinov2_windowed_large,
-    dinov2_windowed_giant,
-)
 from .dinov2 import DinoV2
 from .projector import MultiScaleProjector
 from .backbone import Backbone, get_dinov2_lr_decay_rate, get_dinov2_weight_decay_rate

@@ -89,6 +89,8 @@ from paz.models.detection.dino_v2_object_detection.models.backbone.backbone_weig
     transfer_encoder as transfer_backbone_encoder,
     port_weights_multiscale_projector,
     transfer_layernorm,
+    _optional_table,
+    assign_table,
 )
 from paz.models.detection.dino_v2_object_detection.models.transformer_decoder_head.transformer_weights_porting_utils import (
     transfer_transformer_weights,
@@ -347,7 +349,7 @@ MODEL_CONFIGS = {
 }
 
 
-def resize_and_assign_pos_embed(pt_embeddings_layer, keras_embeddings_layer):
+def resize_and_assign_pos_embed(pt_embeddings_layer, keras_pos):
     """Interpolates position embeddings to match target spatial grid.
 
     Separates CLS token from spatial grid tokens, performs bicubic
@@ -356,8 +358,8 @@ def resize_and_assign_pos_embed(pt_embeddings_layer, keras_embeddings_layer):
     Args:
         pt_embeddings_layer: Source embeddings containing
             ``position_embeddings`` of shape (1, N_src, D).
-        keras_embeddings_layer: Target Keras embeddings whose
-            ``position_embeddings`` (1, N_tgt, D) will be overwritten.
+        keras_pos: Target Keras position-embedding variable (1, N_tgt, D)
+            that will be overwritten.
     """
     # Fix: Handle both Embedding module (.weight) and raw Parameter
     if hasattr(pt_embeddings_layer.position_embeddings, "weight"):
@@ -370,10 +372,10 @@ def resize_and_assign_pos_embed(pt_embeddings_layer, keras_embeddings_layer):
     if pt_pos_embed.ndim == 2:
         pt_pos_embed = np.expand_dims(pt_pos_embed, axis=0)
 
-    keras_shape = keras_embeddings_layer.position_embeddings.shape
+    keras_shape = keras_pos.shape
 
-    if pt_pos_embed.shape == keras_shape:
-        keras_embeddings_layer.position_embeddings.assign(pt_pos_embed)
+    if pt_pos_embed.shape[1] == keras_shape[0]:
+        keras_pos.assign(np.reshape(pt_pos_embed, keras_shape))
         return
 
     print(f"  Resizing PosEmbed: {pt_pos_embed.shape} -> {keras_shape}")
@@ -389,7 +391,7 @@ def resize_and_assign_pos_embed(pt_embeddings_layer, keras_embeddings_layer):
 
     gs_pt = int(np.sqrt(n_tokens))
 
-    n_tokens_keras = keras_shape[1] - 1
+    n_tokens_keras = keras_shape[0] - 1
     gs_keras = int(np.sqrt(n_tokens_keras))
 
     # Reshape to spatial grid and interpolate
@@ -416,7 +418,7 @@ def resize_and_assign_pos_embed(pt_embeddings_layer, keras_embeddings_layer):
     # Recombine CLS token and resized grid
     new_pos_embed = np.concatenate([cls_token, grid_tokens_resized], axis=1)
 
-    keras_embeddings_layer.position_embeddings.assign(new_pos_embed)
+    keras_pos.assign(np.reshape(new_pos_embed, keras_shape))
 
 
 def transfer_lwdetr_head_weights(pt_model, keras_model, config):
@@ -501,12 +503,13 @@ def transfer_full_model_weights(pt_model, keras_model, config):
     inner_pt = pt_model.model.model
     pt_backbone = inner_pt.backbone[0]
     keras_backbone = keras_model.backbone.backbone
+    k_model = keras_backbone.encoder.feature_model
 
     # 1. Backbone
     # a. Position embeddings
+    keras_pos = k_model.get_layer("embeddings_position_embeddings").embeddings
     resize_and_assign_pos_embed(
-        pt_backbone.encoder.encoder.embeddings,
-        keras_backbone.encoder.encoder.embeddings,
+        pt_backbone.encoder.encoder.embeddings, keras_pos
     )
 
     # b. Transfer other embedding parts (CLS token, patch projection)
@@ -518,7 +521,7 @@ def transfer_full_model_weights(pt_model, keras_model, config):
     else:
         pt_patch_embed = pt_embeddings
 
-    keras_patch_embed = keras_backbone.encoder.encoder.embeddings
+    keras_proj = k_model.get_layer("embeddings_patch_embeddings_projection")
 
     # Handle both 'projection' and 'proj' naming conventions
     if hasattr(pt_patch_embed, "projection"):
@@ -530,31 +533,28 @@ def transfer_full_model_weights(pt_model, keras_model, config):
     else:
         raise AttributeError(f"Could not find projection weights in {pt_patch_embed}")
 
-    keras_patch_embed.projection.kernel.assign(
+    keras_proj.kernel.assign(
         pt_proj_weight.detach().cpu().numpy().transpose(2, 3, 1, 0)
     )
-    keras_patch_embed.projection.bias.assign(pt_proj_bias.detach().cpu().numpy())
+    keras_proj.bias.assign(pt_proj_bias.detach().cpu().numpy())
 
     if hasattr(pt_embeddings, "cls_token"):
-        keras_backbone.encoder.encoder.embeddings.cls_token.assign(
-            pt_embeddings.cls_token.detach().cpu().numpy()
-        )
+        cls = k_model.get_layer("embeddings_cls_token").embeddings
+        assign_table(cls, pt_embeddings.cls_token.detach().cpu().numpy())
 
     # Mask token (optional, inference-only)
-    if hasattr(keras_backbone.encoder.encoder.embeddings, "mask_token"):
-        if hasattr(pt_embeddings, "mask_token"):
-            keras_backbone.encoder.encoder.embeddings.mask_token.assign(
-                pt_embeddings.mask_token.detach().cpu().numpy()
-            )
+    mask_token = _optional_table(k_model, "embeddings_mask_token")
+    if mask_token is not None and hasattr(pt_embeddings, "mask_token"):
+        assign_table(mask_token, pt_embeddings.mask_token.detach().cpu().numpy())
 
     # c. Encoder blocks
     transfer_backbone_encoder(
-        pt_backbone.encoder.encoder.encoder, keras_backbone.encoder.encoder.encoder
+        pt_backbone.encoder.encoder.encoder, k_model, "encoder"
     )
 
     # d. Final layer norm
     transfer_layernorm(
-        pt_backbone.encoder.encoder.layernorm, keras_backbone.encoder.encoder.layernorm
+        pt_backbone.encoder.encoder.layernorm, k_model.get_layer("layernorm")
     )
 
     # e. Multi-scale projector
@@ -578,9 +578,9 @@ def transfer_full_model_weights(pt_model, keras_model, config):
         )
 
     # Debug: verify backbone weight norms match
-    enc_weights = keras_backbone.encoder.encoder.encoder.encoder_layers[
-        0
-    ].attention.predict_query_key_value.get_weights()[0]
+    enc_weights = k_model.get_layer(
+        "encoder_layer_0_attention_qkv"
+    ).get_weights()[0]
     print(f"DEBUG: Keras Layer 0 Attn Weights Norm: {np.linalg.norm(enc_weights):.4e}")
     pt_enc_weights = (
         pt_backbone.encoder.encoder.encoder.layer[0]
@@ -611,6 +611,7 @@ def test_lwdetr_real_weights_parity(variant_name):
     else:
         pt_model = config["pt_class"]()
     pt_model.model.model.eval()
+    pt_model.model.model.cpu()
 
     # 2. Build Keras model
     print(f"Building Keras {variant_name}...")
@@ -687,31 +688,32 @@ def test_lwdetr_real_weights_parity(variant_name):
     # 5.1.5 Encoder-only parity check
     print("  Checking weight transfer norms...")
     pt_backbone = pt_model.model.model.backbone[0]
+    k_model = keras_backbone.backbone.encoder.feature_model
     # Patch projection
     pt_proj = pt_backbone.encoder.encoder.embeddings.patch_embeddings.projection.weight
-    keras_proj = keras_backbone.backbone.encoder.encoder.embeddings.projection.kernel
+    keras_proj = k_model.get_layer("embeddings_patch_embeddings_projection").kernel
     print(f"    PT Proj Weight Norm: {torch.norm(pt_proj).item():.4e}")
     print(f"    Keras Proj Weight Norm: {np.linalg.norm(np.asarray(keras_proj)):.4e}")
 
     pt_cls = pt_backbone.encoder.encoder.embeddings.cls_token
-    keras_cls = keras_backbone.backbone.encoder.encoder.embeddings.cls_token
+    keras_cls = k_model.get_layer("embeddings_cls_token").embeddings
     print(f"    PT CLS Token Norm: {torch.norm(pt_cls).item():.4e}")
     print(f"    Keras CLS Token Norm: {np.linalg.norm(np.asarray(keras_cls)):.4e}")
 
     pt_pos = pt_backbone.encoder.encoder.embeddings.position_embeddings
-    keras_pos = keras_backbone.backbone.encoder.encoder.embeddings.position_embeddings
+    keras_pos = k_model.get_layer("embeddings_position_embeddings").embeddings
     print(f"    PT PosEmbed Norm: {torch.norm(pt_pos).item():.4e}")
     print(f"    Keras PosEmbed Norm: {np.linalg.norm(np.asarray(keras_pos)):.4e}")
 
     # LayerNorms
     pt_ln = pt_backbone.encoder.encoder.layernorm
-    keras_ln = keras_backbone.backbone.encoder.encoder.layernorm
+    keras_ln = k_model.get_layer("layernorm")
     print(
         f"    Final LN Gamma Norm - PT: {torch.norm(pt_ln.weight).item():.4e}, Keras: {np.linalg.norm(np.asarray(keras_ln.gamma)):.4e}"
     )
 
     pt_ln1 = pt_backbone.encoder.encoder.encoder.layer[0].norm1
-    keras_ln1 = keras_backbone.backbone.encoder.encoder.encoder.encoder_layers[0].norm1
+    keras_ln1 = k_model.get_layer("encoder_layer_0_norm1")
     print(
         f"    Layer 0 LN1 Gamma Norm - PT: {torch.norm(pt_ln1.weight).item():.4e}, Keras: {np.linalg.norm(np.asarray(keras_ln1.gamma)):.4e}"
     )
@@ -719,10 +721,9 @@ def test_lwdetr_real_weights_parity(variant_name):
     # First layer weights
     for i in range(2):
         pt_l = pt_backbone.encoder.encoder.encoder.layer[i]
-        keras_l = keras_backbone.backbone.encoder.encoder.encoder.encoder_layers[i]
 
         pt_q = pt_l.attention.attention.query.weight
-        keras_q = keras_l.attention.predict_query_key_value.kernel[
+        keras_q = k_model.get_layer(f"encoder_layer_{i}_attention_qkv").kernel[
             :, :384
         ]  # Assume Q is first
         print(
@@ -730,7 +731,7 @@ def test_lwdetr_real_weights_parity(variant_name):
         )
 
         pt_fc1 = pt_l.mlp.fc1.weight
-        keras_fc1 = keras_l.mlp.fully_connected_layer_1.kernel
+        keras_fc1 = k_model.get_layer(f"encoder_layer_{i}_mlp_fc1").kernel
         print(
             f"    Layer {i} FC1 Weight Norm - PT: {torch.norm(pt_fc1).item():.4e}, Keras: {np.linalg.norm(np.asarray(keras_fc1)):.4e}"
         )

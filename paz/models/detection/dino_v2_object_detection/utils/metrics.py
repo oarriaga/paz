@@ -1,4 +1,6 @@
 from typing import Any, Dict, List, Optional, Sequence, TypeVar
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 

@@ -270,6 +270,7 @@ def _build_and_port_variant(variant_name):
     # 1. Reference model (auto-downloads weights)
     pt_model = config["pt_class"]()
     pt_model.model.model.eval()
+    pt_model.model.model.cpu()
 
     # 2. Keras RF-DETR facade (skip pretrained download)
     facade = info["keras_cls"](pretrain_weights=None)

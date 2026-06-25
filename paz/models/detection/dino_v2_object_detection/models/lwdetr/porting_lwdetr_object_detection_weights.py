@@ -95,6 +95,8 @@ from paz.models.detection.dino_v2_object_detection.models.backbone.backbone_weig
     transfer_encoder as transfer_backbone_encoder,
     port_weights_multiscale_projector,
     transfer_layernorm,
+    _optional_table,
+    assign_table,
 )
 from paz.models.detection.dino_v2_object_detection.models.transformer_decoder_head.transformer_weights_porting_utils import (
     transfer_transformer_weights,
@@ -279,7 +281,7 @@ AVAILABLE_VARIANTS = [
 # Weight transfer helpers
 
 
-def resize_and_assign_pos_embed(pt_embeddings_layer, keras_embeddings_layer):
+def resize_and_assign_pos_embed(pt_embeddings_layer, keras_pos):
     """Interpolates position embeddings to match the target spatial grid.
 
     If the source and target position embedding shapes differ, performs
@@ -289,8 +291,8 @@ def resize_and_assign_pos_embed(pt_embeddings_layer, keras_embeddings_layer):
     Args:
         pt_embeddings_layer: Source embeddings layer with
             ``position_embeddings`` attribute.
-        keras_embeddings_layer: Target Keras embeddings layer whose
-            ``position_embeddings`` will be overwritten.
+        keras_pos: Target Keras position-embedding variable that will be
+            overwritten.
     """
     if hasattr(pt_embeddings_layer.position_embeddings, "weight"):
         pt_pos_embed = (
@@ -302,10 +304,10 @@ def resize_and_assign_pos_embed(pt_embeddings_layer, keras_embeddings_layer):
     if pt_pos_embed.ndim == 2:
         pt_pos_embed = np.expand_dims(pt_pos_embed, axis=0)
 
-    keras_shape = keras_embeddings_layer.position_embeddings.shape
+    keras_shape = keras_pos.shape
 
-    if pt_pos_embed.shape == keras_shape:
-        keras_embeddings_layer.position_embeddings.assign(pt_pos_embed)
+    if pt_pos_embed.shape[1] == keras_shape[0]:
+        keras_pos.assign(np.reshape(pt_pos_embed, keras_shape))
         return
 
     print(f"  Resizing PosEmbed: PT {pt_pos_embed.shape} -> Keras {keras_shape}")
@@ -319,7 +321,7 @@ def resize_and_assign_pos_embed(pt_embeddings_layer, keras_embeddings_layer):
         return
 
     gs_pt = int(np.sqrt(n_tokens))
-    n_tokens_keras = keras_shape[1] - 1
+    n_tokens_keras = keras_shape[0] - 1
     gs_keras = int(np.sqrt(n_tokens_keras))
 
     grid_tokens = grid_tokens.reshape(1, gs_pt, gs_pt, -1)
@@ -343,7 +345,7 @@ def resize_and_assign_pos_embed(pt_embeddings_layer, keras_embeddings_layer):
     grid_tokens_resized = grid_tokens_resized.reshape(1, -1, pt_pos_embed.shape[-1])
 
     new_pos_embed = np.concatenate([cls_token, grid_tokens_resized], axis=1)
-    keras_embeddings_layer.position_embeddings.assign(new_pos_embed)
+    keras_pos.assign(np.reshape(new_pos_embed, keras_shape))
 
 
 def transfer_lwdetr_head_weights(pt_model, keras_model, config):
@@ -428,6 +430,7 @@ def transfer_full_model_weights(pt_model, keras_model, config):
     inner_pt = pt_model.model.model
     pt_backbone = inner_pt.backbone[0]
     keras_backbone = keras_model.backbone.backbone
+    k_model = keras_backbone.encoder.feature_model
 
     # 1. Backbone
     # a. Position embeddings
@@ -445,9 +448,9 @@ def transfer_full_model_weights(pt_model, keras_model, config):
         )
         pt_backbone.encoder.export()
 
+    keras_pos = k_model.get_layer("embeddings_position_embeddings").embeddings
     resize_and_assign_pos_embed(
-        pt_backbone.encoder.encoder.embeddings,
-        keras_backbone.encoder.encoder.embeddings,
+        pt_backbone.encoder.encoder.embeddings, keras_pos
     )
 
     # b. Patch embeddings (projection + CLS token)
@@ -458,7 +461,7 @@ def transfer_full_model_weights(pt_model, keras_model, config):
     else:
         pt_patch_embed = pt_embeddings
 
-    keras_patch_embed = keras_backbone.encoder.encoder.embeddings
+    keras_proj = k_model.get_layer("embeddings_patch_embeddings_projection")
 
     if hasattr(pt_patch_embed, "projection"):
         pt_proj_weight = pt_patch_embed.projection.weight
@@ -469,30 +472,27 @@ def transfer_full_model_weights(pt_model, keras_model, config):
     else:
         raise AttributeError(f"Could not find projection weights in {pt_patch_embed}")
 
-    keras_patch_embed.projection.kernel.assign(
+    keras_proj.kernel.assign(
         pt_proj_weight.detach().cpu().numpy().transpose(2, 3, 1, 0)
     )
-    keras_patch_embed.projection.bias.assign(pt_proj_bias.detach().cpu().numpy())
+    keras_proj.bias.assign(pt_proj_bias.detach().cpu().numpy())
 
     if hasattr(pt_embeddings, "cls_token"):
-        keras_backbone.encoder.encoder.embeddings.cls_token.assign(
-            pt_embeddings.cls_token.detach().cpu().numpy()
-        )
+        cls = k_model.get_layer("embeddings_cls_token").embeddings
+        assign_table(cls, pt_embeddings.cls_token.detach().cpu().numpy())
 
-    if hasattr(keras_backbone.encoder.encoder.embeddings, "mask_token"):
-        if hasattr(pt_embeddings, "mask_token"):
-            keras_backbone.encoder.encoder.embeddings.mask_token.assign(
-                pt_embeddings.mask_token.detach().cpu().numpy()
-            )
+    mask_token = _optional_table(k_model, "embeddings_mask_token")
+    if mask_token is not None and hasattr(pt_embeddings, "mask_token"):
+        assign_table(mask_token, pt_embeddings.mask_token.detach().cpu().numpy())
 
     # c. Encoder blocks
     transfer_backbone_encoder(
-        pt_backbone.encoder.encoder.encoder, keras_backbone.encoder.encoder.encoder
+        pt_backbone.encoder.encoder.encoder, k_model, "encoder"
     )
 
     # d. Final LayerNorm
     transfer_layernorm(
-        pt_backbone.encoder.encoder.layernorm, keras_backbone.encoder.encoder.layernorm
+        pt_backbone.encoder.encoder.layernorm, k_model.get_layer("layernorm")
     )
 
     # e. Multi-scale projector
@@ -733,6 +733,7 @@ def _build_and_port_variant(variant_name):
     else:
         pt_model = config["pt_class"]()
     pt_model.model.model.eval()
+    pt_model.model.model.cpu()
 
     # Force eager attention to match the Keras matmul -> softmax ->
     # matmul sequence, eliminating attention-kernel FP divergence.

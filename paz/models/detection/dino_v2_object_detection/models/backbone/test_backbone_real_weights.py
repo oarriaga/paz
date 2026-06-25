@@ -41,9 +41,9 @@ from paz.models.detection.dino_v2_object_detection.models.backbone.backbone impo
 from paz.models.detection.dino_v2_object_detection.models.backbone.__init__ import Joiner
 from paz.models.detection.dino_v2_object_detection.models.backbone.backbone_weights_porting_utils import (
     transfer_encoder,
-    transfer_patch_embeddings,
     transfer_layernorm,
     port_weights_multiscale_projector,
+    _optional_table,
     hwc_to_chw,
     chw_to_hwc,
 )
@@ -157,7 +157,7 @@ def _build_keras_backbone(cfg):
     return backbone
 
 
-def _resize_and_assign_pos_embed(pt_embeddings, keras_embeddings):
+def _resize_and_assign_pos_embed(pt_embeddings, keras_pos):
     """Interpolate PyTorch position embeddings to match Keras shape if needed.
 
     When the Keras model is built with a different image_size than the one
@@ -174,10 +174,10 @@ def _resize_and_assign_pos_embed(pt_embeddings, keras_embeddings):
     if pt_pos.ndim == 2:
         pt_pos = np.expand_dims(pt_pos, axis=0)
 
-    keras_shape = keras_embeddings.position_embeddings.shape
+    keras_shape = keras_pos.shape
 
-    if pt_pos.shape == keras_shape:
-        keras_embeddings.position_embeddings.assign(pt_pos)
+    if pt_pos.shape[1] == keras_shape[0]:
+        keras_pos.assign(np.reshape(pt_pos, keras_shape))
         return
 
     # Separate CLS token from grid tokens
@@ -186,7 +186,7 @@ def _resize_and_assign_pos_embed(pt_embeddings, keras_embeddings):
 
     n_pt = grid_tokens.shape[1]
     gs_pt = int(np.sqrt(n_pt))
-    n_keras = keras_shape[1] - 1
+    n_keras = keras_shape[0] - 1
     gs_keras = int(np.sqrt(n_keras))
 
     grid_tokens = grid_tokens.reshape(1, gs_pt, gs_pt, -1)
@@ -205,7 +205,7 @@ def _resize_and_assign_pos_embed(pt_embeddings, keras_embeddings):
     grid_resized = grid_resized.reshape(1, -1, pt_pos.shape[-1])
 
     new_pos = np.concatenate([cls_token, grid_resized], axis=1)
-    keras_embeddings.position_embeddings.assign(new_pos)
+    keras_pos.assign(np.reshape(new_pos, keras_shape))
 
 
 def _transfer_full_backbone_weights(pt_backbone, keras_backbone):
@@ -214,7 +214,7 @@ def _transfer_full_backbone_weights(pt_backbone, keras_backbone):
     # PyTorch Backbone -> DinoV2 Wrapper -> WindowedDinov2Model
     pt_encoder = pt_backbone.encoder.encoder
     # Keras Backbone -> DinoV2 Wrapper -> WindowedDinov2Model
-    k_encoder = keras_backbone.encoder.encoder
+    k_model = keras_backbone.encoder.feature_model
 
     # Transfer patch embeddings manually so we can interpolate pos embeds
     # when PT and Keras have different image_size (and thus different
@@ -222,24 +222,21 @@ def _transfer_full_backbone_weights(pt_backbone, keras_backbone):
     from paz.models.detection.dino_v2_object_detection.models.backbone.backbone_weights_porting_utils import (
         transfer_conv2d,
         to_keras,
+        assign_table,
     )
 
-    transfer_conv2d(
-        pt_encoder.embeddings.patch_embeddings.projection,
-        k_encoder.embeddings.projection,
-    )
-    k_encoder.embeddings.cls_token.assign(to_keras(pt_encoder.embeddings.cls_token))
-    _resize_and_assign_pos_embed(pt_encoder.embeddings, k_encoder.embeddings)
-    if (
-        pt_encoder.embeddings.register_tokens is not None
-        and k_encoder.embeddings.register_tokens is not None
-    ):
-        k_encoder.embeddings.register_tokens.assign(
-            to_keras(pt_encoder.embeddings.register_tokens)
-        )
+    conv = k_model.get_layer("embeddings_patch_embeddings_projection")
+    transfer_conv2d(pt_encoder.embeddings.patch_embeddings.projection, conv)
+    cls = k_model.get_layer("embeddings_cls_token").embeddings
+    assign_table(cls, to_keras(pt_encoder.embeddings.cls_token))
+    pos = k_model.get_layer("embeddings_position_embeddings").embeddings
+    _resize_and_assign_pos_embed(pt_encoder.embeddings, pos)
+    registers = _optional_table(k_model, "embeddings_register_tokens")
+    if pt_encoder.embeddings.register_tokens is not None and registers is not None:
+        assign_table(registers, to_keras(pt_encoder.embeddings.register_tokens))
 
-    transfer_encoder(pt_encoder.encoder, k_encoder.encoder)
-    transfer_layernorm(pt_encoder.layernorm, k_encoder.layernorm)
+    transfer_encoder(pt_encoder.encoder, k_model, "encoder")
+    transfer_layernorm(pt_encoder.layernorm, k_model.get_layer("layernorm"))
 
     # 2. Transfer Projector
     # PyTorch: pt_backbone.projector

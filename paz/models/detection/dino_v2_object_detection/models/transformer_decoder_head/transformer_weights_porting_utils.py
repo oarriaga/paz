@@ -125,6 +125,7 @@ def extract_pt_transformer(model_class, config=None):
         wrapper = model_class(pretrained=True)
 
     wrapper.model.model.eval()
+    wrapper.model.model.cpu()
     pt_transformer = wrapper.model.model.transformer
     return pt_transformer
 

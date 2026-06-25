@@ -101,18 +101,19 @@ def test_rfdetr_ms_deform_attn_real_weights(model_class):
     _ = keras_attn(to_keras(query_np), to_keras(ref_points_np), to_keras(input_flatten_np), input_spatial_shapes_np)
 
     # 6. Transfer pretrained weights
+    torch_attn = torch_attn.cpu()
     with torch.no_grad():
-        keras_attn.sampling_offsets.kernel.assign(to_keras(torch_attn.sampling_offsets.weight.T.numpy()))
-        keras_attn.sampling_offsets.bias.assign(to_keras(torch_attn.sampling_offsets.bias.numpy()))
-        
-        keras_attn.attention_weights.kernel.assign(to_keras(torch_attn.attention_weights.weight.T.numpy()))
-        keras_attn.attention_weights.bias.assign(to_keras(torch_attn.attention_weights.bias.numpy()))
-        
-        keras_attn.value_proj.kernel.assign(to_keras(torch_attn.value_proj.weight.T.numpy()))
-        keras_attn.value_proj.bias.assign(to_keras(torch_attn.value_proj.bias.numpy()))
-        
-        keras_attn.output_proj.kernel.assign(to_keras(torch_attn.output_proj.weight.T.numpy()))
-        keras_attn.output_proj.bias.assign(to_keras(torch_attn.output_proj.bias.numpy()))
+        keras_attn.sampling_offsets.kernel.assign(to_keras(torch_attn.sampling_offsets.weight.T.cpu().numpy()))
+        keras_attn.sampling_offsets.bias.assign(to_keras(torch_attn.sampling_offsets.bias.cpu().numpy()))
+
+        keras_attn.attention_weights.kernel.assign(to_keras(torch_attn.attention_weights.weight.T.cpu().numpy()))
+        keras_attn.attention_weights.bias.assign(to_keras(torch_attn.attention_weights.bias.cpu().numpy()))
+
+        keras_attn.value_proj.kernel.assign(to_keras(torch_attn.value_proj.weight.T.cpu().numpy()))
+        keras_attn.value_proj.bias.assign(to_keras(torch_attn.value_proj.bias.cpu().numpy()))
+
+        keras_attn.output_proj.kernel.assign(to_keras(torch_attn.output_proj.weight.T.cpu().numpy()))
+        keras_attn.output_proj.bias.assign(to_keras(torch_attn.output_proj.bias.cpu().numpy()))
 
     # 7. Run forward pass comparison
     torch_attn = torch_attn.cpu()
