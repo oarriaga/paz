@@ -6,8 +6,8 @@ import pytest
 from keras import ops
 
 import paz
-from paz.models.foundation.whisper.models.whisper import Whisper
-from paz.models.foundation.whisper.models.whisper import WhisperFrontend
+from paz.models.foundation.whisper.model import Whisper
+from paz.models.foundation.whisper.model import WhisperFrontend
 from paz.models.foundation.whisper.decoding import (
     KVDecoder, kv_decode, build_whisper_prompt_token_ids,
     extract_text_token_ids)
@@ -41,12 +41,12 @@ def preprocess(waveform, sample_rate):
     return ops.convert_to_tensor(waveform, dtype="float32")
 
 
-def test_whisper_returns_four_keras_models():
-    frontend, encoder, cross_cache, decoder_step = Whisper(
-        "whisper_tiny_en", weights=None)
-    names = [m.__class__.__name__ for m in (frontend, encoder, cross_cache)]
-    assert names == ["Functional", "Functional", "Functional"]
-    inputs = [tensor.name for tensor in decoder_step.inputs]
+def test_whisper_returns_named_models():
+    models = Whisper("whisper_tiny_en", weights=None)
+    assert models._fields == (
+        "frontend", "encoder", "cross_cache", "decoder_step")
+    assert models.encoder.__class__.__name__ == "Functional"
+    inputs = [tensor.name for tensor in models.decoder_step.inputs]
     assert inputs[0] == "decoder_token_ids"
     assert inputs[1] == "self_attention_cache"
 

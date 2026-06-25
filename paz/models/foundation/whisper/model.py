@@ -1,3 +1,4 @@
+from collections import namedtuple
 from pathlib import Path
 
 from keras import ops
@@ -8,32 +9,32 @@ from keras.layers import LayerNormalization
 from keras.utils import get_file
 from keras_hub.layers import ReversibleEmbedding
 
-from paz.models.foundation.whisper.layers.frontend import frontend
-from paz.models.foundation.whisper.layers.frontend import build_mel_filters
-from paz.models.foundation.whisper.layers.embedding import embed_position
-from paz.models.foundation.whisper.layers.utils import Kernel
-from paz.models.foundation.whisper.layers.attention import build_cache
-from paz.models.foundation.whisper.layers.encoder import encoder_block
-from paz.models.foundation.whisper.layers.decoder import decoder_block
+from paz.backend.audio import log_mel_spectrogram, build_mel_filters
+from paz.models.transformers.attention import build_cache, kernel
+from paz.models.transformers.embeddings.absolute import embed_position
+from paz.models.foundation.whisper.layers import encoder_block, decoder_block
 from paz.models.foundation.whisper.configuration import to_model_args
 
 WHISPER_WEIGHTS_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.20/whisper/"  # fmt: skip
 DECODER_LAYER = "transformer_decoder_layer_{}"
 NORM_KWARGS = {"axis": -1, "epsilon": 1e-5}
 
+WhisperModels = namedtuple(
+    "Whisper", ["frontend", "encoder", "cross_cache", "decoder_step"])
+
 
 def Whisper(model_name="whisper_base_en", weights="paz", models_path=None):
     encoder_args, cross_args, decoder_args = to_model_args(model_name)
     variant = model_name if weights == "paz" else None
     kwargs = {"weights": variant, "models_path": models_path}
-    frontend_model = WhisperFrontend()
+    frontend = WhisperFrontend()
     encoder_name = f"{model_name}_encoder"
     cross_name = f"{model_name}_cross_cache"
     decoder_name = f"{model_name}_decoder_step"
     encoder = WhisperEncoder(*encoder_args, name=encoder_name, **kwargs)
     cross_cache = WhisperCrossCache(*cross_args, name=cross_name, **kwargs)
     decoder = WhisperDecoderStep(*decoder_args, name=decoder_name, **kwargs)
-    return frontend_model, encoder, cross_cache, decoder
+    return WhisperModels(frontend, encoder, cross_cache, decoder)
 
 
 def WhisperFrontend(name="whisper_frontend"):
@@ -43,7 +44,8 @@ def WhisperFrontend(name="whisper_frontend"):
     num_samples = sample_rate * 30
     mel_filters = build_mel_filters(num_mels, fft_bins, sample_rate, max_mel)
     mel_filters = ops.convert_to_tensor(mel_filters)
-    features = frontend(waveform, mel_filters, num_samples, fft_bins, stride)
+    args = (waveform, mel_filters, num_samples, fft_bins, stride)
+    features = log_mel_spectrogram(*args)
     return Model(waveform, features, name=name)
 
 
@@ -68,8 +70,8 @@ def build_encoder_stem(features, hidden_dim):
     return gelu(x, approximate=False)
 
 
-def build_conv1d(filters, kernel, stride, padding, name):
-    return Conv1D(filters, kernel, stride, padding, name=name)
+def build_conv1d(filters, kernel_size, stride, padding, name):
+    return Conv1D(filters, kernel_size, stride, padding, name=name)
 
 
 def pad_encoder(t):
@@ -138,7 +140,7 @@ def build_position_from_index(x):
 
 def build_token_embedding(vocab_size, hidden_dim):
     keys = ("tie_weights", "embeddings_initializer", "mask_zero", "name")
-    values = (True, Kernel(), False, "decoder_token_embedding")
+    values = (True, kernel(), False, "decoder_token_embedding")
     kwargs = dict(zip(keys, values))
     return ReversibleEmbedding(vocab_size, hidden_dim, **kwargs)
 

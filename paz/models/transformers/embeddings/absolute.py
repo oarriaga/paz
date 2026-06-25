@@ -1,7 +1,7 @@
 from keras import ops
 from keras.layers import Embedding, Lambda
 
-from paz.models.foundation.whisper.layers.utils import Kernel
+from paz.models.transformers.attention import kernel
 
 
 def embed_position(x, seq_length, trainable, positions, name):
@@ -20,7 +20,7 @@ def embed_position(x, seq_length, trainable, positions, name):
 
 def build_embedding(seq_length, dim, trainable, name):
     kwargs = {"trainable": trainable, "name": name}
-    return Embedding(seq_length, dim, Kernel(), **kwargs)
+    return Embedding(seq_length, dim, kernel(), **kwargs)
 
 
 def build_index_lambda(name):

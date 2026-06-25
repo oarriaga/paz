@@ -1,10 +1,10 @@
 import string
 
-import paz
+import keras
 from keras import ops
 from keras.layers import Dropout, EinsumDense
 
-from paz.models.foundation.whisper.layers.utils import Kernel
+from paz.models.transformers import cache as kv_cache
 
 
 def attend(query, value, num_heads, key_dim, dropout, name):
@@ -19,10 +19,9 @@ def attend(query, value, num_heads, key_dim, dropout, name):
     return project_output(output, query_rank, output_dim, name)
 
 
-def kv_attend(query, cache, index, value, mask, config, name):
-    num_heads = config["num_heads"]
-    key_dim = config["hidden_dim"] // num_heads
-    dropout = config["dropout"]
+def kv_attend(query, cache, index, value, mask, num_heads, hidden_dim,
+              dropout, name):
+    key_dim = hidden_dim // num_heads
     output_dim = query.shape[-1]
     q = project_query(query, num_heads, key_dim, name)
     if index is not None:
@@ -57,7 +56,7 @@ def update_cache(cache, index, value, key, num_heads, key_dim, name):
         key = value
     k = project_key(key, num_heads, key_dim, name)
     v = project_value(value, num_heads, key_dim, name)
-    return paz.transformers.cache.update(cache, index, k, v)
+    return kv_cache.update(cache, index, k, v)
 
 
 def project_query(query, num_heads, key_dim, name):
@@ -89,7 +88,7 @@ def project(x, free, bound, out_dims, shape, use_bias, name):
     equation, bias, rank = build_projection_equation(*args)
     final_shape = build_output_shape(rank - 1, shape)
     bias = bias if use_bias else None
-    layer = build_projection(equation, final_shape, bias, Kernel(), name)
+    layer = build_projection(equation, final_shape, bias, kernel(), name)
     return layer(x)
 
 
@@ -169,3 +168,7 @@ def apply_attention(scores, values, dropout, name):
 
 def merge_heads(tensor):
     return ops.transpose(tensor, (0, 2, 1, 3))
+
+
+def kernel(stddev=0.02):
+    return keras.initializers.TruncatedNormal(stddev=stddev)

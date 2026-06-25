@@ -2,7 +2,7 @@ import paz
 from keras import ops
 from keras.layers import LayerNormalization, Dropout
 
-from paz.models.foundation.whisper.layers.attention import kv_attend
+from paz.models.transformers.attention import kv_attend
 
 
 def decoder_block(x, caches, index, config, name):
@@ -19,10 +19,15 @@ def attend_self(x, cache, index, config, name):
     mask = build_self_attention_mask(cache, index)
     norm_name = f"{name}_layer_norm"
     hidden = LayerNormalization(epsilon=1e-5, name=norm_name)(x)
-    args = (hidden, cache, index, hidden, mask, config, name)
+    heads, dim, drop = unpack_attention_config(config)
+    args = (hidden, cache, index, hidden, mask, heads, dim, drop, name)
     hidden, cache = kv_attend(*args)
     hidden = Dropout(config["dropout"], name=f"{name}_dropout")(hidden)
     return hidden + x, cache
+
+
+def unpack_attention_config(config):
+    return config["num_heads"], config["hidden_dim"], config["dropout"]
 
 
 def build_self_attention_mask(cache, index):
@@ -35,7 +40,8 @@ def build_self_attention_mask(cache, index):
 def attend_cross(x, cross_cache, config, name):
     norm_name = f"{name}_layer_norm"
     delta = LayerNormalization(epsilon=1e-5, name=norm_name)(x)
-    args = (delta, cross_cache, None, None, None, config, name)
+    heads, dim, drop = unpack_attention_config(config)
+    args = (delta, cross_cache, None, None, None, heads, dim, drop, name)
     delta, _ = kv_attend(*args)
     delta = Dropout(config["dropout"], name=f"{name}_dropout")(delta)
     return x + delta

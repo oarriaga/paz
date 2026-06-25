@@ -1,7 +1,7 @@
 import paz
 from keras.layers import LayerNormalization, Dropout
 
-from paz.models.foundation.whisper.layers.attention import attend
+from paz.models.transformers.attention import attend
 
 
 def encoder_block(x, num_heads, dim, name, dropout, epsilon):
