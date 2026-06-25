@@ -8,6 +8,7 @@ and exposes bare-verb functions: ``cache.build``, ``cache.update``,
 from paz.models.transformers import cache
 from paz.models.transformers import mask
 from paz.models.transformers import logits
+from paz.models.transformers import numerics
 from paz.models.transformers import search
 from paz.models.transformers import feedforward
 from paz.models.transformers import attention
