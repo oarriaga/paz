@@ -15,7 +15,7 @@ from paz.models.transformers.embeddings.absolute import embed_position
 from paz.models.foundation.whisper.layers import encoder_block, decoder_block
 from paz.models.foundation.whisper.configuration import to_model_args
 
-WHISPER_WEIGHTS_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.20/whisper/"  # fmt: skip
+WHISPER_WEIGHTS_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.23/"  # fmt: skip
 DECODER_LAYER = "transformer_decoder_layer_{}"
 NORM_KWARGS = {"axis": -1, "epsilon": 1e-5}
 
@@ -246,6 +246,6 @@ def resolve_weights_path(variant_name, model_kind, models_path):
     filename = "{}.weights.h5".format(model_kind)
     if models_path is not None:
         return Path(models_path) / variant_name / filename
-    cache_name = "{}_{}".format(variant_name, filename)
-    url = WHISPER_WEIGHTS_URL + variant_name + "/" + filename
-    return Path(get_file(cache_name, url, cache_subdir="paz/models/whisper"))
+    asset = "{}_{}".format(variant_name, filename)
+    url = WHISPER_WEIGHTS_URL + asset
+    return Path(get_file(asset, url, cache_subdir="paz/models/whisper"))

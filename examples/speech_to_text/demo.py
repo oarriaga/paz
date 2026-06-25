@@ -7,147 +7,29 @@ import argparse
 import sys
 from pathlib import Path
 
-import jax
-import numpy as np
-from keras import ops
-
 ROOT = Path(__file__).resolve().parents[2]
 
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import paz
+from paz.applications import TranscribeWhisper
+from paz.models.foundation.whisper.configuration import CONFIGS
 
-from examples.speech_to_text.audio import load, resample
-from examples.speech_to_text.audio import to_float, to_mono
-from examples.speech_to_text.decoding import KVDecoder
-from examples.speech_to_text.decoding import build_whisper_prompt_token_ids
-from examples.speech_to_text.decoding import kv_decode
-from examples.speech_to_text.decoding import extract_text_token_ids
-from examples.speech_to_text.configuration import CONFIGS
-from examples.speech_to_text.configuration import to_model_args
-from examples.speech_to_text.model import WHISPER_MODELS_DIR
-from examples.speech_to_text.model import WhisperCrossCache
-from examples.speech_to_text.model import WhisperDecoderStep
-from examples.speech_to_text.model import WhisperEncoder
-from examples.speech_to_text.model import WhisperFrontend
-from examples.speech_to_text.tokenizer import decode_whisper_tokens
-from examples.speech_to_text.tokenizer import find_special_token_id
-
-
-SAMPLE_RATE = 16000
-MAX_AUDIO_SECONDS = 30
-
-
-def transcribe(key, wav_path, models, max_tokens=64, select=None):
-    waveform, sample_rate = load(wav_path)
-    waveform = preprocess(waveform, sample_rate)
-    return transcribe_waveform(key, waveform, models, max_tokens, select)
-
-
-def preprocess(waveform, sample_rate, target=16000):
-    waveform = to_float(waveform)
-    waveform = to_mono(waveform)
-    waveform = resample(waveform, sample_rate, target)
-    waveform = np.clip(waveform, -1.0, 1.0)
-    return ops.convert_to_tensor(waveform, dtype="float32")
-
-
-def preprocess_fixed(waveform, sample_rate, target=16000, duration=30):
-    waveform = to_float(waveform)
-    waveform = to_mono(waveform)
-    waveform = resample(waveform, sample_rate, target)
-    waveform = np.clip(waveform, -1.0, 1.0)
-    waveform = pad_or_trim_waveform(waveform, target * duration)
-    return ops.convert_to_tensor(waveform, dtype="float32")
-
-
-def pad_or_trim_waveform(waveform, num_samples):
-    waveform = np.asarray(waveform, dtype="float32")
-    if len(waveform) >= num_samples:
-        return waveform[:num_samples]
-    padded = np.zeros((num_samples,), dtype="float32")
-    padded[: len(waveform)] = waveform
-    return padded
-
-
-def transcribe_waveform(key, waveform, models, max_tokens=64, select=None):
-    decoder_state = build_decoder_state(models[3], max_tokens, select)
-    return transcribe_waveform_with_state(key, waveform, models, decoder_state)
-
-
-def transcribe_waveform_with_state(key, waveform, models, decoder_state):
-    frontend_model, encoder, cross_model, decoder_step = models
-    if len(waveform.shape) == 1:
-        waveform = ops.expand_dims(waveform, axis=0)
-    features = frontend_model(waveform)
-    encoder_output = encoder(features)
-    token_ids, text_ids, text = decode_encoder_output(
-        key, encoder_output, cross_model, decoder_state
-    )
-    return token_ids, text_ids, text
-
-
-def build_decoder_state(decoder_step, max_tokens=64, select=None):
-    prompt_ids = build_whisper_prompt_token_ids()
-    stop_id = find_special_token_id("<|endoftext|>")
-    cache_shape = decoder_step.input_shape[1]
-    decoder = KVDecoder(decoder_step, prompt_ids, max_tokens, select=select)
-    return decoder, cache_shape, stop_id, len(prompt_ids)
-
-
-def decode_encoder_output(key, encoder_output, cross_model, decoder_state):
-    decoder, cache_shape, stop_id, prompt_length = decoder_state
-    args = (key, decoder, cache_shape, cross_model, encoder_output, stop_id)
-    token_ids = kv_decode(*args)
-    text_ids = extract_text_token_ids(token_ids, prompt_length, stop_id)
-    text = decode_whisper_tokens(text_ids)
-    return token_ids, text_ids, text
-
-
-def build_models(model_name, models_path=WHISPER_MODELS_DIR):
-    model_args = to_model_args(model_name, models_path)
-    encoder_args, cross_cache_args, decoder_args, kwargs = model_args
-    encoder_name = f"{model_name}_encoder"
-    cross_name = f"{model_name}_cross_cache"
-    decoder_name = f"{model_name}_decoder_step"
-    frontend_model = WhisperFrontend()
-    encoder = WhisperEncoder(*encoder_args, name=encoder_name, **kwargs)
-    cross_cache = WhisperCrossCache(
-        *cross_cache_args, name=cross_name, **kwargs
-    )
-    decoder_step = WhisperDecoderStep(
-        *decoder_args, name=decoder_name, **kwargs
-    )
-    return frontend_model, encoder, cross_cache, decoder_step
-
-
-def build_select(args):
-    # Greedy by default; passing --temperature routes selection through the
-    # shared paz.transformers sampler.
-    if args.temperature is None:
-        return None
-    return paz.transformers.search.build_sampler(
-        args.temperature, args.top_k, args.top_p)
+# Until the weights are published, load them from the local example folder.
+WEIGHTS_DIR = Path(__file__).with_name("whisper_models")
 
 
 if __name__ == "__main__":
     description = "Whisper speech-to-text demo"
     parser = argparse.ArgumentParser(description=description)
     default_audio = str(Path(__file__).with_name("harvard.wav"))
-    model_names = list(CONFIGS.keys())
     add = parser.add_argument
     add("--audio_path", default=default_audio)
-    add("--model_name", default="whisper_base_en", choices=model_names)
+    add("--model_name", default="whisper_base_en", choices=list(CONFIGS))
     add("--max_tokens", default=64, type=int)
-    add("--temperature", default=None, type=float)
-    add("--top_k", default=0, type=int)
-    add("--top_p", default=1.0, type=float)
-    add("--seed", default=0, type=int)
     args = parser.parse_args()
-    key = jax.random.PRNGKey(args.seed)
-    select = build_select(args)
-    models = build_models(args.model_name)
-    text = transcribe(key, Path(args.audio_path), models, args.max_tokens,
-                      select)[2]
-    print(text)
+    transcribe = TranscribeWhisper(
+        args.model_name, args.max_tokens, models_path=str(WEIGHTS_DIR))
+    waveform, sample_rate = paz.audio.load(args.audio_path)
+    print(transcribe(waveform, sample_rate))

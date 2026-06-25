@@ -7,7 +7,7 @@ from paz.models.transformers.tokenizers import build_token_id_to_bytes
 from paz.models.transformers.tokenizers import decode_token_ids
 
 ASSETS_DIR = Path(__file__).resolve().with_name("assets")
-WHISPER_TOKENIZER_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.20/whisper/"  # fmt: skip
+WHISPER_TOKENIZER_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.23/"  # fmt: skip
 
 
 def decode_whisper_tokens(token_ids, vocabulary_path=None, config_path=None):
@@ -53,9 +53,9 @@ def resolve_vocabulary_path():
     return resolve_asset("vocabulary.json", "whisper_vocabulary.json")
 
 
-def resolve_asset(filename, cache_name):
+def resolve_asset(filename, asset_name):
     local = ASSETS_DIR / filename
     if local.exists():
         return local
-    url = WHISPER_TOKENIZER_URL + filename
-    return Path(get_file(cache_name, url, cache_subdir="paz/models/whisper"))
+    url = WHISPER_TOKENIZER_URL + asset_name
+    return Path(get_file(asset_name, url, cache_subdir="paz/models/whisper"))

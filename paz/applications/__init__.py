@@ -33,3 +33,8 @@ from paz.applications.pose_estimators import HeadPoseKeypointNet2D32
 from paz.applications.human_pose_estimators import HigherHRNetHumanPose2D
 from paz.applications.human_pose_estimators import EstimateHumanPose3D
 from paz.applications.human_pose_estimators import EstimateHumanPose
+from paz.applications.transcribers import TranscribeWhisper
+from paz.applications.transcribers import TranscribeWhisperTinyEN
+from paz.applications.transcribers import TranscribeWhisperBaseEN
+from paz.applications.transcribers import TranscribeWhisperSmallEN
+from paz.applications.transcribers import TranscribeWhisperMediumEN
