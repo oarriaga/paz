@@ -61,3 +61,13 @@ def test_download_requires_cityscapesscripts():
         pytest.skip("cityscapesscripts is installed")
     with pytest.raises(ImportError):
         cityscapes.build_downloader()
+
+
+def test_adapt_kaggle_layout_links_images(tmp_path):
+    base = tmp_path / "Cityspaces"
+    (base / "gtFine").mkdir(parents=True)
+    (base / "images").mkdir()
+    resolved = cityscapes.adapt_kaggle_layout(str(tmp_path))
+    assert resolved == str(base)
+    link = base / "leftImg8bit"
+    assert link.is_symlink() and os.readlink(link) == "images"

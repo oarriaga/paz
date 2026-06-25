@@ -33,11 +33,17 @@ colored masks are blended onto it.
 official Cityscapes `categoryId` grouping. `void` is class 0 (a real channel),
 so the Dice loss applies directly with no ignore-index handling.
 
-Cityscapes is login-gated. `paz.datasets.cityscapes.download(root)` fetches and
-extracts `gtFine` + `leftImg8bit` into the official layout using the maintained
-downloader — `pip install cityscapesScripts` and export `CITYSCAPES_USERNAME` /
-`CITYSCAPES_PASSWORD` from a free account at https://www.cityscapes-dataset.com.
-Or download manually and keep the same layout:
+Cityscapes is login-gated. Two ways to fetch it:
+
+- **Official:** `paz.datasets.cityscapes.download(root)` uses the maintained
+  downloader — `pip install cityscapesScripts` and export `CITYSCAPES_USERNAME` /
+  `CITYSCAPES_PASSWORD` from a free account at https://www.cityscapes-dataset.com.
+- **Kaggle mirror:** `paz.datasets.cityscapes.download_kaggle(root)` pulls a
+  mirror that carries the official `_gtFine_labelIds.png` and returns the dataset
+  root (needs a Kaggle API token; it symlinks `leftImg8bit` to the mirror's
+  `images` folder so the loader sees the official layout).
+
+Either way the layout the loader reads is:
 
 ```
 <root>/leftImg8bit/{train,val,test}/<city>/<frame>_leftImg8bit.png

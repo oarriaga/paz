@@ -51,7 +51,7 @@ the bottom.
 | **Hand detection** (`hand_detection/train.py`) | wired (reuses SSD pipeline) | Open Images V6 |
 | **MiniXception FER** (`emotion_classifier/train.py`) | ✅ synthetic | FER |
 | **UNet segmentation** (`semantic_segmentation/train.py`) | ✅ smoke (dice↓) | Shapes (synthetic) |
-| **UNet Cityscapes** (`semantic_segmentation/train_cityscapes.py`) | ✅ smoke (dice↓, synthetic tree) | Cityscapes (login-gated) |
+| **UNet Cityscapes** (`semantic_segmentation/train_cityscapes.py`) | ✅ real data (val mIoU 0.689, 89.3% px-acc) | Cityscapes (login-gated) |
 | **IMDB classifier** (`imdb_classifier/train.py`) | ✅ smoke (loss↓) | IMDB face arrays (`.npy`) |
 | **Implicit orientation (AAE)** (`implicit_orientation_learning/train.py`) | ✅ smoke (loss↓ + codebook retrieval) | `paz.graphics` renders (synthetic) |
 
@@ -130,7 +130,10 @@ H36M loader), **Minimal Hand** (DetNet/IKNet keypoint + IK losses),
   loads per batch, resizes images bilinear and labels nearest-neighbor, and
   `build_id_to_category` LUT-remaps the 34 raw IDs to the 8 official categories
   (`CATEGORY_RANGES`). `void` is class 0 (a trained channel), so `dice` needs no
-  ignore index. Verified on a synthetic fake-Cityscapes tree.
+  ignore index. `download` uses the official `cityscapesscripts` downloader;
+  `download_kaggle` pulls a mirror (symlinking `leftImg8bit`→`images`). Verified
+  on real Cityscapes: UNET_VGG16 (35 epochs, 256px) reaches val mIoU 0.689 /
+  89.3% pixel accuracy on the 500-image val split.
 - **Implicit orientation (AAE):** `paz.models.AutoEncoder` (conv encoder →
   latent → conv decoder, sigmoid) is trained to reconstruct clean object views
   from augmented ones; `extract_encoder` slices the encoder and orientation is

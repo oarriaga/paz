@@ -75,6 +75,23 @@ def build_download_message():
             "free account at https://www.cityscapes-dataset.com to download.")
 
 
+def download_kaggle(root, dataset="xiaose/cityscapes"):
+    api = kaggle_utils.build_api()
+    os.makedirs(root, exist_ok=True)
+    api.dataset_download_files(dataset, path=root, unzip=True)
+    return adapt_kaggle_layout(root)
+
+
+def adapt_kaggle_layout(root):
+    matches = glob(os.path.join(root, "**", "gtFine"), recursive=True)
+    assert matches, f"No gtFine directory found under {root}"
+    base = os.path.dirname(matches[0])
+    images = os.path.join(base, "leftImg8bit")
+    if not os.path.exists(images):
+        os.symlink("images", images)
+    return base
+
+
 def load_image(path, size):
     return paz.image.resize_opencv(paz.image.load(path), size)
 
