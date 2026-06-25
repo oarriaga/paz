@@ -5,7 +5,6 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 
-from examples.speech_to_text.demo import pad_or_trim_waveform
 from examples.speech_to_text.microphone import build_sounddevice_error
 from examples.speech_to_text.microphone import load_sounddevice
 from examples.speech_to_text.microphone import verify_input_device
@@ -45,12 +44,6 @@ def test_build_waveform_concatenates_chunks():
     chunks = [np.array([0.1, 0.2]), np.array([0.3], dtype="float64")]
     waveform = build_waveform(chunks)
     expected = np.array([0.1, 0.2, 0.3], dtype="float32")
-    np.testing.assert_allclose(waveform, expected)
-
-
-def test_pad_or_trim_waveform_builds_fixed_shape():
-    waveform = pad_or_trim_waveform(np.array([1.0, 2.0]), 4)
-    expected = np.array([1.0, 2.0, 0.0, 0.0], dtype="float32")
     np.testing.assert_allclose(waveform, expected)
 
 
@@ -111,16 +104,8 @@ def test_stop_recording_keeps_sample_rate_for_next_take():
     app.recording = True
     app.stream = FakeStream()
     app.chunks = [np.array([0.1, 0.2, 0.3], dtype="float32")]
-    app.models = object()
-    app.decoder_state = object()
-    with patch(
-        "examples.speech_to_text.push_to_talk.preprocess_fixed",
-        return_value=np.array([0.1], dtype="float32"),
-    ), patch(
-        "examples.speech_to_text.push_to_talk.transcribe_waveform_with_state",
-        return_value=([], [], "hello"),
-    ):
-        app.stop_recording()
+    app.transcribe = lambda waveform, sample_rate: "hello"
+    app.stop_recording()
     assert app.sample_rate == 32000
     assert not app.recording
     assert not app.transcribing
