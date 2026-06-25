@@ -215,6 +215,12 @@ def denormalize(detections, H, W):
     return merge(boxes, scores)
 
 
+def clip(detections, H, W):
+    boxes, scores = split(detections)
+    boxes = paz.boxes.clip(boxes, H, W)
+    return merge(boxes, scores)
+
+
 def normalize(detections, H, W):
     boxes, scores = split(detections)
     boxes = paz.boxes.normalize(boxes, H, W)

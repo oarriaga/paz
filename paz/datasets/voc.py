@@ -41,16 +41,16 @@ def parse_box(box):
     return [x_min, y_min, x_max, y_max]
 
 
-def parse_XML(name_to_arg, XML_filename, with_difficult_boxes=True):
+def parse_XML(name_to_arg, XML_filename):
     tree = ElementTree.parse(XML_filename)
     image_name = tree.find("filename").text
-    detections = []
+    detections, difficulties = [], []
     for detection in tree.findall("object"):
         class_arg = name_to_arg[detection.find("name").text]
-        # difficult = int(detection.find("difficult").text)  # TODO
         box = parse_box(detection.find("bndbox"))
         detections.append(box + [class_arg])
-    return image_name, detections
+        difficulties.append(int(detection.find("difficult").text))
+    return image_name, detections, difficulties
 
 
 def validate_inputs(name, split, task):
@@ -122,7 +122,7 @@ def load(name, split="trainval", task="detection"):
     parse = partial(parse_XML, paz.datasets.build_name_to_arg(class_names))
     image_paths, masks_paths, detections = [], [], []
     for label_path in get_label_paths(path, name, split, task):
-        image_name, image_detections = parse(label_path)
+        image_name, image_detections, _ = parse(label_path)
         if len(image_detections) != 0:
             image_name = strip_extension(image_name)
             image_paths.append(os.path.join(image_root, image_name + ".jpg"))
@@ -135,6 +135,19 @@ def load(name, split="trainval", task="detection"):
     else:
         dataset = (image_paths, detections)
     return dataset
+
+
+def load_difficulties(name, split="test", task="detection"):
+    validate_inputs(name, split, task)
+    path = download(name, split)
+    name_to_arg = paz.datasets.build_name_to_arg(get_class_names())
+    parse = partial(parse_XML, name_to_arg)
+    difficulties = []
+    for label_path in get_label_paths(path, name, split, task):
+        _, image_detections, image_difficulties = parse(label_path)
+        if len(image_detections) != 0:
+            difficulties.append(image_difficulties)
+    return difficulties
 
 
 def colormap_to_class():

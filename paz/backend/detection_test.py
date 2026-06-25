@@ -954,3 +954,15 @@ def test_match_logic_with_padded_boxes():
     # It has low IOU with all real boxes and is not a forced match.
     # It should be assigned a background class of 0.
     assert matched_boxes[2, 4] == 0, "Prior 2 should be background (class 0)"
+
+
+def test_clip_keeps_edge_box_but_drops_padding():
+    edge = [-4.0, 0.0, 50.0, 60.0, 0.99, 3.0]
+    padding = [-1.0, -1.0, -1.0, -1.0, -1.0, -1.0]
+    detections = jp.array([edge, padding])
+    clipped = paz.detection.clip(detections, 64, 64)
+    kept = paz.detection.remove_invalid(clipped)
+    assert kept.shape[0] == 1
+    assert float(kept[0, 0]) == 0.0
+    assert float(kept[0, 2]) == 50.0
+    assert float(kept[0, 4]) == pytest.approx(0.99)
