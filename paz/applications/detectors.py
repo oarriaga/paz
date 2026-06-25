@@ -26,6 +26,7 @@ def SSD(model, score_thresh, prior_boxes, variances, apply_NMS, draw):
         detections = apply_NMS(detections)
         detections = paz.detection.filter_by_score(detections, score_thresh, -1)
         detections = paz.detection.denormalize(detections, *image_size)
+        detections = paz.detection.clip(detections, *image_size)
         return detections
 
     def call(image):

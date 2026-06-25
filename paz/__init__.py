@@ -8,6 +8,7 @@ from paz.backend import pinhole
 from paz.backend import mask
 from paz.backend import pointcloud
 from paz.backend import detection
+from paz.backend import evaluation
 from paz.backend import standard
 from paz.backend import depth
 from paz.backend import logger  # DEPRECATED - use directory, file, message
