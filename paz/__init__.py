@@ -2,6 +2,7 @@ from paz import datasets
 from paz.backend import draw
 from paz.backend import boxes
 from paz.backend import image
+from paz.backend import audio
 from paz.backend import classes
 from paz.backend import pinhole
 from paz.backend import mask
