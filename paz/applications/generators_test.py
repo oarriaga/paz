@@ -18,14 +18,14 @@ def run_weights_test():
     return (WEIGHTS_DIR / "decoder_step.weights.h5").exists()
 
 
-def test_generate_gemma4_requires_models_path():
-    with pytest.raises(ValueError):
-        GenerateGemma4("gemma4_2b")
+def test_generate_gemma4_missing_models_path_raises():
+    with pytest.raises((FileNotFoundError, OSError)):
+        GenerateGemma4("gemma4_2b", models_path="/nonexistent/gemma4")
 
 
-def test_describe_image_gemma4_requires_models_path():
-    with pytest.raises(ValueError):
-        DescribeImageGemma4("gemma4_2b")
+def test_describe_image_gemma4_missing_models_path_raises():
+    with pytest.raises((FileNotFoundError, OSError)):
+        DescribeImageGemma4("gemma4_2b", models_path="/nonexistent/gemma4")
 
 
 @pytest.mark.skipif(not run_weights_test(), reason="set GEMMA4_WEIGHTS_TEST=1")
