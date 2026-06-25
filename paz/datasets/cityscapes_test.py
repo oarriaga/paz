@@ -1,7 +1,9 @@
 import os
+import importlib.util
 
 import numpy as np
 import cv2
+import pytest
 
 from paz.datasets import cityscapes
 
@@ -46,3 +48,16 @@ def test_load_image_and_mask_shapes(tmp_path):
     assert image.shape == (32, 48, 3)
     assert mask.shape == (32, 48)
     assert mask.min() >= 0 and mask.max() <= 7
+
+
+def test_download_message_mentions_credentials():
+    message = cityscapes.build_download_message()
+    assert "CITYSCAPES_USERNAME" in message
+    assert "CITYSCAPES_PASSWORD" in message
+
+
+def test_download_requires_cityscapesscripts():
+    if importlib.util.find_spec("cityscapesscripts") is not None:
+        pytest.skip("cityscapesscripts is installed")
+    with pytest.raises(ImportError):
+        cityscapes.build_downloader()

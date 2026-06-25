@@ -4,6 +4,11 @@ from glob import glob
 import numpy as np
 
 import paz
+from paz.datasets import kaggle_utils
+
+
+CITYSCAPES_PACKAGES = ("gtFine_trainvaltest.zip",
+                       "leftImg8bit_trainvaltest.zip")
 
 
 def get_class_names():
@@ -44,6 +49,30 @@ def load(root, split="train"):
     for label_path in label_paths:
         assert os.path.exists(label_path), f"Missing label {label_path}"
     return image_paths, label_paths
+
+
+def download(root, packages=CITYSCAPES_PACKAGES):
+    downloader = build_downloader()
+    os.makedirs(root, exist_ok=True)
+    session = downloader.login()
+    downloader.download_packages(session, list(packages), root, resume=True)
+    for package in packages:
+        kaggle_utils.extract_archive(os.path.join(root, package), root)
+    return root
+
+
+def build_downloader():
+    try:
+        from cityscapesscripts.download import downloader
+    except ImportError as error:
+        raise ImportError(build_download_message()) from error
+    return downloader
+
+
+def build_download_message():
+    return ("Cityscapes is login-gated. Run `pip install cityscapesScripts` "
+            "and export CITYSCAPES_USERNAME and CITYSCAPES_PASSWORD from a "
+            "free account at https://www.cityscapes-dataset.com to download.")
 
 
 def load_image(path, size):

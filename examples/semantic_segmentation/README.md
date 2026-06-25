@@ -33,8 +33,11 @@ colored masks are blended onto it.
 official Cityscapes `categoryId` grouping. `void` is class 0 (a real channel),
 so the Dice loss applies directly with no ignore-index handling.
 
-Cityscapes is login-gated; download `leftImg8bit` and `gtFine` manually and keep
-the official layout:
+Cityscapes is login-gated. `paz.datasets.cityscapes.download(root)` fetches and
+extracts `gtFine` + `leftImg8bit` into the official layout using the maintained
+downloader — `pip install cityscapesScripts` and export `CITYSCAPES_USERNAME` /
+`CITYSCAPES_PASSWORD` from a free account at https://www.cityscapes-dataset.com.
+Or download manually and keep the same layout:
 
 ```
 <root>/leftImg8bit/{train,val,test}/<city>/<frame>_leftImg8bit.png
@@ -42,7 +45,8 @@ the official layout:
 ```
 
 ```bash
-python train_cityscapes.py --root /data/cityscapes --image_size 256
+# --download fetches the data first (needs the env credentials above)
+python train_cityscapes.py --root /data/cityscapes --image_size 256 --download
 python demo_cityscapes.py --image scene_leftImg8bit.png \
     --weights experiments/unet_cityscapes.weights.h5
 ```

@@ -45,8 +45,11 @@ if __name__ == "__main__":
     parser.add_argument("--learning_rate", default=0.001, type=float)
     parser.add_argument("--epochs", default=100, type=int)
     parser.add_argument("--backbone_weights", default="imagenet")
+    parser.add_argument("--download", action="store_true")
     args = parser.parse_args()
     os.makedirs(args.save_path, exist_ok=True)
+    if args.download:
+        cityscapes.download(args.root)
     H = W = args.image_size
     num_classes = len(cityscapes.get_class_names())
     train_paths = cityscapes.load(args.root, "train")
