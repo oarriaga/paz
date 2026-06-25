@@ -1,0 +1,20 @@
+from pathlib import Path
+
+from keras import Model
+
+from paz.models.transformers.logits import soft_cap as apply_soft_cap
+
+from paz.models.foundation.gemma4.model import build_text_backbone
+
+
+def Gemma4CausalLM(config, weights_path=None, name="gemma4_causal_lm"):
+    backbone = build_text_backbone(config)
+    inputs = backbone.input
+    hidden = backbone(inputs)
+    embedding = backbone.get_layer("token_embedding")
+    logits = embedding(hidden, reverse=True)
+    logits = apply_soft_cap(logits, config.final_logit_soft_cap)
+    model = Model(inputs, logits, name=name)
+    if weights_path is not None:
+        model.load_weights(str(Path(weights_path)))
+    return model
