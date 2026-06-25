@@ -293,3 +293,51 @@ def MiniXceptionFER():
     path = get_file(filename, URL + filename, cache_subdir="paz/models")
     model.load_weights(path)
     return model
+
+
+def build_mini_xception_imdb(input_shape, num_classes, l2_reg=0.01):
+    # Original face_classification mini_XCEPTION: 8-kernel stem and a strided,
+    # max-pooled fourth module. Kept faithful so the released IMDB weights load
+    # by topological order. Rescaling maps the [0, 1] classifier input to the
+    # [-1, 1] training range.
+    reg = l2(l2_reg)
+    conv = dict(use_bias=False, kernel_regularizer=reg)
+    down = dict(strides=2, padding="same", use_bias=False)
+    sep = dict(padding="same", use_bias=False, depthwise_regularizer=reg)
+    image = Input(input_shape)
+    x = Rescaling(scale=2.0, offset=-1.0)(image)
+    x = Conv2D(8, 3, **conv)(x)
+    x = Activation("relu")(BatchNormalization()(x))
+    x = Conv2D(8, 3, **conv)(x)
+    x = Activation("relu")(BatchNormalization()(x))
+    for num_kernels in [16, 32, 64, 128]:
+        residual = Conv2D(num_kernels, 1, **down)(x)
+        residual = BatchNormalization()(residual)
+        x = SeparableConv2D(num_kernels, 3, **sep)(x)
+        x = Activation("relu")(BatchNormalization()(x))
+        x = SeparableConv2D(num_kernels, 3, **sep)(x)
+        x = BatchNormalization()(x)
+        x = MaxPooling2D(3, strides=2, padding="same")(x)
+        x = layers.add([x, residual])
+    x = Conv2D(num_classes, 3, padding="same")(x)
+    x = GlobalAveragePooling2D()(x)
+    output = Activation("softmax", name="predictions")(x)
+    return Model(image, output)
+
+
+def MiniXceptionIMDB():
+    """Build mini_XCEPTION with the released IMDB two-class face weights.
+
+    # Returns
+        Keras model.
+
+    # References
+       - [Real-time Convolutional Neural Networks for Emotion and
+            Gender Classification](https://arxiv.org/abs/1710.07557)
+    """
+    model = build_mini_xception_imdb((64, 64, 1), 2)
+    filename = "imdb_mini_XCEPTION_paz_jax.weights.h5"
+    URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.22/"
+    path = get_file(filename, URL + filename, cache_subdir="paz/models")
+    model.load_weights(path)
+    return model

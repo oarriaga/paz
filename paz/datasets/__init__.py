@@ -8,7 +8,11 @@ from paz.datasets import (
     deepfish,
     omniglot,
     fsclvr,
+    hands,
+    ycb_video,
+    cityscapes,
 )
+from paz.datasets.hands import MPIIHandJoints, MANOHandJoints
 
 
 def load(name, *args, **kwargs):
@@ -20,6 +24,8 @@ def load(name, *args, **kwargs):
         dataset = fer.load(*args, **kwargs)
     elif name == "FERPlus":
         dataset = ferplus.load(*args, **kwargs)
+    elif name == "Cityscapes":
+        dataset = cityscapes.load(*args, **kwargs)
     else:
         raise ValueError(f"Invalid dataset name: {name}")
     return dataset
@@ -42,8 +48,16 @@ def labels(name):
         class_names = fer.get_class_names()
     elif name == "FERPlus":
         class_names = ferplus.get_class_names()
+    elif name == "IMDB":
+        class_names = ["man", "woman"]
     elif name == "COCO":
         class_names = coco.get_class_names()
+    elif name == "COCO_EFFICIENTDET":
+        class_names = coco.get_efficientdet_class_names()
+    elif name in ["YCBVideo", "FAT"]:
+        class_names = ycb_video.get_class_names()
+    elif name == "Cityscapes":
+        class_names = cityscapes.get_class_names()
     else:
         raise ValueError(f"Invalid dataset name: {name}")
     return class_names

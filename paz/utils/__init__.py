@@ -31,14 +31,34 @@ def _cache_key(*args):
 def _load_cached(path):
     """Load exported function from disk."""
     with open(path, "rb") as filedata:
-        return jax.export.deserialize(filedata.read()).call
+        serialized = filedata.read()
+    if len(serialized) == 0:
+        raise ValueError(f"Empty cache file: {path}")
+    return jax.export.deserialize(serialized).call
+
+
+def _load_valid_cache(path):
+    try:
+        return _load_cached(path)
+    except Exception:
+        try:
+            path.unlink()
+        except OSError:
+            pass
+        return None
 
 
 def _save_cached(exported, path):
     """Save exported function to disk."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "wb") as filedata:
-        filedata.write(exported.serialize())
+    temporary_path = path.with_suffix(path.suffix + ".tmp")
+    try:
+        with open(temporary_path, "wb") as filedata:
+            filedata.write(exported.serialize())
+        os.replace(temporary_path, path)
+    finally:
+        if temporary_path.exists():
+            temporary_path.unlink()
 
 
 def _extract_non_static_args(args, static_argnums):
@@ -89,8 +109,9 @@ def cache(func=None, static_argnums=(), cache_dir=None):
             non_static_args = _extract_non_static_args(args, static_argnums)
 
             if cache_path.exists():
-                cached_fn = _load_cached(cache_path)
-                return cached_fn(*non_static_args)
+                cached_fn = _load_valid_cache(cache_path)
+                if cached_fn is not None:
+                    return cached_fn(*non_static_args)
 
             exported = jax.export.export(fn)(*args)
             _save_cached(exported, cache_path)
@@ -132,8 +153,9 @@ def jit_and_cache(func=None, static_argnums=(), cache_dir=None, **jit_kwargs):
             non_static_args = _extract_non_static_args(args, static_argnums)
 
             if cache_path.exists():
-                cached_fn = _load_cached(cache_path)
-                return cached_fn(*non_static_args)
+                cached_fn = _load_valid_cache(cache_path)
+                if cached_fn is not None:
+                    return cached_fn(*non_static_args)
 
             exported = jax.export.export(jitted)(*args)
             _save_cached(exported, cache_path)

@@ -1,4 +1,6 @@
+import cv2
 import numpy as np
+import jax
 import jax.numpy as jp
 import paz
 from paz.backend import draw
@@ -126,3 +128,31 @@ def test_lincolors_uses_cache():
     draw._lincolors(3)
     after = draw._lincolors.cache_info().hits
     assert after == before + 1
+
+
+def test_blend_background_respects_mask():
+    foreground = jp.full((4, 4, 3), 200, jp.uint8)
+    background = jp.zeros((4, 4, 3), jp.uint8)
+    mask = jp.zeros((4, 4)).at[0, 0].set(1.0)
+    blended = paz.draw.blend_background(foreground, background, mask)
+    assert int(blended[0, 0, 0]) == 200
+    assert int(blended[1, 1, 0]) == 0
+
+
+def test_add_occlusion_changes_image_and_keeps_shape():
+    image = jp.full((32, 32, 3), 200, jp.uint8)
+    occluded = paz.draw.add_occlusion(jax.random.PRNGKey(1), image)
+    assert occluded.shape == (32, 32, 3)
+    assert not bool(jp.all(occluded == 200))
+
+
+def test_fill_polygon_matches_cv2():
+    polygon = jp.array([[12, 10], [50, 16], [55, 48], [28, 58], [10, 38]],
+                       jp.float32)
+    image = jp.full((64, 64, 3), 200, jp.uint8)
+    filled = paz.draw.fill_polygon(image, polygon, jp.zeros(3, jp.uint8))
+    reference = np.full((64, 64, 3), 200, np.uint8)
+    cv2.fillPoly(reference, [np.asarray(polygon).astype(np.int32)], (0, 0, 0))
+    jax_mask = np.asarray((filled == 0).all(-1))
+    reference_mask = (reference == 0).all(-1)
+    assert (jax_mask == reference_mask).mean() > 0.95

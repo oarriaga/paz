@@ -1,6 +1,8 @@
 import tempfile
 from pathlib import Path
 
+import cv2
+import numpy as np
 import jax
 import jax.numpy as jp
 
@@ -50,3 +52,35 @@ def test_forward_differences_batches_images():
     expected = jax.vmap(legacy_forward_differences)(batch)
     assert jp.allclose(dy, expected[0])
     assert jp.allclose(dx, expected[1])
+
+
+def test_make_random_plain_image_is_uniform_color():
+    image = paz.image.make_random_plain_image(jax.random.PRNGKey(0), (8, 8, 3))
+    assert image.shape == (8, 8, 3)
+    assert jp.all(image[0, 0] == image[5, 4])
+
+
+def test_randomize_rendered_image_keeps_shape():
+    image = jp.full((32, 32, 3), 128, jp.uint8)
+    mask = jp.ones((32, 32))
+    key = jax.random.PRNGKey(2)
+    output = paz.image.randomize_rendered_image(key, image, mask)
+    assert output.shape == (32, 32, 3)
+
+
+def test_apply_gaussian_blur_matches_cv2_interior():
+    image = np.random.default_rng(0).integers(0, 255, (64, 64, 3), np.uint8)
+    blurred = paz.image.apply_gaussian_blur(jp.array(image), 9, 2.0)
+    blurred = np.asarray(blurred).astype(np.int16)
+    reference = cv2.GaussianBlur(image, (9, 9), 2.0).astype(np.int16)
+    interior = np.abs(blurred[8:-8, 8:-8] - reference[8:-8, 8:-8]).mean()
+    assert interior < 2.0
+
+
+def test_randomize_rendered_image_jits_without_recompilation():
+    randomize = jax.jit(paz.image.randomize_rendered_image)
+    image = jp.full((32, 32, 3), 128, jp.uint8)
+    mask = jp.ones((32, 32))
+    randomize(jax.random.PRNGKey(0), image, mask).block_until_ready()
+    randomize(jax.random.PRNGKey(1), image, mask).block_until_ready()
+    assert randomize._cache_size() == 1

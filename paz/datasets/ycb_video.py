@@ -1,0 +1,25 @@
+def get_class_names():
+    """YCB-Video / FAT object class names (without the background class)."""
+    return [
+        "037_scissors",
+        "008_pudding_box",
+        "024_bowl",
+        "005_tomato_soup_can",
+        "007_tuna_fish_can",
+        "010_potted_meat_can",
+        "061_foam_brick",
+        "011_banana",
+        "035_power_drill",
+        "004_sugar_box",
+        "019_pitcher_base",
+        "006_mustard_bottle",
+        "036_wood_block",
+        "009_gelatin_box",
+        "051_large_clamp",
+        "040_large_marker",
+        "003_cracker_box",
+        "025_mug",
+        "052_extra_large_clamp",
+        "021_bleach_cleanser",
+        "002_master_chef_can",
+    ]

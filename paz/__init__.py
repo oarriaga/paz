@@ -2,11 +2,13 @@ from paz import datasets
 from paz.backend import draw
 from paz.backend import boxes
 from paz.backend import image
+from paz.backend import audio
 from paz.backend import classes
 from paz.backend import pinhole
 from paz.backend import mask
 from paz.backend import pointcloud
 from paz.backend import detection
+from paz.backend import evaluation
 from paz.backend import standard
 from paz.backend import depth
 from paz.backend import logger  # DEPRECATED - use directory, file, message
@@ -19,9 +21,12 @@ from paz.backend.lie import SE3
 from paz.backend.lie import SO3
 from paz.backend.lie import SE2
 from paz.backend.lie import quaternion
+from paz.backend import angles
 
 from paz import graphics
 from paz.backend import points2D
+from paz.backend import gaussian_mixture
+from paz.backend import poses
 from paz.backend import algebra
 from paz.backend import scene
 from paz.backend import plane
@@ -35,10 +40,13 @@ from paz.backend.standard import (
     to_jax,
     to_numpy,
     NamedTuple,
+    snapshot_variables,
+    call_stateless,
 )
 from paz import losses
 from paz.abstract import Model, Node, Input, Sequential, Tree
 from paz.models.decomposition import pca as PCA
+from paz.models import transformers
 from paz import applications
 from paz import utils
 from paz.utils import pytree

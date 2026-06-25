@@ -14,18 +14,6 @@ import eigenfaces
 import paz
 
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Eigenfaces live demo")
-    parser.add_argument("--camera", default=0, type=int)
-    parser.add_argument("--H", default=480, type=int)
-    parser.add_argument("--W", default=640, type=int)
-    parser.add_argument("--box_scale", default=1.2, type=float)
-    parser.add_argument("--distance_threshold", default=None, type=float)
-    parser.add_argument("--experiments_path", default="experiments")
-    parser.add_argument("--database_path", default="database")
-    return parser.parse_args()
-
-
 def load_state(experiments_path):
     filepath = Path(experiments_path) / "eigenfaces_state.npz"
     if not filepath.exists():
@@ -52,23 +40,10 @@ def build_demo_pipeline(state, face_database, box_scale=1.2, threshold=None):
             weight = eigenfaces.project_single(face, state)
             label = face_database.query(weight, threshold)
             labels.append(label)
-        image_with_boxes = _draw_predictions(image, boxes, labels, color_by_label)
-        return (boxes, labels), image_with_boxes
+        drawn = _draw_predictions(image, boxes, labels, color_by_label)
+        return (boxes, labels), drawn
 
     return call
-
-
-def main():
-    args = parse_args()
-    eigenface_state = load_state(args.experiments_path)
-    face_database = load_database(args.database_path)
-    box_scale = args.box_scale
-    threshold = args.distance_threshold
-    build_args = (eigenface_state, face_database, box_scale, threshold)
-    pipeline = build_demo_pipeline(*build_args)
-    camera = paz.Camera(args.camera)
-    player = paz.VideoPlayer((args.H, args.W), pipeline, camera)
-    player.run()
 
 
 def _build_face_boxes(image, detect_face, box_scale):
@@ -115,4 +90,20 @@ def _cast_box(box):
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Eigenfaces live demo")
+    parser.add_argument("--camera", default=0, type=int)
+    parser.add_argument("--H", default=480, type=int)
+    parser.add_argument("--W", default=640, type=int)
+    parser.add_argument("--box_scale", default=1.2, type=float)
+    parser.add_argument("--distance_threshold", default=None, type=float)
+    parser.add_argument("--experiments_path", default="experiments")
+    parser.add_argument("--database_path", default="database")
+    args = parser.parse_args()
+    eigenface_state = load_state(args.experiments_path)
+    face_database = load_database(args.database_path)
+    build_args = (eigenface_state, face_database, args.box_scale,
+                  args.distance_threshold)
+    pipeline = build_demo_pipeline(*build_args)
+    camera = paz.Camera(args.camera)
+    player = paz.VideoPlayer((args.H, args.W), pipeline, camera)
+    player.run()

@@ -3,7 +3,8 @@ from pathlib import Path
 
 from keras import Model, ops
 from keras.initializers import VarianceScaling
-from keras.layers import Embedding, EinsumDense, Input, ReversibleEmbedding
+from keras.layers import Embedding, EinsumDense, Input
+from keras_hub.layers import ReversibleEmbedding
 
 from .layers.decoder import decoder_block
 from .layers.normalization import build_rms_norm
@@ -15,10 +16,12 @@ TEXT_BACKBONE_FIELDS = (
     "attention_logit_soft_cap final_logit_soft_cap "
     "use_sliding_window_attention sliding_window_size "
     "sliding_window_pattern global_head_dim "
+    "local_rope_wavelength global_rope_wavelength "
     "local_rope_scaling_factor global_rope_scaling_factor "
     "global_rope_partial_rotary_factor "
     "use_bidirectional_attention layer_norm_epsilon dropout dtype "
-    "hidden_size_per_layer_input num_kv_shared_layers global_layer_indices"
+    "hidden_size_per_layer_input num_kv_shared_layers global_layer_indices "
+    "use_double_wide_mlp"
 )
 TextBackboneArgs = namedtuple("TextBackboneArgs", TEXT_BACKBONE_FIELDS)
 TextIntermediates = namedtuple(
@@ -43,6 +46,8 @@ def build_text_backbone_args(**overrides):
         "sliding_window_size": 16,
         "sliding_window_pattern": 6,
         "global_head_dim": None,
+        "local_rope_wavelength": 10_000.0,
+        "global_rope_wavelength": 1_000_000.0,
         "local_rope_scaling_factor": 1.0,
         "global_rope_scaling_factor": 1.0,
         "global_rope_partial_rotary_factor": 1.0,
@@ -53,55 +58,75 @@ def build_text_backbone_args(**overrides):
         "hidden_size_per_layer_input": None,
         "num_kv_shared_layers": 0,
         "global_layer_indices": None,
+        "use_double_wide_mlp": False,
     }
     values.update(overrides)
     return TextBackboneArgs(**values)
 
 
-class Gemma4TextBackbone(Model):
-    def __init__(self, config, name="gemma4_text_backbone"):
-        self.config = config
-        token_embedding = build_token_embedding(
-            config.vocabulary_size, config.hidden_dim, config.dtype)
-        token_ids = Input((None,), dtype="int32", name="token_ids")
-        padding_mask = Input(
-            (None,), dtype="int32", name="padding_mask")
-        hidden = token_embedding(token_ids)
-        hidden = scale_token_embeddings(hidden, config.hidden_dim)
-        embedding_output = hidden
-        if config.hidden_size_per_layer_input:
-            p = config.hidden_size_per_layer_input
-            per_layer_embedding = build_per_layer_embedding(
-                config.vocabulary_size,
-                p * config.num_layers,
-                config.dtype)
-            full_embedding = per_layer_embedding(token_ids)
-            per_layer_embeddings = build_per_layer_slices(
-                full_embedding, config.num_layers, p)
-        else:
-            per_layer_embeddings = [None] * config.num_layers
-        block_outputs = []
-        for layer_index in range(config.num_layers):
-            block_name = "decoder_block_{}".format(layer_index)
-            args = (hidden, padding_mask, config, layer_index, block_name)
-            kwargs = {"per_layer_embedding": per_layer_embeddings[layer_index]}
-            hidden = decoder_block(*args, **kwargs)
-            block_outputs.append(hidden)
-        norm_args = (config.layer_norm_epsilon, config.dtype,
-                     "final_normalization")
-        final_output = build_rms_norm(*norm_args)(hidden)
-        inputs = {"token_ids": token_ids, "padding_mask": padding_mask}
-        super().__init__(inputs, final_output, name=name)
-        self._embedding_output = embedding_output
-        self._block_outputs = tuple(block_outputs)
-        self._final_output = final_output
-
-
 def build_text_backbone(config, weights_path=None, name=BACKBONE_NAME):
-    model = Gemma4TextBackbone(config, name=name)
+    token_embedding = build_token_embedding(
+        config.vocabulary_size, config.hidden_dim, config.dtype)
+    token_ids = Input((None,), dtype="int32", name="token_ids")
+    padding_mask = Input((None,), dtype="int32", name="padding_mask")
+    embedding = token_embedding(token_ids)
+    inputs = {"token_ids": token_ids, "padding_mask": padding_mask}
+    return build_backbone_from_embedding(
+        embedding, token_ids, padding_mask, inputs, config, name, weights_path)
+
+
+def build_backbone_from_embedding(embedding, token_ids, padding_mask, inputs,
+                                  config, name, weights_path=None):
+    hidden = scale_token_embeddings(embedding, config.hidden_dim)
+    embedding_output = hidden
+    per_layer = build_backbone_per_layer_embeddings(
+        config, token_ids, embedding)
+    kv_source = build_kv_source_map(config)
+    block_outputs, layer_kvs = [], []
+    for layer_index in range(config.num_layers):
+        block_name = "decoder_block_{}".format(layer_index)
+        source = kv_source.get(layer_index)
+        shared_kv = layer_kvs[source] if source is not None else None
+        args = (hidden, padding_mask, config, layer_index, block_name)
+        kwargs = {"per_layer_embedding": per_layer[layer_index],
+                  "shared_kv": shared_kv}
+        hidden, kv = decoder_block(*args, **kwargs)
+        block_outputs.append(hidden)
+        layer_kvs.append(kv)
+    norm_args = (config.layer_norm_epsilon, config.dtype,
+                 "final_normalization")
+    final_output = build_rms_norm(*norm_args)(hidden)
+    model = Model(inputs, final_output, name=name)
+    attach_intermediates(model, embedding_output, block_outputs, final_output)
     if weights_path is not None:
         model.load_weights(str(Path(weights_path)))
     return model
+
+
+def build_backbone_per_layer_embeddings(config, token_ids, token_embedding):
+    if not config.hidden_size_per_layer_input:
+        return [None] * config.num_layers
+    p = config.hidden_size_per_layer_input
+    embedding = build_per_layer_embedding(
+        config.vocabulary_size, p * config.num_layers, config.dtype)
+    full_embedding = embedding(token_ids)
+    full_embedding = scale_per_layer_embedding(full_embedding, p, config.dtype)
+    projection = build_per_layer_model_projection(
+        token_embedding, config.num_layers, p, config.dtype)
+    args = (projection, full_embedding, config.num_layers, p,
+            config.layer_norm_epsilon, config.dtype)
+    return build_per_layer_combined_inputs(*args)
+
+
+def scale_per_layer_embedding(full_embedding, per_layer_dim, dtype):
+    scale = ops.cast(float(per_layer_dim) ** 0.5, dtype)
+    return ops.cast(full_embedding, dtype) * scale
+
+
+def attach_intermediates(model, embedding_output, block_outputs, final_output):
+    model._embedding_output = embedding_output
+    model._block_outputs = tuple(block_outputs)
+    model._final_output = final_output
 
 
 def compute_text_intermediates(model, token_ids, padding_mask):
@@ -144,12 +169,6 @@ def slice_per_layer(tensor, layer_index, per_layer_dim):
     start = layer_index * per_layer_dim
     end = (layer_index + 1) * per_layer_dim
     return tensor[..., start:end]
-
-
-def build_per_layer_slices(full_embedding, num_layers, per_layer_dim):
-    """Split per-layer embedding into one slice per layer."""
-    return [slice_per_layer(full_embedding, i, per_layer_dim)
-            for i in range(num_layers)]
 
 
 def build_per_layer_model_projection(hidden, num_layers, per_layer_dim, dtype):
@@ -240,7 +259,9 @@ def build_kv_source_map(config):
 
 
 def build_feedforward_dim(config, layer_index):
-    if is_kv_shared_layer(config, layer_index):
+    double_wide = config.use_double_wide_mlp and is_kv_shared_layer(
+        config, layer_index)
+    if double_wide:
         return config.intermediate_dim * 2
     return config.intermediate_dim
 
@@ -255,10 +276,10 @@ def use_sliding_window(config, is_global):
     return config.use_sliding_window_attention and not is_global
 
 
-def build_rope_wavelength(is_global):
+def build_rope_wavelength(config, is_global):
     if is_global:
-        return 1_000_000.0
-    return 10_000.0
+        return config.global_rope_wavelength
+    return config.local_rope_wavelength
 
 
 def build_rope_scaling_factor(config, is_global):

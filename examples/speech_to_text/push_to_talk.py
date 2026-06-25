@@ -18,19 +18,17 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from examples.speech_to_text.configuration import CONFIGS
-from examples.speech_to_text.demo import MAX_AUDIO_SECONDS
-from examples.speech_to_text.demo import SAMPLE_RATE
-from examples.speech_to_text.demo import build_decoder_state
-from examples.speech_to_text.demo import build_models
-from examples.speech_to_text.demo import preprocess_fixed
-from examples.speech_to_text.demo import transcribe_waveform_with_state
+from paz.applications import TranscribeWhisper
+from paz.models.foundation.whisper.configuration import CONFIGS
 from examples.speech_to_text.microphone import build_input_device_label
 from examples.speech_to_text.microphone import collect_input_devices
-from examples.speech_to_text.microphone import list_input_devices
 from examples.speech_to_text.microphone import load_sounddevice
 from examples.speech_to_text.microphone import resolve_input_device
 from examples.speech_to_text.microphone import verify_input_device
+
+SAMPLE_RATE = 16000
+# Until the weights are published, load them from the local example folder.
+WEIGHTS_DIR = Path(__file__).with_name("whisper_models")
 
 
 RESET = "\033[0m"
@@ -39,16 +37,6 @@ CYAN = "\033[96m"
 GREEN = "\033[92m"
 RED = "\033[91m"
 YELLOW = "\033[93m"
-
-
-def main():
-    parser = build_parser()
-    args = parser.parse_args()
-    try:
-        return run(args)
-    except (ImportError, ValueError) as error:
-        print_error(str(error))
-        return 1
 
 
 def run(args):
@@ -96,8 +84,7 @@ class PushToTalk:
         self.device = None
         self.sample_rate = None
         self.chunks = []
-        self.models = None
-        self.decoder_state = None
+        self.transcribe = None
         self.sounddevice = None
 
     def run(self):
@@ -105,10 +92,8 @@ class PushToTalk:
         self.print_banner()
         self.prepare_microphone()
         self.print_status("Loading {}".format(self.model_name), BLUE)
-        self.models = build_models(self.model_name)
-        self.decoder_state = build_decoder_state(
-            self.models[3], self.max_tokens
-        )
+        self.transcribe = TranscribeWhisper(
+            self.model_name, self.max_tokens, models_path=str(WEIGHTS_DIR))
         self.warmup_models()
         self.print_help()
         with TerminalInput():
@@ -205,10 +190,7 @@ class PushToTalk:
         )
         flush_input_buffer()
         try:
-            waveform = preprocess_fixed(waveform, sample_rate)
-            _, _, text = transcribe_waveform_with_state(
-                waveform, self.models, self.decoder_state
-            )
+            text = self.transcribe(waveform, sample_rate)
         except Exception as error:
             self.transcribing = False
             print_error("Transcription failed: {}".format(error))
@@ -236,12 +218,7 @@ class PushToTalk:
         self.print_status("Warming up on silence...", BLUE)
         waveform = np.zeros((SAMPLE_RATE,), dtype="float32")
         try:
-            waveform = preprocess_fixed(
-                waveform, SAMPLE_RATE, SAMPLE_RATE, MAX_AUDIO_SECONDS
-            )
-            transcribe_waveform_with_state(
-                waveform, self.models, self.decoder_state
-            )
+            self.transcribe(waveform, SAMPLE_RATE)
         except Exception as error:
             raise RuntimeError("Warm-up failed: {}".format(error)) from error
         self.print_status("Warm-up complete", GREEN)
@@ -408,4 +385,10 @@ def print_error(message):
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    parser = build_parser()
+    args = parser.parse_args()
+    try:
+        raise SystemExit(run(args))
+    except (ImportError, ValueError) as error:
+        print_error(str(error))
+        raise SystemExit(1)

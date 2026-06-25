@@ -18,7 +18,8 @@ dependencies = [
     "jax",
     "tfp-nightly",
     "matplotlib",
-    "optax"
+    "optax",
+    "scipy"
 ]
 
 [project.urls]

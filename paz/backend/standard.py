@@ -59,6 +59,22 @@ def as_numpy_array(function):
     return wrapper
 
 
+def snapshot_variables(model):
+    if model is None:
+        return None
+    train = [variable.value for variable in model.trainable_variables]
+    nontrain = [variable.value for variable in model.non_trainable_variables]
+    return train, nontrain
+
+
+def call_stateless(model, variables, *inputs):
+    # Run a Keras model from variables passed as inputs so jax.jit treats the
+    # weights as arguments instead of constant-folding large tables into the
+    # compiled executable (which would exhaust host memory).
+    output, _ = model.stateless_call(variables[0], variables[1], *inputs)
+    return output
+
+
 def str_to_bool(value):
     if isinstance(value, bool):
         result = value

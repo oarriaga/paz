@@ -5,3 +5,6 @@ from .add import Add
 from .full_reshape import FullReshape
 from .compute_pairwise_distances import ComputePairwiseDistances
 from .compute_prototypes import ComputePrototypes
+from .rms_normalization import RMSNormalization
+from .merge_dims import MergeDims
+from .split_dim import SplitDim
