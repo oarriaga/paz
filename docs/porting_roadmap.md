@@ -51,6 +51,7 @@ the bottom.
 | **Hand detection** (`hand_detection/train.py`) | wired (reuses SSD pipeline) | Open Images V6 |
 | **MiniXception FER** (`emotion_classifier/train.py`) | ✅ synthetic | FER |
 | **UNet segmentation** (`semantic_segmentation/train.py`) | ✅ smoke (dice↓) | Shapes (synthetic) |
+| **UNet Cityscapes** (`semantic_segmentation/train_cityscapes.py`) | ✅ real data (val mIoU 0.689, 89.3% px-acc) | Cityscapes (login-gated) |
 | **IMDB classifier** (`imdb_classifier/train.py`) | ✅ smoke (loss↓) | IMDB face arrays (`.npy`) |
 | **Implicit orientation (AAE)** (`implicit_orientation_learning/train.py`) | ✅ smoke (loss↓ + codebook retrieval) | `paz.graphics` renders (synthetic) |
 
@@ -72,11 +73,13 @@ the bottom.
 - **EfficientDet train.py / evaluate_mAP** — inference is done for both COCO
   (D0–D7) and VOC (`EFFICIENTDETD0VOC`, v0.16 weights, SSD-style decode); no
   training/eval script yet.
-- **Semantic segmentation (UNet)**: done for the synthetic **Shapes** dataset —
-  `examples/semantic_segmentation/` (train + demo), Dice/Jaccard/Focal losses in
-  `paz.losses`, mask-overlay draw helpers, `UNET_*` exported. **Cityscapes**
-  (loader + 34-ID→8-class mapping + `train_cityscapes.py`) is still pending
-  (data-gated, not verifiable here).
+- **Semantic segmentation (UNet)**: done for the synthetic **Shapes** dataset and
+  for real **Cityscapes** — `examples/semantic_segmentation/`
+  (`train.py`/`demo.py` + `train_cityscapes.py`/`demo_cityscapes.py`),
+  Dice/Jaccard/Focal losses in `paz.losses`, mask-overlay draw helpers, `UNET_*`
+  exported. Cityscapes uses the **8-category** scheme (= official `categoryId`
+  grouping) via `paz.datasets.cityscapes`; no weights hosted (login-gated data,
+  train to produce).
 
 ### Other domain capabilities not ported
 - **visual_voice_activity_detection (VVAD)** — `cnn2Plus1` video model + demos.
@@ -122,7 +125,15 @@ H36M loader), **Minimal Hand** (DetNet/IKNet keypoint + IK losses),
   (`num_classes=4`, softmax) with `paz.losses.dice`; `paz.draw.overlay_masks`
   blends per-class colors. Fixed a latent break: `paz.datasets.shapes.load`
   called a missing NMS — `remove_overlaps` now uses the JAX
-  `paz.detection.apply_NMS`.
+  `paz.detection.apply_NMS`. **Cityscapes:** `paz.datasets.cityscapes` returns
+  paired `leftImg8bit`/`gtFine` paths (lazy, like `voc.load`); a `PyDataset`
+  loads per batch, resizes images bilinear and labels nearest-neighbor, and
+  `build_id_to_category` LUT-remaps the 34 raw IDs to the 8 official categories
+  (`CATEGORY_RANGES`). `void` is class 0 (a trained channel), so `dice` needs no
+  ignore index. `download` uses the official `cityscapesscripts` downloader;
+  `download_kaggle` pulls a mirror (symlinking `leftImg8bit`→`images`). Verified
+  on real Cityscapes: UNET_VGG16 (35 epochs, 256px) reaches val mIoU 0.689 /
+  89.3% pixel accuracy on the 500-image val split.
 - **Implicit orientation (AAE):** `paz.models.AutoEncoder` (conv encoder →
   latent → conv decoder, sigmoid) is trained to reconstruct clean object views
   from augmented ones; `extract_encoder` slices the encoder and orientation is
