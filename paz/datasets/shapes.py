@@ -1,6 +1,7 @@
 from functools import partial
 from collections import namedtuple
 import numpy as np
+import jax.numpy as jp
 
 import paz
 
@@ -67,13 +68,13 @@ def draw_masks(H, W, shapes, name_to_arg):
 
 
 def remove_overlaps(shapes, IOU_thresh):
-    boxes = np.array([shape.box for shape in shapes])
-    scores = np.ones(len(boxes))
-    args, num_boxes = paz.detection.non_max_suppression(
-        boxes, scores, IOU_thresh
-    )
-    selected_args = args[:num_boxes]
-    return [shapes[arg] for arg in selected_args]
+    boxes = jp.array([shape.box for shape in shapes], "float32")
+    scores = jp.ones((len(shapes), 1), "float32")
+    detections = jp.concatenate([boxes, scores], axis=1)
+    order = jp.argsort(jp.squeeze(scores, axis=-1))[::-1]
+    kept = paz.detection.apply_NMS(detections, IOU_thresh, len(shapes))
+    selected = np.asarray(order)[np.asarray(kept[:, 4]) != -1]
+    return [shapes[arg] for arg in selected]
 
 
 def sample(H, W, iou_thresh, num_shapes, class_names, arg_to_name, name_to_arg):

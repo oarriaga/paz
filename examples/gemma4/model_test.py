@@ -56,3 +56,14 @@ def test_runtime_backbone_supports_per_layer_inputs():
     inputs = {"token_ids": token_ids, "padding_mask": padding_mask}
     outputs = model(inputs)
     assert outputs.shape == (2, 5, config.hidden_dim)
+
+
+def test_runtime_backbone_runs_global_partial_rope():
+    config = build_text_backbone_args(
+        num_layers=6, sliding_window_pattern=3, head_dim=16,
+        global_head_dim=16, global_rope_partial_rotary_factor=0.25)
+    model = build_text_backbone(config)
+    token_ids, padding_mask = build_test_inputs()
+    inputs = {"token_ids": token_ids, "padding_mask": padding_mask}
+    outputs = model(inputs)
+    assert outputs.shape == (2, 5, config.hidden_dim)

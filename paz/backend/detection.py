@@ -215,6 +215,12 @@ def denormalize(detections, H, W):
     return merge(boxes, scores)
 
 
+def clip(detections, H, W):
+    boxes, scores = split(detections)
+    boxes = paz.boxes.clip(boxes, H, W)
+    return merge(boxes, scores)
+
+
 def normalize(detections, H, W):
     boxes, scores = split(detections)
     boxes = paz.boxes.normalize(boxes, H, W)
@@ -247,108 +253,6 @@ def to_boxes2D(detections):
     # labels = jp.argmax(scores, axis=-1)
     # scores = scores[jp.arange(len(scores)), labels]
     return boxes.astype("int32"), label.astype("int32"), score
-
-
-def apply_per_class_NMS(detections, num_classes, iou_thresh=0.45, top_k=200):
-
-    def compute_IOU(box_A, boxes_B):
-        xy_min_inter = np.maximum(box_A[0:2], boxes_B[:, 0:2])
-        xy_max_inter = np.minimum(box_A[2:4], boxes_B[:, 2:4])
-        inter_wh = np.maximum(0.0, xy_max_inter - xy_min_inter)
-        intersection_area = inter_wh[:, 0] * inter_wh[:, 1]
-        area_a = (box_A[2] - box_A[0]) * (box_A[3] - box_A[1])
-        areas_b = (boxes_B[:, 2] - boxes_B[:, 0]) * (
-            boxes_B[:, 3] - boxes_B[:, 1]
-        )
-        union_area = (area_a + areas_b) - intersection_area
-        union_area = np.maximum(union_area, 1e-8)
-        iou = intersection_area / union_area
-        return np.clip(iou, 0.0, 1.0)
-
-    def split(detections):
-        boxes = detections[:, :4]
-        class_args = detections[:, 4:]
-        return boxes, class_args
-
-    def get_boxes(detections):
-        return detections[:, :4]
-
-    def get_scores(detections):
-        return detections[:, 4:]
-
-    def select_top_k(boxes_and_scores, top_k=200):
-        boxes, scores = split(boxes_and_scores)
-        sorted_score_args = np.argsort(np.squeeze(scores, axis=-1))[::-1]
-        top_k_score_args = sorted_score_args[:top_k]
-        return boxes_and_scores[top_k_score_args]
-
-    def to_score(boxes_and_one_hot_vectors, class_arg):
-        boxes, one_hot_vectors = split(boxes_and_one_hot_vectors)
-        class_scores = np.expand_dims(one_hot_vectors[:, class_arg], 1)
-        boxes_and_scores = merge(boxes, class_scores)
-        return boxes_and_scores
-
-    def merge(boxes, class_args):
-        return np.concatenate([boxes, class_args], axis=1)
-
-    def apply_NMS(detections, class_arg):
-        class_detections = to_score(detections, class_arg)
-        class_detections = select_top_k(class_detections, top_k)
-        top_k_boxes = get_boxes(class_detections)
-        top_k_boxes_args = np.arange(len(top_k_boxes))
-        num_total_boxes = top_k_boxes.shape[0]
-
-        def do_continue(state):
-            suppressed_mask, top_k_box_arg = state
-            in_bounds = top_k_box_arg < num_total_boxes
-
-            def any_unprocessed_unsuppressed():
-                is_suffix = top_k_boxes_args >= top_k_box_arg
-                is_unsuppressed = np.logical_not(suppressed_mask)
-                unsuppressed_in_suffix = np.logical_and(
-                    is_unsuppressed, is_suffix
-                )
-                return np.any(unsuppressed_in_suffix)
-
-            return any_unprocessed_unsuppressed() if in_bounds else False
-
-        def step(state):
-            suppressed_mask, top_k_box_arg = state
-            is_suppressed = suppressed_mask[top_k_box_arg]
-
-            def suppress():
-                current_box = top_k_boxes[top_k_box_arg]
-                ious = compute_IOU(current_box, top_k_boxes)
-                is_not_this_box = top_k_boxes_args != top_k_box_arg
-                do_suppress = (ious > iou_thresh) & is_not_this_box
-                return np.logical_or(suppressed_mask, do_suppress)
-
-            def do_nothing():
-                return suppressed_mask
-
-            new_suppressed_mask = do_nothing() if is_suppressed else suppress()
-            return (new_suppressed_mask, top_k_box_arg + 1)
-
-        scores = np.squeeze(get_scores(class_detections), -1)
-        state = (scores < 0.01, 0)
-        while do_continue(state):
-            state = step(state)
-        suppressed_mask, num_steps = state
-        keep_mask = np.expand_dims(np.logical_not(suppressed_mask), axis=-1)
-        return np.where(keep_mask, class_detections, -1)
-
-    def build_labels(num_classes, top_k):
-        labels = jp.arange(num_classes)
-        labels = jp.repeat(labels, repeats=top_k)
-        return jp.expand_dims(labels, axis=-1)
-
-    suppressed_detections = []
-    for class_arg in np.arange(num_classes):
-        class_detection = apply_NMS(detections, class_arg)
-        suppressed_detections.append(class_detection)
-    suppressed_detections = np.stack(suppressed_detections).reshape(-1, 5)
-    suppressed_detections = paz.to_jax(suppressed_detections)
-    return merge(suppressed_detections, build_labels(num_classes, top_k))
 
 
 def apply_NMS(detections, iou_thresh, top_k):
@@ -396,8 +300,7 @@ def apply_NMS(detections, iou_thresh, top_k):
     return jp.where(keep_mask, detections, -1)
 
 
-def jp_apply_per_class_NMS(detections, num_classes, iou_thresh=0.45, top_k=200):
-    # TODO JAX version of apply_per_class_NMS is slower than the numpy version
+def apply_per_class_NMS(detections, num_classes, iou_thresh=0.45, top_k=200):
 
     def apply_NMS(detections, class_arg):
         class_detections = paz.detection.to_score(detections, class_arg)
@@ -448,7 +351,12 @@ def jp_apply_per_class_NMS(detections, num_classes, iou_thresh=0.45, top_k=200):
         keep_mask = jp.expand_dims(jp.logical_not(suppressed_mask), axis=-1)
         return jp.where(keep_mask, class_detections, -1)
 
-    return jax.vmap(paz.partial(apply_NMS, detections))(jp.arange(num_classes))
+    suppressed = jax.vmap(paz.partial(apply_NMS, detections))(
+        jp.arange(num_classes)
+    )
+    suppressed = suppressed.reshape(-1, 5)
+    labels = jp.repeat(jp.arange(num_classes), top_k).astype("float32")
+    return jp.concatenate([suppressed, jp.expand_dims(labels, -1)], axis=-1)
 
 
 def original_match(boxes_with_class_arg, prior_boxes, IOU_threshold=0.5):

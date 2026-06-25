@@ -212,30 +212,26 @@ def apply_sobel(image):
 
 
 def apply_gaussian_blur(image, kernel_size=9, sigma=2.0):
-    """Apply Gaussian blur to a 2D or single-channel image."""
+    """Apply Gaussian blur to a 2D or multi-channel image (depthwise)."""
     if image.ndim == 2:
         image = image[..., jp.newaxis]
-    image = image.astype(jp.float32)
-    image_4d = image[jp.newaxis, ...]
+    num_channels = image.shape[-1]
+    image_4d = image.astype(jp.float32)[jp.newaxis, ...]
 
     radius = kernel_size // 2
     coords = jp.arange(-radius, radius + 1)
     x_grid, y_grid = jp.meshgrid(coords, coords)
     kernel = jp.exp(-(x_grid**2 + y_grid**2) / (2.0 * sigma**2))
     kernel = kernel / jp.sum(kernel)
-    kernel = kernel[:, :, jp.newaxis, jp.newaxis]
+    kernel = jp.reshape(kernel, (kernel_size, kernel_size, 1, 1))
+    kernel = jp.tile(kernel, (1, 1, 1, num_channels))
 
     dimension_numbers = lax.conv_dimension_numbers(
         image_4d.shape, kernel.shape, ("NHWC", "HWIO", "NHWC")
     )
     output = lax.conv_general_dilated(
-        image_4d,
-        kernel,
-        (1, 1),
-        "SAME",
-        (1, 1),
-        (1, 1),
-        dimension_numbers,
+        image_4d, kernel, (1, 1), "SAME", (1, 1), (1, 1),
+        dimension_numbers, feature_group_count=num_channels,
     )
     return output[0]
 
@@ -401,6 +397,40 @@ def random_color_transform(key, image):
     image = random_contrast(key_3, image)
     image = random_hue(key_4, image)
     return image
+
+
+def make_random_plain_image(key, shape):
+    """Plain image of a single random RGB color."""
+    color = jax.random.randint(key, (shape[-1],), 0, 256)
+    return jp.broadcast_to(color, shape).astype(jp.uint8)
+
+
+def random_blur(key, image, kernel_size=9):
+    """Applies Gaussian blur with probability one half (jittable)."""
+    apply = jax.random.uniform(key, ()) < 0.5
+    blurred = paz.cast(apply_gaussian_blur(image, kernel_size), image.dtype)
+    return jp.where(apply, blurred, image)
+
+
+def randomize_rendered_image(key, image, mask, backgrounds=None,
+                             num_occlusions=2, max_radius_scale=0.5):
+    """Domain-randomizes a rendered object view: background blending, random
+    occlusions, blur and color jitter. Mirrors the legacy pipeline."""
+    keys = jax.random.split(key, 3 + num_occlusions)
+    background = sample_background(keys[0], image.shape, backgrounds)
+    image = paz.draw.blend_background(image, background, mask)
+    for occlusion_arg in range(num_occlusions):
+        image = paz.draw.add_occlusion(keys[1 + occlusion_arg], image,
+                                       max_radius_scale=max_radius_scale)
+    image = random_blur(keys[1 + num_occlusions], image)
+    return random_color_transform(keys[2 + num_occlusions], image)
+
+
+def sample_background(key, shape, backgrounds):
+    if backgrounds is None:
+        return make_random_plain_image(key, shape)
+    index = jax.random.randint(key, (), 0, len(backgrounds))
+    return backgrounds[index]
 
 
 def affine_transform(image, matrix, order=1, mode="nearest", cval=0.0):

@@ -47,3 +47,38 @@ def test_soft_box_barrier_matches_example_formula():
     positive = 2.0 * (values - 1.0)
     expected = (jp.exp(-negative) + jp.exp(positive)).sum()
     assert jp.allclose(result, expected)
+
+
+def test_soft_half_quadratic_is_zero_for_satisfied_inequalities():
+    values = jp.array([-2.0, 0.0, -0.1])
+    result = paz.losses.soft_half_quadratic(values)
+    assert jp.allclose(result, 0.0)
+
+
+def test_soft_half_quadratic_penalizes_positive_violations():
+    values = jp.array([-1.0, 2.0, 3.0])
+    result = paz.losses.soft_half_quadratic(values)
+    assert jp.allclose(result, 13.0)
+
+
+def test_soft_half_quadratic_supports_axis_reduction():
+    values = jp.array([[-1.0, 2.0], [3.0, -4.0]])
+    result = paz.losses.soft_half_quadratic(values, axis=1, reduction="mean")
+    expected = jp.array([2.0, 4.5])
+    assert jp.allclose(result, expected)
+
+
+def test_soft_half_quadratic_supports_none_reduction():
+    values = jp.array([[-1.0, 2.0], [3.0, -4.0]])
+    result = paz.losses.soft_half_quadratic(values, reduction="none")
+    expected = jp.array([[0.0, 4.0], [9.0, 0.0]])
+    assert jp.allclose(result, expected)
+
+
+def test_soft_half_quadratic_matches_minimum_distance_violation():
+    minimum_distance = 0.1
+    distances = jp.array([0.3, 0.1, 0.0, -0.2])
+    violations = minimum_distance - distances
+    result = paz.losses.soft_half_quadratic(violations, reduction="none")
+    expected = jp.array([0.0, 0.0, 0.01, 0.09])
+    assert jp.allclose(result, expected)
