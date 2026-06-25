@@ -1,8 +1,9 @@
 import jax
 import jax.numpy as jp
 
-from .decoding import (KVDecoder, extract_generated_ids, kv_decode, kv_sample,
-                       select_greedy)
+from paz.models.transformers import search
+
+from .decoding import KVDecoder, extract_generated_ids, kv_decode, kv_sample
 from .inference import Gemma4DecoderStep, build_empty_cache
 from .model import build_text_backbone_args
 from .sampling import SamplingArgs
@@ -16,7 +17,7 @@ def test_kv_decoder_generates_tokens():
     config = build_test_config()
     step_model = Gemma4DecoderStep(config)
     prompt = [1, 2, 3]
-    decoder = KVDecoder(step_model, prompt, 5, select_greedy, 16)
+    decoder = KVDecoder(step_model, prompt, 5, search.greedy, 16)
     cache = jp.asarray(build_empty_cache(config, decoder.max_decode_length))
     stop_id = jp.array(config.vocabulary_size - 1, dtype=jp.int32)
     buffer, length = decoder(cache, stop_id, jax.random.PRNGKey(0))
