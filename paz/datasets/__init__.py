@@ -10,6 +10,7 @@ from paz.datasets import (
     fsclvr,
     hands,
     ycb_video,
+    cityscapes,
 )
 from paz.datasets.hands import MPIIHandJoints, MANOHandJoints
 
@@ -23,6 +24,8 @@ def load(name, *args, **kwargs):
         dataset = fer.load(*args, **kwargs)
     elif name == "FERPlus":
         dataset = ferplus.load(*args, **kwargs)
+    elif name == "Cityscapes":
+        dataset = cityscapes.load(*args, **kwargs)
     else:
         raise ValueError(f"Invalid dataset name: {name}")
     return dataset
@@ -53,6 +56,8 @@ def labels(name):
         class_names = coco.get_efficientdet_class_names()
     elif name in ["YCBVideo", "FAT"]:
         class_names = ycb_video.get_class_names()
+    elif name == "Cityscapes":
+        class_names = cityscapes.get_class_names()
     else:
         raise ValueError(f"Invalid dataset name: {name}")
     return class_names
