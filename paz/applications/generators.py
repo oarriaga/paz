@@ -5,6 +5,7 @@ import numpy as np
 from keras import ops
 
 from paz.models import Gemma4
+from paz.models.foundation.gemma4.pretrained import resolve_gemma4_dir
 from paz.models.foundation.gemma4.tokenizer import Gemma4Tokenizer
 from paz.models.foundation.gemma4.image_converter import preprocess_images
 from paz.models.foundation.gemma4.multimodal_decoding import generate_eager
@@ -13,8 +14,9 @@ from paz.models.foundation.gemma4.vision import VisionEncoderArgs
 
 def GenerateGemma4(model_name="gemma4_2b", max_tokens=64, weights="paz",
                    models_path=None):
-    models = Gemma4(model_name, weights=weights, models_path=models_path)
-    tokenizer = build_gemma4_tokenizer(models_path)
+    model_dir = resolve_gemma4_dir(model_name, models_path)
+    models = Gemma4(model_name, weights=weights, models_path=model_dir)
+    tokenizer = build_gemma4_tokenizer(model_dir)
     stop_id = tokenizer.get_stop_token_ids()[-1]
     no_vision = np.zeros((0, models.config.hidden_dim), "float32")
 
@@ -29,9 +31,10 @@ def GenerateGemma4(model_name="gemma4_2b", max_tokens=64, weights="paz",
 
 def DescribeImageGemma4(model_name="gemma4_2b", max_tokens=32, weights="paz",
                         models_path=None):
-    models = Gemma4(model_name, weights=weights, models_path=models_path)
-    tokenizer = build_gemma4_tokenizer(models_path)
-    vision = VisionEncoderArgs(**read_vision_config(models_path))
+    model_dir = resolve_gemma4_dir(model_name, models_path)
+    models = Gemma4(model_name, weights=weights, models_path=model_dir)
+    tokenizer = build_gemma4_tokenizer(model_dir)
+    vision = VisionEncoderArgs(**read_vision_config(model_dir))
     stop_id = tokenizer.get_stop_token_ids()[-1]
 
     def describe(image, question="Describe this image."):

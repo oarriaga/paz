@@ -16,9 +16,6 @@ if str(ROOT) not in sys.path:
 
 from paz.applications import DescribeImageGemma4
 
-# Until the weights are published, load them from the local example folder.
-WEIGHTS_DIR = Path(__file__).with_name("weights")
-
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Gemma 4 image captioning demo")
@@ -26,7 +23,8 @@ if __name__ == "__main__":
     add("--image", required=True)
     add("--question", default="Describe this image.")
     add("--model_name", default="gemma4_2b")
-    add("--models_path", default=str(WEIGHTS_DIR))
+    # Default downloads the published weights; pass a local dir to override.
+    add("--models_path", default=None)
     add("--max_tokens", default=32, type=int)
     args = parser.parse_args()
     describe = DescribeImageGemma4(
