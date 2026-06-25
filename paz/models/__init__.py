@@ -33,3 +33,4 @@ from .autoencoder.autoencoder import extract_encoder
 from .foundation.dinov3.models.vision_transformer import DINOV3VITS
 from .foundation.dinov3.models.vision_transformer import DINOV3VITB
 from .foundation.dinov3.models.vision_transformer import DINOV3VITL
+from .foundation.whisper.model import Whisper
