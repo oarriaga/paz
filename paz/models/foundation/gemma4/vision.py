@@ -6,7 +6,8 @@ from keras.layers import Input
 
 from paz.models.foundation.gemma4.layers.vision import (
     build_average_pooling, build_patch_embedder, build_real_patch_mask,
-    build_vision_attention_mask, build_vision_output, vision_decoder_block)
+    build_vision_attention_mask, build_vision_decoder_block,
+    build_vision_output)
 
 VISION_ENCODER_NAME = "gemma4_vision_encoder"
 VISION_ENCODER_FIELDS = (
@@ -56,7 +57,7 @@ def build_vision_encoder(config, weights_path=None, name=VISION_ENCODER_NAME):
     key_mask = build_vision_attention_mask(pixel_position_ids)
     for layer_index in range(config.num_layers):
         block_name = "encoder_block_{}".format(layer_index)
-        hidden = vision_decoder_block(
+        hidden = build_vision_decoder_block(
             hidden, key_mask, pixel_position_ids, config, block_name)
         hidden = hidden * real_mask
     pooled = build_average_pooling(hidden, pixel_position_ids, config)

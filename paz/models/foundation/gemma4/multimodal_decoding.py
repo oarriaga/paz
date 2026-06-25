@@ -26,7 +26,9 @@ def as_token(token):
 def build_prompt_rows(step_model, vision_embeddings, prompt_ids,
                       vision_indices, per_layer_step):
     embedding = step_model.get_layer("token_embedding")
-    image_position = {int(p): k for k, p in enumerate(vision_indices)}
+    image_position = {}
+    for image_index, position in enumerate(vision_indices):
+        image_position[int(position)] = image_index
     embeds, per_layers = [], []
     for index, token in enumerate(prompt_ids):
         if index in image_position:

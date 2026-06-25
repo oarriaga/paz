@@ -14,7 +14,7 @@ WEIGHTS_DIR = ROOT / "examples" / "gemma4" / "weights"
 
 def run_weights_test():
     # The real E2B/E4B weights are multi-GB and need CPU + large RAM, so this
-    # end-to-end check is opt-in: GEMMA4_WEIGHTS_TEST=1 with a local weights dir.
+    # end-to-end check is opt-in via GEMMA4_WEIGHTS_TEST=1 with local weights.
     if os.environ.get("GEMMA4_WEIGHTS_TEST") != "1":
         return False
     return (WEIGHTS_DIR / "decoder_step.weights.h5").exists()

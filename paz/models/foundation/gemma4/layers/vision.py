@@ -97,65 +97,66 @@ def build_patch_embedder(pixel_values, position_ids, config):
     return projection(pixel_values) + table(position_ids)
 
 
-def vision_decoder_block(x, mask, position_ids, config, name):
+def build_vision_decoder_block(x, mask, position_ids, config, name):
     epsilon, dtype = config.layer_norm_epsilon, config.dtype
     residual = x
     norm_name = "{}_pre_attention_norm".format(name)
     hidden = build_rms_norm(epsilon, dtype, norm_name)(x)
-    hidden = vision_attend(hidden, mask, position_ids, config, name)
+    hidden = build_vision_attention(hidden, mask, position_ids, config, name)
     post_name = "{}_post_attention_norm".format(name)
     hidden = build_rms_norm(epsilon, dtype, post_name)(hidden)
     x = residual + hidden
     residual = x
     pre_ffw_name = "{}_pre_ffw_norm".format(name)
     hidden = build_rms_norm(epsilon, dtype, pre_ffw_name)(x)
-    hidden = vision_feedforward(hidden, config, name)
+    hidden = build_vision_feedforward(hidden, config, name)
     post_ffw_name = "{}_post_ffw_norm".format(name)
     hidden = build_rms_norm(epsilon, dtype, post_ffw_name)(hidden)
     return residual + hidden
 
 
-def vision_attend(x, mask, position_ids, config, name):
-    attn_name = "{}_attention".format(name)
-    query = vision_project(x, "query", config.num_heads, config, attn_name)
-    key = vision_project(
-        x, "key", config.num_key_value_heads, config, attn_name)
-    value = vision_value(x, config, attn_name)
+def build_vision_attention(x, mask, position_ids, config, name):
+    attention_name = "{}_attention".format(name)
+    query = build_vision_projection(
+        x, "query", config.num_heads, config, attention_name)
+    key = build_vision_projection(
+        x, "key", config.num_key_value_heads, config, attention_name)
+    value = build_vision_value(x, config, attention_name)
     query = apply_vision_rotary_embedding(
         query, position_ids, config.rope_wavelength)
     key = apply_vision_rotary_embedding(
         key, position_ids, config.rope_wavelength)
     args = (query, key, value, mask, config.num_heads,
             config.num_key_value_heads, config.head_dim, None, config.dropout,
-            config.dtype, attn_name)
+            config.dtype, attention_name)
     output = compute_attention(*args)
-    proj = build_clippable_einsum_dense(
+    projection = build_clippable_einsum_dense(
         "btnh,nhd->btd", (None, x.shape[-1]), config.dtype,
-        "{}_attention_output".format(attn_name))
-    return proj(output)
+        "{}_attention_output".format(attention_name))
+    return projection(output)
 
 
-def vision_project(x, role, num_heads, config, name):
+def build_vision_projection(x, role, num_heads, config, name):
     equation = "btd,ndh->btnh" if role == "query" else "btd,kdh->btkh"
     shape = (None, num_heads, config.head_dim)
-    proj = build_clippable_einsum_dense(
+    projection = build_clippable_einsum_dense(
         equation, shape, config.dtype, "{}_{}".format(name, role))
     norm = build_rms_norm(
         config.layer_norm_epsilon, config.dtype,
         "{}_{}_norm".format(name, role))
-    return norm(proj(x))
+    return norm(projection(x))
 
 
-def vision_value(x, config, name):
+def build_vision_value(x, config, name):
     shape = (None, config.num_key_value_heads, config.head_dim)
-    proj = build_clippable_einsum_dense(
+    projection = build_clippable_einsum_dense(
         "btd,kdh->btkh", shape, config.dtype, "{}_value".format(name))
     norm = build_v_norm(
         config.layer_norm_epsilon, config.dtype, "{}_value_norm".format(name))
-    return norm(proj(x))
+    return norm(projection(x))
 
 
-def vision_feedforward(x, config, name):
+def build_vision_feedforward(x, config, name):
     dtype = config.dtype
     up_shape = (None, config.intermediate_dim)
     gate = build_clippable_einsum_dense(
@@ -205,17 +206,17 @@ def build_real_patch_mask(position_ids):
 def build_average_pooling(hidden, position_ids, config):
     # hidden (images, max_patches, dim). The pooled-grid width is derived from
     # the patch positions, so rectangular/padded images pool correctly.
-    k = config.pool_size
-    pooled_length = config.max_patches // (k * k)
+    pool = config.pool_size
+    pooled_length = config.max_patches // (pool * pool)
     clamped = ops.maximum(position_ids, 0)
-    kernel_x = clamped[..., 0] // k
-    kernel_y = clamped[..., 1] // k
-    width = (ops.max(clamped[..., 0]) + 1) // k
+    kernel_x = clamped[..., 0] // pool
+    kernel_y = clamped[..., 1] // pool
+    width = (ops.max(clamped[..., 0]) + 1) // pool
     kernel_index = kernel_x + width * kernel_y
     is_padding = ops.all(ops.equal(position_ids, -1), axis=-1, keepdims=True)
     hidden = hidden * (1.0 - ops.cast(is_padding, hidden.dtype))
     weights = ops.cast(ops.one_hot(kernel_index, pooled_length), hidden.dtype)
-    weights = weights / ops.cast(k * k, hidden.dtype)
+    weights = weights / ops.cast(pool * pool, hidden.dtype)
     pooled = ops.matmul(ops.transpose(weights, (0, 2, 1)), hidden)
     scale = ops.cast(float(config.hidden_dim) ** 0.5, hidden.dtype)
     return pooled * scale

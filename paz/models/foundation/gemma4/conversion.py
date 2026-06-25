@@ -21,7 +21,7 @@ if str(ROOT) not in sys.path:
 from paz.models.foundation.gemma4.configuration import save_config
 from paz.models.foundation.gemma4.inference import (
     Gemma4DecoderStep, Gemma4PerLayerEmbeddingStep)
-from paz.models.foundation.gemma4.model import TextBackboneArgs
+from paz.models.foundation.gemma4.configuration import TextBackboneArgs
 
 ROLE_SYNONYMS = {
     "per_layer_token_embedding": "per_layer_embeddings",

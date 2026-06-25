@@ -6,94 +6,14 @@ from keras.initializers import VarianceScaling
 from keras.layers import Embedding, EinsumDense, Input
 from keras_hub.layers import ReversibleEmbedding
 
+from paz.models.foundation.gemma4.configuration import TextBackboneArgs
+from paz.models.foundation.gemma4.configuration import build_kv_source_map
 from paz.models.foundation.gemma4.layers.decoder import decoder_block
 from paz.models.foundation.gemma4.layers.normalization import build_rms_norm
 
 BACKBONE_NAME = "gemma4_text_backbone"
-GEMMA4_WEIGHTS_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.24/"  # fmt: skip
-Gemma4Models = namedtuple(
-    "Gemma4", "config decoder_step per_layer_step vision_encoder")
-TEXT_BACKBONE_FIELDS = (
-    "vocabulary_size image_size num_layers num_query_heads "
-    "num_key_value_heads hidden_dim intermediate_dim head_dim "
-    "attention_logit_soft_cap final_logit_soft_cap "
-    "use_sliding_window_attention sliding_window_size "
-    "sliding_window_pattern global_head_dim "
-    "local_rope_wavelength global_rope_wavelength "
-    "local_rope_scaling_factor global_rope_scaling_factor "
-    "global_rope_partial_rotary_factor "
-    "use_bidirectional_attention layer_norm_epsilon dropout dtype "
-    "hidden_size_per_layer_input num_kv_shared_layers global_layer_indices "
-    "use_double_wide_mlp"
-)
-TextBackboneArgs = namedtuple("TextBackboneArgs", TEXT_BACKBONE_FIELDS)
 TextIntermediates = namedtuple(
-    "TextIntermediates",
-    "embedding_output block_outputs final_output",
-)
-
-
-def Gemma4(model_name="gemma4_2b", weights="paz", models_path=None):
-    model_dir = resolve_gemma4_dir(model_name, models_path)
-    config = read_gemma4_config(model_dir)
-    decoder_step = build_gemma4_decoder_step(config)
-    per_layer_step = build_gemma4_per_layer_step(config)
-    vision_encoder = build_gemma4_vision_encoder(model_dir)
-    if weights is not None:
-        args = (model_dir, decoder_step, per_layer_step, vision_encoder)
-        load_gemma4_weights(*args)
-    return Gemma4Models(config, decoder_step, per_layer_step, vision_encoder)
-
-
-def resolve_gemma4_dir(model_name, models_path):
-    if models_path is not None:
-        return Path(models_path)
-    message = ("Gemma4 weights for '{}' are not hosted yet; pass models_path "
-               "to a local weights directory.").format(model_name)
-    raise ValueError(message)
-
-
-def read_gemma4_config(model_dir):
-    from paz.models.foundation.gemma4.configuration import load_config
-    return load_config(Path(model_dir) / "config.json")
-
-
-def build_gemma4_decoder_step(config):
-    from paz.models.foundation.gemma4.inference import (
-        Gemma4MultimodalDecoderStep)
-    return Gemma4MultimodalDecoderStep(config)
-
-
-def build_gemma4_per_layer_step(config):
-    if not config.hidden_size_per_layer_input:
-        return None
-    from paz.models.foundation.gemma4.inference import (
-        Gemma4PerLayerEmbeddingStep)
-    return Gemma4PerLayerEmbeddingStep(config)
-
-
-def build_gemma4_vision_encoder(model_dir):
-    import json
-    from paz.models.foundation.gemma4.vision import (
-        VisionEncoderArgs, build_vision_encoder)
-    path = Path(model_dir) / "vision_config.json"
-    if not path.exists():
-        return None
-    with open(str(path), encoding="utf-8") as file:
-        config = VisionEncoderArgs(**json.load(file))
-    return build_vision_encoder(config)
-
-
-def load_gemma4_weights(model_dir, decoder_step, per_layer_step,
-                        vision_encoder):
-    model_dir = Path(model_dir)
-    decoder_step.load_weights(str(model_dir / "decoder_step.weights.h5"))
-    if per_layer_step is not None:
-        per_layer_step.load_weights(
-            str(model_dir / "embedding_step.weights.h5"))
-    if vision_encoder is not None:
-        vision_encoder.load_weights(
-            str(model_dir / "vision_encoder.weights.h5"))
+    "TextIntermediates", "embedding_output block_outputs final_output")
 
 
 def build_text_backbone_args(**overrides):
@@ -244,11 +164,12 @@ def build_per_layer_model_projection(hidden, num_layers, per_layer_dim, dtype):
     provides a context-dependent conditioning signal derived from the scaled
     token embedding (before any decoder blocks).
     """
-    n = num_layers * per_layer_dim
-    eq = "btd,dn->btn"
+    combined_dim = num_layers * per_layer_dim
+    equation = "btd,dn->btn"
     name = "per_layer_model_projection"
-    proj = EinsumDense(eq, (None, n), dtype=dtype, name=name)
-    return proj(hidden)
+    projection = EinsumDense(
+        equation, (None, combined_dim), dtype=dtype, name=name)
+    return projection(hidden)
 
 
 def combine_projection_and_embedding(projection, embedding, scale):
@@ -265,96 +186,15 @@ def build_per_layer_combined_inputs(projection_full, embedding_full,
 
     The projection norm is shared across all layers.
     """
-    proj_norm = build_rms_norm(
+    projection_norm = build_rms_norm(
         epsilon, dtype, "per_layer_projection_norm")
     scale = ops.cast(2 ** -0.5, dtype)
     inputs = []
-    for i in range(num_layers):
-        proj_i = slice_per_layer(projection_full, i, per_layer_dim)
-        embedding_i = slice_per_layer(
-            embedding_full, i, per_layer_dim)
-        proj_i_normed = proj_norm(proj_i)
-        combined = combine_projection_and_embedding(
-            proj_i_normed, embedding_i, scale)
+    for layer_index in range(num_layers):
+        projection = slice_per_layer(
+            projection_full, layer_index, per_layer_dim)
+        embedding = slice_per_layer(embedding_full, layer_index, per_layer_dim)
+        normed = projection_norm(projection)
+        combined = combine_projection_and_embedding(normed, embedding, scale)
         inputs.append(combined)
     return inputs
-
-
-def build_cache_head_dim(config):
-    if config.global_head_dim is not None:
-        return config.global_head_dim
-    return config.head_dim
-
-
-def is_global_attention_layer(config, layer_index):
-    if config.global_layer_indices is not None:
-        return layer_index in config.global_layer_indices
-    pattern_index = layer_index % config.sliding_window_pattern
-    return pattern_index == config.sliding_window_pattern - 1
-
-
-def is_kv_shared_layer(config, layer_index):
-    if not config.num_kv_shared_layers:
-        return False
-    return layer_index >= config.num_layers - config.num_kv_shared_layers
-
-
-def build_kv_source_map(config):
-    """Map each kv_shared layer index to its K/V source layer index.
-
-    Returns a dict {layer_index: source_index} for kv_shared layers only.
-    Mirrors the keras-hub backbone precomputation of _kv_source.
-    """
-    num_kv_shared = config.num_kv_shared_layers
-    if not num_kv_shared:
-        return {}
-    first_shared = config.num_layers - num_kv_shared
-    non_shared_types = [
-        "global" if is_global_attention_layer(config, j) else "local"
-        for j in range(first_shared)
-    ]
-    kv_source = {}
-    for j in range(first_shared, config.num_layers):
-        is_global = is_global_attention_layer(config, j)
-        layer_type = "global" if is_global else "local"
-        for k in range(len(non_shared_types) - 1, -1, -1):
-            if non_shared_types[k] == layer_type:
-                kv_source[j] = k
-                break
-    return kv_source
-
-
-def build_feedforward_dim(config, layer_index):
-    double_wide = config.use_double_wide_mlp and is_kv_shared_layer(
-        config, layer_index)
-    if double_wide:
-        return config.intermediate_dim * 2
-    return config.intermediate_dim
-
-
-def build_head_dim(config, is_global):
-    if is_global and config.global_head_dim is not None:
-        return config.global_head_dim
-    return config.head_dim
-
-
-def use_sliding_window(config, is_global):
-    return config.use_sliding_window_attention and not is_global
-
-
-def build_rope_wavelength(config, is_global):
-    if is_global:
-        return config.global_rope_wavelength
-    return config.local_rope_wavelength
-
-
-def build_rope_scaling_factor(config, is_global):
-    if is_global:
-        return config.global_rope_scaling_factor
-    return config.local_rope_scaling_factor
-
-
-def build_partial_rotary_factor(config, is_global):
-    if is_global:
-        return config.global_rope_partial_rotary_factor
-    return 1.0

@@ -2,15 +2,15 @@ from keras import Model, ops
 from keras.layers import Input
 
 from paz.models.transformers import cache as kv_cache
-
 from paz.models.transformers.logits import soft_cap as apply_soft_cap
-
+from paz.models.foundation.gemma4.configuration import build_cache_head_dim
+from paz.models.foundation.gemma4.configuration import build_kv_source_map
 from paz.models.foundation.gemma4.layers.decoder import cached_decoder_block
 from paz.models.foundation.gemma4.layers.normalization import build_rms_norm
 from paz.models.foundation.gemma4.model import (
-    build_cache_head_dim, build_per_layer_combined_inputs,
-    build_per_layer_embedding, build_per_layer_model_projection,
-    build_token_embedding, scale_per_layer_embedding, scale_token_embeddings)
+    build_per_layer_combined_inputs, build_per_layer_embedding,
+    build_per_layer_model_projection, build_token_embedding,
+    scale_per_layer_embedding, scale_token_embeddings)
 
 
 def Gemma4PerLayerEmbeddingStep(
@@ -144,7 +144,6 @@ def concat_layer_caches(caches):
 
 def build_cached_decoder_blocks(hidden, cache, index, config,
                                  per_layer_embeddings=None, positions=None):
-    from paz.models.foundation.gemma4.model import build_kv_source_map
     kv_source_map = build_kv_source_map(config)
     updated_caches = []
     for layer_index in range(config.num_layers):

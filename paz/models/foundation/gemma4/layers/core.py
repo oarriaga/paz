@@ -1,4 +1,3 @@
-import keras
 from keras import ops
 
 from paz.models.transformers import mask
@@ -35,20 +34,3 @@ def merge_padding_mask(padding_mask):
         return None
     mask = ops.cast(padding_mask, "bool")
     return ops.expand_dims(mask, axis=1)
-
-
-def clip_float16(values):
-    dtype = keras.backend.standardize_dtype(values.dtype)
-    if dtype != "float16":
-        return values
-    return ops.clip(values, -65504, 65504)
-
-
-def add_residual(left, right):
-    dtype = keras.backend.standardize_dtype(left.dtype)
-    if dtype != "float16":
-        return left + right
-    left = ops.cast(left, "float32")
-    right = ops.cast(right, "float32")
-    output = clip_float16(ops.add(left, right))
-    return ops.cast(output, "float16")
