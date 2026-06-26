@@ -61,6 +61,18 @@ def tile_render_binned_soft_mask(bins, y_fov, H, W, pose, mesh, sigma, chunk):
 
     # Returns
     - JAX array with shape `(H, W)`, soft silhouette mask in `[0, 1]`.
+
+    # Notes
+    `sigma` is the temperature of `sigmoid(-distance / sigma)`, where
+    `distance` is the signed squared distance from a pixel to the projected
+    triangle boundary in normalized image coordinates. One pixel spans
+    `2 / min(H, W)` of that space, so the soft boundary width scales as
+    `sqrt(sigma)`. A faithful default keeps that width within a few pixels:
+    `sigma` in `[1e-4, 1e-2]` for typical resolutions. Larger `sigma` grows
+    the blur radius (`compute_blur_radius`) toward the whole image, makes far
+    more than `FACES_PER_PIXEL` faces contribute per pixel, and the
+    depth-ordered fragment cap then both biases the mask and roughens its
+    gradient, so it stops matching finite differences.
     """
     H_bin, W_bin = unpack_bin_shape(bins)
     assert_exact_tile_side(H, H_bin)
