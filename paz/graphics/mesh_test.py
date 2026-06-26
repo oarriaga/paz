@@ -4,7 +4,7 @@ import pytest
 import paz
 from paz.graphics.constants import FARAWAY
 from paz.graphics.types import PointLight, Material
-from paz.backend.lie import SE3
+from paz.backend.lie import SE3, SO3
 from paz.graphics.mesh.silhouette import blend_fragments
 from paz.graphics.mesh.silhouette import build_empty_fragments
 from paz.graphics.mesh.silhouette import compute_face_fragments
@@ -640,3 +640,88 @@ def compute_finite_shift_gradient(loss_fn, shift):
     high = loss_fn(shift + jp.array([epsilon]))
     low = loss_fn(shift - jp.array([epsilon]))
     return (high - low) / (2.0 * epsilon)
+
+
+# Gradient faithfulness of object pose for analysis-by-synthesis fitting.
+# The mesh is a non-spherical ellipsoid so rotation changes the silhouette.
+# sigma is kept small so the soft-mask blur radius stays sub-pixel and the
+# FACES_PER_PIXEL fragment cap never truncates contributing faces.
+POSE_FIT_SIGMA = 1e-3
+
+
+def make_ellipsoid_mesh(transform):
+    vertices, faces, edges = build_sphere(0.6, 2)
+    vertices = vertices * jp.array([1.0, 1.8, 1.0])
+    color = jp.repeat(jp.array([[0.7, 0.3, 0.1]]), len(vertices), axis=0)
+    material = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100)
+    return Mesh(vertices, color, transform, material, faces, edges)
+
+
+def make_pose_camera():
+    camera_origin = jp.array([0.0, 0.0, 3.0])
+    world_up = jp.array([0.0, 1.0, 0.0])
+    pose = SE3.view_transform(camera_origin, jp.zeros(3), world_up)
+    return camera_origin, pose
+
+
+def render_pose_soft_mask(transform):
+    _, pose = make_pose_camera()
+    mesh = make_ellipsoid_mesh(transform)
+    bins = BinArgs(8, mesh.faces.shape[0])
+    args = (bins, jp.pi / 3.0, 32, 32, pose, mesh, POSE_FIT_SIGMA, 256)
+    return tile_render_binned_soft_mask(*args)
+
+
+def render_pose_depth(transform):
+    camera_origin, pose = make_pose_camera()
+    mesh = make_ellipsoid_mesh(transform)
+    meshes, mask = merge_meshes(mesh)
+    lights = [PointLight(jp.full(3, 10.0), camera_origin)]
+    args = (32, 32), jp.pi / 3.0, pose, meshes, mask, lights
+    return render(*args, (1, 1), 1024)[1]
+
+
+def x_translation(value):
+    return SE3.translation(jp.array([value, 0.0, 0.0]))
+
+
+def z_rotation(angle):
+    rotation = SO3.exp(SO3.hat(jp.array([0.0, 0.0, angle])))
+    return SE3.to_affine_matrix(rotation, jp.zeros(3))
+
+
+def central_difference(loss_fn, value, epsilon=1e-3):
+    return (loss_fn(value + epsilon) - loss_fn(value - epsilon)) / (2 * epsilon)
+
+
+def mse_to_target_loss(render_fn, build_transform, target):
+    return lambda x: jp.mean((render_fn(build_transform(x)) - target) ** 2)
+
+
+def assert_matches_central_difference(render_fn, build_transform, offset):
+    target = render_fn(build_transform(offset))
+    loss_fn = mse_to_target_loss(render_fn, build_transform, target)
+    gradient = jax.grad(loss_fn)(0.0)
+    finite = central_difference(loss_fn, 0.0)
+    assert jp.abs(gradient) > 1e-4
+    assert jp.allclose(gradient, finite, rtol=0.05)
+    return gradient
+
+
+def test_soft_mask_translation_gradient_matches_finite_difference():
+    assert_matches_central_difference(render_pose_soft_mask, x_translation, 0.3)
+
+
+def test_soft_mask_rotation_gradient_matches_finite_difference():
+    gradient = assert_matches_central_difference(
+        render_pose_soft_mask, z_rotation, 0.3
+    )
+    assert jp.abs(gradient) > 1e-3
+
+
+def test_depth_translation_gradient_matches_finite_difference():
+    assert_matches_central_difference(render_pose_depth, x_translation, 0.3)
+
+
+def test_depth_rotation_gradient_matches_finite_difference():
+    assert_matches_central_difference(render_pose_depth, z_rotation, 0.3)

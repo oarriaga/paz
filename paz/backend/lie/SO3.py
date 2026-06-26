@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jp
 
-from paz.backend.algebra import safe_norm, divide, near_zero
+from paz.backend.algebra import safe_norm, near_zero
 
 
 def hat(so3_vector):
@@ -63,6 +63,24 @@ def compute_rodriguez_formula(theta, omega_matrix):
     return first_order + odds_powers + even_powers
 
 
+def compute_sinc(theta_squared):
+    use_taylor = theta_squared < 1e-8
+    safe = jp.where(use_taylor, 1.0, theta_squared)
+    theta = jp.sqrt(safe)
+    exact = jp.sin(theta) / theta
+    taylor = 1.0 - theta_squared / 6.0 + theta_squared**2 / 120.0
+    return jp.where(use_taylor, taylor, exact)
+
+
+def compute_versine_ratio(theta_squared):
+    use_taylor = theta_squared < 1e-8
+    safe = jp.where(use_taylor, 1.0, theta_squared)
+    theta = jp.sqrt(safe)
+    exact = (1.0 - jp.cos(theta)) / safe
+    taylor = 0.5 - theta_squared / 24.0 + theta_squared**2 / 720.0
+    return jp.where(use_taylor, taylor, exact)
+
+
 def exp(matrix_so3):
     """Computes the matrix exponential of matrix in so(3)
 
@@ -73,10 +91,11 @@ def exp(matrix_so3):
         Element of SO3 representing manifold projection of tangent matrix so3
     """
     omega = vee(matrix_so3)
-    theta = compute_rotation_angle(omega)
-    omega_matrix = divide(matrix_so3, theta)
-    SO3 = compute_rodriguez_formula(theta, omega_matrix)
-    return SO3
+    theta_squared = jp.dot(omega, omega)
+    A = compute_sinc(theta_squared)
+    B = compute_versine_ratio(theta_squared)
+    even_powers = jp.dot(matrix_so3, matrix_so3)
+    return jp.eye(3) + A * matrix_so3 + B * even_powers
 
 
 def rpy_to_SO3(coordinates):
