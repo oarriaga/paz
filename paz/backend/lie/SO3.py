@@ -47,23 +47,65 @@ def compute_rotation_angle(exponential_coordinates):
     return safe_norm(exponential_coordinates)
 
 
-def compute_rodriguez_formula(theta, omega_matrix):
-    """Computes the matrix exponential of rotations using Rodrigues' formula
+def exp(matrix_so3):
+    """Matrix exponential mapping so(3) to SO(3).
 
     # Arguments
-        theta: scalar.
-        omega_matrix: skew symmetric matrix.
+        matrix_so3: A 3x3 skew-symmetric matrix.
 
     # Returns
-        matrix exponential of rotations
+        Element of SO3 representing manifold projection of tangent matrix so3
     """
-    first_order = jp.eye(3)
-    odds_powers = jp.sin(theta) * omega_matrix
-    even_powers = (1 - jp.cos(theta)) * jp.dot(omega_matrix, omega_matrix)
-    return first_order + odds_powers + even_powers
+    return compute_rodriguez_formula(matrix_so3)
+
+
+def compute_rodriguez_formula(matrix_so3):
+    """Rodrigues' rotation formula written in exponential coordinates.
+
+    Classic Rodrigues rotates by an angle `theta` about a unit axis
+    whose skew matrix is `K`:
+
+        R = I + sin(theta) K + (1 - cos theta) K^2
+
+    Building `K` needs `K = W / theta` with `W = hat(omega)` and
+    `theta = |omega|`. That normalization divides by zero at `theta = 0`
+    (the identity, a common initialization) and, through `safe_norm`,
+    makes `theta` locally constant there, which zeroes the gradient.
+    Substituting `K = W / theta` folds both divisions into the
+    coefficients and drops the normalization entirely:
+
+        R = I + A W + B W^2
+        A = sin(theta) / theta          (compute_sinc)
+        B = (1 - cos theta) / theta^2   (compute_versine_ratio)
+
+    This is the same rotation, but `A` and `B` are smooth functions of
+    `theta^2 = |omega|^2`, so value and gradient are correct everywhere,
+    including `theta = 0` where `R = I` and the derivative is the so(3)
+    basis.
+
+    # Arguments
+        matrix_so3: A 3x3 skew-symmetric matrix `W = hat(omega)`.
+
+    # Returns
+        The 3x3 rotation matrix `exp(W)`.
+    """
+    omega = vee(matrix_so3)
+    theta_squared = jp.dot(omega, omega)
+    A = compute_sinc(theta_squared)
+    B = compute_versine_ratio(theta_squared)
+    even_powers = jp.dot(matrix_so3, matrix_so3)
+    return jp.eye(3) + A * matrix_so3 + B * even_powers
 
 
 def compute_sinc(theta_squared):
+    """First Rodrigues coefficient `A = sin(theta) / theta`.
+
+    This is the cardinal sine. It is `0 / 0` at `theta = 0` but has the
+    limit `1`. Near zero a Taylor series replaces the singular ratio so
+    value and gradient stay finite; swapping in a safe `theta_squared`
+    before the square root keeps the unused branch from emitting a NaN
+    under autodiff.
+    """
     use_taylor = theta_squared < 1e-8
     safe = jp.where(use_taylor, 1.0, theta_squared)
     theta = jp.sqrt(safe)
@@ -73,29 +115,19 @@ def compute_sinc(theta_squared):
 
 
 def compute_versine_ratio(theta_squared):
+    """Second Rodrigues coefficient `B = (1 - cos theta) / theta^2`.
+
+    The numerator `1 - cos theta` is the versine (versed sine). The
+    ratio is `0 / 0` at `theta = 0` but has the limit `1 / 2`. Near zero
+    a Taylor series replaces the singular ratio so value and gradient
+    stay finite.
+    """
     use_taylor = theta_squared < 1e-8
     safe = jp.where(use_taylor, 1.0, theta_squared)
     theta = jp.sqrt(safe)
     exact = (1.0 - jp.cos(theta)) / safe
     taylor = 0.5 - theta_squared / 24.0 + theta_squared**2 / 720.0
     return jp.where(use_taylor, taylor, exact)
-
-
-def exp(matrix_so3):
-    """Computes the matrix exponential of matrix in so(3)
-
-    # Arguments
-        matrix_so3: A 3x3 skew-symmetric matrix.
-
-    # Returns
-        Element of SO3 representing manifold projection of tangent matrix so3
-    """
-    omega = vee(matrix_so3)
-    theta_squared = jp.dot(omega, omega)
-    A = compute_sinc(theta_squared)
-    B = compute_versine_ratio(theta_squared)
-    even_powers = jp.dot(matrix_so3, matrix_so3)
-    return jp.eye(3) + A * matrix_so3 + B * even_powers
 
 
 def rpy_to_SO3(coordinates):

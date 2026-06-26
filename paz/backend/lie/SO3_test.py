@@ -100,9 +100,9 @@ def test_identity_log():
 
 
 def test_rodrigues(so3_vector_C, SO3_matrix_C):
-    angle = math.pi / 6
-    so3_matrix = SO3.compute_rodriguez_formula(angle, SO3.hat(so3_vector_C))
-    jp.allclose(so3_matrix, SO3_matrix_C)
+    omega = (math.pi / 6) * so3_vector_C
+    rotation = SO3.compute_rodriguez_formula(SO3.hat(omega))
+    assert jp.allclose(rotation, SO3_matrix_C, atol=1e-3)
 
 
 def test_rpy_to_SO3(radians_vector):
