@@ -1,6 +1,10 @@
+import hashlib
 import json
+import shutil
 from collections import namedtuple
 from pathlib import Path
+
+from keras.utils import get_file
 
 from paz.models.foundation.gemma4.configuration import load_config
 from paz.models.foundation.gemma4.inference import Gemma4MultimodalDecoderStep
@@ -9,6 +13,15 @@ from paz.models.foundation.gemma4.vision import VisionEncoderArgs
 from paz.models.foundation.gemma4.vision import build_vision_encoder
 
 GEMMA4_WEIGHTS_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.24/"  # fmt: skip
+GEMMA4_CACHE = "paz/models/gemma4"
+# GitHub release assets are capped at 2 GB, so larger files are uploaded as
+# byte-identical parts and reassembled on download (scripts/shard_gemma4.py).
+PART_BYTES = 1_900_000_000
+GEMMA4_WEIGHT_FILES = (
+    "config.json", "tokenizer.json", "vision_config.json",
+    "vision_encoder.weights.h5", "decoder_step.weights.h5",
+    "embedding_step.weights.h5",
+)
 Gemma4Models = namedtuple(
     "Gemma4", "config decoder_step per_layer_step vision_encoder")
 
@@ -28,9 +41,87 @@ def Gemma4(model_name="gemma4_2b", weights="paz", models_path=None):
 def resolve_gemma4_dir(model_name, models_path):
     if models_path is not None:
         return Path(models_path)
-    message = ("Gemma4 weights for '{}' are not hosted yet; pass models_path "
-               "to a local weights directory.").format(model_name)
-    raise ValueError(message)
+    return download_gemma4_weights(model_name)
+
+
+def download_gemma4_weights(model_name):
+    subdir = "{}/{}".format(GEMMA4_CACHE, model_name)
+    asset = "{}.manifest.json".format(model_name)
+    manifest_path = Path(get_file(
+        asset, GEMMA4_WEIGHTS_URL + asset, cache_subdir=subdir))
+    model_dir = manifest_path.parent
+    manifest = json.loads(manifest_path.read_text())
+    for filename, entry in manifest.items():
+        assemble_weights_file(model_dir / filename, entry, subdir)
+    return model_dir
+
+
+def assemble_weights_file(path, entry, subdir):
+    checksum = entry.get("sha256")
+    if is_complete(path, checksum):
+        return path
+    parts = []
+    for asset in entry["parts"]:
+        parts.append(get_file(
+            asset, GEMMA4_WEIGHTS_URL + asset, cache_subdir=subdir))
+    concatenate_parts(parts, path)
+    if checksum is not None and compute_sha256(path) != checksum:
+        raise ValueError("Checksum mismatch after assembling {}".format(path))
+    return path
+
+
+def is_complete(path, checksum):
+    if not path.exists():
+        return False
+    return checksum is None or compute_sha256(path) == checksum
+
+
+def concatenate_parts(parts, output):
+    with open(str(output), "wb") as merged:
+        for part in parts:
+            with open(str(part), "rb") as chunk:
+                shutil.copyfileobj(chunk, merged)
+    return output
+
+
+def compute_sha256(path):
+    digest = hashlib.sha256()
+    with open(str(path), "rb") as file:
+        for block in iter(lambda: file.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def shard_weights(source_dir, model_name, output_dir, part_bytes=PART_BYTES):
+    """Split a local weights dir into <2 GB parts plus an upload manifest."""
+    source_dir, output_dir = Path(source_dir), Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    manifest = {}
+    for filename in GEMMA4_WEIGHT_FILES:
+        source = source_dir / filename
+        if not source.exists():
+            continue
+        prefix = "{}_{}".format(model_name, filename)
+        parts = split_file(source, output_dir, prefix, part_bytes)
+        manifest[filename] = {"parts": parts, "sha256": compute_sha256(source)}
+    manifest_path = output_dir / "{}.manifest.json".format(model_name)
+    manifest_path.write_text(json.dumps(manifest, indent=2))
+    return manifest_path
+
+
+def split_file(source, output_dir, prefix, part_bytes=PART_BYTES):
+    output_dir = Path(output_dir)
+    parts, index = [], 0
+    with open(str(source), "rb") as file:
+        while True:
+            block = file.read(part_bytes)
+            if not block:
+                break
+            asset = "{}.part{}".format(prefix, index)
+            (output_dir / asset).write_bytes(block)
+            parts.append(asset)
+            index = index + 1
+    return parts
 
 
 def build_per_layer_step(config):
