@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 
+import jax
 import numpy as np
 from keras import ops
 
@@ -62,7 +63,9 @@ def encode_image(image, models, vision):
     if image.max() > 1.0:
         image = image / 255.0
     inputs = preprocess_images(image[None], vision)
-    embeddings = np.asarray(models.vision_encoder(inputs))[0]
+    cpu = jax.devices("cpu")[0]
+    with jax.default_device(cpu):
+        embeddings = np.asarray(models.vision_encoder(inputs))[0]
     positions = np.asarray(inputs["pixel_position_ids"])[0]
     pool = vision.pool_size
     width = (int(positions[:, 0].max()) + 1) // pool

@@ -1,6 +1,6 @@
 import os
 
-os.environ["XLA_PYTHON_CLIENT_PREALLOCATE"] = "false"
+os.environ["XLA_PYTHON_CLIENT_ALLOCATOR"] = "platform"
 os.environ["KERAS_BACKEND"] = "jax"
 
 import argparse
