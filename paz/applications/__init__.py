@@ -38,3 +38,7 @@ from paz.applications.transcribers import TranscribeWhisperTinyEN
 from paz.applications.transcribers import TranscribeWhisperBaseEN
 from paz.applications.transcribers import TranscribeWhisperSmallEN
 from paz.applications.transcribers import TranscribeWhisperMediumEN
+from paz.applications.generators import GenerateGemma4
+from paz.applications.generators import GenerateGemma42B
+from paz.applications.generators import GenerateGemma44B
+from paz.applications.generators import DescribeImageGemma4
