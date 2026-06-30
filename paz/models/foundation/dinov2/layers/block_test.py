@@ -1,27 +1,21 @@
-import os
-
-os.environ["KERAS_BACKEND"] = "jax"
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
 import numpy as np
 import keras
 from keras import Input, Model
 
-from paz.models.foundation.dinov2.layers.block import (
-    block,
-    apply_FFN,
-    AttentionArgs,
-    FFNArgs,
-)
+from paz.models.foundation.dinov2.layers.block import block, apply_FFN
 
 
 def make_block_args(name="block_0"):
-    attention = AttentionArgs(4, True, True, 0.0)
-    FFN = FFNArgs("mlp", 2, True, "gelu")
     return dict(
         dim=24,
-        attention=attention,
-        FFN=FFN,
+        num_heads=4,
+        use_QKV_bias=True,
+        use_projection_bias=True,
+        attention_dropout_rate=0.0,
+        FFN_layer="mlp",
+        MLP_ratio=2,
+        use_FFN_bias=True,
+        activation="gelu",
         drop_rate=0.0,
         init_values=None,
         drop_path=0.0,
@@ -67,13 +61,12 @@ def test_block_has_expected_sublayer_names():
 
 def test_apply_FFN_mlp_branch_returns_tensor():
     inputs = Input(shape=(None, 24))
-    FFN = FFNArgs("mlp", 2, True, "gelu")
-    output = apply_FFN(inputs, 24, FFN, 0.0, "ffn_branch")
+    output = apply_FFN(inputs, 24, "mlp", 2, True, "gelu", 0.0, "ffn_branch")
     assert output.shape[-1] == 24
 
 
 def test_apply_FFN_swiglu_branch_returns_tensor():
     inputs = Input(shape=(None, 24))
-    FFN = FFNArgs("swiglu", 2, True, "silu")
-    output = apply_FFN(inputs, 24, FFN, 0.0, "swiglu_branch")
+    FFN_inputs = (inputs, 24, "swiglu", 2, True, "silu", 0.0, "swiglu_branch")
+    output = apply_FFN(*FFN_inputs)
     assert output.shape[-1] == 24

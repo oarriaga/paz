@@ -1,16 +1,9 @@
-import os
-
-os.environ["KERAS_BACKEND"] = "jax"
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
 import numpy as np
 import keras
 from keras import Input, Model
 
 from paz.models.foundation.dinov2.layers.drop_path import (
     apply_drop_path,
-    drop_path,
-    apply_identity,
     build_noise_shape,
 )
 
@@ -78,7 +71,7 @@ def test_drop_path_layer_name_present():
 
 def test_apply_identity_returns_input():
     inputs = Input(shape=(5, 8), name="ai_input")
-    outputs = apply_identity(inputs, "ai_layer")
+    outputs = apply_drop_path(inputs, 0.0, "ai_layer")
     model = Model(inputs=inputs, outputs=outputs, name="ai_model")
     x = np.random.randn(2, 5, 8).astype(np.float32)
     y = np.array(model(x))
@@ -88,7 +81,7 @@ def test_apply_identity_returns_input():
 def test_drop_path_inverted_scaling_expectation():
     keras.utils.set_random_seed(1)
     inputs = Input(shape=(4, 6), name="dpis_input")
-    outputs = drop_path(inputs, 0.5, "dpis_layer")
+    outputs = apply_drop_path(inputs, 0.5, "dpis_layer")
     model = Model(inputs=inputs, outputs=outputs, name="dpis_model")
     x = np.ones((2048, 4, 6), dtype=np.float32)
     y = np.array(model(x, training=True))

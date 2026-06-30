@@ -3,35 +3,23 @@ from keras import ops
 from keras.layers import Activation, Dense, Dropout
 
 
-def swiglu_ffn_fused(
-    x,
-    hidden_dim,
-    out_dim,
-    use_bias,
-    drop_rate,
-    name,
-    activation,
-):
-    hidden_units = compute_fused_hidden(hidden_dim)
-    args = (x, hidden_units, out_dim, use_bias, activation, name)
-    projected = compute_swiglu(*args)
-    output = Dropout(drop_rate, name=f"{name}_drop")(projected)
-    return output
+def swiglu_ffn_fused(x, hidden_dim, out_dim, use_bias, drop_rate, name, activation):  # fmt: skip
+    hidden = fused_hidden_dim(hidden_dim)
+    output = compute_swiglu(x, hidden, out_dim, use_bias, activation, name)
+    return Dropout(drop_rate, name=f"{name}_drop")(output)
 
 
-def compute_swiglu(x, hidden, output_units, use_bias, activation, name):
+def compute_swiglu(x, hidden_dim, out_dim, use_bias, activation, name):
     fused_name = f"{name}_fused_gate_and_value_projection"
-    fused = project(x, 2 * hidden, use_bias, fused_name)
-    value, gate = split_value_and_gate(fused)
-    activated = activate(value, activation, f"{name}_act")
-    multiplied = activated * gate
+    gate_and_value = project(x, 2 * hidden_dim, use_bias, fused_name)
+    value, gate = split_value_and_gate(gate_and_value)
+    value = Activation(activation, name=f"{name}_act")(value)
     output_name = f"{name}_output_projection"
-    output = project(multiplied, output_units, use_bias, output_name)
-    return output
+    return project(value * gate, out_dim, use_bias, output_name)
 
 
-def split_value_and_gate(fused):
-    parts = ops.split(fused, 2, axis=-1)
+def split_value_and_gate(gate_and_value):
+    parts = ops.split(gate_and_value, 2, axis=-1)
     return parts[0], parts[1]
 
 
@@ -41,10 +29,5 @@ def project(x, units, use_bias, name):
     return Dense(units, **kwargs)(x)
 
 
-def activate(x, activation, name):
-    return Activation(activation, name=name)(x)
-
-
-def compute_fused_hidden(hidden):
-    return (int(hidden * 2 / 3) + 7) // 8 * 8
-
+def fused_hidden_dim(hidden_dim):
+    return (int(hidden_dim * 2 / 3) + 7) // 8 * 8

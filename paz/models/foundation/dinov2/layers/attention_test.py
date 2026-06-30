@@ -1,35 +1,21 @@
-import os
-
-os.environ["KERAS_BACKEND"] = "jax"
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
 import numpy as np
 import keras
+import pytest
 from keras import Input, Model
 
 from paz.models.foundation.dinov2.layers.attention import attend
-from paz.models.foundation.dinov2.layers.block import (
-    block,
-    AttentionArgs,
-    FFNArgs,
-)
+from paz.models.foundation.dinov2.layers.block import block
 
 
 def build_attention_model(
-    seq_len, dim, num_heads, head_dim, attn_drop, proj_drop, qkv_bias, proj_bias
+    seq_len, dim, num_heads, head_dim, attention_dropout, projection_dropout,
+    QKV_bias, projection_bias,
 ):
     inputs = Input(shape=(seq_len, dim), name="attn_input")
-    args = (
-        inputs,
-        num_heads,
-        head_dim,
-        attn_drop,
-        proj_drop,
-        qkv_bias,
-        proj_bias,
-        "attn",
-    )
-    outputs = attend(*args)
+    rates = (attention_dropout, projection_dropout)
+    biases = (QKV_bias, projection_bias)
+    attend_inputs = (inputs, num_heads, head_dim, *rates, *biases, "attn")
+    outputs = attend(*attend_inputs)
     return Model(inputs=inputs, outputs=outputs, name="attention_model")
 
 
@@ -79,8 +65,8 @@ def build_block_model(args):
     return Model(inputs, outputs, name=args["name"])
 
 
+@pytest.mark.heavy
 def test_attend_parity_with_pytorch_dinov2():
-    pytest = __import__("pytest")
     torch = __import__("torch")
     try:
         ref = torch.hub.load(
@@ -109,12 +95,16 @@ def test_attend_parity_with_pytorch_dinov2():
 
 
 def build_block_args():
-    attention = AttentionArgs(4, True, True, 0.0)
-    FFN = FFNArgs("mlp", 2, True, "gelu")
     return dict(
         dim=24,
-        attention=attention,
-        FFN=FFN,
+        num_heads=4,
+        use_QKV_bias=True,
+        use_projection_bias=True,
+        attention_dropout_rate=0.0,
+        FFN_layer="mlp",
+        MLP_ratio=2,
+        use_FFN_bias=True,
+        activation="gelu",
         drop_rate=0.0,
         init_values=None,
         drop_path=0.0,

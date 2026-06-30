@@ -1,23 +1,13 @@
-import keras
 from keras.layers import Conv2D, Reshape
 
 
 def build_patch_embedding(x, patch_size, embedding_dimension, name):
     patch_HW = to_pair(patch_size)
-    projected = project_patches(x, embedding_dimension, patch_HW, name)
-    flattened = flatten_patches(projected, embedding_dimension)
-    return flattened
+    x = project_patches(x, embedding_dimension, patch_HW, name)
+    return flatten_patches(x, embedding_dimension)
 
 
 def project_patches(x, embedding_dimension, patch_HW, name):
-    # args = dict(
-    #     filters=embedding_dimension,
-    #     kernel_size=patch_HW,
-    #     strides=patch_HW,
-    #     padding="valid",
-    #     name=f"{name}_proj",
-    # )
-    # return Conv2D(**args)(x)
     return Conv2D(
         filters=embedding_dimension,
         kernel_size=patch_HW,
