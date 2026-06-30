@@ -1,8 +1,3 @@
-import os
-
-os.environ["KERAS_BACKEND"] = "jax"
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
 import numpy as np
 import keras
 from keras import Input, Model

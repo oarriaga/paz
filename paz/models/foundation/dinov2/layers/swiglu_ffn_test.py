@@ -1,34 +1,29 @@
-import os
-
-os.environ["KERAS_BACKEND"] = "jax"
-os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-
 import numpy as np
 import keras
 from keras import Input, Model
 
 from paz.models.foundation.dinov2.layers.swiglu_ffn import (
     swiglu_ffn_fused,
-    compute_fused_hidden,
+    fused_hidden_dim,
 )
 
 
 def build_swiglu_fused_model(input_features, hidden_features, drop_rate):
     inputs = Input(shape=(None, input_features))
-    args = (inputs, hidden_features, input_features, True, drop_rate, "ffn", "silu")
-    outputs = swiglu_ffn_fused(*args)
+    swiglu_inputs = (inputs, hidden_features, input_features, True, drop_rate, "ffn", "silu")  # fmt: skip
+    outputs = swiglu_ffn_fused(*swiglu_inputs)
     return Model(inputs, outputs, name="ffn")
 
 
-def test_compute_fused_hidden_rounds_to_multiple_of_8():
-    assert compute_fused_hidden(384) == 256
-    assert compute_fused_hidden(1536) == 1024
+def test_fused_hidden_dim_rounds_to_multiple_of_8():
+    assert fused_hidden_dim(384) == 256
+    assert fused_hidden_dim(1536) == 1024
 
 
 def test_swiglu_ffn_fused_uses_aligned_hidden_units():
     model = build_swiglu_fused_model(48, 96, drop_rate=0.0)
     fused = model.get_layer("ffn_fused_gate_and_value_projection")
-    expected_hidden = compute_fused_hidden(96)
+    expected_hidden = fused_hidden_dim(96)
     assert fused.units == 2 * expected_hidden
 
 
