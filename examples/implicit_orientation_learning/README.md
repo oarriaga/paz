@@ -14,9 +14,11 @@ Synthetic views are produced with `paz.graphics` (the built-in renderer) — no
 external rasterizer. Views are rendered once and cached to
 `experiments/views.npz`, since ray tracing is the slow step; training then
 augments the cached views each epoch (random background, occlusions,
-brightness). `scenes.build_mesh` normalizes any mesh to unit extent, so the
-default camera distance frames any object. With no `--mesh`, a colored cube is
-used so the example runs offline.
+brightness). `scenes.build_mesh` normalizes any mesh to unit extent and the
+camera is framed (distance 2.5) with an off-axis point light, so the object is
+centered with margin and its faces are distinctly shaded. With no `--mesh`, a
+solid per-face colored cube (six plain face colors) is used so the example runs
+offline.
 
 Camera poses are sampled with `paz.SO3.sample` (uniform rotations), and domain
 randomization reuses the `paz.backend.image` pipeline:
@@ -52,6 +54,24 @@ KERAS_BACKEND=jax python demo.py --weights experiments/aae.weights.h5
 Builds a 10x10 pose codebook from the same mesh, encodes each camera frame,
 and shows the nearest codebook view (the implicit orientation). No weights are
 hosted — train first to produce the checkpoint.
+
+## Evaluate
+
+```bash
+KERAS_BACKEND=jax python eval.py --weights experiments/aae.weights.h5
+```
+
+Renders a dense codebook and a held-out set of random orientations, retrieves
+the nearest codebook pose for each (clean and domain-randomized), and reports
+the geodesic angular error against the codebook-resolution oracle floor. It also
+writes a `[clean | augmented | true axes / predicted axes]` montage to
+`experiments/eval.png`. On the solid-color cube the augmented retrieval reaches
+a **median of ~7 deg**, matching the clean result and the oracle floor.
+
+A uniform-colored face is rotationally symmetric, so near face-on views cannot
+resolve the in-plane rotation; those rare views form a high-error tail (mean
+~20 deg) while typical two/three-face views are recovered exactly. Breaking each
+face's symmetry (a small per-face accent) would remove the tail.
 
 ## Notes
 

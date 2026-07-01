@@ -15,14 +15,16 @@ import scenes
 
 
 class OrientationSequence(keras.utils.PyDataset):
-    def __init__(self, views, masks, batch_size, backgrounds=None, seed=0):
+    def __init__(self, views, masks, batch_size, backgrounds=None, seed=0,
+                 occlusion_scale=0.25):
         super().__init__()
         self.views = jp.asarray(views)
         self.masks = jp.asarray(masks)
         self.batch_size = batch_size
         self.key = jax.random.PRNGKey(seed)
         randomize = partial(paz.image.randomize_rendered_image,
-                            backgrounds=backgrounds)
+                            backgrounds=backgrounds,
+                            max_radius_scale=occlusion_scale)
         self.randomize = jax.jit(jax.vmap(randomize, in_axes=(0, 0, 0)))
 
     def __len__(self):
@@ -65,16 +67,18 @@ if __name__ == "__main__":
     parser.add_argument("--backgrounds", default=None)
     parser.add_argument("--root", default="experiments")
     parser.add_argument("--image_size", default=128, type=int)
-    parser.add_argument("--distance", default=0.9, type=float)
+    parser.add_argument("--distance", default=2.5, type=float)
     parser.add_argument("--num_views", default=2000, type=int)
-    parser.add_argument("--batch_size", default=32, type=int)
+    parser.add_argument("--batch_size", default=64, type=int)
     parser.add_argument("--epochs", default=300, type=int)
+    parser.add_argument("--occlusion_scale", default=0.25, type=float)
     args = parser.parse_args()
     os.makedirs(args.root, exist_ok=True)
     pack = (args.mesh, args.num_views, args.image_size, args.distance)
     views, masks = render_dataset(*pack, args.root, seed=0)
     backgrounds = load_backgrounds(args.backgrounds, args.image_size)
-    sequence = OrientationSequence(views, masks, args.batch_size, backgrounds)
+    sequence = OrientationSequence(views, masks, args.batch_size, backgrounds,
+                                   occlusion_scale=args.occlusion_scale)
     model = paz.models.AutoEncoder((args.image_size, args.image_size, 3))
     optimizer = keras.optimizers.Adam(1e-3, amsgrad=True)
     model.compile(optimizer, "binary_crossentropy")

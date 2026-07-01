@@ -3,9 +3,20 @@ import jax
 import jax.numpy as jp
 
 import paz
-from paz.graphics.mesh import Mesh, load_mesh, build_cube, merge_meshes
+from paz.graphics.mesh import Mesh, load_mesh, merge_meshes
 from paz.graphics.types import Material, PointLight
 from paz.graphics.viewer import mesh_renderer
+
+FACE_QUADS = [
+    [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]],
+    [[0, 0, 1], [0, 1, 1], [0, 1, 0], [0, 0, 0]],
+    [[0, 1, 0], [0, 1, 1], [1, 1, 1], [1, 1, 0]],
+    [[0, 0, 1], [0, 0, 0], [1, 0, 0], [1, 0, 1]],
+    [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]],
+    [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]],
+]
+FACE_COLORS = [[1, 0, 0], [0, 1, 0], [0, 0, 1],
+               [1, 1, 0], [1, 0, 1], [0, 1, 1]]
 
 
 def normalize_vertices(vertices):
@@ -20,9 +31,31 @@ def build_face_edges(faces):
 
 
 def colored_cube():
-    vertices, faces, edges = build_cube(1.0)
-    colors = (normalize_vertices(vertices) + 0.5)
-    return vertices, faces, edges, jp.clip(colors, 0.0, 1.0)
+    vertices, faces, colors = [], [], []
+    for face_arg, quad in enumerate(FACE_QUADS):
+        corners = np.asarray(quad, "float32") - 0.5
+        vertices.extend(corners.tolist())
+        faces.extend(orient_outward(corners, 4 * face_arg))
+        colors.extend([FACE_COLORS[face_arg]] * 4)
+    vertices, faces = jp.asarray(vertices), jp.asarray(faces)
+    return vertices, faces, cube_edges(), jp.asarray(colors)
+
+
+def orient_outward(corners, base):
+    triangles = [[base, base + 1, base + 2], [base, base + 2, base + 3]]
+    normal = np.cross(corners[1] - corners[0], corners[2] - corners[0])
+    if np.dot(normal, corners.mean(axis=0)) < 0:
+        triangles = [triangle[::-1] for triangle in triangles]
+    return triangles
+
+
+def cube_edges():
+    edges = []
+    for face_arg in range(len(FACE_QUADS)):
+        ring = [4 * face_arg + offset for offset in range(4)]
+        for corner in range(4):
+            edges.append([ring[corner], ring[(corner + 1) % 4]])
+    return jp.asarray(edges)
 
 
 def build_mesh(mesh_path=None):
@@ -32,14 +65,15 @@ def build_mesh(mesh_path=None):
         vertices, faces, colors = load_mesh(mesh_path)
         edges = build_face_edges(faces)
     vertices = normalize_vertices(vertices)
-    material = Material(jp.zeros(3), 0.6, 0.0, 0.3, 32.0)
+    material = Material(jp.ones(3), 0.3, 0.8, 0.2, 32.0)
     transform = paz.SE3.identity()
     return Mesh(vertices, colors, transform, material, faces, edges)
 
 
 def build_renderer(mesh, image_size, distance, y_FOV=jp.pi / 4.0):
     meshes, mask = merge_meshes(mesh)
-    lights = [PointLight(jp.ones(3) * 1.6, jp.array([distance, distance, distance]))]  # fmt: skip
+    position = jp.array([1.5, 2.0, 2.5]) * distance
+    lights = [PointLight(jp.ones(3) * 1.6, position)]
     H = W = image_size
     return mesh_renderer(meshes, mask, H, W, y_FOV, lights, 1024 * 8, (2, 2))
 
