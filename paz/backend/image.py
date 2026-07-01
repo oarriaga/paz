@@ -258,6 +258,23 @@ def crop(image, box):
     return image[y_min:y_max, x_min:x_max, :]
 
 
+def place_in_canvas(image, out_size, scale, translation, fill):
+    """Resamples `image` by `scale` and pastes it at pixel `translation`
+    onto a fixed `out_size` canvas; uncovered pixels take the `fill` color.
+    Fixed output shape makes it jit/vmap-friendly for detection augmentation.
+    """
+    dims = (0, 1)
+    image = paz.cast(image, jp.float32)
+    shape = (out_size[0], out_size[1], image.shape[-1])
+    args = shape, dims, scale, translation, "linear"
+    placed = jax.image.scale_and_translate(image, *args, antialias=False)
+    ones = jp.ones((image.shape[0], image.shape[1], 1), jp.float32)
+    mask_shape = (out_size[0], out_size[1], 1)
+    mask_args = mask_shape, dims, scale, translation, "linear"
+    covered = jax.image.scale_and_translate(ones, *mask_args, antialias=False)
+    return placed + fill * (1.0 - covered)
+
+
 def crop_center(image, H_crop, W_crop):
     H_now, W_now = get_size(image)
     center_x = W_now // 2

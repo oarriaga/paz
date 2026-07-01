@@ -18,7 +18,7 @@ parser.add_argument("--batch_size", default=32, type=int)
 parser.add_argument("--learning_rate", default=0.001, type=float)
 parser.add_argument("--momentum", default=0.9, type=float)
 parser.add_argument("--num_workers", default="max")
-parser.add_argument("--max_queue_size", default=50 type=float)
+parser.add_argument("--max_queue_size", default=50, type=int)
 parser.add_argument("--decay_epochs", nargs="+", type=int, default=[110, 152])
 parser.add_argument("--decay_rate", default=0.1, type=float)
 parser.add_argument("--max_num_epochs", default=240, type=int)
@@ -39,7 +39,7 @@ train_data = (images_07 + images_12, detections_07 + detections_12)
 test_data = paz.datasets.load("VOC2007", "test")
 input_shape = (args.H, args.W, 3)
 model = paz.models.SSD300(
-    num_classes + 1, "VGG", None, input_shape, trainable_base=False
+    num_classes + 1, "VGG", None, input_shape, trainable_base=True
 )
 model.summary()
 
@@ -73,7 +73,8 @@ batch_args = (
     args.max_num_boxes,
 )
 
-num_workers = os.cpu_count() if args.num_workers == "max" else args.num_workers
+use_all_cpus = args.num_workers == "max"
+num_workers = os.cpu_count() if use_all_cpus else int(args.num_workers)
 train_pipeline = paz.lock(preprocess_batch, *batch_args, True)
 train_generator = Generator(
     key,

@@ -589,3 +589,182 @@ def translate(detections, x_offset, y_offset):
     boxes = paz.boxes.merge(x_new_center, y_new_center, W, H)
     boxes = paz.boxes.xywh_to_xyxy(boxes)
     return merge(boxes, class_args)
+
+
+# --- SSD-style detection augmentation (fixed-shape, jit/vmap-friendly) ---
+# All ops keep a fixed image size and a fixed number of boxes: `detections`
+# is `(num_boxes, 5)` with normalized corners + class, padded rows set to -1.
+# This mirrors the legacy master pipeline (photometric -> expand -> sample
+# crop -> flip) but stays jittable, so a batch runs as one jit(vmap(...)).
+
+CROP_MODE_MIN_IOU = jp.array([jp.nan, 0.1, 0.3, 0.7, 0.9, -jp.inf])
+
+
+def augment_detection(key, image, detections, mean):
+    """Applies the full SSD training augmentation to a single sample."""
+    keys = jax.random.split(key, 4)
+    image = random_photometric(keys[0], image)
+    image, detections = random_expand(keys[1], image, detections, mean)
+    image, detections = random_sample_crop(keys[2], image, detections)
+    image, detections = random_flip(keys[3], image, detections)
+    return image, detections
+
+
+def random_photometric(key, image):
+    """Contrast, brightness, saturation and hue, each with probability 0.5."""
+    keys = jax.random.split(key, 4)
+    image = maybe_apply(keys[0], adjust_contrast, image)
+    image = maybe_apply(keys[1], adjust_brightness, image)
+    image = maybe_apply(keys[2], adjust_saturation, image)
+    image = maybe_apply(keys[3], adjust_hue, image)
+    return image
+
+
+def random_expand(key, image, detections, mean, max_ratio=2.0, probability=0.5):
+    """Zooms out up to `max_ratio`, filling new pixels with `mean`."""
+    H, W = paz.image.get_size(image)
+    coin_key, ratio_key, x_key, y_key = jax.random.split(key, 4)
+    ratio = jax.random.uniform(ratio_key, (), minval=1.0, maxval=max_ratio)
+    inverse = 1.0 / ratio
+    left = jax.random.uniform(x_key, (), maxval=1.0 - inverse)
+    top = jax.random.uniform(y_key, (), maxval=1.0 - inverse)
+    scale = jp.array([inverse, inverse])
+    translation = jp.array([top * H, left * W])
+    fill = jp.asarray(mean, jp.float32)
+    canvas_args = image, (H, W), scale, translation, fill
+    expanded = paz.image.place_in_canvas(*canvas_args)
+    boxes, class_args = split(detections)
+    moved = boxes * inverse + jp.array([left, top, left, top])
+    moved = keep_valid(merge(moved, class_args), detections)
+    apply = jax.random.uniform(coin_key, ()) < probability
+    image = jp.where(apply, expanded, paz.cast(image, jp.float32))
+    detections = jp.where(apply, moved, detections)
+    return image, detections
+
+
+def random_sample_crop(key, image, detections, max_trials=50):
+    """Crops a window meeting a random IoU mode, then resizes it back."""
+    H, W = paz.image.get_size(image)
+    mode_key, loop_key = jax.random.split(key)
+    mode = jax.random.randint(mode_key, (), 0, CROP_MODE_MIN_IOU.shape[0])
+    min_iou = CROP_MODE_MIN_IOU[mode]
+    search_args = loop_key, detections, min_iou, max_trials
+    window, found = search_crop_window(*search_args)
+    cropped_image, cropped = apply_crop(image, detections, window)
+    do_crop = (mode > 0) & found
+    image = jp.where(do_crop, cropped_image, paz.cast(image, jp.float32))
+    detections = jp.where(do_crop, cropped, detections)
+    return image, detections
+
+
+def random_flip(key, image, detections, probability=0.5):
+    """Mirrors the image and boxes left-right in normalized coordinates."""
+    boxes, class_args = split(detections)
+    x_min, y_min, x_max, y_max = paz.boxes.split(boxes)
+    flipped_boxes = paz.boxes.merge(1.0 - x_max, y_min, 1.0 - x_min, y_max)
+    flipped = keep_valid(merge(flipped_boxes, class_args), detections)
+    flipped_image = paz.cast(paz.image.flip_left_right(image), jp.float32)
+    apply = jax.random.uniform(key, ()) < probability
+    image = jp.where(apply, flipped_image, paz.cast(image, jp.float32))
+    detections = jp.where(apply, flipped, detections)
+    return image, detections
+
+
+def search_crop_window(key, detections, min_iou, max_trials):
+    """Rejection-samples a crop window satisfying the IoU mode and aspect."""
+    boxes = get_boxes(detections)
+    valid = detections[:, 4] >= 0.0
+
+    def condition(state):
+        trials, _, _, found = state
+        return (trials < max_trials) & jp.logical_not(found)
+
+    def body(state):
+        trials, key, window, found = state
+        key, window_key = jax.random.split(key)
+        candidate = sample_window(window_key)
+        is_valid = is_window_valid(candidate, boxes, valid, min_iou)
+        window = jp.where(is_valid, candidate, window)
+        return trials + 1, key, window, found | is_valid
+
+    identity = jp.array([0.0, 0.0, 1.0, 1.0])
+    state = (0, key, identity, jp.array(False))
+    _, _, window, found = jax.lax.while_loop(condition, body, state)
+    return window, found
+
+
+def sample_window(key):
+    """Samples a crop rectangle with side lengths in [0.3, 1.0]."""
+    w_key, h_key, x_key, y_key = jax.random.split(key, 4)
+    W = jax.random.uniform(w_key, (), minval=0.3, maxval=1.0)
+    H = jax.random.uniform(h_key, (), minval=0.3, maxval=1.0)
+    x_min = jax.random.uniform(x_key, (), maxval=1.0 - W)
+    y_min = jax.random.uniform(y_key, (), maxval=1.0 - H)
+    return jp.array([x_min, y_min, x_min + W, y_min + H])
+
+
+def is_window_valid(window, boxes, valid, min_iou):
+    """A window is valid with a good aspect, IoU and one enclosed center."""
+    W = window[2] - window[0]
+    H = window[3] - window[1]
+    aspect = H / W
+    good_aspect = (aspect >= 0.5) & (aspect <= 2.0)
+    ious = paz.boxes.compute_IOUs(window[None], boxes)[0]
+    good_iou = jp.max(jp.where(valid, ious, -jp.inf)) >= min_iou
+    centers = (boxes[:, :2] + boxes[:, 2:]) / 2.0
+    inside = (window[0] < centers[:, 0]) & (centers[:, 0] < window[2])
+    inside = inside & (window[1] < centers[:, 1]) & (centers[:, 1] < window[3])
+    has_center = jp.any(inside & valid)
+    return good_aspect & good_iou & has_center
+
+
+def apply_crop(image, detections, window):
+    """Resizes `window` to the full frame and remaps the boxes into it."""
+    H, W = paz.image.get_size(image)
+    x_min, y_min, x_max, y_max = window
+    width, height = x_max - x_min, y_max - y_min
+    scale = jp.array([1.0 / height, 1.0 / width])
+    translation = jp.array([-y_min * H / height, -x_min * W / width])
+    fill = jp.zeros(image.shape[-1])
+    canvas_args = image, (H, W), scale, translation, fill
+    cropped_image = paz.image.place_in_canvas(*canvas_args)
+    boxes, class_args = split(detections)
+    lower = jp.clip(boxes[:, :2], window[:2], window[2:])
+    upper = jp.clip(boxes[:, 2:], window[:2], window[2:])
+    remapped = jp.concatenate([lower, upper], axis=1) - jp.tile(window[:2], 2)
+    remapped = remapped / jp.array([width, height, width, height])
+    centers = (boxes[:, :2] + boxes[:, 2:]) / 2.0
+    inside = (window[0] < centers[:, 0]) & (centers[:, 0] < window[2])
+    inside = inside & (window[1] < centers[:, 1]) & (centers[:, 1] < window[3])
+    keep = (inside & (detections[:, 4] >= 0.0))[:, None]
+    cropped = jp.where(keep, merge(remapped, class_args), -1.0)
+    return cropped_image, cropped
+
+
+def maybe_apply(key, function, image, probability=0.5):
+    """Applies a keyed photometric `function` with the given probability."""
+    coin_key, op_key = jax.random.split(key)
+    apply = jax.random.uniform(coin_key, ()) < probability
+    return jp.where(apply, function(op_key, image), image)
+
+
+def keep_valid(new_detections, reference):
+    """Resets rows that were padding in `reference` back to -1."""
+    valid = reference[:, 4:5] >= 0.0
+    return jp.where(valid, new_detections, -1.0)
+
+
+def adjust_contrast(key, image):
+    return paz.image.random_contrast(key, image)
+
+
+def adjust_brightness(key, image):
+    return paz.image.random_brightness(key, image)
+
+
+def adjust_saturation(key, image):
+    return paz.image.random_saturation(key, image, 0.7, 1.5)
+
+
+def adjust_hue(key, image):
+    return paz.image.random_hue(key, image, 0.05)
