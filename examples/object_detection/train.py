@@ -17,6 +17,7 @@ parser.add_argument("--label", default=None)
 parser.add_argument("--batch_size", default=32, type=int)
 parser.add_argument("--learning_rate", default=0.001, type=float)
 parser.add_argument("--momentum", default=0.9, type=float)
+parser.add_argument("--clipnorm", default=1.0, type=float)
 parser.add_argument("--num_workers", default="max")
 parser.add_argument("--max_queue_size", default=50, type=int)
 parser.add_argument("--decay_epochs", nargs="+", type=int, default=[110, 152])
@@ -58,7 +59,8 @@ callbacks = [
     paz.callbacks.EpochScheduler(args.decay_epochs, args.decay_rate),
 ]
 
-optimizer = keras.optimizers.SGD(args.learning_rate, args.momentum)
+sgd_args = args.learning_rate, args.momentum
+optimizer = keras.optimizers.SGD(*sgd_args, global_clipnorm=args.clipnorm)
 model.compile(
     optimizer, paz.losses.multibox.call, metrics=metrics, jit_compile=True
 )

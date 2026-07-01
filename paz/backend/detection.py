@@ -597,7 +597,10 @@ def translate(detections, x_offset, y_offset):
 # This mirrors the legacy master pipeline (photometric -> expand -> sample
 # crop -> flip) but stays jittable, so a batch runs as one jit(vmap(...)).
 
-CROP_MODE_MIN_IOU = jp.array([jp.nan, 0.1, 0.3, 0.7, 0.9, -jp.inf])
+# Index 0 is the "skip crop" mode: an unsatisfiable +inf threshold means no
+# window is ever accepted, so the image passes through unchanged. Avoids a nan
+# sentinel that would trip jax_debug_nans and could leak into the graph.
+CROP_MODE_MIN_IOU = jp.array([jp.inf, 0.1, 0.3, 0.7, 0.9, -jp.inf])
 
 
 def augment_detection(key, image, detections, mean):
