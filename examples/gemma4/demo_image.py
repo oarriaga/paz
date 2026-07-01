@@ -20,7 +20,7 @@ import paz
 from paz.applications import DescribeImageGemma4
 from paz.models import Gemma4
 from paz.models.foundation.gemma4.pretrained import (
-    resolve_gemma4_dir, load_gemma4_vision_encoder)
+    resolve_dir, load_vision_encoder)
 
 SAMPLE_IMAGE_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.9.1/image_with_everyday_classes.jpg"  # fmt: skip
 
@@ -37,7 +37,7 @@ def build_models_with_cpu_vision(model_name, model_dir):
     # on a 16 GB GPU, so build that piece on the CPU and swap it in.
     models = Gemma4(model_name, models_path=model_dir)
     with jax.default_device(jax.devices("cpu")[0]):
-        vision_encoder = load_gemma4_vision_encoder(model_dir)
+        vision_encoder = load_vision_encoder(model_dir)
     return models._replace(vision_encoder=vision_encoder)
 
 
@@ -64,7 +64,7 @@ if __name__ == "__main__":
     add("--image", default=None)
     add("--max_tokens", default=64, type=int)
     args = parser.parse_args()
-    model_dir = resolve_gemma4_dir(args.model_name, args.models_path)
+    model_dir = resolve_dir(args.model_name, args.models_path)
     models = build_models_with_cpu_vision(args.model_name, model_dir)
     describe = DescribeImageGemma4(
         args.model_name, args.max_tokens, models_path=model_dir, models=models)

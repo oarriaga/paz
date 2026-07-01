@@ -1,12 +1,12 @@
 import json
 from pathlib import Path
 
-import jax
 import numpy as np
 from keras import ops
 
+from paz import place_on_model_device
 from paz.models import Gemma4
-from paz.models.foundation.gemma4.pretrained import resolve_gemma4_dir
+from paz.models.foundation.gemma4.pretrained import resolve_dir
 from paz.models.foundation.gemma4.tokenizer import Gemma4Tokenizer
 from paz.models.foundation.gemma4.image_converter import preprocess_images
 from paz.models.foundation.gemma4.multimodal_decoding import (
@@ -15,9 +15,9 @@ from paz.models.foundation.gemma4.vision import VisionEncoderArgs
 
 
 def GenerateGemma4(model_name="gemma4_2b", max_tokens=64, max_seq=512,
-                   max_prompt=128, weights="paz", models_path=None,
+                   max_prompt=128, weights="pretrained", models_path=None,
                    models=None):
-    model_dir = resolve_gemma4_dir(model_name, models_path)
+    model_dir = resolve_dir(model_name, models_path)
     if models is None:
         models = Gemma4(model_name, weights=weights, models_path=model_dir)
     tokenizer = build_gemma4_tokenizer(model_dir)
@@ -44,9 +44,9 @@ def build_token_printer(tokenizer, stop_id):
 
 
 def DescribeImageGemma4(model_name="gemma4_2b", max_tokens=64, max_seq=512,
-                        max_prompt=400, weights="paz", models_path=None,
+                        max_prompt=400, weights="pretrained", models_path=None,
                         models=None):
-    model_dir = resolve_gemma4_dir(model_name, models_path)
+    model_dir = resolve_dir(model_name, models_path)
     if models is None:
         models = Gemma4(model_name, weights=weights, models_path=model_dir)
     tokenizer = build_gemma4_tokenizer(model_dir)
@@ -105,12 +105,6 @@ def encode_image(image, models, vision):
     return ops.cast(embeddings, models.config.dtype)
 
 
-def place_on_model_device(inputs, model):
-    device = next(iter(model.weights[0].value.devices()))
-    return {name: jax.device_put(value, device)
-            for name, value in inputs.items()}
-
-
 def build_image_prompt(tokenizer, num_image_tokens, question):
     head = tokenizer.tokenize("<|turn>user\n")
     tail = tokenizer.tokenize("{}<turn|>\n<|turn>model\n".format(question))
@@ -131,3 +125,11 @@ def GenerateGemma42B(**kwargs):
 
 def GenerateGemma44B(**kwargs):
     return GenerateGemma4("gemma4_4b", **kwargs)
+
+
+def DescribeImageGemma42B(**kwargs):
+    return DescribeImageGemma4("gemma4_2b", **kwargs)
+
+
+def DescribeImageGemma44B(**kwargs):
+    return DescribeImageGemma4("gemma4_4b", **kwargs)

@@ -7,16 +7,16 @@ from keras import ops
 import paz
 from paz.models import Whisper
 from paz.models.foundation.whisper.decoding import (
-    KVDecoder, kv_decode, build_whisper_prompt_token_ids,
+    KVDecoder, kv_decode, build_prompt_token_ids,
     extract_text_token_ids)
 from paz.models.foundation.whisper.tokenizer import (
-    find_special_token_id, decode_whisper_tokens, build_whisper_byte_maps)
+    find_special_token_id, decode_tokens, build_byte_maps)
 
 
 def TranscribeWhisper(model_name="whisper_base_en", max_tokens=64, seed=0,
-                      weights="paz", models_path=None, select=None, emit=None):
+                      weights="pretrained", models_path=None, select=None, emit=None):
     models = Whisper(model_name, weights=weights, models_path=models_path)
-    prompt = build_whisper_prompt_token_ids()
+    prompt = build_prompt_token_ids()
     stop_id = find_special_token_id("<|endoftext|>")
     streams = emit is None
     if streams:
@@ -42,7 +42,7 @@ def TranscribeWhisper(model_name="whisper_base_en", max_tokens=64, seed=0,
         if streams:
             print()
         text_ids = extract_text_token_ids(token_ids, len(prompt), stop_id)
-        return decode_whisper_tokens(text_ids)
+        return decode_tokens(text_ids)
 
     return transcribe
 
@@ -53,7 +53,7 @@ def build_transcript_printer(stop_id):
     An incremental UTF-8 decoder buffers partial multi-byte characters, so a
     character split across two tokens still prints correctly once complete.
     """
-    id_to_bytes, special_to_bytes = build_whisper_byte_maps()
+    id_to_bytes, special_to_bytes = build_byte_maps()
     incremental = codecs.getincrementaldecoder("utf-8")("replace")
 
     def print_token(token_id):

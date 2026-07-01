@@ -42,6 +42,8 @@ from paz.backend.standard import (
     NamedTuple,
     snapshot_variables,
     call_stateless,
+    model_device,
+    place_on_model_device,
 )
 from paz import losses
 from paz.abstract import Model, Node, Input, Sequential, Tree

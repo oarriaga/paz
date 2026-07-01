@@ -88,5 +88,5 @@ def extract_text_token_ids(ids, prompt_length, stop_id):
     return text_ids
 
 
-def build_whisper_prompt_token_ids(config_path=None):
+def build_prompt_token_ids(config_path=None):
     return [find_special_token_id(t, config_path) for t in PROMPT_TOKENS]

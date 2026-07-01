@@ -26,8 +26,8 @@ Gemma4Models = namedtuple(
     "Gemma4", "config decoder_step per_layer_step vision_encoder")
 
 
-def Gemma4(model_name="gemma4_2b", weights="paz", models_path=None):
-    model_dir = resolve_gemma4_dir(model_name, models_path)
+def Gemma4(model_name="gemma4_2b", weights="pretrained", models_path=None):
+    model_dir = resolve_dir(model_name, models_path)
     config = load_config(model_dir / "config.json")
     decoder_step = Gemma4MultimodalDecoderStep(config)
     per_layer_step = build_per_layer_step(config)
@@ -38,13 +38,13 @@ def Gemma4(model_name="gemma4_2b", weights="paz", models_path=None):
     return Gemma4Models(config, decoder_step, per_layer_step, vision_encoder)
 
 
-def resolve_gemma4_dir(model_name, models_path):
+def resolve_dir(model_name, models_path):
     if models_path is not None:
         return Path(models_path)
-    return download_gemma4_weights(model_name)
+    return download_weights(model_name)
 
 
-def download_gemma4_weights(model_name):
+def download_weights(model_name):
     subdir = "{}/{}".format(GEMMA4_CACHE, model_name)
     asset = "{}.manifest.json".format(model_name)
     manifest_path = Path(get_file(
@@ -139,7 +139,7 @@ def build_vision_encoder_from_dir(model_dir):
     return build_vision_encoder(config)
 
 
-def load_gemma4_vision_encoder(model_dir, weights="paz"):
+def load_vision_encoder(model_dir, weights="pretrained"):
     """Build and load just the vision encoder, on the current default device.
 
     Use inside a `jax.default_device(...)` block to place it where you want,

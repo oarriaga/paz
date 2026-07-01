@@ -451,7 +451,7 @@ def vit_small(patch_size=16, weights=None, input_shape=(224, 224, 3), **kwargs):
     }
     defaults.update(kwargs)
     model = DinoVisionTransformer(**defaults)
-    if weights == "paz":
+    if weights == "pretrained":
         load_pretrained_weights(model, "dinov3_vits16_ported")
     return model
 
@@ -470,7 +470,7 @@ def vit_base(patch_size=16, weights=None, input_shape=(224, 224, 3), **kwargs):
     }
     defaults.update(kwargs)
     model = DinoVisionTransformer(**defaults)
-    if weights == "paz":
+    if weights == "pretrained":
         load_pretrained_weights(model, "dinov3_vitb16_ported")
     return model
 
@@ -489,7 +489,7 @@ def vit_large(patch_size=16, weights=None, input_shape=(224, 224, 3), **kwargs):
     }
     defaults.update(kwargs)
     model = DinoVisionTransformer(**defaults)
-    if weights == "paz":
+    if weights == "pretrained":
         load_pretrained_weights(model, "dinov3_vitl16_ported")
     return model
 
@@ -554,12 +554,12 @@ def vit_7b(patch_size=16, input_shape=(224, 224, 3), **kwargs):
 
 
 def DINOV3VITS(input_shape=(224, 224, 3), **kwargs):
-    return vit_small(weights="paz", input_shape=input_shape, **kwargs)
+    return vit_small(weights="pretrained", input_shape=input_shape, **kwargs)
 
 
 def DINOV3VITB(input_shape=(224, 224, 3), **kwargs):
-    return vit_base(weights="paz", input_shape=input_shape, **kwargs)
+    return vit_base(weights="pretrained", input_shape=input_shape, **kwargs)
 
 
 def DINOV3VITL(input_shape=(224, 224, 3), **kwargs):
-    return vit_large(weights="paz", input_shape=input_shape, **kwargs)
+    return vit_large(weights="pretrained", input_shape=input_shape, **kwargs)
