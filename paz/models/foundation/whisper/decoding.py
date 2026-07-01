@@ -28,9 +28,13 @@ def build_self_cache(cache_shape, max_len, batch_size=1):
         batch_size, num_layers, max_len, num_heads, key_dim)
 
 
-def KVDecoder(decoder_step, prompt_ids, max_tokens, max_seq=448, select=None):
+def KVDecoder(decoder_step, prompt_ids, max_tokens, max_seq=448, select=None,
+              emit=None):
+    search = paz.transformers.search
     if select is None:
-        select = paz.transformers.search.greedy
+        select = search.greedy
+    if emit is None:
+        emit = search.discard
     max_len = min(max_seq, len(prompt_ids) + max_tokens)
     prompt = jp.array(prompt_ids, dtype=jp.int32)
     prompt_len = len(prompt_ids)
@@ -44,7 +48,7 @@ def KVDecoder(decoder_step, prompt_ids, max_tokens, max_seq=448, select=None):
             warmup = warmup_step(prompt, decoder_step, cross_cache)
             cache = jax.lax.fori_loop(0, prompt_len - 1, warmup, cache)
         step = build_step(decoder_step, cross_cache)
-        run = paz.transformers.search.build(step, select, max_tokens, max_len)
+        run = search.build_streaming(step, select, max_tokens, max_len, emit)
         token = jp.reshape(prompt[prompt_len - 1], (1, 1))
         index = jp.array(prompt_len - 1, dtype=jp.int32)
         return run(key, buffer, token, index, cache, stop_id)

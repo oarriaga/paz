@@ -21,7 +21,10 @@ def chat(generate):
         prompt = input("you> ").strip()
         if prompt == "":
             break
-        print("gemma>", generate(prompt))
+        # generate streams tokens to stdout as they arrive and prints a
+        # trailing newline, so we only need the prompt prefix here.
+        print("gemma> ", end="", flush=True)
+        generate(prompt)
 
 
 if __name__ == "__main__":

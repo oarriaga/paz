@@ -28,6 +28,19 @@ def test_kv_decoder_generates_tokens():
     assert ids[:len(prompt)] == prompt
 
 
+def test_kv_decoder_streams_generated_tokens_in_order():
+    config = build_test_config()
+    step_model = Gemma4DecoderStep(config)
+    prompt = [1, 2, 3]
+    seen = []
+    decoder = KVDecoder(step_model, prompt, 5, search.greedy, 16,
+                        emit=lambda token_id: seen.append(int(token_id)))
+    cache = jp.asarray(build_empty_cache(config, decoder.max_decode_length))
+    stop_id = jp.array(config.vocabulary_size - 1, dtype=jp.int32)
+    buffer, length = decoder(cache, stop_id, jax.random.PRNGKey(0))
+    assert seen == buffer[0, len(prompt):int(length)].tolist()
+
+
 def test_kv_sample_seeded_and_greedy_matches_kv_decode():
     config = build_test_config()
     step_model = Gemma4DecoderStep(config)

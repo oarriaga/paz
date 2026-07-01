@@ -139,6 +139,20 @@ def build_vision_encoder_from_dir(model_dir):
     return build_vision_encoder(config)
 
 
+def load_gemma4_vision_encoder(model_dir, weights="paz"):
+    """Build and load just the vision encoder, on the current default device.
+
+    Use inside a `jax.default_device(...)` block to place it where you want,
+    then swap it into a bundle: `Gemma4(...)._replace(vision_encoder=vision)`.
+    """
+    model_dir = Path(model_dir)
+    vision_encoder = build_vision_encoder_from_dir(model_dir)
+    if weights is not None and vision_encoder is not None:
+        vision_encoder.load_weights(
+            str(model_dir / "vision_encoder.weights.h5"))
+    return vision_encoder
+
+
 def load_optional_weights(model_dir, per_layer_step, vision_encoder):
     if per_layer_step is not None:
         per_layer_step.load_weights(

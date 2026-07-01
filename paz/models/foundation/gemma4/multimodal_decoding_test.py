@@ -17,7 +17,8 @@ from paz.models.foundation.gemma4.inference import (
     Gemma4MultimodalDecoderStep, build_empty_cache)
 from paz.models.foundation.gemma4.multimodal_decoding import (
     prefill_logits, generate, generate_eager, generate_sample, generate_batch,
-    generate_batch_greedy, build_prompt_rows, call_step, trim_to_stop, as_token)
+    generate_batch_greedy, build_prompt_rows, call_step, trim_to_stop,
+    as_token, build_text_generator, build_generator)
 from paz.models.foundation.gemma4.sampling import SamplingArgs
 
 TEXT = build_text_backbone_args(num_layers=2, sliding_window_pattern=2)
@@ -146,6 +147,48 @@ def test_generate_eager_matches_jitted_greedy():
     jitted = generate(step, None, nov, TEXT, prompt, [], stop, 6)
     eager = generate_eager(step, None, nov, TEXT, prompt, [], stop, 6)
     assert eager == jitted
+
+
+def test_generator_with_vision_matches_eager_reference():
+    causal, backbone = build_full_sequence_causal_lm()
+    step = Gemma4MultimodalDecoderStep(TEXT)
+    vision = build_vision_encoder(VISION)
+    transfer(backbone, step)
+    transfer(backbone, vision)
+    pooled = num_patches(VISION) // VISION.pool_size ** 2
+    tokens, grid, pixels, vision_indices = build_inputs(pooled)
+    scale = float(TEXT.hidden_dim) ** -0.5
+    image = np.array(vision(
+        {"pixel_values": pixels, "pixel_position_ids": grid}))[0] * scale
+    stop = int(TEXT.vocabulary_size - 1)
+    prompt, indices = list(tokens[0]), list(vision_indices[0])
+    reference = generate_eager(step, None, image, TEXT, prompt, indices, stop, 5)
+    generate = build_generator(
+        step, None, TEXT, stop, max_tokens=5, max_seq=64, max_prompt=32)
+    assert generate(prompt, image, indices) == reference
+
+
+def test_text_generator_matches_reference_greedy():
+    step = build_text_step()
+    prompt = [2, 5, 9, 11, 7]
+    stop = int(TEXT.vocabulary_size - 1)
+    nov = np.zeros((0, TEXT.hidden_dim), "float32")
+    reference = generate(step, None, nov, TEXT, prompt, [], stop, 6)
+    decode = build_text_generator(
+        step, None, TEXT, stop, max_tokens=6, max_seq=64, max_prompt=16)
+    assert decode(prompt) == reference
+
+
+def test_text_generator_streams_tokens_in_order():
+    step = build_text_step()
+    prompt = [2, 5, 9, 11, 7]
+    stop = int(TEXT.vocabulary_size - 1)
+    seen = []
+    decode = build_text_generator(
+        step, None, TEXT, stop, max_tokens=6, max_seq=64, max_prompt=16,
+        emit=lambda token_id: seen.append(int(token_id)))
+    generated = decode(prompt)
+    assert seen[:len(generated)] == generated
 
 
 def test_generate_sample_peaked_matches_greedy_and_is_seeded():
