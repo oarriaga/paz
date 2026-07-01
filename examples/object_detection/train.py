@@ -28,6 +28,7 @@ parser.add_argument("--W", default=300, type=int, help="Width of input images")
 parser.add_argument("--max_num_boxes", default=25, type=int)
 parser.add_argument("--match_IOU", default=0.5, type=float)
 parser.add_argument("--box_variances", nargs="+", default=[0.1, 0.1, 0.2, 0.2])
+parser.add_argument("--eval_period", default=10, type=int)
 args = parser.parse_args()
 root, key = paz.logger.setup(args)
 
@@ -44,6 +45,12 @@ model = paz.models.SSD300(
 )
 model.summary()
 
+nms = paz.lock(paz.detection.apply_per_class_NMS, num_classes, 0.45, 200)
+detector_args = model, 0.01, prior_boxes, args.box_variances, nms, None
+detector = paz.applications.detectors.SSD(*detector_args)
+test_images, test_detections = test_data
+difficulties = paz.datasets.voc.load_difficulties("VOC2007", "test")
+
 metrics = {
     "boxes": [
         paz.losses.multibox.regression,
@@ -52,11 +59,14 @@ metrics = {
     ]
 }
 
+map_args = (detector, test_images, test_detections, num_classes,
+            args.eval_period, difficulties)
 checkpoint = os.path.join(root, f"{args.model}.keras")
 callbacks = [
     keras.callbacks.ModelCheckpoint(checkpoint, verbose=1, save_best_only=True),
     keras.callbacks.CSVLogger(os.path.join(root, "optimization.log")),
     paz.callbacks.EpochScheduler(args.decay_epochs, args.decay_rate),
+    paz.callbacks.EvaluateMAP(*map_args),
 ]
 
 sgd_args = args.learning_rate, args.momentum
