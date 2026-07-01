@@ -16,7 +16,7 @@ from keras import ops
 from paz import call_stateless, snapshot_variables
 
 from paz.models.transformers.search import discard, emit_token
-from paz.models.foundation.gemma4.inference import build_empty_cache
+from paz.models.foundation.gemma4.model import build_empty_cache
 from paz.models.foundation.gemma4.sampling import sample_logits
 
 

@@ -8,7 +8,7 @@ import pytest
 from paz.models.foundation.gemma4.configuration import load_config
 from paz.models.foundation.gemma4.conversion import (
     build_paz_config, save_paz_models, transfer)
-from paz.models.foundation.gemma4.inference import (
+from paz.models.foundation.gemma4.model import (
     Gemma4DecoderStep, Gemma4PerLayerEmbeddingStep)
 from paz.models.foundation.gemma4.model import build_text_backbone
 

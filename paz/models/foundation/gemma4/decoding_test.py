@@ -5,7 +5,7 @@ from paz.models.transformers import search
 
 from paz.models.foundation.gemma4.decoding import (
     KVDecoder, extract_generated_ids, kv_decode, kv_sample)
-from paz.models.foundation.gemma4.inference import (
+from paz.models.foundation.gemma4.model import (
     Gemma4DecoderStep, build_empty_cache)
 from paz.models.foundation.gemma4.model import build_text_backbone_args
 from paz.models.foundation.gemma4.sampling import SamplingArgs

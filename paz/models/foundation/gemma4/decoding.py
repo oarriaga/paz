@@ -4,7 +4,7 @@ from keras import ops
 
 from paz.models.transformers import search
 
-from paz.models.foundation.gemma4.inference import build_empty_cache
+from paz.models.foundation.gemma4.model import build_empty_cache
 
 
 def kv_decode(step_model, config, prompt_ids, stop_id, max_tokens,

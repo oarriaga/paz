@@ -6,7 +6,7 @@ from keras import ops
 
 from paz import place_on_model_device
 from paz.models import Gemma4
-from paz.models.foundation.gemma4.pretrained import resolve_dir
+from paz.models.foundation.gemma4.model import resolve_dir
 from paz.models.foundation.gemma4.tokenizer import Gemma4Tokenizer
 from paz.models.foundation.gemma4.image_converter import preprocess_images
 from paz.models.foundation.gemma4.multimodal_decoding import (

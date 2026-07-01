@@ -13,7 +13,7 @@ from paz.models.foundation.gemma4.vision import (
 import jax
 
 from paz.models.foundation.gemma4.multimodal import build_multimodal_backbone
-from paz.models.foundation.gemma4.inference import (
+from paz.models.foundation.gemma4.model import (
     Gemma4MultimodalDecoderStep, build_empty_cache)
 from paz.models.foundation.gemma4.multimodal_decoding import (
     prefill_logits, generate, generate_eager, generate_sample, generate_batch,
