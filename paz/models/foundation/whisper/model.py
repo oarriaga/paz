@@ -23,9 +23,9 @@ WhisperModels = namedtuple(
     "Whisper", ["frontend", "encoder", "cross_cache", "decoder_step"])
 
 
-def Whisper(model_name="whisper_base_en", weights="paz", models_path=None):
+def Whisper(model_name="whisper_base_en", weights="pretrained", models_path=None):
     encoder_args, cross_args, decoder_args = to_model_args(model_name)
-    variant = model_name if weights == "paz" else None
+    variant = model_name if weights == "pretrained" else None
     kwargs = {"weights": variant, "models_path": models_path}
     frontend = WhisperFrontend()
     encoder_name = f"{model_name}_encoder"
@@ -57,7 +57,7 @@ def WhisperEncoder(num_mels, num_layers, num_heads, hidden_dim, ffn_dim, max_seq
     y = build_encoder_blocks(*args)
     model = Model(features, y, name=name)
     if weights is not None:
-        load_whisper_weights(model, weights, "encoder", models_path)
+        load_variant_weights(model, weights, "encoder", models_path)
     return model
 
 
@@ -126,7 +126,7 @@ def WhisperDecoderStep(vocab_size, num_layers, num_heads, hidden_dim, ffn_dim, m
     outputs = [logits, updated_cache]
     model = Model(inputs, outputs, name=name)
     if weights is not None:
-        load_whisper_weights(model, weights, "decoder_step", models_path)
+        load_variant_weights(model, weights, "decoder_step", models_path)
     return model
 
 
@@ -217,7 +217,7 @@ def WhisperCrossCache(num_layers, num_heads, hidden_dim, weights=None, models_pa
     cross_cache = build_cross_caches(*args)
     model = Model(encoder_output, cross_cache, name=name)
     if weights is not None:
-        load_whisper_weights(model, weights, "cross_cache", models_path)
+        load_variant_weights(model, weights, "cross_cache", models_path)
     return model
 
 
@@ -236,7 +236,7 @@ def build_cross_caches(output, num_layers, num_heads, hidden_dim):
     return build_concatenate_lambda(concat_shape, name)(caches)
 
 
-def load_whisper_weights(model, variant_name, model_kind, models_path=None):
+def load_variant_weights(model, variant_name, model_kind, models_path=None):
     path = resolve_weights_path(variant_name, model_kind, models_path)
     model.load_weights(str(path))
     return model

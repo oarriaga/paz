@@ -9,9 +9,11 @@ import paz
 from paz.models.foundation.whisper.model import Whisper
 from paz.models.foundation.whisper.model import WhisperFrontend
 from paz.models.foundation.whisper.decoding import (
-    KVDecoder, kv_decode, build_whisper_prompt_token_ids,
+    KVDecoder, kv_decode, build_prompt_token_ids,
     extract_text_token_ids)
 from paz.models.foundation.whisper.tokenizer import find_special_token_id
+from paz.models.foundation.whisper.tokenizer import decode_tokens
+from paz.applications.transcribers import build_transcript_printer
 
 ROOT = Path(__file__).resolve().parents[4]
 WEIGHTS_DIR = ROOT / "examples" / "speech_to_text" / "whisper_models"
@@ -60,19 +62,29 @@ def test_frontend_feature_shape():
 
 @pytest.mark.skipif(not has_assets(), reason="tokenizer assets not present")
 def test_prompt_and_stop_tokens_resolve_from_assets():
-    assert build_whisper_prompt_token_ids() == [50257, 50357, 50362]
+    assert build_prompt_token_ids() == [50257, 50357, 50362]
     assert find_special_token_id("<|endoftext|>") == 50256
+
+
+@pytest.mark.skipif(not has_assets(), reason="tokenizer assets not present")
+def test_transcript_printer_streams_full_text(capsys):
+    stop_id = find_special_token_id("<|endoftext|>")
+    print_token = build_transcript_printer(stop_id)
+    for token_id in HARVARD_TOKEN_IDS + [stop_id]:
+        print_token(token_id)
+    streamed = capsys.readouterr().out
+    assert streamed == decode_tokens(HARVARD_TOKEN_IDS)
 
 
 @pytest.mark.skipif(not (has_weights() and has_assets()),
                     reason="whisper weights or tokenizer assets not present")
 def test_harvard_token_ids_match_snapshot():
     frontend, encoder, cross_model, decoder_step = Whisper(
-        "whisper_tiny_en", weights="paz", models_path=str(WEIGHTS_DIR))
+        "whisper_tiny_en", weights="pretrained", models_path=str(WEIGHTS_DIR))
     waveform, sample_rate = paz.audio.load(AUDIO_PATH)
     waveform = ops.expand_dims(preprocess(waveform, sample_rate), axis=0)
     encoder_output = encoder(frontend(waveform))
-    prompt = build_whisper_prompt_token_ids()
+    prompt = build_prompt_token_ids()
     stop_id = find_special_token_id("<|endoftext|>")
     cache_shape = decoder_step.input_shape[1]
     decoder = KVDecoder(decoder_step, prompt, 48)
