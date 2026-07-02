@@ -10,11 +10,22 @@ ASSETS_DIR = Path(__file__).resolve().with_name("assets")
 WHISPER_TOKENIZER_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.23/"  # fmt: skip
 
 
-def decode_whisper_tokens(token_ids, vocabulary_path=None, config_path=None):
+def decode_tokens(token_ids, vocabulary_path=None, config_path=None):
+    id_to_bytes, special_to_bytes = build_byte_maps(
+        vocabulary_path, config_path)
+    return decode_token_ids(token_ids, id_to_bytes, special_to_bytes)
+
+
+def build_byte_maps(vocabulary_path=None, config_path=None):
+    """Preload the id->bytes maps once so tokens can be decoded repeatedly.
+
+    Reusable by streaming callers that decode one token at a time and must not
+    reread the vocabulary file per token.
+    """
     vocabulary_path = vocabulary_path or resolve_vocabulary_path()
     id_to_bytes = build_token_id_to_bytes(vocabulary_path)
     special_to_bytes = build_special_id_to_bytes(config_path)
-    return decode_token_ids(token_ids, id_to_bytes, special_to_bytes)
+    return id_to_bytes, special_to_bytes
 
 
 def build_special_id_to_bytes(config_path=None):

@@ -3,6 +3,7 @@ from collections import namedtuple
 import argparse
 
 import numpy as np
+import jax
 import jax.numpy as jp
 
 
@@ -65,6 +66,15 @@ def snapshot_variables(model):
     train = [variable.value for variable in model.trainable_variables]
     nontrain = [variable.value for variable in model.non_trainable_variables]
     return train, nontrain
+
+
+def model_device(model):
+    return next(iter(model.weights[0].value.devices()))
+
+
+def place_on_model_device(tree, model):
+    device = model_device(model)
+    return jax.tree.map(lambda leaf: jax.device_put(leaf, device), tree)
 
 
 def call_stateless(model, variables, *inputs):

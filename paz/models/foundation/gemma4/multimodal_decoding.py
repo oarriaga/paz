@@ -15,7 +15,8 @@ from keras import ops
 
 from paz import call_stateless, snapshot_variables
 
-from paz.models.foundation.gemma4.inference import build_empty_cache
+from paz.models.transformers.search import discard, emit_token
+from paz.models.foundation.gemma4.model import build_empty_cache
 from paz.models.foundation.gemma4.sampling import sample_logits
 
 
@@ -26,22 +27,20 @@ def as_token(token):
 def build_prompt_rows(step_model, vision_embeddings, prompt_ids,
                       vision_indices, per_layer_step):
     embedding = step_model.get_layer("token_embedding")
-    image_position = {}
-    for image_index, position in enumerate(vision_indices):
-        image_position[int(position)] = image_index
-    embeds, per_layers = [], []
-    for index, token in enumerate(prompt_ids):
-        if index in image_position:
-            embeds.append(jp.asarray(vision_embeddings[image_position[index]]))
-            per_layers.append(per_layer_row(per_layer_step, 0))
-        else:
-            embeds.append(embedding(as_token(token))[0, 0])
-            per_layers.append(per_layer_row(per_layer_step, token))
-    input_embeddings = jp.stack(embeds)[None]
+    ids = jp.array(prompt_ids, dtype="int32")[None]
+    embeds = embedding(ids)[0]
     per_layer = None
     if per_layer_step is not None:
-        per_layer = jp.stack(per_layers)[None]
-    return input_embeddings, per_layer
+        per_layer = per_layer_step(ids)[0]
+        zero_row = per_layer_row(per_layer_step, 0)
+    for image_index, position in enumerate(vision_indices):
+        row = jp.asarray(vision_embeddings[image_index])
+        embeds = embeds.at[int(position)].set(row)
+        if per_layer is not None:
+            per_layer = per_layer.at[int(position)].set(zero_row)
+    if per_layer is not None:
+        per_layer = per_layer[None]
+    return embeds[None], per_layer
 
 
 def per_layer_row(per_layer_step, token):
@@ -156,8 +155,84 @@ def trim_to_stop(tokens, stop_id):
     return tokens
 
 
+def build_generator(step_model, per_layer_step, config, stop_id, max_tokens,
+                    max_seq, max_prompt, select=select_greedy_token,
+                    emit=discard):
+    """Compile-once greedy generator for text and image prompts alike.
+
+    Returns `generate(prompt_ids, vision_embeddings, vision_indices)`. Image
+    placeholders in `prompt_ids` at `vision_indices` are fed the matching row
+    of `vision_embeddings`; text-only callers pass an empty (0, hidden) array
+    and empty indices. Every prompt is right-padded to `max_prompt`, so prefill
+    keeps one static shape and the Keras JIT compiles once; the decode loop is
+    a fixed `max_seq` cache, so it also compiles once and is reused across
+    calls. Causal attention keeps padded positions out of the real tokens, so
+    starting decode at the true prompt length is exact. `emit(token_id)` fires
+    per token (including the first) for streaming; pass `discard` to stay
+    silent.
+    """
+    assert max_prompt + max_tokens <= max_seq
+    positions = jp.arange(max_prompt, dtype="int32")[None]
+    decode = build_streaming_decode_loop(
+        step_model, per_layer_step, max_seq, max_tokens, select, emit)
+    variables = (
+        snapshot_variables(step_model),
+        snapshot_variables(step_model.get_layer("token_embedding")),
+        snapshot_variables(per_layer_step))
+
+    def generate(prompt_ids, vision_embeddings, vision_indices):
+        length = min(len(prompt_ids), max_prompt)
+        padded = pad_prompt_ids(prompt_ids, max_prompt)
+        embeds, per_layer = build_prompt_rows(
+            step_model, vision_embeddings, padded, vision_indices,
+            per_layer_step)
+        cache = jp.asarray(build_empty_cache(config, max_seq))
+        logits, cache = call_step(
+            step_model, embeds, cache, 0, positions, per_layer)
+        first = select(logits[:, length - 1], None)
+        emit(first)
+        buffer, count = decode(
+            cache, first, jp.array(length, "int32"),
+            jp.array(stop_id, "int32"), jax.random.PRNGKey(0), variables)
+        generated = ops.convert_to_numpy(buffer[:int(count)]).tolist()
+        return trim_to_stop(generated, stop_id)
+
+    return generate
+
+
+def build_text_generator(step_model, per_layer_step, config, stop_id,
+                         max_tokens, max_seq, max_prompt,
+                         select=select_greedy_token, emit=discard):
+    """Text specialization of build_generator: `generate(prompt_ids)`."""
+    args = (step_model, per_layer_step, config, stop_id, max_tokens, max_seq,
+            max_prompt, select, emit)
+    generate = build_generator(*args)
+    no_vision = np.zeros((0, config.hidden_dim), "float32")
+
+    def generate_text(prompt_ids):
+        return generate(prompt_ids, no_vision, [])
+
+    return generate_text
+
+
+def pad_prompt_ids(prompt_ids, max_prompt):
+    prompt_ids = list(prompt_ids[:max_prompt])
+    return prompt_ids + [0] * (max_prompt - len(prompt_ids))
+
+
 def build_decode_loop(step_model, per_layer_step, max_length, max_tokens,
                       select):
+    return build_streaming_decode_loop(
+        step_model, per_layer_step, max_length, max_tokens, select, discard)
+
+
+def build_streaming_decode_loop(step_model, per_layer_step, max_length,
+                                max_tokens, select, emit):
+    """Like build_decode_loop but calls `emit(token_id)` per decoded token.
+
+    `emit` runs on the host from inside the jitted loop via jax.debug.callback,
+    so tokens can be shown as they are produced. Pass `discard` for no output.
+    """
     embedding = step_model.get_layer("token_embedding")
 
     @jax.jit
@@ -168,7 +243,8 @@ def build_decode_loop(step_model, per_layer_step, max_length, max_tokens,
                  first_token == stop_id, key)
         cont = build_should_continue(max_tokens, max_length)
         step = build_decode_step(
-            step_model, embedding, per_layer_step, stop_id, select, variables)
+            step_model, embedding, per_layer_step, stop_id, select, variables,
+            emit)
         buffer, _, _, _, count, _, _ = jax.lax.while_loop(cont, step, state)
         return buffer, count
 
@@ -183,7 +259,7 @@ def build_should_continue(max_tokens, max_length):
 
 
 def build_decode_step(step_model, embedding, per_layer_step, stop_id, select,
-                      variables):
+                      variables, emit):
     step_vars, embedding_vars, per_layer_vars = variables
 
     def step(state):
@@ -199,6 +275,7 @@ def build_decode_step(step_model, embedding, per_layer_step, stop_id, select,
         logits, cache = call_stateless(step_model, step_vars, inputs)
         key, step_key = jax.random.split(key)
         next_id = select(logits[:, 0, :], step_key)
+        emit_token(emit, next_id)
         buffer = buffer.at[count].set(next_id)
         finished = next_id == stop_id
         return (buffer, next_id, index + 1, cache, count + 1, finished, key)

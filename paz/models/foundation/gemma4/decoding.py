@@ -4,7 +4,7 @@ from keras import ops
 
 from paz.models.transformers import search
 
-from paz.models.foundation.gemma4.inference import build_empty_cache
+from paz.models.foundation.gemma4.model import build_empty_cache
 
 
 def kv_decode(step_model, config, prompt_ids, stop_id, max_tokens,
@@ -34,7 +34,8 @@ def run_kv_decode(step_model, config, prompt_ids, stop_id, max_tokens, key,
     return ops.convert_to_numpy(buffer[0, :length]).tolist()
 
 
-def KVDecoder(step_model, prompt_ids, max_tokens, select, max_seq=4096):
+def KVDecoder(step_model, prompt_ids, max_tokens, select, max_seq=4096,
+              emit=search.discard):
     max_len = min(max_seq, len(prompt_ids) + max_tokens)
     prompt = jp.array(prompt_ids, dtype=jp.int32)
     prompt_len = len(prompt_ids)
@@ -48,7 +49,7 @@ def KVDecoder(step_model, prompt_ids, max_tokens, select, max_seq=4096):
             warmup = warmup_step(prompt, step_model)
             cache = jax.lax.fori_loop(0, prompt_len - 1, warmup, cache)
         step = build_step(step_model)
-        run = search.build(step, select, max_tokens, max_len)
+        run = search.build_streaming(step, select, max_tokens, max_len, emit)
         token = jp.reshape(prompt[prompt_len - 1], (1, 1))
         index = jp.array(prompt_len - 1, dtype=jp.int32)
         return run(key, buffer, token, index, cache, stop_id)
