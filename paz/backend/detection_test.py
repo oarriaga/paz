@@ -1,4 +1,5 @@
 import pytest
+import jax
 import jax.numpy as jp
 import paz
 import numpy as np
@@ -966,3 +967,95 @@ def test_clip_keeps_edge_box_but_drops_padding():
     assert float(kept[0, 0]) == 0.0
     assert float(kept[0, 2]) == 50.0
     assert float(kept[0, 4]) == pytest.approx(0.99)
+
+
+def padded_detections():
+    boxes = jp.array([[0.3, 0.3, 0.5, 0.7, 5.0], [0.0, 0.0, 0.05, 0.05, 2.0]])
+    return paz.detection.pad(boxes, 8, "constant", -1)
+
+
+def test_place_in_canvas_identity():
+    image = jax.random.randint(jax.random.PRNGKey(0), (32, 32, 3), 0, 256)
+    scale, translation = jp.array([1.0, 1.0]), jp.array([0.0, 0.0])
+    same = paz.image.place_in_canvas(image, (32, 32), scale, translation,
+                                     jp.zeros(3))
+    assert jp.allclose(same, image.astype(jp.float32), atol=1e-4)
+
+
+def test_place_in_canvas_fills_uncovered():
+    image = jp.full((32, 32, 3), 200.0)
+    scale, translation = jp.array([0.5, 0.5]), jp.array([0.0, 0.0])
+    fill = jp.array([10.0, 20.0, 30.0])
+    args = image, (32, 32), scale, translation, fill
+    canvas = paz.image.place_in_canvas(*args)
+    assert jp.allclose(canvas[-1, -1], fill, atol=1e-4)
+    assert jp.allclose(canvas[0, 0], jp.full(3, 200.0), atol=1e-4)
+
+
+def test_random_expand_identity_when_probability_zero():
+    image = jp.zeros((300, 300, 3), jp.uint8)
+    detections = padded_detections()
+    mean = jp.asarray(paz.image.BGR_IMAGENET_MEAN, jp.float32)
+    _, out = paz.detection.random_expand(jax.random.PRNGKey(0), image,
+                                         detections, mean, probability=0.0)
+    assert jp.allclose(out, detections.astype(jp.float32))
+
+
+def test_random_expand_shrinks_boxes_and_keeps_padding():
+    image = jp.zeros((300, 300, 3), jp.uint8)
+    detections = padded_detections()
+    mean = jp.asarray(paz.image.BGR_IMAGENET_MEAN, jp.float32)
+    _, out = paz.detection.random_expand(jax.random.PRNGKey(3), image,
+                                         detections, mean, probability=1.0)
+    valid = out[out[:, 4] >= 0]
+    assert valid.shape[0] == 2
+    assert float(valid[:, :4].min()) >= -1e-6
+    assert float(valid[:, :4].max()) <= 1.0 + 1e-6
+    width, height = valid[0, 2] - valid[0, 0], valid[0, 3] - valid[0, 1]
+    assert float(width * height) <= (0.5 - 0.3) * (0.7 - 0.3) + 1e-6
+    assert float(out[-1, 4]) == -1.0
+
+
+def test_apply_crop_remaps_and_drops_outside_boxes():
+    image = jp.zeros((300, 300, 3), jp.uint8)
+    detections = padded_detections()
+    window = jp.array([0.2, 0.1, 0.8, 0.9])
+    _, cropped = paz.detection.apply_crop(image, detections, window)
+    kept = cropped[cropped[:, 4] >= 0]
+    assert kept.shape[0] == 1
+    expected = jp.array([(0.3 - 0.2) / 0.6, (0.3 - 0.1) / 0.8,
+                         (0.5 - 0.2) / 0.6, (0.7 - 0.1) / 0.8])
+    assert jp.allclose(kept[0, :4], expected, atol=1e-5)
+    assert float(kept[0, 4]) == 5.0
+    assert cropped.shape[0] == detections.shape[0]
+
+
+def test_random_flip_mirrors_and_preserves_padding():
+    image = jax.random.randint(jax.random.PRNGKey(0), (300, 300, 3), 0, 256)
+    detections = padded_detections()
+    _, out = paz.detection.random_flip(jax.random.PRNGKey(0), image,
+                                       detections, probability=1.0)
+    assert jp.allclose(out[0, :4],
+                       jp.array([1.0 - 0.5, 0.3, 1.0 - 0.3, 0.7]), atol=1e-5)
+    assert float(out[0, 4]) == 5.0
+    assert float(out[-1, 4]) == -1.0
+    _, same = paz.detection.random_flip(jax.random.PRNGKey(0), image,
+                                        detections, probability=0.0)
+    assert jp.allclose(same, detections.astype(jp.float32))
+
+
+def test_augment_detection_is_jit_vmap_stable():
+    image = jax.random.randint(jax.random.PRNGKey(0), (300, 300, 3), 0, 256)
+    detections = padded_detections()
+    mean = jp.asarray(paz.image.BGR_IMAGENET_MEAN, jp.float32)
+    augment_fn = jax.vmap(paz.detection.augment_detection, (0, 0, 0, None))
+    augment = jax.jit(augment_fn)
+    images = jp.broadcast_to(image, (6, 300, 300, 3))
+    batch = jp.broadcast_to(detections, (6, 8, 5))
+    for seed in range(3):
+        keys = jax.random.split(jax.random.PRNGKey(seed), 6)
+        out_images, out_detections = augment(keys, images, batch, mean)
+    assert out_images.shape == (6, 300, 300, 3)
+    assert out_detections.shape == (6, 8, 5)
+    assert bool(jp.all(jp.isfinite(out_images)))
+    assert augment._cache_size() == 1
