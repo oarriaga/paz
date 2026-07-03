@@ -3,6 +3,7 @@ import cv2
 import jax.numpy as jp
 import numpy as np
 import jax
+from keras import ops
 import paz
 
 
@@ -31,7 +32,10 @@ def SSD(model, score_thresh, prior_boxes, variances, apply_NMS, draw):
 
     def call(image):
         image_size = paz.image.get_size(image)
-        detections = postprocess(model(preprocess(image)), image_size)
+        # convert_to_numpy makes the model output backend-agnostic: the JAX
+        # postprocess consumes it whether the backend is jax or torch.
+        outputs = ops.convert_to_numpy(model(preprocess(image)))
+        detections = postprocess(outputs, image_size)
         detections = paz.detection.remove_invalid(detections)
         return paz.detection.to_boxes2D(detections)
 
