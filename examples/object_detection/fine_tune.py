@@ -6,8 +6,7 @@ os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".95"
 
 import paz
 import keras
-from generator import Generator
-from pipeline2 import preprocess_batch
+from generator import Generator, preprocess_batch
 
 parser = argparse.ArgumentParser(description="Training script for SSD on VOC")
 parser.add_argument("--seed", default=777, type=int)
