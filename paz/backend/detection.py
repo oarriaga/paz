@@ -70,6 +70,15 @@ def to_one_hot(boxes_and_class_args, num_classes):
     return merge(boxes, classes)
 
 
+def encode_detection(detection, prior_boxes, num_classes, match_IOU, variances):
+    """Matches, encodes and one-hots a sample into anchor training targets."""
+    boxes, class_args = split(detection)
+    detection = merge(boxes, class_args + 1)  # 0 is background
+    detection = match(detection, prior_boxes, match_IOU)
+    detection = encode(detection, prior_boxes, variances)
+    return to_one_hot(detection, num_classes + 1)
+
+
 def pad(detections, size, mode="constant", constant_value=-1):
     # Ensure we don't exceed the target size from the start.
     detections = detections[:size]
@@ -595,14 +604,13 @@ def translate(detections, x_offset, y_offset):
     return merge(boxes, class_args)
 
 
-# --- SSD-style detection augmentation (fixed-shape, jit/vmap-friendly) ---
-# All ops keep a fixed image size and a fixed number of boxes: `detections`
-# is `(num_boxes, 5)` with normalized corners + class, padded rows set to -1.
-# This mirrors the legacy master pipeline (photometric -> expand -> sample
-# crop -> flip) but stays jittable, so a batch runs as one jit(vmap(...)).
-
 def augment_detection(key, image, detections, mean):
-    """Applies the full SSD training augmentation to a single sample."""
+    """Photometric, expand, sample-crop and flip on a single sample.
+
+    Keeps a fixed image size and a fixed number of boxes: `detections` is
+    `(num_boxes, 5)` with normalized corners + class, padded rows set to -1.
+    Every op is fixed-shape, so a batch runs as one jit(vmap(...)).
+    """
     keys = jax.random.split(key, 4)
     image = paz.image.random_photometric(keys[0], image)
     image, detections = random_expand(keys[1], image, detections, mean)

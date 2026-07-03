@@ -47,8 +47,8 @@ def transform_batch(keys, images, detections, prior_boxes, mean, num_classes,
             image, detection = paz.detection.augment_detection(
                 key, image, detection, mean)
         image = preprocess_image(image, mean)
-        detection = encode_detection(detection, prior_boxes, num_classes,
-                                     match_IOU, variances)
+        detection = paz.detection.encode_detection(
+            detection, prior_boxes, num_classes, match_IOU, variances)
         return image, detection
 
     return jax.vmap(transform)(keys, images, detections)
@@ -56,11 +56,3 @@ def transform_batch(keys, images, detections, prior_boxes, mean, num_classes,
 
 def preprocess_image(image, mean):
     return paz.image.subtract_mean(paz.image.RGB_to_BGR(image), mean)
-
-
-def encode_detection(detection, prior_boxes, num_classes, match_IOU, variances):
-    boxes, class_args = paz.detection.split(detection)
-    detection = paz.detection.merge(boxes, class_args + 1)  # 0 is background
-    detection = paz.detection.match(detection, prior_boxes, match_IOU)
-    detection = paz.detection.encode(detection, prior_boxes, variances)
-    return paz.detection.to_one_hot(detection, num_classes + 1)
