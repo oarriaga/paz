@@ -1,8 +1,13 @@
 import os
 import argparse
 
-os.environ["KERAS_BACKEND"] = "jax"
-os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".95"
+# SSD300 with the paper recipe is only marginally stable: fused/compiled kernel
+# execution (JAX/XLA or torch.compile) reorders float reductions just enough to
+# tip it into a NaN runaway, while eager execution stays on the stable side. So
+# train eager on the torch backend. JAX runs the augmentation on CPU so it does
+# not preallocate the GPU that the torch model needs.
+os.environ.setdefault("KERAS_BACKEND", "torch")
+os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
 import paz
 import keras
@@ -17,7 +22,8 @@ parser.add_argument("--label", default=None)
 parser.add_argument("--batch_size", default=32, type=int)
 parser.add_argument("--learning_rate", default=0.001, type=float)
 parser.add_argument("--momentum", default=0.9, type=float)
-parser.add_argument("--clipnorm", default=1.0, type=float)
+parser.add_argument("--weight_decay", default=5e-4, type=float)
+parser.add_argument("--l2_loss", default=0.0, type=float)
 parser.add_argument("--num_workers", default="max")
 parser.add_argument("--max_queue_size", default=50, type=int)
 parser.add_argument("--decay_epochs", nargs="+", type=int, default=[110, 152])
@@ -41,7 +47,8 @@ train_data = (images_07 + images_12, detections_07 + detections_12)
 test_data = paz.datasets.load("VOC2007", "test")
 input_shape = (args.H, args.W, 3)
 model = paz.models.SSD300(
-    num_classes + 1, "VGG", None, input_shape, trainable_base=True
+    num_classes + 1, "VGG", None, input_shape, l2_loss=args.l2_loss,
+    trainable_base=True
 )
 model.summary()
 
@@ -69,10 +76,11 @@ callbacks = [
     paz.callbacks.EvaluateMAP(*map_args),
 ]
 
-sgd_args = args.learning_rate, args.momentum
-optimizer = keras.optimizers.SGD(*sgd_args, global_clipnorm=args.clipnorm)
+optimizer = keras.optimizers.SGD(args.learning_rate, args.momentum,
+                                 weight_decay=args.weight_decay)
+# jit_compile=False keeps execution eager (see the header note on stability).
 model.compile(
-    optimizer, paz.losses.multibox.call, metrics=metrics, jit_compile=True
+    optimizer, paz.losses.multibox.call, metrics=metrics, jit_compile=False
 )
 batch_args = (
     args.H,

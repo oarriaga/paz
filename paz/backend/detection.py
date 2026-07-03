@@ -457,20 +457,24 @@ def match(boxes_with_class_arg, prior_boxes, IOU_threshold=0.5):
     per_box_best_prior = jp.argmax(IOUs, axis=1)
     is_valid_box_mask = boxes_with_class_arg[:, 0] >= 0.0
 
-    def body(iou_carry, box_arg):
-        # Get the prior that best matches the current ground truth box `box_arg`
-        prior_to_update = per_box_best_prior[box_arg]
+    def body(carry, box_arg):
+        # Force each ground truth box onto its best prior: mark that prior
+        # positive (IOU 2.0) and reassign it to this box, matching the
+        # reference matcher. Invalid padded boxes leave the carry untouched.
+        best_IOU, best_box = carry
+        prior = per_box_best_prior[box_arg]
         is_box_valid = is_valid_box_mask[box_arg]
-        # Conditionally create the new IOU value. If the box is valid, the
-        # new IOU is 2.0. If not, the new IOU is the original IOU (a no-op).
-        new_iou = jp.where(is_box_valid, 2.0, iou_carry[prior_to_update])
-        # Update the IOU array with the new value. Because this is a scan,
-        # if multiple boxes map to the same prior, the last one wins.
-        return iou_carry.at[prior_to_update].set(new_iou), None
+        new_iou = jp.where(is_box_valid, 2.0, best_IOU[prior])
+        new_box = jp.where(is_box_valid, box_arg, best_box[prior])
+        best_IOU = best_IOU.at[prior].set(new_iou)
+        best_box = best_box.at[prior].set(new_box)
+        return (best_IOU, best_box), None
 
-    # Run the scan, starting with the original `per_prior_best_IOU`
+    # Run the scan, starting with the per-prior best IOU and box arguments.
     box_args = jp.arange(len(boxes_with_class_arg))
-    per_prior_best_IOU, _ = jax.lax.scan(body, per_prior_best_IOU, box_args)
+    carry = (per_prior_best_IOU, per_prior_best_box)
+    (per_prior_best_IOU, per_prior_best_box), _ = jax.lax.scan(
+        body, carry, box_args)
 
     selected_boxes = boxes_with_class_arg[per_prior_best_box]
     # 4. Label negative boxes: set the class of any box with an IOU below
@@ -623,7 +627,7 @@ def random_photometric(key, image):
     return image
 
 
-def random_expand(key, image, detections, mean, max_ratio=2.0, probability=0.5):
+def random_expand(key, image, detections, mean, max_ratio=4.0, probability=0.5):
     """Zooms out up to `max_ratio`, filling new pixels with `mean`."""
     H, W = paz.image.get_size(image)
     coin_key, ratio_key, x_key, y_key = jax.random.split(key, 4)

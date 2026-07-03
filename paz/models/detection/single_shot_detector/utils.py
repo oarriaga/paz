@@ -110,7 +110,7 @@ def build_prior_boxes(configuration_name="VOC"):
                 ]
 
     output = np.asarray(mean).reshape((-1, 4))
-    # output = np.clip(output, 0, 1)
+    output = np.clip(output, 0, 1)
     return output
 
 
