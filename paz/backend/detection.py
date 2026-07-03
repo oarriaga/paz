@@ -601,30 +601,14 @@ def translate(detections, x_offset, y_offset):
 # This mirrors the legacy master pipeline (photometric -> expand -> sample
 # crop -> flip) but stays jittable, so a batch runs as one jit(vmap(...)).
 
-# Index 0 is the "skip crop" mode: an unsatisfiable +inf threshold means no
-# window is ever accepted, so the image passes through unchanged. Avoids a nan
-# sentinel that would trip jax_debug_nans and could leak into the graph.
-CROP_MODE_MIN_IOU = jp.array([jp.inf, 0.1, 0.3, 0.7, 0.9, -jp.inf])
-
-
 def augment_detection(key, image, detections, mean):
     """Applies the full SSD training augmentation to a single sample."""
     keys = jax.random.split(key, 4)
-    image = random_photometric(keys[0], image)
+    image = paz.image.random_photometric(keys[0], image)
     image, detections = random_expand(keys[1], image, detections, mean)
     image, detections = random_sample_crop(keys[2], image, detections)
     image, detections = random_flip(keys[3], image, detections)
     return image, detections
-
-
-def random_photometric(key, image):
-    """Contrast, brightness, saturation and hue, each with probability 0.5."""
-    keys = jax.random.split(key, 4)
-    image = maybe_apply(keys[0], adjust_contrast, image)
-    image = maybe_apply(keys[1], adjust_brightness, image)
-    image = maybe_apply(keys[2], adjust_saturation, image)
-    image = maybe_apply(keys[3], adjust_hue, image)
-    return image
 
 
 def random_expand(key, image, detections, mean, max_ratio=4.0, probability=0.5):
@@ -653,8 +637,12 @@ def random_sample_crop(key, image, detections, max_trials=50):
     """Crops a window meeting a random IoU mode, then resizes it back."""
     H, W = paz.image.get_size(image)
     mode_key, loop_key = jax.random.split(key)
-    mode = jax.random.randint(mode_key, (), 0, CROP_MODE_MIN_IOU.shape[0])
-    min_iou = CROP_MODE_MIN_IOU[mode]
+    # Index 0 is the "skip crop" mode: an unsatisfiable +inf threshold means no
+    # window is ever accepted, so the image passes through unchanged. Avoids a
+    # nan sentinel that would trip jax_debug_nans and could leak into the graph.
+    min_ious = jp.array([jp.inf, 0.1, 0.3, 0.7, 0.9, -jp.inf])
+    mode = jax.random.randint(mode_key, (), 0, min_ious.shape[0])
+    min_iou = min_ious[mode]
     search_args = loop_key, detections, min_iou, max_trials
     window, found = search_crop_window(*search_args)
     cropped_image, cropped = apply_crop(image, detections, window)
@@ -748,30 +736,7 @@ def apply_crop(image, detections, window):
     return cropped_image, cropped
 
 
-def maybe_apply(key, function, image, probability=0.5):
-    """Applies a keyed photometric `function` with the given probability."""
-    coin_key, op_key = jax.random.split(key)
-    apply = jax.random.uniform(coin_key, ()) < probability
-    return jp.where(apply, function(op_key, image), image)
-
-
 def keep_valid(new_detections, reference):
     """Resets rows that were padding in `reference` back to -1."""
     valid = reference[:, 4:5] >= 0.0
     return jp.where(valid, new_detections, -1.0)
-
-
-def adjust_contrast(key, image):
-    return paz.image.random_contrast(key, image)
-
-
-def adjust_brightness(key, image):
-    return paz.image.random_brightness(key, image)
-
-
-def adjust_saturation(key, image):
-    return paz.image.random_saturation(key, image, 0.7, 1.5)
-
-
-def adjust_hue(key, image):
-    return paz.image.random_hue(key, image, 0.05)

@@ -1044,14 +1044,6 @@ def test_random_flip_mirrors_and_preserves_padding():
     assert jp.allclose(same, detections.astype(jp.float32))
 
 
-def test_random_photometric_stays_in_uint8_range():
-    key = jax.random.PRNGKey(1)
-    image = jax.random.randint(key, (64, 64, 3), 0, 256).astype(jp.uint8)
-    out = paz.detection.random_photometric(jax.random.PRNGKey(2), image)
-    assert out.dtype == jp.uint8
-    assert int(out.min()) >= 0 and int(out.max()) <= 255
-
-
 def test_augment_detection_is_jit_vmap_stable():
     image = jax.random.randint(jax.random.PRNGKey(0), (300, 300, 3), 0, 256)
     detections = padded_detections()

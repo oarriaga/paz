@@ -416,6 +416,18 @@ def random_color_transform(key, image):
     return image
 
 
+def random_photometric(key, image):
+    """Contrast, brightness, saturation and hue, each with probability 0.5."""
+    keys = jax.random.split(key, 4)
+    image = paz.maybe_apply(keys[0], random_contrast, image)
+    image = paz.maybe_apply(keys[1], random_brightness, image)
+    saturation = paz.partial(random_saturation, lower=0.7)
+    image = paz.maybe_apply(keys[2], saturation, image)
+    hue = paz.partial(random_hue, max_delta=0.05)
+    image = paz.maybe_apply(keys[3], hue, image)
+    return image
+
+
 def make_random_plain_image(key, shape):
     """Plain image of a single random RGB color."""
     color = jax.random.randint(key, (shape[-1],), 0, 256)
