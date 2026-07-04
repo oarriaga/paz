@@ -10,7 +10,9 @@ import paz
 def SSD(model, score_thresh, prior_boxes, variances, apply_NMS, draw):
     apply_NMS = jax.jit(apply_NMS)
 
-    @jax.jit
+    # Not jitted: inputs are raw, variable-size images, so jitting recompiles
+    # (and caches) per unique resolution -- a large memory leak across an eval
+    # over a whole dataset. The heavy op (resize) is a cv2 callback regardless.
     def preprocess(image, mean=paz.image.BGR_IMAGENET_MEAN):
         """Single-shot Multi Box Detector preprocessing function."""
         image = paz.image.resize_opencv(image, paz.image.get_input_size(model))

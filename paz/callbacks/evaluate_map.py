@@ -1,3 +1,5 @@
+import gc
+
 import keras
 import paz
 
@@ -28,6 +30,7 @@ class EvaluateMAP(keras.callbacks.Callback):
                   "iou_thresh": self.iou_thresh,
                   "use_07_metric": self.use_07_metric, "verbose": True}
         result = paz.evaluation.compute_mAP(*args, **kwargs)
+        gc.collect()  # reclaim the per-eval detection arrays on low-RAM hosts
         if logs is not None:
             logs["mAP"] = float(result["mAP"])
         print("Epoch %d mAP: %.4f" % (epoch + 1, result["mAP"]))
