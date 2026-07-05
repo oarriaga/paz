@@ -1,4 +1,5 @@
 import os
+import math
 import argparse
 
 # SSD300 with the paper recipe is only marginally stable: fused/compiled kernel
@@ -25,9 +26,10 @@ parser.add_argument("--weight_decay", default=5e-4, type=float)
 parser.add_argument("--l2_loss", default=0.0, type=float)
 parser.add_argument("--num_workers", default="max")
 parser.add_argument("--max_queue_size", default=50, type=int)
-parser.add_argument("--decay_epochs", nargs="+", type=int, default=[110, 152])
+parser.add_argument("--decay_iterations", nargs="+", type=int,
+                    default=[80000, 100000])
 parser.add_argument("--decay_rate", default=0.1, type=float)
-parser.add_argument("--max_num_epochs", default=240, type=int)
+parser.add_argument("--num_iterations", default=120000, type=int)
 parser.add_argument("--H", default=300, type=int, help="Height of input images")
 parser.add_argument("--W", default=300, type=int, help="Width of input images")
 parser.add_argument("--max_num_boxes", default=25, type=int)
@@ -43,6 +45,12 @@ mean = paz.image.BGR_IMAGENET_MEAN
 images_07, detections_07 = paz.datasets.load("VOC2007", "trainval")
 images_12, detections_12 = paz.datasets.load("VOC2012", "trainval")
 train_data = (images_07 + images_12, detections_07 + detections_12)
+# The SSD paper / amdegroot schedule is defined in iterations (decay at 80k and
+# 100k, stop at 120k). Convert to epochs for the epoch scheduler so the recipe
+# stays aligned to the baseline regardless of batch size.
+steps_per_epoch = math.ceil(len(train_data[0]) / args.batch_size)
+decay_epochs = [round(i / steps_per_epoch) for i in args.decay_iterations]
+num_epochs = round(args.num_iterations / steps_per_epoch)
 test_data = paz.datasets.load("VOC2007", "test")
 input_shape = (args.H, args.W, 3)
 model = paz.models.SSD300(
@@ -71,7 +79,7 @@ checkpoint = os.path.join(root, f"{args.model}.keras")
 callbacks = [
     keras.callbacks.ModelCheckpoint(checkpoint, verbose=1, save_best_only=True),
     keras.callbacks.CSVLogger(os.path.join(root, "optimization.log")),
-    paz.callbacks.EpochScheduler(args.decay_epochs, args.decay_rate),
+    paz.callbacks.EpochScheduler(decay_epochs, args.decay_rate),
     paz.callbacks.EvaluateMAP(*map_args),
 ]
 
@@ -117,7 +125,7 @@ valid_generator = Generator(
 
 history = model.fit(
     train_generator,
-    epochs=args.max_num_epochs,
+    epochs=num_epochs,
     validation_data=valid_generator,
     callbacks=callbacks,
 )
