@@ -69,6 +69,7 @@ from paz.inference import metropolis_hastings
 from paz.inference.prior import Prior
 from paz.inference.observable import Observable
 from paz.inference.latent import Latent
+from paz.inference.gated import Gated
 from paz.inference.pgm import PGM
 from paz.inference.tuner import AdaptiveStepTuner, Tuner
 from paz.inference.pgm import marginalize, recover_discrete_posterior
