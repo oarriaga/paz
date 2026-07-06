@@ -25,9 +25,38 @@ def render_dataset(mesh, num_views, size, distance, y_FOV, chunk_size, tiles,
         mesh, size, y_FOV, chunk_size)
     keys = jax.random.split(jax.random.PRNGKey(seed), num_views)
     poses = [scenes.sample_pose(key, distance) for key in keys]
-    views = pipeline.render_views(render_image, render_coordinates, poses)
-    np.savez(cache, images=views[0], coordinates=views[1], masks=views[2])
-    return views
+    images, coordinates, masks = pipeline.render_views(
+        render_image, render_coordinates, poses)
+    images = images.astype("uint8")
+    coordinates = (coordinates * 255).astype("uint8")     # compact cache
+    masks = (masks > 0.5).astype("uint8")
+    np.savez(cache, images=images, coordinates=coordinates, masks=masks)
+    return images, coordinates, masks
+
+
+def build_evaluation(mesh, size, distance, y_FOV, chunk_size, tiles, camera,
+                     extents, num_samples, num_points, seed):
+    render_image = scenes.build_image_renderer(
+        mesh, size, np.mean(distance), y_FOV, chunk_size, tiles)
+    render_coordinates = scenes.build_coordinate_renderer(
+        mesh, size, y_FOV, chunk_size)
+    randomize = jax.jit(paz.image.randomize_rendered_image)
+    keys = jax.random.split(jax.random.PRNGKey(seed), num_samples)
+    inputs, poses_true = [], []
+    for key in keys:
+        pose = scenes.sample_pose(key, distance)
+        image = render_image(pose)
+        nocs, mask = render_coordinates(pose)
+        nocs, mask = np.asarray(nocs), np.asarray(mask) > 0.5
+        pose_true = pipeline.solve_pose_from_nocs(nocs, mask, extents, camera)
+        if pose_true is None:
+            continue
+        randomized = np.asarray(randomize(key, image, mask.astype("float32")))
+        inputs.append(np.clip(randomized, 0, 255) / 255.0)
+        poses_true.append(pose_true)
+    points3D = np.asarray(mesh.vertices)
+    choice = np.random.RandomState(0).choice(len(points3D), num_points, False)
+    return inputs, poses_true, points3D[choice]
 
 
 if __name__ == "__main__":
@@ -42,17 +71,21 @@ if __name__ == "__main__":
     parser.add_argument("--chunk_size", default=1024 * 4, type=int)
     parser.add_argument("--tiles", nargs=2, default=[2, 2], type=int)
     parser.add_argument("--target_faces", default=20000, type=int)
-    parser.add_argument("--num_views", default=10000, type=int)
-    parser.add_argument("--num_backgrounds", default=2000, type=int)
+    parser.add_argument("--num_views", default=40000, type=int)
+    parser.add_argument("--num_backgrounds", default=4000, type=int)
     parser.add_argument("--batch_size", default=32, type=int)
     parser.add_argument("--beta", default=3.0, type=float)
-    parser.add_argument("--epochs", default=200, type=int)
+    parser.add_argument("--epochs", default=400, type=int)
+    parser.add_argument("--patience", default=12, type=int)
+    parser.add_argument("--eval_samples", default=50, type=int)
+    parser.add_argument("--eval_period", default=5, type=int)
     args = parser.parse_args()
 
     os.makedirs(args.root, exist_ok=True)
     size = (args.image_size, args.image_size)
     mesh_path = args.mesh or scenes.download_power_drill()
     mesh = scenes.build_mesh(mesh_path, args.target_faces)
+    extents = np.asarray(scenes.object_extents(mesh))
     images, coordinates, masks = render_dataset(
         mesh, args.num_views, size, args.distance, args.y_FOV,
         args.chunk_size, tuple(args.tiles), args.root, seed=0)
@@ -62,11 +95,27 @@ if __name__ == "__main__":
     sequence = pipeline.Pix2PoseSequence(
         images, coordinates, masks, args.batch_size, backgrounds)
 
+    camera = pipeline.build_camera(args.y_FOV, size)
+    eval_inputs, eval_poses, eval_points = build_evaluation(
+        mesh, size, args.distance, args.y_FOV, args.chunk_size,
+        tuple(args.tiles), camera, extents, args.eval_samples, 512, seed=999)
+    diameter = paz.evaluation.compute_object_diameter(eval_points)
+
+    def predict_pose(model, image):
+        prediction = model(jp.expand_dims(image, 0))
+        nocs = np.asarray(jp.squeeze(prediction, 0))
+        mask = nocs.sum(-1) > 0.15
+        return pipeline.solve_pose_from_nocs(nocs, mask, extents, camera)
+
     model = paz.models.UNET_VGG16(3, (*size, 3), freeze_backbone=True)
     model.compile(keras.optimizers.Adam(1e-3),
                   paz.losses.WeightedReconstruction(args.beta))
     weights = os.path.join(args.root, "UNET-VGG16_POWERDRILL.weights.h5")
     callbacks = [
+        paz.callbacks.EvaluatePose(eval_inputs, eval_poses, eval_points,
+                                   diameter, predict_pose, args.eval_period),
+        keras.callbacks.EarlyStopping("loss", patience=args.patience,
+                                      restore_best_weights=True),
         keras.callbacks.CSVLogger(os.path.join(args.root, "log.csv")),
         keras.callbacks.ModelCheckpoint(weights, save_weights_only=True),
     ]
