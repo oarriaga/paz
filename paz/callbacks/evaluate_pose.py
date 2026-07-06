@@ -16,7 +16,8 @@ class EvaluatePose(Callback):
         self.verbose = verbose
 
     def on_epoch_end(self, epoch, logs=None):
-        if (epoch + 1) % self.period != 0:
+        # Evaluate on the first epoch too so CSVLogger captures the columns.
+        if epoch != 0 and (epoch + 1) % self.period != 0:
             return
         logs = logs if logs is not None else {}
         ADD, ADI, correct, valid = 0.0, 0.0, 0, 0

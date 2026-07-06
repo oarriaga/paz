@@ -31,5 +31,5 @@ def test_evaluate_pose_skips_off_period():
                             diameter=2.0, predict_pose=predict_pose,
                             period=5, verbose=0)
     logs = {}
-    callback.on_epoch_end(0, logs)          # epoch 0 -> (0+1)%5 != 0
+    callback.on_epoch_end(1, logs)          # epoch 1 -> not epoch 0, 2%5 != 0
     assert "ADD" not in logs
