@@ -15,6 +15,7 @@ from paz.graphics.mesh import (
     Mesh,
     BinArgs,
     render,
+    render_coordinates,
     render_masks,
     merge_meshes,
     extract_points,
@@ -725,3 +726,40 @@ def test_depth_translation_gradient_matches_finite_difference():
 
 def test_depth_rotation_gradient_matches_finite_difference():
     assert_matches_central_difference(render_pose_depth, z_rotation, 0.3)
+
+
+def make_single_mesh():
+    vertices, faces, edges = build_cube(1.0)
+    color = jp.array([[0.7, 0.3, 0.1]])
+    vertex_colors = jp.repeat(color, len(vertices), axis=0)
+    transform = SE3.translation(jp.zeros(3))
+    material = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100)
+    return Mesh(vertices, vertex_colors, transform, material, faces, edges)
+
+
+def camera_looking_at_origin():
+    camera_origin = jp.array([0.0, 1.0, -1.5])
+    world_up = jp.array([0.0, 0.0, 1.0])
+    return SE3.view_transform(camera_origin, jp.zeros(3), world_up)
+
+
+def test_render_coordinates_shapes_and_object_frame_bounds():
+    mesh = make_single_mesh()
+    pose = camera_looking_at_origin()
+    coordinates, hit = render_coordinates((20, 20), jp.pi / 4, pose, mesh, 1024)
+    assert coordinates.shape == (20, 20, 3)
+    assert hit.shape == (20, 20)
+    assert jp.any(hit)
+    inside = coordinates[hit]
+    assert jp.all(inside >= -0.5 - 1e-4) and jp.all(inside <= 0.5 + 1e-4)
+    assert jp.allclose(coordinates[~hit], 0.0)
+
+
+def test_render_coordinates_mask_matches_render_depth():
+    mesh = make_single_mesh()
+    pose = camera_looking_at_origin()
+    meshes, mask = merge_meshes(mesh)
+    lights = [PointLight(jp.full((3,), 10.0), jp.array([0.0, 1.0, -1.5]))]
+    _, depth = render((20, 20), jp.pi / 4, pose, meshes, mask, lights, (1, 1), 1024)
+    _, hit = render_coordinates((20, 20), jp.pi / 4, pose, mesh, 1024)
+    assert jp.array_equal(hit, depth > 0)

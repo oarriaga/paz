@@ -7,6 +7,7 @@ import paz
 
 from .types import normalize_mesh_batch
 from .intersect import intersect_mesh
+from .patterns import interpolate_for_hits
 from .geometry import compute_normals_for_hits
 from .shading import compute_colors_for_hits
 from .tile import assemble, assert_exact_tile_side
@@ -22,6 +23,15 @@ def render(shape, y_FOV, pose, meshes, mask, lights, tiles, chunk_size):
     args = RenderArgs(*args)
     image, depth = _scan_tiles(args, _render_tile)
     return _assemble_image(args, image), _assemble_depth(args, depth)
+
+
+def render_coordinates(shape, y_FOV, pose, mesh, chunk_size):
+    origins, directions = paz.graphics.camera.build_rays(shape, y_FOV, pose)
+    hit, depth, u, v, face_idx = intersect_mesh(mesh, origins, directions, chunk_size)  # fmt: skip
+    coordinates = interpolate_for_hits(mesh.vertices, mesh.faces, face_idx, u, v)
+    coordinates = coordinates * hit[:, None]
+    H, W = shape
+    return jp.reshape(coordinates, (H, W, 3)), jp.reshape(hit, (H, W))
 
 
 def render_masks(shape, y_FOV, pose, meshes, lights, depth, tiles, chunk_size):

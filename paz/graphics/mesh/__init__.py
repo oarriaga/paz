@@ -37,6 +37,7 @@ from .render import (
     mask_out_mesh,
     postprocess,
     render,
+    render_coordinates,
     render_masks,
     select_closest_color,
     to_color_image,
