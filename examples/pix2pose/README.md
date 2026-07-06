@@ -20,8 +20,13 @@ For each random camera pose the renderer produces two aligned outputs:
   confined to the object silhouette. A 4th alpha channel (the mask) is appended
   so `WeightedReconstruction` can up-weight object pixels.
 
-The drill mesh (`035_power_drill`, ~524k faces) renders at ~0.8–1.0 s/sample on
-GPU, so data is rendered once and cached; augmentation runs per batch.
+The drill mesh (`035_power_drill`) ships with ~524k faces, which renders at
+~0.8 s/sample on GPU. It is decimated to `--target_faces` (default 20000) with
+trimesh quadric decimation; the baked texture colors are transferred to the
+decimated vertices by nearest neighbor. This drops rendering to ~32 ms/sample
+(~25× faster) with no visible quality loss and the object extents preserved to
+< 0.1 mm (so pose scaling is unaffected). Data is still rendered once and
+cached; augmentation runs per batch.
 
 ## Scripts
 

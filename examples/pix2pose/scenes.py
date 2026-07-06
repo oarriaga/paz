@@ -2,6 +2,7 @@ import numpy as np
 import jax
 import jax.numpy as jp
 import trimesh
+from scipy.spatial import cKDTree
 from keras.utils import get_file
 
 import paz
@@ -25,20 +26,39 @@ def build_face_edges(faces):
     return jp.concatenate(pairs, axis=0)
 
 
-def load_textured_mesh(mesh_path):
+def simplify_mesh(mesh, target_faces):
+    if hasattr(mesh, "simplify_quadric_decimation"):
+        return mesh.simplify_quadric_decimation(target_faces)
+    return mesh.simplify_quadratic_decimation(target_faces)
+
+
+def transfer_vertex_colors(source_vertices, source_colors, vertices):
+    nearest = cKDTree(source_vertices).query(vertices)[1]
+    return source_colors[nearest]
+
+
+def load_textured_mesh(mesh_path, target_faces):
     mesh = trimesh.load(mesh_path, process=False)
-    vertices = jp.asarray(mesh.vertices, "float32")
-    faces = jp.asarray(mesh.faces, "int32")
-    colors = np.asarray(mesh.visual.to_color().vertex_colors)[:, :3] / 255.0
-    return vertices, faces, jp.asarray(colors, "float32")
+    mesh.visual = mesh.visual.to_color()
+    vertices = np.asarray(mesh.vertices)
+    colors = np.asarray(mesh.visual.vertex_colors)[:, :3] / 255.0
+    if target_faces is None or target_faces >= len(mesh.faces):
+        return vertices, np.asarray(mesh.faces), colors
+    decimated = simplify_mesh(mesh, target_faces)
+    new_vertices = np.asarray(decimated.vertices)
+    colors = transfer_vertex_colors(vertices, colors, new_vertices)
+    return new_vertices, np.asarray(decimated.faces), colors
 
 
-def build_mesh(mesh_path):
-    vertices, faces, colors = load_textured_mesh(mesh_path)
+def build_mesh(mesh_path, target_faces=20000):
+    vertices, faces, colors = load_textured_mesh(mesh_path, target_faces)
+    vertices = jp.asarray(vertices, "float32")
+    faces = jp.asarray(faces, "int32")
     center = (jp.min(vertices, axis=0) + jp.max(vertices, axis=0)) / 2.0
     vertices = vertices - center
     edges = build_face_edges(faces)
     material = Material(jp.ones(3), 0.4, 0.8, 0.2, 32.0)
+    colors = jp.asarray(colors, "float32")
     return Mesh(vertices, colors, paz.SE3.identity(), material, faces, edges)
 
 

@@ -41,6 +41,7 @@ if __name__ == "__main__":
     parser.add_argument("--y_FOV", default=float(jp.pi / 4), type=float)
     parser.add_argument("--chunk_size", default=1024 * 4, type=int)
     parser.add_argument("--tiles", nargs=2, default=[2, 2], type=int)
+    parser.add_argument("--target_faces", default=20000, type=int)
     parser.add_argument("--num_views", default=10000, type=int)
     parser.add_argument("--num_backgrounds", default=2000, type=int)
     parser.add_argument("--batch_size", default=32, type=int)
@@ -51,7 +52,7 @@ if __name__ == "__main__":
     os.makedirs(args.root, exist_ok=True)
     size = (args.image_size, args.image_size)
     mesh_path = args.mesh or scenes.download_power_drill()
-    mesh = scenes.build_mesh(mesh_path)
+    mesh = scenes.build_mesh(mesh_path, args.target_faces)
     images, coordinates, masks = render_dataset(
         mesh, args.num_views, size, args.distance, args.y_FOV,
         args.chunk_size, tuple(args.tiles), args.root, seed=0)

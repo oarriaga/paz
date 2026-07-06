@@ -22,6 +22,7 @@ parser.add_argument("--distance", nargs=2, default=[0.35, 0.45], type=float)
 parser.add_argument("--y_FOV", default=float(jp.pi / 4), type=float)
 parser.add_argument("--chunk_size", default=1024 * 4, type=int)
 parser.add_argument("--tiles", nargs=2, default=[2, 2], type=int)
+parser.add_argument("--target_faces", default=20000, type=int)
 parser.add_argument("--max_points", default=1500, type=int)
 parser.add_argument("--seed", default=7, type=int)
 parser.add_argument("--output", default="pix2pose_pose.png")
@@ -29,7 +30,7 @@ args = parser.parse_args()
 
 size = (args.image_size, args.image_size)
 H, W = size
-mesh = scenes.build_mesh(scenes.download_power_drill())
+mesh = scenes.build_mesh(scenes.download_power_drill(), args.target_faces)
 extents = np.asarray(scenes.object_extents(mesh))
 
 render_image = scenes.build_image_renderer(
