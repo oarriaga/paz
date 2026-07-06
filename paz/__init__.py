@@ -35,6 +35,7 @@ from paz.backend import cage
 from paz.backend.standard import (
     lock,
     partial,
+    maybe_apply,
     merge_dicts,
     cast,
     to_jax,

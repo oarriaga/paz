@@ -3,13 +3,17 @@ import cv2
 import jax.numpy as jp
 import numpy as np
 import jax
+import keras
+from keras import ops
 import paz
 
 
 def SSD(model, score_thresh, prior_boxes, variances, apply_NMS, draw):
     apply_NMS = jax.jit(apply_NMS)
 
-    @jax.jit
+    # Not jitted: inputs are raw, variable-size images, so jitting recompiles
+    # (and caches) per unique resolution -- a large memory leak across an eval
+    # over a whole dataset. The heavy op (resize) is a cv2 callback regardless.
     def preprocess(image, mean=paz.image.BGR_IMAGENET_MEAN):
         """Single-shot Multi Box Detector preprocessing function."""
         image = paz.image.resize_opencv(image, paz.image.get_input_size(model))
@@ -31,7 +35,13 @@ def SSD(model, score_thresh, prior_boxes, variances, apply_NMS, draw):
 
     def call(image):
         image_size = paz.image.get_size(image)
-        detections = postprocess(model(preprocess(image)), image_size)
+        outputs = model(preprocess(image))
+        # On the torch backend the model emits torch tensors, which the JAX
+        # postprocess cannot consume, so convert them. On the jax backend the
+        # output is already a jax array and flows through on-device.
+        if keras.backend.backend() == "torch":
+            outputs = ops.convert_to_numpy(outputs)
+        detections = postprocess(outputs, image_size)
         detections = paz.detection.remove_invalid(detections)
         return paz.detection.to_boxes2D(detections)
 

@@ -1,5 +1,4 @@
 import os
-import sys
 
 os.environ["KERAS_BACKEND"] = "jax"
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = ".95"
@@ -12,10 +11,7 @@ from keras.optimizers import Adam
 import paz
 from openimages import OpenImagesV6Hand
 
-# Reuse the proven SSD training pipeline from the object detection example.
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "object_detection"))  # fmt: skip
-from generator import Generator
-from pipeline2 import preprocess_batch
+from generator import Generator, preprocess_batch
 
 
 def build_generator(args, key, split, batch_args, workers, augment=True):

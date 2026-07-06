@@ -32,6 +32,13 @@ def lock(function, *args, **kwargs):
     return wrap
 
 
+def maybe_apply(key, function, x, probability=0.5):
+    """Applies keyed `function` to `x` with `probability`, else returns `x`."""
+    coin_key, op_key = jax.random.split(key)
+    apply = jax.random.uniform(coin_key, ()) < probability
+    return jp.where(apply, function(op_key, x), x)
+
+
 def NamedTuple(class_name, **fields):
     return namedtuple(class_name, fields)(*fields.values())
 
