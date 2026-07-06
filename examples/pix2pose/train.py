@@ -23,13 +23,16 @@ def render_dataset(mesh, num_views, size, distance, y_FOV, chunk_size, tiles,
         mesh, size, np.mean(distance), y_FOV, chunk_size, tiles)
     render_coordinates = scenes.build_coordinate_renderer(
         mesh, size, y_FOV, chunk_size)
-    keys = jax.random.split(jax.random.PRNGKey(seed), num_views)
-    poses = [scenes.sample_pose(key, distance) for key in keys]
-    images, coordinates, masks = pipeline.render_views(
-        render_image, render_coordinates, poses)
-    images = images.astype("uint8")
-    coordinates = (coordinates * 255).astype("uint8")     # compact cache
-    masks = (masks > 0.5).astype("uint8")
+    H, W = size
+    images = np.empty((num_views, H, W, 3), "uint8")
+    coordinates = np.empty((num_views, H, W, 3), "uint8")
+    masks = np.empty((num_views, H, W), "uint8")
+    for view, key in enumerate(jax.random.split(jax.random.PRNGKey(seed), num_views)):  # fmt: skip
+        pose = scenes.sample_pose(key, distance)
+        nocs, mask = render_coordinates(pose)
+        images[view] = np.asarray(render_image(pose))
+        coordinates[view] = (np.asarray(nocs) * 255).astype("uint8")
+        masks[view] = (np.asarray(mask) > 0.5).astype("uint8")
     np.savez(cache, images=images, coordinates=coordinates, masks=masks)
     return images, coordinates, masks
 
