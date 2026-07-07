@@ -19,7 +19,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from paz.models.foundation.gemma4.configuration import save_config
-from paz.models.foundation.gemma4.inference import (
+from paz.models.foundation.gemma4.model import (
     Gemma4DecoderStep, Gemma4PerLayerEmbeddingStep)
 from paz.models.foundation.gemma4.configuration import TextBackboneArgs
 

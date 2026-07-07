@@ -73,6 +73,21 @@ def chamfer_distance(points_a, points_b):
     return a_to_b + b_to_a
 
 
+def chamfer_squared_distance(points_a, points_b):
+    a_to_b = compute_nearest_squared_distances(points_a, points_b)
+    b_to_a = compute_nearest_squared_distances(points_b, points_a)
+    return jp.mean(a_to_b) + jp.mean(b_to_a)
+
+
+def voxel_downsample(pointcloud, voxel_size=0.01):
+    voxels = jp.floor(pointcloud / voxel_size).astype(jp.int32)
+    keys, inverse = jp.unique(voxels, axis=0, return_inverse=True)
+    inverse = inverse.reshape(-1)
+    counts = jp.zeros(keys.shape[0]).at[inverse].add(1.0)
+    sums = jp.zeros((keys.shape[0], 3)).at[inverse].add(pointcloud)
+    return sums / counts[:, None]
+
+
 def hausdorff_distance(points_a, points_b):
     a_to_b = compute_nearest_squared_distances(points_a, points_b)
     b_to_a = compute_nearest_squared_distances(points_b, points_a)

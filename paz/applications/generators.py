@@ -4,47 +4,76 @@ from pathlib import Path
 import numpy as np
 from keras import ops
 
+from paz import place_on_model_device
 from paz.models import Gemma4
-from paz.models.foundation.gemma4.pretrained import resolve_gemma4_dir
+from paz.models.foundation.gemma4.model import resolve_dir
 from paz.models.foundation.gemma4.tokenizer import Gemma4Tokenizer
 from paz.models.foundation.gemma4.image_converter import preprocess_images
-from paz.models.foundation.gemma4.multimodal_decoding import generate_eager
+from paz.models.foundation.gemma4.multimodal_decoding import (
+    build_generator, build_text_generator)
 from paz.models.foundation.gemma4.vision import VisionEncoderArgs
 
 
-def GenerateGemma4(model_name="gemma4_2b", max_tokens=64, weights="paz",
-                   models_path=None):
-    model_dir = resolve_gemma4_dir(model_name, models_path)
-    models = Gemma4(model_name, weights=weights, models_path=model_dir)
+def GenerateGemma4(model_name="gemma4_2b", max_tokens=64, max_seq=512,
+                   max_prompt=128, weights="pretrained", models_path=None,
+                   models=None):
+    model_dir = resolve_dir(model_name, models_path)
+    if models is None:
+        models = Gemma4(model_name, weights=weights, models_path=model_dir)
     tokenizer = build_gemma4_tokenizer(model_dir)
     stop_id = tokenizer.get_stop_token_ids()[-1]
-    no_vision = np.zeros((0, models.config.hidden_dim), "float32")
+    stream = build_token_printer(tokenizer, stop_id)
+    args = (models.decoder_step, models.per_layer_step, models.config,
+            stop_id, max_tokens, max_seq, max_prompt)
+    decode = build_text_generator(*args, emit=stream)
 
     def generate(prompt):
         token_ids = tokenizer.tokenize_generation_prompt(prompt)
-        args = (models.decoder_step, models.per_layer_step, no_vision,
-                models.config, token_ids, [], stop_id, max_tokens)
-        return tokenizer.detokenize(generate_eager(*args))
+        generated = decode(token_ids)
+        print()
+        return tokenizer.detokenize(generated)
 
     return generate
 
 
-def DescribeImageGemma4(model_name="gemma4_2b", max_tokens=32, weights="paz",
-                        models_path=None):
-    model_dir = resolve_gemma4_dir(model_name, models_path)
-    models = Gemma4(model_name, weights=weights, models_path=model_dir)
+def build_token_printer(tokenizer, stop_id):
+    def print_token(token_id):
+        if int(token_id) != stop_id:
+            print(tokenizer.detokenize([int(token_id)]), end="", flush=True)
+    return print_token
+
+
+def DescribeImageGemma4(model_name="gemma4_2b", max_tokens=64, max_seq=512,
+                        max_prompt=400, weights="pretrained", models_path=None,
+                        models=None):
+    model_dir = resolve_dir(model_name, models_path)
+    if models is None:
+        models = Gemma4(model_name, weights=weights, models_path=model_dir)
     tokenizer = build_gemma4_tokenizer(model_dir)
     vision = VisionEncoderArgs(**read_vision_config(model_dir))
     stop_id = tokenizer.get_stop_token_ids()[-1]
+    stream = build_token_printer(tokenizer, stop_id)
+    args = (models.decoder_step, models.per_layer_step, models.config,
+            stop_id, max_tokens, max_seq, max_prompt)
+    generate = build_generator(*args, emit=stream)
 
-    def describe(image, question="Describe this image."):
-        embeddings = encode_image(image, models, vision)
+    def encode(image):
+        return encode_image(image, models, vision)
+
+    def answer(embeddings, question="Describe this image."):
         token_ids, indices = build_image_prompt(
             tokenizer, len(embeddings), question)
-        args = (models.decoder_step, models.per_layer_step, embeddings,
-                models.config, token_ids, indices, stop_id, max_tokens)
-        return tokenizer.detokenize(generate_eager(*args))
+        generated = generate(token_ids, embeddings, indices)
+        print()
+        return tokenizer.detokenize(generated)
 
+    def describe(image, question="Describe this image."):
+        return answer(encode(image), question)
+
+    # Expose the parts so callers can encode an image once and ask many
+    # questions about it without re-running the vision encoder.
+    describe.encode = encode
+    describe.answer = answer
     return describe
 
 
@@ -62,6 +91,9 @@ def encode_image(image, models, vision):
     if image.max() > 1.0:
         image = image / 255.0
     inputs = preprocess_images(image[None], vision)
+    # Run the vision encoder wherever its weights live: placing the inputs on
+    # that device lets the caller decide CPU vs GPU by how they built the model.
+    inputs = place_on_model_device(inputs, models.vision_encoder)
     embeddings = np.asarray(models.vision_encoder(inputs))[0]
     positions = np.asarray(inputs["pixel_position_ids"])[0]
     pool = vision.pool_size
@@ -93,3 +125,11 @@ def GenerateGemma42B(**kwargs):
 
 def GenerateGemma44B(**kwargs):
     return GenerateGemma4("gemma4_4b", **kwargs)
+
+
+def DescribeImageGemma42B(**kwargs):
+    return DescribeImageGemma4("gemma4_2b", **kwargs)
+
+
+def DescribeImageGemma44B(**kwargs):
+    return DescribeImageGemma4("gemma4_4b", **kwargs)

@@ -35,6 +35,7 @@ from paz.backend import cage
 from paz.backend.standard import (
     lock,
     partial,
+    maybe_apply,
     merge_dicts,
     cast,
     to_jax,
@@ -42,6 +43,8 @@ from paz.backend.standard import (
     NamedTuple,
     snapshot_variables,
     call_stateless,
+    model_device,
+    place_on_model_device,
 )
 from paz import losses
 from paz.abstract import Model, Node, Input, Sequential, Tree
@@ -67,6 +70,7 @@ from paz.inference import metropolis_hastings
 from paz.inference.prior import Prior
 from paz.inference.observable import Observable
 from paz.inference.latent import Latent
+from paz.inference.gated import Gated
 from paz.inference.pgm import PGM
 from paz.inference.tuner import AdaptiveStepTuner, Tuner
 from paz.inference.pgm import marginalize, recover_discrete_posterior

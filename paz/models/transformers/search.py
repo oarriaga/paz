@@ -1,10 +1,13 @@
 """Autoregressive token search over a cached decoder step.
 
-``build`` returns a ``run`` that drives a ``jax.lax.while_loop`` writing
-generated tokens into ``buffer`` starting after ``index``. The model supplies
-``step(cache, token, index, key) -> (logits, cache)`` (it owns the forward and
-the constant cross-cache); ``select(logits, key) -> token_id`` is ``greedy`` or
-a ``build_sampler`` closure. Prefill/warmup stays model-side and seeds the call.
+``build_streaming`` returns a ``run`` that drives a ``jax.lax.while_loop``
+writing generated tokens into ``buffer`` starting after ``index``. The model
+supplies ``step(cache, token, index, key) -> (logits, cache)`` (it owns the
+forward and the constant cross-cache); ``select(logits, key) -> token_id`` is
+``greedy`` or a ``build_sampler`` closure. Prefill/warmup stays model-side and
+seeds the call. Each token is reported to the ``emit`` sink (``emit(token_id)``)
+as it is produced, so any decoder can show tokens live; pass ``discard`` for a
+silent run.
 """
 import jax
 import jax.numpy as jp
@@ -14,13 +17,27 @@ from paz.models.transformers.logits import apply_top_k
 from paz.models.transformers.logits import apply_top_p
 
 
-def build(step, select, max_tokens, max_length):
+def discard(token_id):
+    """Default token sink: silent, so the pure search path stays effect-free."""
+
+
+def emit_token(emit, token_id):
+    """Stream `token_id` to the host in loop order, unless `emit` is silent.
+
+    Shared by every decoder that wants to reveal tokens as they are produced.
+    `ordered=True` keeps the callbacks in generation order inside the loop.
+    """
+    if emit is not discard:
+        jax.debug.callback(emit, token_id, ordered=True)
+
+
+def build_streaming(step, select, max_tokens, max_length, emit):
     def run(key, buffer, token, index, cache, stop_id):
         count = jp.array(0, dtype=jp.int32)
         finished = jp.array(False)
         state = (buffer, token, index, cache, count, finished, key)
         cont = build_should_continue(max_tokens, max_length)
-        advance = build_advance(step, select, stop_id)
+        advance = build_advance(step, select, stop_id, emit)
         state = jax.lax.while_loop(cont, advance, state)
         return state[0], state[2] + 1
 
@@ -35,12 +52,13 @@ def build_should_continue(max_tokens, max_length):
     return check
 
 
-def build_advance(step, select, stop_id):
+def build_advance(step, select, stop_id, emit):
     def advance(state):
         buffer, token, index, cache, count, _, key = state
         logits, cache = step(cache, token, index, key)
         key, step_key = jax.random.split(key)
         next_id = select(logits, step_key)
+        emit_token(emit, next_id[0])
         next_index = index + 1
         buffer = buffer.at[0, next_index].set(next_id[0])
         token = jp.expand_dims(next_id, axis=-1)

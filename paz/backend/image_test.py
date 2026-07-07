@@ -84,3 +84,11 @@ def test_randomize_rendered_image_jits_without_recompilation():
     randomize(jax.random.PRNGKey(0), image, mask).block_until_ready()
     randomize(jax.random.PRNGKey(1), image, mask).block_until_ready()
     assert randomize._cache_size() == 1
+
+
+def test_random_photometric_stays_in_uint8_range():
+    key = jax.random.PRNGKey(1)
+    image = jax.random.randint(key, (64, 64, 3), 0, 256).astype(jp.uint8)
+    out = paz.image.random_photometric(jax.random.PRNGKey(2), image)
+    assert out.dtype == jp.uint8
+    assert int(out.min()) >= 0 and int(out.max()) <= 255
