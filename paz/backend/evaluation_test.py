@@ -93,3 +93,46 @@ def test_compute_mAP_reaches_one_on_perfect_detector(tmp_path):
     detector = build_detector(predictions)
     result = paz.evaluation.compute_mAP(detector, paths, ground_truths, 2)
     assert np.isclose(result["mAP"], 1.0)
+
+
+def unit_cube_points():
+    corners = [[x, y, z] for x in (-0.5, 0.5)
+               for y in (-0.5, 0.5) for z in (-0.5, 0.5)]
+    return np.array(corners, "float64")
+
+
+def test_compute_ADD_identity_pose_is_zero():
+    points3D = unit_cube_points()
+    pose = (np.eye(3), np.zeros(3))
+    assert paz.evaluation.compute_ADD(points3D, pose, pose) == 0.0
+
+
+def test_compute_ADD_pure_translation_equals_norm():
+    points3D = unit_cube_points()
+    translation = np.array([0.3, -0.4, 0.0])
+    true = (np.eye(3), np.zeros(3))
+    pred = (np.eye(3), translation)
+    error = paz.evaluation.compute_ADD(points3D, true, pred)
+    assert np.isclose(error, np.linalg.norm(translation))
+
+
+def test_compute_ADI_not_greater_than_ADD():
+    points3D = unit_cube_points()
+    angle = 0.5
+    rotation = np.array([[np.cos(angle), -np.sin(angle), 0],
+                         [np.sin(angle), np.cos(angle), 0], [0, 0, 1.0]])
+    true = (np.eye(3), np.zeros(3))
+    pred = (rotation, np.array([0.05, 0.0, 0.0]))
+    add = paz.evaluation.compute_ADD(points3D, true, pred)
+    adi = paz.evaluation.compute_ADI(points3D, true, pred)
+    assert adi <= add + 1e-9
+
+
+def test_object_diameter_of_unit_cube():
+    diameter = paz.evaluation.compute_object_diameter(unit_cube_points())
+    assert np.isclose(diameter, np.sqrt(3.0))
+
+
+def test_is_correct_ADD_threshold():
+    assert paz.evaluation.is_correct_ADD(0.09, 1.0, 0.1)
+    assert not paz.evaluation.is_correct_ADD(0.11, 1.0, 0.1)
