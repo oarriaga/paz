@@ -9,8 +9,8 @@ import jax
 import jax.numpy as jp
 
 import paz
-from paz.applications.pose_estimators import solve_PnP_RANSAC
-from paz.applications.pose_estimators import project_points3D, build_cube_corners
+from paz.keypoints import solve_PnP_RANSAC
+from paz.keypoints import project_points3D, build_cube_points3D
 from paz.applications.pose_estimators import draw_boxes3D
 import scenes
 import pipeline
@@ -84,7 +84,7 @@ for arg, key in enumerate(keys):
         pose_errors.append(np.linalg.norm(projected - truth2D, axis=1).mean())
 
     if arg < args.num_show and pose6D is not None:
-        cube = paz.to_numpy(build_cube_corners(*extents))
+        cube = paz.to_numpy(build_cube_points3D(*extents))
         overlay = draw_boxes3D(image.copy(), [pose6D], cube, camera, paz.draw.GREEN, 2, 3)  # fmt: skip
         row = [image, (nocs_true * 255).astype("uint8"),
                (np.clip(nocs_pred, 0, 1) * 255).astype("uint8"), overlay]

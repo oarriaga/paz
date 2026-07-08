@@ -3,13 +3,11 @@ from collections import namedtuple
 from functools import partial
 
 import numpy as np
-import cv2
 import jax
 import jax.numpy as jp
 import keras
 
 import paz
-from paz.applications.pose_estimators import solve_PnP_RANSAC
 
 Camera = namedtuple("Camera", ["intrinsics", "distortion"])
 
@@ -81,11 +79,5 @@ def solve_pose_from_nocs(nocs, mask, extents, camera, max_points=1500, seed=0):
         return None
     points2D = np.stack([cols, rows], axis=1).astype("float64")
     points3D = extents * (nocs[rows, cols] - 0.5)
-    if len(points3D) > max_points:
-        choice = np.random.RandomState(seed).choice(len(points3D), max_points, False)  # fmt: skip
-        points2D, points3D = points2D[choice], points3D[choice]
-    pose6D = solve_PnP_RANSAC(points2D, points3D, camera)
-    if pose6D is None:
-        return None
-    rotation = cv2.Rodrigues(pose6D.rotation_vector)[0]
-    return rotation, np.asarray(pose6D.translation).reshape(3)
+    args = (points2D, points3D, camera, max_points, seed)
+    return paz.keypoints.solve_pose_matrix_RANSAC(*args)
