@@ -2,19 +2,19 @@ import numpy as np
 import keras
 from keras import Input, Model
 
-from paz.models.foundation.dinov2.layers.block import block, apply_FFN
+from paz.models.foundation.dinov2.layers.block import block, apply_feedforward
 
 
 def make_block_args(name="block_0"):
     return dict(
         dim=24,
         num_heads=4,
-        use_QKV_bias=True,
+        use_qkv_bias=True,
         use_projection_bias=True,
         attention_dropout_rate=0.0,
-        FFN_layer="mlp",
-        MLP_ratio=2,
-        use_FFN_bias=True,
+        feedforward_layer="mlp",
+        mlp_ratio=2,
+        use_feedforward_bias=True,
         activation="gelu",
         drop_rate=0.0,
         init_values=None,
@@ -59,14 +59,15 @@ def test_block_has_expected_sublayer_names():
         assert layer_name in names
 
 
-def test_apply_FFN_mlp_branch_returns_tensor():
+def test_apply_feedforward_mlp_branch_returns_tensor():
     inputs = Input(shape=(None, 24))
-    output = apply_FFN(inputs, 24, "mlp", 2, True, "gelu", 0.0, "ffn_branch")
+    args = (inputs, 24, "mlp", 2, True, "gelu", 0.0, "ffn_branch")
+    output = apply_feedforward(*args)
     assert output.shape[-1] == 24
 
 
-def test_apply_FFN_swiglu_branch_returns_tensor():
+def test_apply_feedforward_swiglu_branch_returns_tensor():
     inputs = Input(shape=(None, 24))
-    FFN_inputs = (inputs, 24, "swiglu", 2, True, "silu", 0.0, "swiglu_branch")
-    output = apply_FFN(*FFN_inputs)
+    args = (inputs, 24, "swiglu", 2, True, "silu", 0.0, "swiglu_branch")
+    output = apply_feedforward(*args)
     assert output.shape[-1] == 24

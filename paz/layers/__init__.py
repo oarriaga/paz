@@ -8,3 +8,5 @@ from .compute_prototypes import ComputePrototypes
 from .rms_normalization import RMSNormalization
 from .merge_dims import MergeDims
 from .split_dim import SplitDim
+from .layer_scale import apply_layer_scale, scale
+from .drop_path import apply_drop_path, build_noise_shape
