@@ -9,8 +9,8 @@ import jax
 import jax.numpy as jp
 
 import paz
-from paz.keypoints import solve_PnP_RANSAC
-from paz.keypoints import project_points3D, build_cube_points3D
+from paz.poses import solve_PnP_RANSAC, project_points3D
+from paz.pinhole import build_cube_points3D
 import scenes
 
 Camera = namedtuple("Camera", ["intrinsics", "distortion"])

@@ -80,4 +80,4 @@ def solve_pose_from_nocs(nocs, mask, extents, camera, max_points=1500, seed=0):
     points2D = np.stack([cols, rows], axis=1).astype("float64")
     points3D = extents * (nocs[rows, cols] - 0.5)
     args = (points2D, points3D, camera, max_points, seed)
-    return paz.keypoints.solve_pose_matrix_RANSAC(*args)
+    return paz.poses.solve_pose_matrix_RANSAC(*args)

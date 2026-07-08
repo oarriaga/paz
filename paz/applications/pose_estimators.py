@@ -1,9 +1,9 @@
 import numpy as np
 import paz
-from paz.backend.keypoints import LEVENBERG_MARQUARDT
-from paz.backend.keypoints import build_cube_points3D
-from paz.backend.keypoints import project_points3D
-from paz.backend.keypoints import solve_PnP
+from paz.backend.poses import LEVENBERG_MARQUARDT
+from paz.backend.poses import project_points3D
+from paz.backend.poses import solve_PnP
+from paz.backend.pinhole import build_cube_points3D
 
 
 def draw_boxes3D(image, poses, points3D, camera, color, thickness=5, radius=2):

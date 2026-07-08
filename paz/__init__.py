@@ -27,7 +27,6 @@ from paz import graphics
 from paz.backend import points2D
 from paz.backend import gaussian_mixture
 from paz.backend import poses
-from paz.backend import keypoints
 from paz.backend import algebra
 from paz.backend import scene
 from paz.backend import plane
