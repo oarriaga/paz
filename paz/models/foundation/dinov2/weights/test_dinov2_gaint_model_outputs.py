@@ -36,7 +36,6 @@ class TestFinalOutputVerification:
         keras_output = keras_outputs["final_output_from_full_model"]
 
         mean_diff = np.mean(np.abs(pytorch_output - keras_output))
-        print(f"\nFinal output mean difference: {mean_diff:.8f}")
 
         assert (
             mean_diff < TOLERANCE
@@ -47,9 +46,7 @@ class TestLayerByLayerVerification:
     """Comprehensive layer-by-layer comparison from saved files."""
 
     @staticmethod
-    def compare_tensors(
-        pytorch_tensor: np.ndarray, keras_tensor: np.ndarray, layer_name: str
-    ):
+    def compare_tensors(pytorch_tensor, keras_tensor):
         """Compares two tensors and returns detailed results."""
         mean_diff = np.mean(np.abs(pytorch_tensor - keras_tensor))
         is_close = mean_diff < TOLERANCE
@@ -57,26 +54,20 @@ class TestLayerByLayerVerification:
 
     def test_all_layers_verification(self, keras_outputs, pytorch_outputs):
         """Runs a comprehensive layer-by-layer verification."""
-        print("\n🔍 Starting comprehensive verification from saved files for ViT-Giant")
-
         mismatched_layers = []
         for layer_name in pytorch_outputs.files:
             if layer_name not in keras_outputs.files:
-                print(f" ⚠️ {layer_name}: Not found in Keras outputs, skipping.")
                 continue
 
             pytorch_tensor = pytorch_outputs[layer_name]
             keras_tensor = keras_outputs[layer_name]
 
             is_close, mean_diff = self.compare_tensors(
-                pytorch_tensor, keras_tensor, layer_name
+                pytorch_tensor, keras_tensor
             )
 
-            if is_close:
-                print(f"   ✅ {layer_name}: PASS (mean_diff={mean_diff:.8f})")
-            else:
+            if not is_close:
                 mismatched_layers.append((layer_name, mean_diff))
-                print(f"   ❌ {layer_name}: FAIL (mean_diff={mean_diff:.8f})")
 
         assert (
             not mismatched_layers
@@ -100,7 +91,7 @@ class TestLayerByLayerVerification:
         keras_tensor = keras_outputs[layer_name]
 
         is_close, mean_diff = self.compare_tensors(
-            pytorch_tensor, keras_tensor, layer_name
+            pytorch_tensor, keras_tensor
         )
         assert is_close, f"{layer_name} output mismatch: mean_diff={mean_diff:.8f}"
 

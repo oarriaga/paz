@@ -1,24 +1,13 @@
 import os
+
+import sys
 import torch
 import numpy as np
 import keras
-from typing import Dict
-
-os.environ["KERAS_BACKEND"] = "jax"
-
-script_path = os.path.abspath(__file__)
-script_dir = os.path.dirname(script_path)
-project_root = os.path.abspath(os.path.join(script_dir, "..", "..", "..", ".."))
-import sys
-
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
 
 from paz.models.foundation.dinov2.layers.attention import (
     split_query_key_value,
     compute_scores,
-    apply_attention,
-    merge_heads,
     flatten_heads,
 )
 
@@ -57,8 +46,7 @@ def has_layer(keras_model, name):
         return False
 
 
-
-def get_test_input(size: int = DEFAULT_INPUT_SIZE, file_path: str = None):
+def get_test_input(size=DEFAULT_INPUT_SIZE, file_path=None):
     """Generates or loads a consistent test input."""
     if file_path and os.path.exists(file_path):
         print(f"Loading existing test input from {file_path}")
@@ -77,7 +65,7 @@ def get_test_input(size: int = DEFAULT_INPUT_SIZE, file_path: str = None):
     return torch_input, keras_input
 
 
-def extract_pytorch_intermediates(model, input_tensor) -> Dict[str, np.ndarray]:
+def extract_pytorch_intermediates(model, input_tensor):
     """Extracts intermediate outputs from the PyTorch model."""
     print("Extracting PyTorch intermediate outputs...")
     outputs = {}
@@ -129,9 +117,7 @@ def extract_pytorch_intermediates(model, input_tensor) -> Dict[str, np.ndarray]:
     return outputs
 
 
-def perform_keras_step_by_step_forward(
-    keras_model, keras_input: np.ndarray
-) -> Dict[str, np.ndarray]:
+def perform_keras_step_by_step_forward(keras_model, keras_input):
     """Performs a detailed step-by-step forward pass through the Keras model."""
     print("Performing Keras step-by-step forward pass...")
     keras_outputs = {}
@@ -146,8 +132,8 @@ def perform_keras_step_by_step_forward(
         keras_model, "block_0_mlp_fused_gate_and_value_projection"
     )
 
-    proj_layer = keras_model.get_layer("patch_embed_proj")
-    projected = proj_layer(keras_input)
+    projection_layer = keras_model.get_layer("patch_embed_proj")
+    projected = projection_layer(keras_input)
     B = keras.ops.shape(keras_input)[0]
     H = keras.ops.shape(keras_input)[1]
     W = keras.ops.shape(keras_input)[2]
@@ -157,14 +143,14 @@ def perform_keras_step_by_step_forward(
 
     x = raw_patch_embed
 
-    cls_table = keras_model.get_layer("cls_token").embeddings
+    CLS_table = keras_model.get_layer("cls_token").embeddings
     classification_tokens = keras.ops.broadcast_to(
-        keras.ops.expand_dims(cls_table, axis=0), (B, 1, embed_dim)
+        keras.ops.expand_dims(CLS_table, axis=0), (B, 1, embed_dim)
     )
     x = keras.ops.concatenate([classification_tokens, x], axis=1)
 
-    pos_table = keras_model.get_layer("pos_embed").embeddings
-    x = keras.ops.add(x, keras.ops.expand_dims(pos_table, axis=0))
+    POS_table = keras_model.get_layer("pos_embed").embeddings
+    x = keras.ops.add(x, keras.ops.expand_dims(POS_table, axis=0))
 
     try:
         register_layer = keras_model.get_layer("register_tokens")
@@ -183,20 +169,21 @@ def perform_keras_step_by_step_forward(
         prefix = f"block_{block_idx}"
 
         norm1_layer = keras_model.get_layer(f"{prefix}_norm1")
-        qkv_layer = keras_model.get_layer(f"{prefix}_qkv")
-        proj_out_layer = keras_model.get_layer(f"{prefix}_proj")
+        QKV_layer = keras_model.get_layer(f"{prefix}_qkv")
+        projection_out_layer = keras_model.get_layer(f"{prefix}_proj")
         ls1_layer = keras_model.get_layer(f"{prefix}_ls1")
         norm2_layer = keras_model.get_layer(f"{prefix}_norm2")
         ls2_layer = keras_model.get_layer(f"{prefix}_ls2")
 
         normalized_x_1 = norm1_layer(x)
-        qkv_out = qkv_layer(normalized_x_1)
-        q, k, v = split_query_key_value(qkv_out, num_heads, head_dim)
-        scores = compute_scores(q, k, scale)
-        attended = apply_attention(scores, v, 0.0, name=prefix)
-        merged = merge_heads(attended)
+        QKV_out = QKV_layer(normalized_x_1)
+        Q, K, V = split_query_key_value(QKV_out, num_heads, head_dim)
+        scores = compute_scores(Q, K, scale)
+        probabilities = keras.ops.softmax(scores, axis=-1)
+        attended = keras.ops.matmul(probabilities, V)
+        merged = keras.ops.transpose(attended, (0, 2, 1, 3))
         flat = flatten_heads(merged)
-        attention_output = proj_out_layer(flat)
+        attention_output = projection_out_layer(flat)
         scaled_attention = ls1_layer(attention_output)
         x = keras.ops.add(x, scaled_attention)
 
@@ -210,34 +197,34 @@ def perform_keras_step_by_step_forward(
             fused_layer = keras_model.get_layer(
                 f"{prefix}_mlp_fused_gate_and_value_projection"
             )
-            output_proj_layer = keras_model.get_layer(
+            output_projection_layer = keras_model.get_layer(
                 f"{prefix}_mlp_output_projection"
             )
             gate_and_value = fused_layer(normalized_x_2)
             value, gate = keras.ops.split(gate_and_value, 2, axis=-1)
             activated_value = keras.activations.silu(value)
             hidden = activated_value * gate
-            mlp_output = output_proj_layer(hidden)
+            MLP_output = output_projection_layer(hidden)
             keras_outputs[
                 f"blocks.{block_idx}.mlp.fused_gate_and_value_projection"
             ] = gate_and_value
             keras_outputs[f"blocks.{block_idx}.mlp.activation"] = activated_value
-            keras_outputs[f"blocks.{block_idx}.mlp.output_projection"] = mlp_output
+            keras_outputs[f"blocks.{block_idx}.mlp.output_projection"] = MLP_output
         else:
             fc1_layer = keras_model.get_layer(f"{prefix}_mlp_fc1")
             act_layer = keras_model.get_layer(f"{prefix}_mlp_act")
             fc2_layer = keras_model.get_layer(f"{prefix}_mlp_fc2")
             hidden_pre = fc1_layer(normalized_x_2)
             hidden = act_layer(hidden_pre)
-            mlp_output = fc2_layer(hidden)
+            MLP_output = fc2_layer(hidden)
             keras_outputs[f"blocks.{block_idx}.mlp.activation"] = hidden
 
-        scaled_mlp = ls2_layer(mlp_output)
-        x = keras.ops.add(x, scaled_mlp)
+        scaled_MLP = ls2_layer(MLP_output)
+        x = keras.ops.add(x, scaled_MLP)
 
         keras_outputs[f"blocks.{block_idx}.norm2"] = normalized_x_2
-        keras_outputs[f"blocks.{block_idx}.mlp"] = mlp_output
-        keras_outputs[f"blocks.{block_idx}.ls2"] = scaled_mlp
+        keras_outputs[f"blocks.{block_idx}.mlp"] = MLP_output
+        keras_outputs[f"blocks.{block_idx}.ls2"] = scaled_MLP
         keras_outputs[f"blocks.{block_idx}"] = x
 
     final_norm_out = keras_model.get_layer("norm")(x)
@@ -257,7 +244,7 @@ if __name__ == "__main__":
     pytorch_outputs = extract_pytorch_intermediates(pytorch_model, torch_input)
     pytorch_output_path = os.path.join(OUTPUT_DIR, "pytorch_outputs.npz")
     np.savez(pytorch_output_path, **pytorch_outputs)
-    print(f"✅ PyTorch outputs saved to {pytorch_output_path}")
+    print(f"PyTorch outputs saved to {pytorch_output_path}")
     del pytorch_model, pytorch_outputs
 
     print("\n--- Processing Keras Model ---")
@@ -270,7 +257,7 @@ if __name__ == "__main__":
     keras_output_path = os.path.join(OUTPUT_DIR, "keras_outputs.npz")
     keras_outputs_np = {k: np.array(v) for k, v in keras_outputs.items()}
     np.savez(keras_output_path, **keras_outputs_np)
-    print(f"✅ Keras outputs saved to {keras_output_path}")
+    print(f"Keras outputs saved to {keras_output_path}")
     del keras_model, keras_outputs, keras_outputs_np
 
-    print("\n🎉 All outputs generated successfully!")
+    print("All outputs generated successfully!")

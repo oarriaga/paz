@@ -1,33 +1,20 @@
 import keras
-import keras.ops as ops
+from keras.layers import EinsumDense, Identity
 
 
-class LayerScale(keras.layers.Layer):
-    def __init__(
-        self, dimension, init_values=1e-5, inplace=False, data_type=None, **kwargs
-    ):
-        super().__init__(dtype=data_type, **kwargs)
-        self.dimension = dimension
-        self.init_values = init_values
-        self.inplace = inplace
+def apply_layer_scale(x, dim, init_values, name):
+    if init_values:
+        return scale(x, dim, init_values, name)
+    return Identity(name=name)(x)
 
-        self.gamma = self.add_weight(
-            name="gamma",
-            shape=(self.dimension,),
-            initializer=keras.initializers.Constant(self.init_values),
-            trainable=True,
-        )
 
-    def call(self, x):
-        return ops.multiply(x, self.gamma)
-
-    def get_config(self):
-        config = super().get_config()
-        config.update(
-            {
-                "dimension": self.dimension,
-                "init_values": self.init_values,
-                "inplace": self.inplace,
-            }
-        )
-        return config
+def scale(x, dim, init_values, name):
+    initializer = keras.initializers.Constant(init_values)
+    # The EinsumDense layer is used here to perform element-wise scaling and "...d,d->...d" applies a learnable per-channel scale to the last dim.
+    return EinsumDense(
+        equation="...d,d->...d",
+        output_shape=(dim,),
+        bias_axes=None,
+        kernel_initializer=initializer,
+        name=name,
+    )(x)

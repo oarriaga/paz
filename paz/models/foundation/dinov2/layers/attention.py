@@ -1,81 +1,67 @@
 import keras
-from keras import ops, initializers
-from keras.layers import Dense, Dropout, Layer
+from keras import ops
+from keras.layers import Dense, Dropout
 
 
-class Attention(Layer):
-    def __init__(
-        self,
-        dimension,
-        number_of_heads=8,
-        use_query_key_value_bias=False,
-        use_projection_bias=True,
-        attention_drop_rate=0.0,
-        projection_drop_rate=0.0,
-        **kwargs,
-    ):
-        super().__init__(**kwargs)
-        self.dimension = dimension
-        self.number_of_heads = number_of_heads
-        self.use_query_key_value_bias = use_query_key_value_bias
-        self.use_projection_bias = use_projection_bias
-        self.attention_drop_rate = attention_drop_rate
-        self.projection_drop_rate = projection_drop_rate
-        self.head_dimension = self.dimension // self.number_of_heads
-        self.scale = self.head_dimension**-0.5
+def attend(
+    x,
+    num_heads,
+    head_dim,
+    attention_dropout_rate,
+    projection_dropout_rate,
+    use_QKV_bias,
+    use_projection_bias,
+    name,
+    attention_bias=None,
+):
+    dim = num_heads * head_dim
+    scale = head_dim**-0.5
+    QKV = project_query_key_value(x, dim, use_QKV_bias, name)
+    Q, K, V = split_query_key_value(QKV, num_heads, head_dim)
+    scores = compute_scores(Q, K, scale)
+    biased_scores = scores if attention_bias is None else scores + attention_bias
+    context = apply_attention(biased_scores, V, attention_dropout_rate, name)
+    transposed_heads = ops.transpose(context, (0, 2, 1, 3))
+    flat_heads = flatten_heads(transposed_heads)
+    return project_output(flat_heads, dim, use_projection_bias, projection_dropout_rate, name)  # fmt: skip
 
-        initializer = keras.initializers.TruncatedNormal(stddev=0.02)
-        dense_kwargs = {"kernel_initializer": initializer}
-        self.predict_query_key_value = Dense(
-            self.dimension * 3,
-            use_bias=self.use_query_key_value_bias,
-            name="qkv",
-            **dense_kwargs,
-        )
-        self.projection_layer = Dense(
-            self.dimension,
-            use_bias=self.use_projection_bias,
-            name="proj",
-            **dense_kwargs,
-        )
-        self.attention_drop = Dropout(self.attention_drop_rate)
-        self.projection_drop = Dropout(self.projection_drop_rate)
 
-    def build(self, input_shape):
-        self.predict_query_key_value.build(input_shape)
-        self.projection_layer.build((input_shape[0], input_shape[1], self.dimension))
-        self.built = True
+def project_query_key_value(x, dim, use_QKV_bias, name):
+    return AttentionDense(dim * 3, use_QKV_bias, f"{name}_qkv")(x)
 
-    def call(self, x, attention_bias=None, training=None):
-        batch_size, number_of_tokens, channels = ops.shape(x)
 
-        query_key_value = self.predict_query_key_value(x)
-        query_key_value = ops.reshape(
-            query_key_value,
-            (
-                batch_size,
-                number_of_tokens,
-                3,
-                self.number_of_heads,
-                self.head_dimension,
-            ),
-        )
-        query_key_value = ops.transpose(query_key_value, axes=(2, 0, 3, 1, 4))
-        query, key, value = query_key_value[0], query_key_value[1], query_key_value[2]
+def project_output(x, dim, use_projection_bias, projection_dropout_rate, name):
+    projected = AttentionDense(dim, use_projection_bias, f"{name}_proj")(x)
+    return Dropout(projection_dropout_rate, name=f"{name}_proj_drop")(projected)
 
-        attention = (
-            ops.matmul(query, ops.transpose(key, axes=[0, 1, 3, 2])) * self.scale
-        )
 
-        if attention_bias is not None:
-            attention = attention + attention_bias
+def AttentionDense(units, use_bias, name):
+    initializer = keras.initializers.TruncatedNormal(stddev=0.02)
+    kwargs = dict(use_bias=use_bias, kernel_initializer=initializer, name=name)
+    return Dense(units, **kwargs)
 
-        attention = ops.softmax(attention, axis=-1)
-        attention = self.attention_drop(attention, training=training)
 
-        x = ops.transpose((attention @ value), axes=(0, 2, 1, 3))
-        x = ops.reshape(x, (batch_size, number_of_tokens, channels))
+def split_query_key_value(QKV, num_heads, head_dim):
+    # split fused projection into Q, K, V per head; Reshape keeps the batch axis, so -1 is seq_len -> (batch, seq_len, 3, num_heads, head_dim)
+    new_shape = (-1, 3, num_heads, head_dim)
+    QKV = keras.layers.Reshape(new_shape)(QKV)
+    QKV = ops.transpose(QKV, (2, 0, 3, 1, 4))
+    return QKV[0], QKV[1], QKV[2]
 
-        x = self.projection_layer(x)
-        x = self.projection_drop(x, training=training)
-        return x
+
+def compute_scores(Q, K, scale):
+    key_transposed = ops.transpose(K, (0, 1, 3, 2))
+    scores = ops.matmul(Q, key_transposed)
+    return scores * scale
+
+
+def apply_attention(scores, values, attention_dropout_rate, name):
+    probabilities = ops.softmax(scores, axis=-1)
+    dropped = Dropout(attention_dropout_rate, name=f"{name}_attn_drop")(probabilities)
+    return ops.matmul(dropped, values)
+
+
+def flatten_heads(tensor):
+    num_heads = tensor.shape[2]
+    head_dim = tensor.shape[3]
+    return keras.layers.Reshape((-1, num_heads * head_dim))(tensor)
