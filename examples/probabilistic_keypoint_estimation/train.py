@@ -14,13 +14,30 @@ import paz
 import facial_keypoints
 
 
+def rotate_image_and_keypoints(key, image, keypoints, rotation_range):
+    angle = jax.random.uniform(key, (), minval=-rotation_range,
+                               maxval=rotation_range)
+    height, width = image.shape[0], image.shape[1]
+    center = jp.array([(width - 1) / 2.0, (height - 1) / 2.0])
+    image = paz.image.rotate(image, angle)
+    return image, paz.keypoints.rotate_keypoints2D(keypoints, angle, center)
+
+
+def translate_image_and_keypoints(key, image, keypoints, delta_scale):
+    height, width = image.shape[0], image.shape[1]
+    scale = jp.array([width * delta_scale[0], height * delta_scale[1]])
+    shift = jax.random.uniform(key, (2,), minval=-scale, maxval=scale)
+    image = paz.image.translate(image, shift)
+    return image, paz.keypoints.translate_keypoints(keypoints, shift)
+
+
 def augment_image_and_keypoints(key, image, keypoints, rotation_range,
                                 delta_scale):
     rotate_key, translate_key, bright_key = jax.random.split(key, 3)
-    image, keypoints = paz.keypoints.rotate_image_and_keypoints(
-        rotate_key, image, keypoints, rotation_range)
-    image, keypoints = paz.keypoints.translate_image_and_keypoints(
-        translate_key, image, keypoints, delta_scale)
+    args = (rotate_key, image, keypoints, rotation_range)
+    image, keypoints = rotate_image_and_keypoints(*args)
+    args = (translate_key, image, keypoints, delta_scale)
+    image, keypoints = translate_image_and_keypoints(*args)
     image = paz.image.random_brightness(bright_key, image)
     return image, keypoints
 

@@ -2,10 +2,7 @@ from collections import namedtuple
 
 import cv2
 import numpy as np
-import jax
 import jax.numpy as jp
-
-import paz
 
 
 UPNP = cv2.SOLVEPNP_UPNP
@@ -70,28 +67,6 @@ def rotate_keypoints2D(keypoints, angle, center):
     cos_angle, sin_angle = jp.cos(angle), jp.sin(angle)
     rotation = jp.array([[cos_angle, -sin_angle], [sin_angle, cos_angle]])
     return (keypoints - center) @ rotation.T + center
-
-
-def image_center2D(image):
-    height, width = image.shape[0], image.shape[1]
-    return jp.array([(width - 1) / 2.0, (height - 1) / 2.0])
-
-
-def rotate_image_and_keypoints(key, image, keypoints, rotation_range):
-    angle = jax.random.uniform(key, (), minval=-rotation_range,
-                               maxval=rotation_range)
-    rotated_image = paz.image.rotate(image, angle)
-    rotated_keypoints = rotate_keypoints2D(keypoints, angle, image_center2D(image))  # fmt: skip
-    return rotated_image, rotated_keypoints
-
-
-def translate_image_and_keypoints(key, image, keypoints, delta_scale):
-    height, width = image.shape[0], image.shape[1]
-    scale = jp.array([width * delta_scale[0], height * delta_scale[1]])
-    translation = jax.random.uniform(key, (2,), minval=-scale, maxval=scale)
-    translated_image = paz.image.translate_image(image, translation)
-    translated_keypoints = translate_keypoints(keypoints, translation)
-    return translated_image, translated_keypoints
 
 
 def project_points3D(points3D, pose6D, camera):

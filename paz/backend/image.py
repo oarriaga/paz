@@ -496,7 +496,7 @@ def random_rotation(
     return rotate(image, angle, order, mode, cval)
 
 
-def translate_image(image, translation, order=1, mode="nearest", cval=0.0):
+def translate(image, translation, order=1, mode="nearest", cval=0.0):
     """Translates image content by a ``(x, y)`` pixel shift."""
     offset = jp.array([-translation[1], -translation[0], 0.0])
     matrix = paz.SE3.to_affine_matrix(jp.eye(3), offset)

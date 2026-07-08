@@ -1,7 +1,6 @@
 from collections import namedtuple
 
 import numpy as np
-import jax
 import jax.numpy as jp
 import cv2
 
@@ -115,28 +114,18 @@ def test_rotate_keypoints2D_tracks_image_rotation():
     image[5, 20] = 1.0
     rotated = paz.image.rotate(jp.asarray(image), 0.5)
     col, row = hot_pixel_location(np.asarray(rotated))
-    center = keypoints.image_center2D(jp.asarray(image))
+    center = jp.array([(31 - 1) / 2.0, (31 - 1) / 2.0])
     keypoint = jp.array([[20.0, 5.0]])  # (x=col, y=row)
     moved = np.asarray(keypoints.rotate_keypoints2D(keypoint, 0.5, center))[0]
     assert abs(moved[0] - col) <= 1.5 and abs(moved[1] - row) <= 1.5
 
 
-def test_translate_image_and_keypoints_track():
+def test_translate_keypoints_tracks_image_translation():
     image = np.zeros((31, 31, 3), "float32")
     image[10, 8] = 1.0
     translation = jp.array([4.0, -3.0])  # (x, y) shift
-    translated = paz.image.translate_image(jp.asarray(image), translation)
+    translated = paz.image.translate(jp.asarray(image), translation)
     col, row = hot_pixel_location(np.asarray(translated))
     keypoint = jp.array([[8.0, 10.0]])
     moved = np.asarray(keypoints.translate_keypoints(keypoint, translation))[0]
     assert (moved[0], moved[1]) == (col, row)
-
-
-def test_rotate_image_and_keypoints_preserves_shapes():
-    image = jp.zeros((96, 96, 1))
-    points = jp.array([[10.0, 20.0], [50.0, 40.0]])
-    key = jax.random.PRNGKey(0)
-    out_image, out_points = keypoints.rotate_image_and_keypoints(
-        key, image, points, jp.pi / 12)
-    assert out_image.shape == image.shape
-    assert out_points.shape == points.shape
