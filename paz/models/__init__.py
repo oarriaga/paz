@@ -37,3 +37,4 @@ from .foundation.whisper.model import Whisper
 from .foundation.gemma4.model import Gemma4
 from .feature.xfeat.model import XFeatModel
 from .feature.xfeat.model import XFeat
+from .feature.lightglue.model import LighterGlue

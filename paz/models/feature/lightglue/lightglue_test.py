@@ -1,0 +1,123 @@
+import os
+
+os.environ.setdefault("KERAS_BACKEND", "jax")
+
+import numpy as np
+import jax.numpy as jp
+import pytest
+
+from paz.models.feature.lightglue import model as lightglue
+
+WEIGHTS = os.environ.get("LIGHTERGLUE_WEIGHTS")
+REPO = os.environ.get("LIGHTGLUE_REPO")
+
+
+def numpy_filter(scores, threshold):
+    valid = scores[:-1, :-1]
+    match0, match1 = valid.argmax(1), valid.argmax(0)
+    mutual0 = np.arange(len(match0)) == match1[match0]
+    mutual1 = np.arange(len(match1)) == match0[match1]
+    strength0 = np.where(mutual0, np.exp(valid.max(1)), 0.0)
+    valid0 = mutual0 & (strength0 > threshold)
+    valid1 = mutual1 & valid0[match1]
+    return (np.where(valid0, match0, -1), np.where(valid1, match1, -1),
+            strength0, np.where(mutual1, strength0[match1], 0.0))
+
+
+def test_filter_matches_matches_reference():
+    rng = np.random.default_rng(0)
+    scores = rng.standard_normal((80, 65)).astype(np.float32)
+    matches0, matches1, scores0, scores1 = numpy_filter(scores, 0.1)
+    ours = lightglue.filter_matches(jp.asarray(scores), 0.1)
+    assert np.array_equal(np.asarray(ours[0]), matches0)
+    assert np.array_equal(np.asarray(ours[1]), matches1)
+    assert np.allclose(np.asarray(ours[2]), scores0, atol=1e-4)
+    assert np.allclose(np.asarray(ours[3]), scores1, atol=1e-4)
+
+
+def test_rotate_half_is_quarter_turn():
+    rng = np.random.default_rng(1)
+    x = jp.asarray(rng.standard_normal((10, 8)).astype(np.float32))
+    rotated = lightglue.rotate_half(lightglue.rotate_half(x))
+    assert np.allclose(np.asarray(rotated), -np.asarray(x), atol=1e-6)
+
+
+@pytest.mark.skipif(not (WEIGHTS and REPO), reason="set LIGHTERGLUE_WEIGHTS "
+                    "and LIGHTGLUE_REPO to the cvg/LightGlue checkout")
+def test_matches_torch_reference():
+    from paz.models.feature.lightglue.port_weights import port_weights
+
+    keypoints0, descriptors0 = random_features(0, 300)
+    keypoints1, descriptors1 = correlated_features(descriptors0, 1)
+    size = jp.array([640.0, 480.0])
+    match = lightglue.LighterGlue(port_weights(WEIGHTS), num_heads=1)
+    ours = match(keypoints0, descriptors0, keypoints1, descriptors1,
+                 size, size)
+    expected = reference_matches(keypoints0, descriptors0, keypoints1,
+                                 descriptors1)
+    assert np.array_equal(ours.matches0, expected)
+
+
+def random_features(seed, count):
+    rng = np.random.default_rng(seed)
+    keypoints = rng.uniform([0, 0], [640, 480], (count, 2)).astype(np.float32)
+    descriptors = normalize(rng.standard_normal((count, 64)))
+    return jp.asarray(keypoints), jp.asarray(descriptors)
+
+
+def correlated_features(descriptors0, seed):
+    rng = np.random.default_rng(seed)
+    descriptors0 = np.asarray(descriptors0)
+    keypoints = rng.uniform([0, 0], [640, 480], (280, 2)).astype(np.float32)
+    descriptors = normalize(descriptors0[:280] + rng.normal(0, 0.05, (280, 64)))
+    return jp.asarray(keypoints), jp.asarray(descriptors)
+
+
+def normalize(descriptors):
+    norm = np.linalg.norm(descriptors, axis=1, keepdims=True)
+    return (descriptors / norm).astype(np.float32)
+
+
+def reference_matches(keypoints0, descriptors0, keypoints1, descriptors1):
+    import importlib.util
+    import torch
+
+    spec = importlib.util.spec_from_file_location(
+        "reference_lightglue", os.path.join(REPO, "lightglue/lightglue.py"))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    net = build_reference(module, torch)
+    data = reference_data(torch, keypoints0, descriptors0, keypoints1,
+                          descriptors1)
+    with torch.inference_mode():
+        return net(data)["matches0"][0].numpy()
+
+
+def build_reference(module, torch):
+    config = dict(input_dim=64, descriptor_dim=96, n_layers=6, num_heads=1,
+                  flash=False, depth_confidence=-1, width_confidence=-1)
+    net = module.LightGlue(features=None, **config).eval()
+    state = torch.load(WEIGHTS, map_location="cpu")
+    for index in range(6):
+        state = rename(state, index)
+    state = {key.replace("matcher.", ""): value
+             for key, value in state.items()}
+    net.load_state_dict(state, strict=False)
+    return net
+
+
+def rename(state, index):
+    for kind in ("self_attn", "cross_attn"):
+        pattern = f"{kind}.{index}", f"transformers.{index}.{kind}"
+        state = {key.replace(*pattern): value for key, value in state.items()}
+    return state
+
+
+def reference_data(torch, keypoints0, descriptors0, keypoints1, descriptors1):
+    def image(keypoints, descriptors):
+        return {"keypoints": torch.tensor(np.asarray(keypoints))[None],
+                "descriptors": torch.tensor(np.asarray(descriptors))[None],
+                "image_size": torch.tensor([[640.0, 480.0]])}
+
+    return {"image0": image(keypoints0, descriptors0),
+            "image1": image(keypoints1, descriptors1)}
