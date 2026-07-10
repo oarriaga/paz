@@ -3,170 +3,209 @@ from collections import namedtuple
 import numpy as np
 import jax
 import jax.numpy as jp
+from keras import Model
+from keras import ops
+from keras.layers import Layer, Dense, LayerNormalization
 from keras.utils import get_file
 
-from paz.models.feature.lightglue.port_weights import load_params
+INPUT_DIM = 64
+DESCRIPTOR_DIM = 96
+NUM_LAYERS = 6
+NUM_HEADS = 1
+WEIGHTS_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.25/xfeat_lighterglue_paz_jax.weights.h5"  # fmt: skip
 
 Matches = namedtuple("Matches", ["matches0", "matches1", "scores0", "scores1"])
-WEIGHTS_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.25/xfeat_lighterglue_paz_jax.npz"  # fmt: skip
 
 
-def LighterGlue(weights="pretrained", num_heads=1, filter_threshold=0.1):
-    params = load_pretrained(weights)
-    core = jax.jit(match_core, static_argnums=(7, 8))
+def LighterGlue(weights="pretrained", filter_threshold=0.1):
+    model = LighterGlueModel(weights)
+    forward = jax.jit(lambda inputs: model(inputs))
+    prune = jax.jit(filter_matches, static_argnums=(1,))
 
-    def call(keypoints0, descriptors0, keypoints1, descriptors1,
-             size0, size1):
-        outputs = core(params, keypoints0, descriptors0, keypoints1,
-                       descriptors1, size0, size1, num_heads, filter_threshold)
-        return Matches(*(np.asarray(value) for value in outputs))
+    def call(keypoints0, descriptors0, keypoints1, descriptors1, size0, size1):
+        inputs = [normalize(keypoints0, size0)[None], descriptors0[None],
+                  normalize(keypoints1, size1)[None], descriptors1[None]]
+        scores = forward(inputs)[0]
+        return Matches(*(np.asarray(x) for x in prune(scores,
+                                                      filter_threshold)))
 
     return call
 
 
-def load_pretrained(weights):
-    if weights != "pretrained":
-        return weights
-    asset = WEIGHTS_URL.rsplit("/", 1)[-1]
-    path = get_file(asset, WEIGHTS_URL, cache_subdir="paz/models/lightglue")
-    return load_params(path)
+def LighterGlueModel(weights="pretrained", name="lighterglue"):
+    model = LightGlueTransformer(name=name)
+    build_model(model)
+    if weights == "pretrained":
+        asset = WEIGHTS_URL.rsplit("/", 1)[-1]
+        weights = get_file(asset, WEIGHTS_URL,
+                           cache_subdir="paz/models/lightglue")
+    if weights is not None:
+        model.load_weights(weights)
+    return model
 
 
-def match_core(params, keypoints0, descriptors0, keypoints1, descriptors1,
-               size0, size1, num_heads, threshold):
-    scores = assignment(params, keypoints0, descriptors0, keypoints1,
-                        descriptors1, size0, size1, num_heads)
-    return filter_matches(scores, threshold)
+def build_model(model):
+    keypoints = ops.zeros((1, 8, 2))
+    descriptors = ops.zeros((1, 8, INPUT_DIM))
+    model([keypoints, descriptors, keypoints, descriptors])
 
 
-def assignment(params, keypoints0, descriptors0, keypoints1, descriptors1,
-               size0, size1, num_heads):
-    keypoints0 = normalize_keypoints(keypoints0, size0)
-    keypoints1 = normalize_keypoints(keypoints1, size1)
-    cos0, sin0 = position_encoding(params.posenc, keypoints0)
-    cos1, sin1 = position_encoding(params.posenc, keypoints1)
-    x0 = linear(params.input_proj, descriptors0)
-    x1 = linear(params.input_proj, descriptors1)
-    for layer in params.layers:
-        x0 = self_attention(layer.self_attn, x0, cos0, sin0, num_heads)
-        x1 = self_attention(layer.self_attn, x1, cos1, sin1, num_heads)
-        x0, x1 = cross_attention(layer.cross_attn, x0, x1, num_heads)
-    return log_assignment(params.assign, x0, x1)
+class LightGlueTransformer(Model):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.input_proj = Dense(DESCRIPTOR_DIM, name="input_proj")
+        self.encoding = FourierEncoding(DESCRIPTOR_DIM // NUM_HEADS)
+        self.self_blocks = [SelfBlock(i) for i in range(NUM_LAYERS)]
+        self.cross_blocks = [CrossBlock(i) for i in range(NUM_LAYERS)]
+        self.assignment = MatchAssignment()
+
+    def call(self, inputs):
+        keypoints0, descriptors0, keypoints1, descriptors1 = inputs
+        cos0, sin0 = self.encoding(keypoints0)
+        cos1, sin1 = self.encoding(keypoints1)
+        x0 = self.input_proj(descriptors0)
+        x1 = self.input_proj(descriptors1)
+        for self_block, cross_block in zip(self.self_blocks, self.cross_blocks):
+            x0 = self_block(x0, cos0, sin0)
+            x1 = self_block(x1, cos1, sin1)
+            x0, x1 = cross_block(x0, x1)
+        return self.assignment(x0, x1)
 
 
-def normalize_keypoints(keypoints, size):
-    size = jp.asarray(size, keypoints.dtype)
-    center = keypoints - size / 2
-    return center / (jp.max(size) / 2)
+class FourierEncoding(Layer):
+    def __init__(self, dim, **kwargs):
+        super().__init__(**kwargs)
+        self.projection = Dense(dim // 2, use_bias=False, name="projection")
+
+    def call(self, keypoints):
+        angles = ops.repeat(self.projection(keypoints), 2, axis=-1)
+        return ops.cos(angles), ops.sin(angles)
 
 
-def position_encoding(weight, keypoints):
-    projected = keypoints @ weight
-    angles = jp.repeat(projected, 2, axis=-1)
-    return jp.cos(angles), jp.sin(angles)
+class SelfBlock(Layer):
+    def __init__(self, index, **kwargs):
+        super().__init__(name=f"self_block_{index}", **kwargs)
+        self.qkv = Dense(3 * DESCRIPTOR_DIM, name="qkv")
+        self.out_proj = Dense(DESCRIPTOR_DIM, name="out_proj")
+        self.ffn = FeedForward()
+
+    def call(self, x, cos, sin):
+        heads, groups = NUM_HEADS, 3
+        qkv = split_heads(self.qkv(x), heads, groups)
+        query = rotate(qkv[..., 0], cos, sin)
+        key = rotate(qkv[..., 1], cos, sin)
+        context = attention(query, key, qkv[..., 2])
+        message = self.out_proj(merge_heads(context))
+        return x + self.ffn(ops.concatenate([x, message], axis=-1))
 
 
-def self_attention(layer, x, cos, sin, num_heads):
-    qkv = split_heads(linear(layer.qkv, x), num_heads, 3)
-    query, key, value = qkv[..., 0], qkv[..., 1], qkv[..., 2]
-    query = apply_rotary(query, cos, sin)
-    key = apply_rotary(key, cos, sin)
-    message = merge_heads(attention(query, key, value))
-    message = linear(layer.out_proj, message)
-    return x + feed_forward(layer.ffn, jp.concatenate([x, message], -1))
+class CrossBlock(Layer):
+    def __init__(self, index, **kwargs):
+        super().__init__(name=f"cross_block_{index}", **kwargs)
+        self.to_qk = Dense(DESCRIPTOR_DIM, name="to_qk")
+        self.to_v = Dense(DESCRIPTOR_DIM, name="to_v")
+        self.out_proj = Dense(DESCRIPTOR_DIM, name="out_proj")
+        self.ffn = FeedForward()
+
+    def call(self, x0, x1):
+        query0 = scale_query(split_heads(self.to_qk(x0), NUM_HEADS))
+        query1 = scale_query(split_heads(self.to_qk(x1), NUM_HEADS))
+        value0 = split_heads(self.to_v(x0), NUM_HEADS)
+        value1 = split_heads(self.to_v(x1), NUM_HEADS)
+        similarity = ops.einsum("bhid,bhjd->bhij", query0, query1)
+        message0 = ops.softmax(similarity, axis=-1) @ value1
+        message1 = ops.softmax(swap(similarity), axis=-1) @ value0
+        return self.update(x0, message0), self.update(x1, message1)
+
+    def update(self, x, message):
+        message = self.out_proj(merge_heads(message))
+        return x + self.ffn(ops.concatenate([x, message], axis=-1))
 
 
-def cross_attention(layer, x0, x1, num_heads):
-    query0 = scale_query(split_heads(linear(layer.qk, x0), num_heads))
-    query1 = scale_query(split_heads(linear(layer.qk, x1), num_heads))
-    value0 = split_heads(linear(layer.v, x0), num_heads)
-    value1 = split_heads(linear(layer.v, x1), num_heads)
-    similarity = jp.einsum("hid,hjd->hij", query0, query1)
-    message0 = jax.nn.softmax(similarity, -1) @ value1
-    message1 = jax.nn.softmax(jp.swapaxes(similarity, -1, -2), -1) @ value0
-    x0 = x0 + update(layer, x0, message0)
-    x1 = x1 + update(layer, x1, message1)
-    return x0, x1
+class FeedForward(Layer):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.expand = Dense(2 * DESCRIPTOR_DIM, name="expand")
+        self.norm = LayerNormalization(epsilon=1e-5, name="norm")
+        self.project = Dense(DESCRIPTOR_DIM, name="project")
+
+    def call(self, x):
+        x = ops.gelu(self.norm(self.expand(x)), approximate=False)
+        return self.project(x)
 
 
-def update(layer, x, message):
-    message = linear(layer.out_proj, merge_heads(message))
-    return feed_forward(layer.ffn, jp.concatenate([x, message], -1))
+class MatchAssignment(Layer):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.final_proj = Dense(DESCRIPTOR_DIM, name="final_proj")
+        self.matchability = Dense(1, name="matchability")
 
-
-def scale_query(query):
-    head_dim = query.shape[-1]
-    return query * head_dim ** -0.25
+    def call(self, x0, x1):
+        scale = DESCRIPTOR_DIM ** 0.25
+        matches0 = self.final_proj(x0) / scale
+        matches1 = self.final_proj(x1) / scale
+        similarity = ops.einsum("bmd,bnd->bmn", matches0, matches1)
+        return double_softmax(similarity, self.matchability(x0),
+                              self.matchability(x1))
 
 
 def attention(query, key, value):
     scale = query.shape[-1] ** -0.5
-    similarity = jp.einsum("hid,hjd->hij", query, key) * scale
-    return jax.nn.softmax(similarity, -1) @ value
+    similarity = ops.einsum("bhid,bhjd->bhij", query, key) * scale
+    return ops.softmax(similarity, axis=-1) @ value
+
+
+def scale_query(query):
+    return query * query.shape[-1] ** -0.25
 
 
 def split_heads(x, num_heads, groups=1):
-    length = x.shape[0]
-    x = x.reshape(length, num_heads, -1, groups) if groups > 1 else \
-        x.reshape(length, num_heads, -1)
-    return jp.moveaxis(x, 0, 1)
+    batch, length = x.shape[0], x.shape[1]
+    shape = (batch, length, num_heads, -1, groups)
+    x = ops.reshape(x, shape if groups > 1 else shape[:-1])
+    return ops.transpose(x, (0, 2, 1, 3, 4) if groups > 1 else (0, 2, 1, 3))
 
 
 def merge_heads(x):
-    length = x.shape[1]
-    return jp.moveaxis(x, 0, 1).reshape(length, -1)
+    batch, length = x.shape[0], x.shape[2]
+    return ops.reshape(ops.transpose(x, (0, 2, 1, 3)), (batch, length, -1))
 
 
-def apply_rotary(x, cos, sin):
+def rotate(x, cos, sin):
+    cos, sin = ops.expand_dims(cos, 1), ops.expand_dims(sin, 1)
     return x * cos + rotate_half(x) * sin
 
 
 def rotate_half(x):
-    pairs = x.reshape(*x.shape[:-1], -1, 2)
-    rotated = jp.stack([-pairs[..., 1], pairs[..., 0]], axis=-1)
-    return rotated.reshape(x.shape)
+    first, second = x[..., ::2], x[..., 1::2]
+    return ops.reshape(ops.stack([-second, first], axis=-1), x.shape)
 
 
-def feed_forward(params, x):
-    x = linear(params.input, x)
-    x = layer_norm(params.norm, x)
-    return linear(params.output, jax.nn.gelu(x, approximate=False))
-
-
-def layer_norm(params, x):
-    mean = jp.mean(x, axis=-1, keepdims=True)
-    variance = jp.var(x, axis=-1, keepdims=True)
-    normed = (x - mean) / jp.sqrt(variance + 1e-5)
-    return normed * params.weight + params.bias
-
-
-def linear(params, x):
-    return x @ params.weight + params.bias
-
-
-def log_assignment(params, x0, x1):
-    scale = x0.shape[-1] ** 0.25
-    matches0 = linear(params.final_proj, x0) / scale
-    matches1 = linear(params.final_proj, x1) / scale
-    similarity = matches0 @ matches1.T
-    z0 = linear(params.matchability, x0)
-    z1 = linear(params.matchability, x1)
-    return double_softmax(similarity, z0, z1)
+def swap(x):
+    return ops.transpose(x, (0, 1, 3, 2))
 
 
 def double_softmax(similarity, z0, z1):
-    rows, columns = similarity.shape
-    certainty = log_sigmoid(z0) + log_sigmoid(z1).T
-    scores = jax.nn.log_softmax(similarity, 1) + \
-        jax.nn.log_softmax(similarity, 0) + certainty
-    output = jp.zeros((rows + 1, columns + 1))
-    output = output.at[:rows, :columns].set(scores)
-    output = output.at[:rows, columns].set(log_sigmoid(-z0)[:, 0])
-    return output.at[rows, :columns].set(log_sigmoid(-z1)[:, 0])
+    certainty = log_sigmoid(z0) + swap_last(log_sigmoid(z1))
+    scores = ops.log_softmax(similarity, axis=2)
+    scores = scores + ops.log_softmax(similarity, axis=1) + certainty
+    top = ops.concatenate([scores, log_sigmoid(-z0)], axis=2)
+    corner = ops.zeros((z0.shape[0], 1, 1))
+    bottom = ops.concatenate([swap_last(log_sigmoid(-z1)), corner], axis=2)
+    return ops.concatenate([top, bottom], axis=1)
+
+
+def swap_last(x):
+    return ops.transpose(x, (0, 2, 1))
 
 
 def log_sigmoid(x):
-    return -jax.nn.softplus(-x)
+    return -ops.softplus(-x)
+
+
+def normalize(keypoints, size):
+    size = ops.cast(size, "float32")
+    return (keypoints - size / 2) / (ops.max(size) / 2)
 
 
 def filter_matches(scores, threshold):

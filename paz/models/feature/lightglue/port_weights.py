@@ -1,48 +1,14 @@
-from collections import namedtuple
-
-import numpy as np
-import jax.numpy as jp
-
-Linear = namedtuple("Linear", ["weight", "bias"])
-FeedForward = namedtuple("FeedForward", ["input", "norm", "output"])
-SelfAttention = namedtuple("SelfAttention", ["qkv", "out_proj", "ffn"])
-CrossAttention = namedtuple("CrossAttention", ["qk", "v", "out_proj", "ffn"])
-Layer = namedtuple("Layer", ["self_attn", "cross_attn"])
-Assignment = namedtuple("Assignment", ["final_proj", "matchability"])
-LightGlueParams = namedtuple(
-    "LightGlueParams", ["posenc", "input_proj", "layers", "assign"])
+from paz.models.feature.lightglue.model import LighterGlueModel
 
 
-def load_params(weights_path, num_layers=6):
-    data = np.load(weights_path)
-    state = {key.replace("__", "."): data[key] for key in data.files}
-    return build_params(state, num_layers)
-
-
-def port_weights(torch_path, num_layers=6):
+def port_weights(torch_path):
     import torch
 
     state = matcher_state(torch.load(torch_path, map_location="cpu"))
-    return build_params({key: value.numpy() for key, value in state.items()},
-                        num_layers)
-
-
-def save_params(torch_path, output_path):
-    import torch
-
-    state = matcher_state(torch.load(torch_path, map_location="cpu"))
-    arrays = {key.replace(".", "__"): value.numpy()
-              for key, value in state.items()}
-    np.savez(output_path, **arrays)
-
-
-def build_params(state, num_layers):
-    layers = [build_layer(state, index) for index in range(num_layers)]
-    return LightGlueParams(
-        posenc=array(state["posenc.Wr.weight"]).T,
-        input_proj=linear(state, "input_proj"),
-        layers=layers,
-        assign=build_assignment(state, num_layers - 1))
+    state = {key: value.numpy() for key, value in state.items()}
+    model = LighterGlueModel(weights=None)
+    set_weights(model, state)
+    return model
 
 
 def matcher_state(state):
@@ -50,41 +16,38 @@ def matcher_state(state):
             if key.startswith("matcher.")}
 
 
-def build_layer(state, index):
-    prefix = f"transformers.{index}"
-    self_attn = SelfAttention(
-        qkv=linear(state, f"{prefix}.self_attn.Wqkv"),
-        out_proj=linear(state, f"{prefix}.self_attn.out_proj"),
-        ffn=feed_forward(state, f"{prefix}.self_attn.ffn"))
-    cross_attn = CrossAttention(
-        qk=linear(state, f"{prefix}.cross_attn.to_qk"),
-        v=linear(state, f"{prefix}.cross_attn.to_v"),
-        out_proj=linear(state, f"{prefix}.cross_attn.to_out"),
-        ffn=feed_forward(state, f"{prefix}.cross_attn.ffn"))
-    return Layer(self_attn, cross_attn)
+def set_weights(model, state):
+    dense(model.input_proj, state, "input_proj")
+    model.encoding.projection.set_weights([state["posenc.Wr.weight"].T])
+    for index, block in enumerate(model.self_blocks):
+        prefix = f"transformers.{index}.self_attn"
+        dense(block.qkv, state, f"{prefix}.Wqkv")
+        dense(block.out_proj, state, f"{prefix}.out_proj")
+        feed_forward(block.ffn, state, f"{prefix}.ffn")
+    for index, block in enumerate(model.cross_blocks):
+        prefix = f"transformers.{index}.cross_attn"
+        dense(block.to_qk, state, f"{prefix}.to_qk")
+        dense(block.to_v, state, f"{prefix}.to_v")
+        dense(block.out_proj, state, f"{prefix}.to_out")
+        feed_forward(block.ffn, state, f"{prefix}.ffn")
+    dense(model.assignment.final_proj, state, "log_assignment.5.final_proj")
+    dense(model.assignment.matchability, state, "log_assignment.5.matchability")
 
 
-def build_assignment(state, index):
-    prefix = f"log_assignment.{index}"
-    return Assignment(final_proj=linear(state, f"{prefix}.final_proj"),
-                      matchability=linear(state, f"{prefix}.matchability"))
+def feed_forward(ffn, state, prefix):
+    dense(ffn.expand, state, f"{prefix}.0")
+    ffn.norm.set_weights([state[f"{prefix}.1.weight"],
+                          state[f"{prefix}.1.bias"]])
+    dense(ffn.project, state, f"{prefix}.3")
 
 
-def feed_forward(state, prefix):
-    return FeedForward(input=linear(state, f"{prefix}.0"),
-                       norm=norm(state, f"{prefix}.1"),
-                       output=linear(state, f"{prefix}.3"))
+def dense(layer, state, prefix):
+    layer.set_weights([state[f"{prefix}.weight"].T, state[f"{prefix}.bias"]])
 
 
-def linear(state, prefix):
-    weight = array(state[f"{prefix}.weight"]).T
-    return Linear(weight, array(state[f"{prefix}.bias"]))
+if __name__ == "__main__":
+    import sys
 
-
-def norm(state, prefix):
-    return Linear(array(state[f"{prefix}.weight"]),
-                  array(state[f"{prefix}.bias"]))
-
-
-def array(values):
-    return jp.asarray(np.asarray(values), jp.float32)
+    model = port_weights(sys.argv[1])
+    model.save_weights(sys.argv[2])
+    print("saved", sys.argv[2])

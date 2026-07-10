@@ -44,13 +44,15 @@ def test_rotate_half_is_quarter_turn():
 
 @pytest.mark.skipif(not (WEIGHTS and REPO), reason="set LIGHTERGLUE_WEIGHTS "
                     "and LIGHTGLUE_REPO to the cvg/LightGlue checkout")
-def test_matches_torch_reference():
+def test_matches_torch_reference(tmp_path):
     from paz.models.feature.lightglue.port_weights import port_weights
 
+    weights_path = str(tmp_path / "lighterglue.weights.h5")
+    port_weights(WEIGHTS).save_weights(weights_path)
     keypoints0, descriptors0 = random_features(0, 300)
     keypoints1, descriptors1 = correlated_features(descriptors0, 1)
     size = jp.array([640.0, 480.0])
-    match = lightglue.LighterGlue(port_weights(WEIGHTS), num_heads=1)
+    match = lightglue.LighterGlue(weights=weights_path)
     ours = match(keypoints0, descriptors0, keypoints1, descriptors1,
                  size, size)
     expected = reference_matches(keypoints0, descriptors0, keypoints1,
