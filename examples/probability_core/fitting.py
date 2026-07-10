@@ -2,7 +2,7 @@ import jax
 import jax.numpy as jp
 import optax
 
-from .distributions import TransformedDistribution
+from paz.backend.distributions import TransformedDistribution
 
 
 def fit_bijector(

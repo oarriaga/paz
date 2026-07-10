@@ -1,7 +1,7 @@
 import jax
 
-from .bijectors import Chain, Scale, Shift
-from .distributions import Normal
+from paz.backend.bijectors import Chain, Scale, Shift
+from paz.backend.distributions import Normal
 from .fitting import fit_bijector
 
 
