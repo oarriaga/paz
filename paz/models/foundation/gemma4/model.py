@@ -8,7 +8,7 @@ from keras import Model, ops
 from keras.initializers import VarianceScaling
 from keras.layers import Embedding, EinsumDense, Input
 from keras.utils import get_file
-from keras_hub.layers import ReversibleEmbedding
+from paz.models.transformers.embeddings.reversible import ReversibleEmbedding
 
 from paz.models.transformers import cache as kv_cache
 from paz.models.transformers.logits import soft_cap as apply_soft_cap
