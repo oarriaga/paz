@@ -7,7 +7,7 @@ from keras.activations import gelu
 from keras.layers import Input, Conv1D, Dropout, Add, Lambda
 from keras.layers import LayerNormalization
 from keras.utils import get_file
-from keras_hub.layers import ReversibleEmbedding
+from paz.models.transformers.embeddings.reversible import ReversibleEmbedding
 
 from paz.backend.audio import log_mel_spectrogram, build_mel_filters
 from paz.models.transformers.attention import build_cache, kernel
