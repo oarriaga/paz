@@ -2,8 +2,44 @@ from collections import namedtuple
 
 import jax
 import jax.numpy as jp
+from jax.scipy import special as jsp_special
 
-from .utils import event_size, logit, sigmoid, softplus_inverse, to_float
+from paz.backend.standard import normal_cdf, normal_icdf, to_float
+
+
+def event_size(event_shape):
+    if len(event_shape) == 0:
+        return 1
+    return int(jp.prod(jp.asarray(event_shape)))
+
+
+def logit(values):
+    values = to_float(values)
+    return jp.log(values) - jp.log1p(-values)
+
+
+def sigmoid(values):
+    return jax.nn.sigmoid(values)
+
+
+def softplus_inverse(values):
+    values = to_float(values)
+    threshold = jp.log(jp.finfo(values.dtype).eps) + 2.0
+    use_small = values < jp.exp(threshold)
+    use_large = values > -threshold
+    small_values = jp.log(values)
+    large_values = values
+    safe_values = jp.where(use_small | use_large, 1.0, values)
+    middle_values = safe_values + jp.log(-jp.expm1(-safe_values))
+    large_or_middle = jp.where(use_large, large_values, middle_values)
+    return jp.where(use_small, small_values, large_or_middle)
+
+
+def _sum_event(log_det, event_ndims):
+    if event_ndims == 0:
+        return log_det
+    axes = tuple(range(log_det.ndim - event_ndims, log_det.ndim))
+    return log_det.sum(axis=axes)
 
 
 class Bijector:
@@ -268,6 +304,139 @@ class SoftmaxCentered(_SoftmaxCenteredBase, Bijector):
         if len(event_shape) == 0:
             return ()
         return event_shape[:-1] + (event_shape[-1] - 1,)
+
+
+_TanhBase = namedtuple("Tanh", [])
+
+
+class Tanh(_TanhBase, Bijector):
+    __slots__ = ()
+
+    def __call__(self, values):
+        return jp.tanh(to_float(values))
+
+    def inverse(self, values):
+        return jp.arctanh(to_float(values))
+
+    def forward_log_det_jacobian(self, values, event_ndims=0):
+        values = to_float(values)
+        log_det = 2.0 * (jp.log(2.0) - values - jax.nn.softplus(-2.0 * values))
+        return _sum_event(log_det, event_ndims)
+
+
+_SquareBase = namedtuple("Square", [])
+
+
+class Square(_SquareBase, Bijector):
+    __slots__ = ()
+
+    def __call__(self, values):
+        return jp.square(to_float(values))
+
+    def inverse(self, values):
+        return jp.sqrt(to_float(values))
+
+    def forward_log_det_jacobian(self, values, event_ndims=0):
+        values = to_float(values)
+        return _sum_event(jp.log(2.0) + jp.log(values), event_ndims)
+
+
+_ReciprocalBase = namedtuple("Reciprocal", [])
+
+
+class Reciprocal(_ReciprocalBase, Bijector):
+    __slots__ = ()
+
+    def __call__(self, values):
+        return 1.0 / to_float(values)
+
+    def inverse(self, values):
+        return 1.0 / to_float(values)
+
+    def forward_log_det_jacobian(self, values, event_ndims=0):
+        values = to_float(values)
+        return _sum_event(-2.0 * jp.log(jp.abs(values)), event_ndims)
+
+    def is_increasing(self):
+        return False
+
+
+_PowerBase = namedtuple("Power", ["power"])
+
+
+class Power(_PowerBase, Bijector):
+    __slots__ = ()
+
+    def __call__(self, values):
+        return jp.power(to_float(values), self.power)
+
+    def inverse(self, values):
+        return jp.power(to_float(values), 1.0 / self.power)
+
+    def forward_log_det_jacobian(self, values, event_ndims=0):
+        values = to_float(values)
+        power = to_float(self.power, values.dtype)
+        log_det = jp.log(jp.abs(power)) + jsp_special.xlogy(power - 1.0, values)
+        return _sum_event(log_det, event_ndims)
+
+    def is_increasing(self):
+        return bool(jp.all(jp.asarray(self.power) > 0))
+
+
+_NormalCDFBase = namedtuple("NormalCDF", [])
+
+
+class NormalCDF(_NormalCDFBase, Bijector):
+    __slots__ = ()
+
+    def __call__(self, values):
+        return normal_cdf(to_float(values))
+
+    def inverse(self, values):
+        return normal_icdf(to_float(values))
+
+    def forward_log_det_jacobian(self, values, event_ndims=0):
+        values = to_float(values)
+        log_det = -0.5 * jp.log(2.0 * jp.pi) - jp.square(values) / 2.0
+        return _sum_event(log_det, event_ndims)
+
+
+_LogBase = namedtuple("Log", [])
+
+
+class Log(_LogBase, Bijector):
+    __slots__ = ()
+
+    def __call__(self, values):
+        return jp.log(to_float(values))
+
+    def inverse(self, values):
+        return jp.exp(to_float(values))
+
+    def forward_log_det_jacobian(self, values, event_ndims=0):
+        values = to_float(values)
+        return _sum_event(-jp.log(values), event_ndims)
+
+
+_CumsumBase = namedtuple("Cumsum", [])
+
+
+class Cumsum(_CumsumBase, Bijector):
+    __slots__ = ()
+
+    def __call__(self, values):
+        return jp.cumsum(to_float(values), axis=-1)
+
+    def inverse(self, values):
+        values = to_float(values)
+        leading = jp.zeros_like(values[..., :1])
+        shifted = jp.concatenate([leading, values[..., :-1]], axis=-1)
+        return values - shifted
+
+    def forward_log_det_jacobian(self, values, event_ndims=1):
+        values = to_float(values)
+        batch_shape = values.shape[: values.ndim - event_ndims]
+        return jp.zeros(batch_shape, values.dtype)
 
 
 _InvertBase = namedtuple("Invert", ["bijector"])

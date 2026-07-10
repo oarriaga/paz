@@ -104,3 +104,75 @@ def str_to_bool(value):
         else:
             raise argparse.ArgumentTypeError(f"Invalid boolean value: {value}")
     return result
+
+
+# --- Probability numeric helpers (used by paz.distributions/paz.bijectors) ---
+
+from jax.scipy import special as jsp_special
+
+
+def common_dtype(*values):
+    arrays = [jp.asarray(value) for value in values if value is not None]
+    if len(arrays) == 0:
+        return jp.float32
+    dtype = jp.result_type(*arrays)
+    if jp.issubdtype(dtype, jp.inexact):
+        return dtype
+    return jp.float32
+
+
+def to_float(values, dtype=None):
+    values = jp.asarray(values)
+    if dtype is not None:
+        return values.astype(dtype)
+    if jp.issubdtype(values.dtype, jp.inexact):
+        return values
+    return values.astype(jp.float32)
+
+
+def build_sample_shape(num_samples):
+    if isinstance(num_samples, tuple):
+        return num_samples
+    if isinstance(num_samples, list):
+        return tuple(num_samples)
+    return (num_samples,)
+
+
+def broadcast_shape(*values):
+    values = [jp.asarray(value) for value in values if value is not None]
+    if len(values) == 0:
+        return ()
+    return jp.broadcast_arrays(*values)[0].shape
+
+
+def sum_rightmost(values, num_dims):
+    if num_dims == 0:
+        return values
+    axes = tuple(range(values.ndim - num_dims, values.ndim))
+    return values.sum(axis=axes)
+
+
+def multiply_no_nan(x, y):
+    x = jp.asarray(x)
+    y = jp.asarray(y, dtype=x.dtype)
+    return jp.where(y == 0, jp.zeros_like(x), x * y)
+
+
+def diag_matrix(diagonal):
+    diagonal = jp.asarray(diagonal)
+    size = diagonal.shape[-1]
+    eye = jp.eye(size, dtype=diagonal.dtype)
+    return diagonal[..., :, None] * eye
+
+
+def normal_cdf(values):
+    return jsp_special.ndtr(values)
+
+
+def normal_log_cdf(values):
+    return jsp_special.log_ndtr(values)
+
+
+def normal_icdf(values):
+    values = to_float(values)
+    return jp.sqrt(2.0) * jsp_special.erfinv(2.0 * values - 1.0)

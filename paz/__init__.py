@@ -22,6 +22,8 @@ from paz.backend.lie import SO3
 from paz.backend.lie import SE2
 from paz.backend.lie import quaternion
 from paz.backend import angles
+from paz.backend import distributions
+from paz.backend import bijectors
 
 from paz import graphics
 from paz.backend import points2D
