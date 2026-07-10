@@ -7,7 +7,7 @@ BLOCK_SIZES = {"block1": 4, "block2": 2, "block3": 3, "block4": 3, "block5": 4}
 
 def port_weights(torch_path):
     state = torch.load(torch_path, map_location="cpu")
-    model = XFeatModel()
+    model = XFeatModel(weights=None)
     for layer in model.layers:
         arrays = weights_for_layer(layer.name, state)
         if arrays is not None:

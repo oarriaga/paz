@@ -45,3 +45,4 @@ from paz.applications.generators import GenerateGemma44B
 from paz.applications.generators import DescribeImageGemma4
 from paz.applications.generators import DescribeImageGemma42B
 from paz.applications.generators import DescribeImageGemma44B
+from paz.applications.feature_matchers import MatchXFeat

@@ -474,3 +474,21 @@ def add_occlusion(key, image, num_vertices=6, max_radius_scale=0.5):
     polygon = center + radii[:, jp.newaxis] * offsets
     color = jax.random.randint(key_color, (3,), 0, 256)
     return fill_polygon(image, polygon, color)
+
+
+def matches(image_A, image_B, points_A, points_B, color=GREEN, thickness=1):
+    canvas, shift = stack_side_by_side(image_A, image_B)
+    for point_A, point_B in zip(points_A, points_B):
+        start = [int(point_A[0]), int(point_A[1])]
+        end = [int(point_B[0]) + shift, int(point_B[1])]
+        line(canvas, start, end, color, thickness)
+    return canvas
+
+
+def stack_side_by_side(image_A, image_B):
+    height = max(image_A.shape[0], image_B.shape[0])
+    width = image_A.shape[1] + image_B.shape[1]
+    canvas = np.zeros((height, width, 3), np.uint8)
+    canvas[:image_A.shape[0], :image_A.shape[1]] = image_A
+    canvas[:image_B.shape[0], image_A.shape[1]:] = image_B
+    return canvas, image_A.shape[1]

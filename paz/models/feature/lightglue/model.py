@@ -3,11 +3,16 @@ from collections import namedtuple
 import numpy as np
 import jax
 import jax.numpy as jp
+from keras.utils import get_file
+
+from paz.models.feature.lightglue.port_weights import load_params
 
 Matches = namedtuple("Matches", ["matches0", "matches1", "scores0", "scores1"])
+WEIGHTS_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.25/xfeat_lighterglue_paz_jax.npz"  # fmt: skip
 
 
-def LighterGlue(params, num_heads=1, filter_threshold=0.1):
+def LighterGlue(weights="pretrained", num_heads=1, filter_threshold=0.1):
+    params = load_pretrained(weights)
     core = jax.jit(match_core, static_argnums=(7, 8))
 
     def call(keypoints0, descriptors0, keypoints1, descriptors1,
@@ -17,6 +22,14 @@ def LighterGlue(params, num_heads=1, filter_threshold=0.1):
         return Matches(*(np.asarray(value) for value in outputs))
 
     return call
+
+
+def load_pretrained(weights):
+    if weights != "pretrained":
+        return weights
+    asset = WEIGHTS_URL.rsplit("/", 1)[-1]
+    path = get_file(asset, WEIGHTS_URL, cache_subdir="paz/models/lightglue")
+    return load_params(path)
 
 
 def match_core(params, keypoints0, descriptors0, keypoints1, descriptors1,

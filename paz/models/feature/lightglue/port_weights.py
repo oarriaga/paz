@@ -1,7 +1,7 @@
 from collections import namedtuple
 
+import numpy as np
 import jax.numpy as jp
-import torch
 
 Linear = namedtuple("Linear", ["weight", "bias"])
 FeedForward = namedtuple("FeedForward", ["input", "norm", "output"])
@@ -13,8 +13,30 @@ LightGlueParams = namedtuple(
     "LightGlueParams", ["posenc", "input_proj", "layers", "assign"])
 
 
+def load_params(weights_path, num_layers=6):
+    data = np.load(weights_path)
+    state = {key.replace("__", "."): data[key] for key in data.files}
+    return build_params(state, num_layers)
+
+
 def port_weights(torch_path, num_layers=6):
+    import torch
+
     state = matcher_state(torch.load(torch_path, map_location="cpu"))
+    return build_params({key: value.numpy() for key, value in state.items()},
+                        num_layers)
+
+
+def save_params(torch_path, output_path):
+    import torch
+
+    state = matcher_state(torch.load(torch_path, map_location="cpu"))
+    arrays = {key.replace(".", "__"): value.numpy()
+              for key, value in state.items()}
+    np.savez(output_path, **arrays)
+
+
+def build_params(state, num_layers):
     layers = [build_layer(state, index) for index in range(num_layers)]
     return LightGlueParams(
         posenc=array(state["posenc.Wr.weight"]).T,
@@ -64,5 +86,5 @@ def norm(state, prefix):
                   array(state[f"{prefix}.bias"]))
 
 
-def array(tensor):
-    return jp.asarray(tensor.numpy(), jp.float32)
+def array(values):
+    return jp.asarray(np.asarray(values), jp.float32)

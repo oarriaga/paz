@@ -8,15 +8,18 @@ from keras import ops
 from keras.layers import Input, Conv2D, ReLU, ZeroPadding2D
 from keras.layers import AveragePooling2D, BatchNormalization, Lambda
 from keras import Model
+from keras.utils import get_file
 
 from paz.models.feature.xfeat import backend
 
 INSTANCE_NORM_EPSILON = 1e-5
+WEIGHTS_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.25/xfeat_paz_jax.weights.h5"  # fmt: skip
 
 Features = namedtuple("Features", ["keypoints", "scores", "descriptors"])
 
 
-def XFeat(model, top_k=4096, threshold=0.05):
+def XFeat(weights="pretrained", top_k=4096, threshold=0.05):
+    model = XFeatModel(weights)
     forward = jax.jit(model)
     core = jax.jit(extract_core, static_argnums=(3, 4, 5, 6))
 
@@ -60,7 +63,16 @@ def preprocess(image):
     return image, scale
 
 
-def XFeatModel(name="xfeat"):
+def XFeatModel(weights="pretrained", name="xfeat"):
+    model = build_xfeat(name)
+    if weights == "pretrained":
+        asset = WEIGHTS_URL.rsplit("/", 1)[-1]
+        path = get_file(asset, WEIGHTS_URL, cache_subdir="paz/models/xfeat")
+        model.load_weights(path)
+    return model
+
+
+def build_xfeat(name):
     image = Input((None, None, 3))
     gray = Lambda(to_grayscale, output_shape=(None, None, 1))(image)
     normed = Lambda(instance_normalize, output_shape=(None, None, 1))(gray)

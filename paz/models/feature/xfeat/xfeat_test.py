@@ -64,7 +64,7 @@ def normalize(x):
 
 
 def test_model_output_shapes():
-    model = XFeatModel()
+    model = XFeatModel(weights=None)
     image = np.zeros((1, 480, 640, 3), np.float32)
     features, keypoints, heatmap = model.predict(image, verbose=0)
     assert features.shape == (1, 60, 80, 64)
