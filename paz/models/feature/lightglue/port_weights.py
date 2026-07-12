@@ -1,4 +1,4 @@
-from paz.models.feature.lightglue.model import LighterGlueModel
+from paz.models.feature.lightglue.model import LighterGlueModel, NUM_LAYERS
 
 
 def port_weights(torch_path):
@@ -17,37 +17,54 @@ def matcher_state(state):
 
 
 def set_weights(model, state):
-    dense(model.input_proj, state, "input_proj")
-    model.encoding.projection.set_weights([state["posenc.Wr.weight"].T])
-    for index, block in enumerate(model.self_blocks):
-        prefix = f"transformers.{index}.self_attn"
-        dense(block.qkv, state, f"{prefix}.Wqkv")
-        dense(block.out_proj, state, f"{prefix}.out_proj")
-        feed_forward(block.ffn, state, f"{prefix}.ffn")
-    for index, block in enumerate(model.cross_blocks):
-        prefix = f"transformers.{index}.cross_attn"
-        dense(block.to_qk, state, f"{prefix}.to_qk")
-        dense(block.to_v, state, f"{prefix}.to_v")
-        dense(block.out_proj, state, f"{prefix}.to_out")
-        feed_forward(block.ffn, state, f"{prefix}.ffn")
-    dense(model.assignment.final_proj, state, "log_assignment.5.final_proj")
-    dense(model.assignment.matchability, state, "log_assignment.5.matchability")
+    dense(model, state, "input_projection", "input_proj")
+    kernel(model, state, "encoding_projection", "posenc.Wr")
+    for index in range(NUM_LAYERS):
+        set_self_attention(model, state, index)
+        set_cross_attention(model, state, index)
+    dense(model, state, "assignment_projection", "log_assignment.5.final_proj")
+    dense(model, state, "assignment_matchability",
+          "log_assignment.5.matchability")
 
 
-def feed_forward(ffn, state, prefix):
-    dense(ffn.expand, state, f"{prefix}.0")
-    ffn.norm.set_weights([state[f"{prefix}.1.weight"],
-                          state[f"{prefix}.1.bias"]])
-    dense(ffn.project, state, f"{prefix}.3")
+def set_self_attention(model, state, index):
+    name, source = f"self_attention_{index}", f"transformers.{index}.self_attn"
+    dense(model, state, f"{name}_qkv", f"{source}.Wqkv")
+    dense(model, state, f"{name}_projection", f"{source}.out_proj")
+    set_feed_forward(model, state, name, f"{source}.ffn")
 
 
-def dense(layer, state, prefix):
-    layer.set_weights([state[f"{prefix}.weight"].T, state[f"{prefix}.bias"]])
+def set_cross_attention(model, state, index):
+    name = f"cross_attention_{index}"
+    source = f"transformers.{index}.cross_attn"
+    dense(model, state, f"{name}_query", f"{source}.to_qk")
+    dense(model, state, f"{name}_value", f"{source}.to_v")
+    dense(model, state, f"{name}_projection", f"{source}.to_out")
+    set_feed_forward(model, state, name, f"{source}.ffn")
+
+
+def set_feed_forward(model, state, name, source):
+    dense(model, state, f"{name}_expand", f"{source}.0")
+    layer_norm(model, state, f"{name}_norm", f"{source}.1")
+    dense(model, state, f"{name}_project", f"{source}.3")
+
+
+def dense(model, state, name, source):
+    weights = [state[f"{source}.weight"].T, state[f"{source}.bias"]]
+    model.get_layer(name).set_weights(weights)
+
+
+def kernel(model, state, name, source):
+    model.get_layer(name).set_weights([state[f"{source}.weight"].T])
+
+
+def layer_norm(model, state, name, source):
+    weights = [state[f"{source}.weight"], state[f"{source}.bias"]]
+    model.get_layer(name).set_weights(weights)
 
 
 if __name__ == "__main__":
     import sys
 
-    model = port_weights(sys.argv[1])
-    model.save_weights(sys.argv[2])
+    port_weights(sys.argv[1]).save_weights(sys.argv[2])
     print("saved", sys.argv[2])
