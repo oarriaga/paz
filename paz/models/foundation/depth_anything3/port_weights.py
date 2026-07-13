@@ -22,6 +22,81 @@ def port_backbone_weights(model, state_dict, depth, num_positions,
     return model
 
 
+def port_head_weights(model, state_dict):
+    state_dict = strip_model_prefix(state_dict)
+    assign(model, "head_norm", named_norm(state_dict, "head.norm"))
+    for stage in range(4):
+        assign(model, f"head_project_{stage}",
+               conv_bias(state_dict, f"head.projects.{stage}"))
+    for stage in (0, 1, 3):
+        assign(model, f"head_resize_{stage}",
+               conv_bias(state_dict, f"head.resize_layers.{stage}"))
+    for stage in range(1, 5):
+        assign(model, f"head_layer{stage}_rn",
+               [conv_kernel(state_dict, f"head.scratch.layer{stage}_rn")])
+    for suffix in ("", "_aux"):
+        port_refinenets(model, state_dict, suffix)
+    assign(model, "head_out1", conv_bias(state_dict, "head.scratch.output_conv1"))
+    assign(model, "head_out2_conv0", conv_bias(state_dict, "head.scratch.output_conv2.0"))
+    assign(model, "head_out2_conv1", conv_bias(state_dict, "head.scratch.output_conv2.2"))
+    for index in range(5):
+        assign(model, f"head_out1_aux_{index}",
+               conv_bias(state_dict, f"head.scratch.output_conv1_aux.3.{index}"))
+    assign(model, "head_out2_aux_conv0",
+           conv_bias(state_dict, "head.scratch.output_conv2_aux.3.0"))
+    assign(model, "head_out2_aux_ln",
+           named_norm(state_dict, "head.scratch.output_conv2_aux.0.2"))
+    assign(model, "head_out2_aux_conv1",
+           conv_bias(state_dict, "head.scratch.output_conv2_aux.3.5"))
+    return model
+
+
+def port_refinenets(model, state_dict, suffix):
+    for index in (1, 2, 3):
+        source = f"head.scratch.refinenet{index}{suffix}.resConfUnit1"
+        assign(model, f"head_refine{index}{suffix}_unit1_conv1",
+               conv_bias(state_dict, source + ".conv1"))
+        assign(model, f"head_refine{index}{suffix}_unit1_conv2",
+               conv_bias(state_dict, source + ".conv2"))
+    for index in (1, 2, 3, 4):
+        block = f"head.scratch.refinenet{index}{suffix}"
+        assign(model, f"head_refine{index}{suffix}_unit2_conv1",
+               conv_bias(state_dict, block + ".resConfUnit2.conv1"))
+        assign(model, f"head_refine{index}{suffix}_unit2_conv2",
+               conv_bias(state_dict, block + ".resConfUnit2.conv2"))
+        assign(model, f"head_refine{index}{suffix}_out",
+               conv_bias(state_dict, block + ".out_conv"))
+
+
+def port_camera_decoder_weights(model, state_dict):
+    state_dict = strip_model_prefix(state_dict)
+    assign(model, "cam_dec_fc1", named_dense(state_dict, "cam_dec.backbone.0"))
+    assign(model, "cam_dec_fc2", named_dense(state_dict, "cam_dec.backbone.2"))
+    assign(model, "cam_dec_t", named_dense(state_dict, "cam_dec.fc_t"))
+    assign(model, "cam_dec_qvec", named_dense(state_dict, "cam_dec.fc_qvec"))
+    assign(model, "cam_dec_fov", named_dense(state_dict, "cam_dec.fc_fov.0"))
+    return model
+
+
+def conv_bias(state_dict, source):
+    return [conv_kernel(state_dict, source),
+            np.asarray(state_dict[source + ".bias"])]
+
+
+def conv_kernel(state_dict, source):
+    return np.transpose(np.asarray(state_dict[source + ".weight"]), (2, 3, 1, 0))
+
+
+def named_dense(state_dict, source):
+    return [np.asarray(state_dict[source + ".weight"]).T,
+            np.asarray(state_dict[source + ".bias"])]
+
+
+def named_norm(state_dict, source):
+    return [np.asarray(state_dict[source + ".weight"]),
+            np.asarray(state_dict[source + ".bias"])]
+
+
 def assign_block(model, state_dict, index):
     source = f"blocks.{index}."
     name = f"block_{index}"

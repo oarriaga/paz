@@ -2,6 +2,7 @@ import numpy as np
 import jax
 
 from paz.models.foundation.depth_anything3.models import build_da3_small_backbone
+from paz.models.foundation.depth_anything3.models import build_da3_small
 from paz.models.foundation.depth_anything3.models import grid_shape
 from paz.models.foundation.depth_anything3.port_weights import port_backbone_weights
 
@@ -37,6 +38,31 @@ def test_backbone_feature_and_camera_shapes():
 
 def test_backbone_jit_matches_eager():
     model = build_da3_small_backbone(VIEWS, IMAGE_SHAPE)
+    data = make_input()
+    eager = np.array(model(data)[0])
+    jitted = np.array(jax.jit(lambda x: model(x))(data)[0])
+    assert np.allclose(eager, jitted, atol=1e-5)
+
+
+def test_da3_small_output_order_and_shapes():
+    model = build_da3_small(VIEWS, IMAGE_SHAPE)
+    outputs = model(make_input())
+    assert not isinstance(outputs, dict)
+    assert not hasattr(outputs, "_fields")
+    assert len(outputs) == 6
+    depth, depth_conf, extrinsics, intrinsics, rays, ray_conf = outputs
+    grid = grid_shape(IMAGE_SHAPE, 14)
+    ray_size = (grid[0] * 8, grid[1] * 8)
+    assert tuple(depth.shape) == (1, VIEWS, 70, 70)
+    assert tuple(depth_conf.shape) == (1, VIEWS, 70, 70)
+    assert tuple(extrinsics.shape) == (1, VIEWS, 3, 4)
+    assert tuple(intrinsics.shape) == (1, VIEWS, 3, 3)
+    assert tuple(rays.shape) == (1, VIEWS, ray_size[0], ray_size[1], 6)
+    assert tuple(ray_conf.shape) == (1, VIEWS, ray_size[0], ray_size[1])
+
+
+def test_da3_small_jit_runs():
+    model = build_da3_small(VIEWS, IMAGE_SHAPE)
     data = make_input()
     eager = np.array(model(data)[0])
     jitted = np.array(jax.jit(lambda x: model(x))(data)[0])
