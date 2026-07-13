@@ -22,24 +22,24 @@ def matcher_state(state):
 def set_weights(model, state):
     dense(model, state, "input_projection", "input_proj")
     kernel(model, state, "encoding_projection", "posenc.Wr")
-    for index in range(6):
-        set_self_attention(model, state, index)
-        set_cross_attention(model, state, index)
+    for arg in range(6):
+        set_self_attention(model, state, arg)
+        set_cross_attention(model, state, arg)
     dense(model, state, "assignment_projection", "log_assignment.5.final_proj")
     dense(model, state, "assignment_matchability",
           "log_assignment.5.matchability")
 
 
-def set_self_attention(model, state, index):
-    name, source = f"self_attention_{index}", f"transformers.{index}.self_attn"
+def set_self_attention(model, state, arg):
+    name, source = f"self_attention_{arg}", f"transformers.{arg}.self_attn"
     dense(model, state, f"{name}_qkv", f"{source}.Wqkv")
     dense(model, state, f"{name}_projection", f"{source}.out_proj")
     set_feed_forward(model, state, name, f"{source}.ffn")
 
 
-def set_cross_attention(model, state, index):
-    name = f"cross_attention_{index}"
-    source = f"transformers.{index}.cross_attn"
+def set_cross_attention(model, state, arg):
+    name = f"cross_attention_{arg}"
+    source = f"transformers.{arg}.cross_attn"
     dense(model, state, f"{name}_query", f"{source}.to_qk")
     dense(model, state, f"{name}_value", f"{source}.to_v")
     dense(model, state, f"{name}_projection", f"{source}.to_out")

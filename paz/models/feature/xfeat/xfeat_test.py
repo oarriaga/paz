@@ -25,13 +25,13 @@ def torch_sample(feature_chw, positions, height, width, mode):
 
 
 @pytest.mark.parametrize("mode", ["nearest", "bilinear", "bicubic"])
-def test_sample_features_matches_torch(mode):
+def test_interpolate_matches_torch(mode):
     rng = np.random.default_rng(0)
     feature = rng.standard_normal((16, 60, 80)).astype(np.float32)
     positions = rng.uniform(-20, 660, size=(200, 2)).astype(np.float32)
     reference = torch_sample(feature, positions, 480, 640, mode)
     feature_hwc = jp.asarray(np.transpose(feature, (1, 2, 0)))
-    ours = features.sample_features(feature_hwc, jp.asarray(positions),
+    ours = features.interpolate(feature_hwc, jp.asarray(positions),
                                    480, 640, mode)
     assert np.allclose(np.asarray(ours), reference, atol=1e-4)
 

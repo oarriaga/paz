@@ -1,15 +1,20 @@
-"""Reusable local-feature ops: sparse sampling, matching, normalization."""
-import numpy as np
+"""Local-feature ops shared by keypoint extractors and matchers.
+
+A feature map is a dense tensor of shape ``(height, width, channels)``, and
+positions are an ``(N, 2)`` array of ``(x, y)`` pixel coordinates. These
+helpers read a feature map at sparse subpixel positions, normalize descriptor
+vectors, match two descriptor sets, and build coordinate grids.
+"""
 import jax
 import jax.numpy as jp
 
 
-def sample_features(features, positions, height, width, mode):
+def interpolate(features, positions, height, width, mode):
     grid = normalize_positions(positions, height, width)
     map_height, map_width = features.shape[0], features.shape[1]
     x = to_source_coordinates(grid[:, 0], map_width)
     y = to_source_coordinates(grid[:, 1], map_height)
-    return interpolate(features, x, y, mode)
+    return interpolate_at(features, x, y, mode)
 
 
 def normalize_positions(positions, height, width):
@@ -21,7 +26,7 @@ def to_source_coordinates(normalized, size):
     return ((normalized + 1.0) * size - 1.0) / 2.0
 
 
-def interpolate(features, x, y, mode):
+def interpolate_at(features, x, y, mode):
     if mode == "nearest":
         return gather_nearest(features, x, y)
     if mode == "bilinear":

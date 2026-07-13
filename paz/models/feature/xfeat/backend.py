@@ -15,8 +15,8 @@ def compute_keypoint_heatmap(logits):
 def compute_dense_scores(heatmap, heat, threshold, height, width):
     grid = features.build_pixel_grid(heatmap.shape[0], heatmap.shape[1])
     dense = heatmap[..., None]
-    sharp = features.sample_features(dense, grid, height, width, "nearest")
-    soft = features.sample_features(heat, grid, height, width, "bilinear")
+    sharp = features.interpolate(dense, grid, height, width, "nearest")
+    soft = features.interpolate(heat, grid, height, width, "bilinear")
     keep = features.find_local_maxima(heatmap, 5) & (heatmap > threshold)
     scores = jp.where(keep.reshape(-1), (sharp * soft)[:, 0], -1.0)
     return grid, scores

@@ -102,17 +102,17 @@ def build_reference(module, torch):
                   flash=False, depth_confidence=-1, width_confidence=-1)
     net = module.LightGlue(features=None, **config).eval()
     state = torch.load(WEIGHTS, map_location="cpu")
-    for index in range(6):
-        state = rename(state, index)
+    for arg in range(6):
+        state = rename(state, arg)
     state = {key.replace("matcher.", ""): value
              for key, value in state.items()}
     net.load_state_dict(state, strict=False)
     return net
 
 
-def rename(state, index):
+def rename(state, arg):
     for kind in ("self_attn", "cross_attn"):
-        pattern = f"{kind}.{index}", f"transformers.{index}.{kind}"
+        pattern = f"{kind}.{arg}", f"transformers.{arg}.{kind}"
         state = {key.replace(*pattern): value for key, value in state.items()}
     return state
 

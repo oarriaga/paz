@@ -42,8 +42,8 @@ def extract_core(model, tensor, top_k, threshold):
                                                 height, width)
     scores, chosen = jax.lax.top_k(scores, top_k)
     positions = grid[chosen]
-    descriptors = features.sample_features(feature_map, positions, height,
-                                           width, "bicubic")
+    descriptors = features.interpolate(feature_map, positions, height,
+                                       width, "bicubic")
     return positions, scores, features.l2_normalize(descriptors, axis=-1)
 
 
@@ -102,8 +102,8 @@ def instance_normalize(x):
 
 
 def build_block(x, specs, prefix):
-    for index, (filters, kernel, stride) in enumerate(specs):
-        x = xfeat_layer(x, filters, kernel, stride, f"{prefix}_{index}")
+    for arg, (filters, kernel, stride) in enumerate(specs):
+        x = xfeat_layer(x, filters, kernel, stride, f"{prefix}_{arg}")
     return x
 
 

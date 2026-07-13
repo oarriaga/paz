@@ -1,4 +1,5 @@
 from collections import namedtuple
+from functools import partial
 
 import numpy as np
 import jax
@@ -34,8 +35,9 @@ def LighterGlue(weights="pretrained", filter_threshold=0.1, capacity=4096):
         second = pad_features(keypoints_1, descriptors_1, capacity)
         outputs = match(*first, *second, size_0, size_1)
         matches_0, matches_1, scores_0, scores_1 = outputs
-        return Matches(matches_0[:count_0], matches_1[:count_1],
-                       scores_0[:count_0], scores_1[:count_1])
+        matches_0, scores_0 = matches_0[:count_0], scores_0[:count_0]
+        matches_1, scores_1 = matches_1[:count_1], scores_1[:count_1]
+        return Matches(matches_0, matches_1, scores_0, scores_1)
 
     return call
 
@@ -61,11 +63,13 @@ def LighterGlueModel(weights="pretrained", name="lighterglue"):
     mask_0, mask_1 = Input((None,)), Input((None,))
     encode = build_encoder(dim, "encoding")
     project = Dense(dim, name="input_projection")
-    cosine_0, sine_0 = encode(keypoints_0)
-    cosine_1, sine_1 = encode(keypoints_1)
+    cos_0, sin_0 = encode(keypoints_0)
+    cos_1, sin_1 = encode(keypoints_1)
     x_0, x_1 = project(descriptors_0), project(descriptors_1)
-    for index in range(num_layers):
-        x_0, x_1 = transformer_layer(x_0, x_1, cosine_0, sine_0, cosine_1, sine_1, mask_0, mask_1, dim, index)  # fmt: skip
+    arguments = (cos_0, sin_0, cos_1, sin_1, mask_0, mask_1, dim)
+    transform = partial(transformer_layer, *arguments)
+    for arg in range(num_layers):
+        x_0, x_1 = transform(arg, x_0, x_1)
     scores = assign_matches(x_0, x_1, mask_0, mask_1, dim, "assignment")
     inputs = [keypoints_0, descriptors_0, mask_0,
               keypoints_1, descriptors_1, mask_1]
@@ -92,12 +96,12 @@ def build_encoder(dim, name):
     return encode
 
 
-def transformer_layer(x_0, x_1, cosine_0, sine_0, cosine_1, sine_1, mask_0,
-                      mask_1, dim, index):
-    self_attend = build_self_attention(dim, f"self_attention_{index}")
-    x_0 = self_attend(x_0, cosine_0, sine_0, mask_0)
-    x_1 = self_attend(x_1, cosine_1, sine_1, mask_1)
-    cross_attend = build_cross_attention(dim, f"cross_attention_{index}")
+def transformer_layer(cos_0, sin_0, cos_1, sin_1, mask_0, mask_1, dim, arg,
+                      x_0, x_1):
+    self_attend = build_self_attention(dim, f"self_attention_{arg}")
+    x_0 = self_attend(x_0, cos_0, sin_0, mask_0)
+    x_1 = self_attend(x_1, cos_1, sin_1, mask_1)
+    cross_attend = build_cross_attention(dim, f"cross_attention_{arg}")
     return cross_attend(x_0, x_1, mask_0, mask_1)
 
 
@@ -106,10 +110,10 @@ def build_self_attention(dim, name):
     project = Dense(dim, name=f"{name}_projection")
     feed_forward = build_feed_forward(dim, name)
 
-    def attend(x, cosine, sine, mask):
+    def attend(x, cos, sin, mask):
         heads = SplitDim(-1, (dim, 3))(to_qkv(x))
-        query = rotate(heads[..., 0], cosine, sine)
-        key = rotate(heads[..., 1], cosine, sine)
+        query = rotate(heads[..., 0], cos, sin)
+        key = rotate(heads[..., 1], cos, sin)
         message = project(scaled_attention(query, key, heads[..., 2], mask))
         return x + feed_forward(ops.concatenate([x, message], axis=-1))
 
@@ -171,8 +175,8 @@ def pair_bias(mask_0, mask_1):
     return ops.where(valid, 0.0, -1e9)
 
 
-def rotate(x, cosine, sine):
-    return x * cosine + rotate_half(x) * sine
+def rotate(x, cos, sin):
+    return x * cos + rotate_half(x) * sin
 
 
 def rotate_half(x):
