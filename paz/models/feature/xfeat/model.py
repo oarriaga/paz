@@ -28,7 +28,7 @@ def XFeat(weights="pretrained", top_k=4096, threshold=0.05):
         return positions, scores, descriptors, scale
 
     def call(image):
-        return finalize(*extract(image))
+        return select_valid(*extract(image))
 
     return call
 
@@ -47,7 +47,7 @@ def extract_core(model, tensor, top_k, threshold):
     return positions, scores, features.l2_normalize(descriptors, axis=-1)
 
 
-def finalize(positions, scores, descriptors, scale):
+def select_valid(positions, scores, descriptors, scale):
     valid = scores > 0
     keypoints = positions[valid] * scale
     return Features(keypoints, scores[valid], descriptors[valid])
