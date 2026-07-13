@@ -2,7 +2,7 @@ import string
 
 import keras
 from keras import ops
-from keras.layers import Dense, Dropout, EinsumDense, Reshape
+from keras.layers import Dense, Dropout, EinsumDense, LayerNormalization, Reshape
 
 from paz.models.transformers import cache as kv_cache
 
@@ -200,3 +200,9 @@ def merge_attention_heads(context):
     num_heads = transposed.shape[2]
     head_dim = transposed.shape[3]
     return Reshape((-1, num_heads * head_dim))(transposed)
+
+
+def normalize_query_key(query, key, epsilon, name):
+    query_norm = LayerNormalization(axis=-1, epsilon=epsilon, name=f"{name}_q_norm")
+    key_norm = LayerNormalization(axis=-1, epsilon=epsilon, name=f"{name}_k_norm")
+    return query_norm(query), key_norm(key)

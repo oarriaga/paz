@@ -6,6 +6,7 @@ from paz.models.transformers.attention import project_query_key_value
 from paz.models.transformers.attention import split_query_key_value
 from paz.models.transformers.attention import compute_attention
 from paz.models.transformers.attention import merge_attention_heads
+from paz.models.transformers.attention import normalize_query_key
 
 
 def test_attend_preserves_query_shape():
@@ -74,3 +75,13 @@ def test_merge_attention_heads_inverts_split_layout():
     context = ops.zeros((1, num_heads, 4, head_dim))
     merged = merge_attention_heads(context)
     assert tuple(merged.shape) == (1, 4, num_heads * head_dim)
+
+
+def test_normalize_query_key_normalizes_over_head_dim():
+    values = np.random.RandomState(2).randn(2, 3, 5, 16).astype("float32")
+    query, key = normalize_query_key(ops.array(values), ops.array(values),
+                                     1e-5, "blk")
+    query = np.array(query)
+    assert np.allclose(query.mean(axis=-1), 0.0, atol=1e-5)
+    assert np.allclose(query.std(axis=-1), 1.0, atol=1e-2)
+    assert np.allclose(query, np.array(key))
