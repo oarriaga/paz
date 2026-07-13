@@ -1,4 +1,6 @@
-from paz.models.feature.lightglue.model import LighterGlueModel, NUM_LAYERS
+from paz.models.feature.lightglue.model import LighterGlueModel
+
+NUM_LAYERS = 6
 
 
 def port_weights(torch_path):
@@ -12,8 +14,11 @@ def port_weights(torch_path):
 
 
 def matcher_state(state):
-    return {key[len("matcher."):]: value for key, value in state.items()
-            if key.startswith("matcher.")}
+    matcher = {}
+    for key, value in state.items():
+        if key.startswith("matcher."):
+            matcher[key[len("matcher."):]] = value
+    return matcher
 
 
 def set_weights(model, state):

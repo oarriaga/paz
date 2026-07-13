@@ -53,7 +53,7 @@ def test_mutual_nearest_neighbors_matches_torch(min_cosine):
     descriptors1 = normalize(rng.standard_normal((300, 64)))
     descriptors2 = normalize(rng.standard_normal((280, 64)))
     reference = torch_mutual(descriptors1, descriptors2, min_cosine)
-    ours = backend.mutual_nearest_neighbors(
+    ours = backend.find_mutual_nearest_neighbors(
         jp.asarray(descriptors1), jp.asarray(descriptors2), min_cosine)
     assert np.array_equal(ours[0], reference[0])
     assert np.array_equal(ours[1], reference[1])

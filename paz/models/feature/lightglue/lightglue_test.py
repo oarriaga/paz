@@ -37,7 +37,7 @@ def test_filter_matches_matches_reference():
 
 def test_rotate_half_is_quarter_turn():
     rng = np.random.default_rng(1)
-    x = jp.asarray(rng.standard_normal((10, lightglue.HEAD_DIM)), jp.float32)
+    x = jp.asarray(rng.standard_normal((10, 96)), jp.float32)
     rotated = lightglue.rotate_half(lightglue.rotate_half(x))
     assert np.allclose(np.asarray(rotated), -np.asarray(x), atol=1e-6)
 

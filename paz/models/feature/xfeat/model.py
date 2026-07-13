@@ -19,23 +19,27 @@ Features = namedtuple("Features", ["keypoints", "scores", "descriptors"])
 
 def XFeat(weights="pretrained", top_k=4096, threshold=0.05):
     model = XFeatModel(weights)
-    forward = jax.jit(model)
-    core = jax.jit(extract_core, static_argnums=(3, 4, 5, 6))
+
+    @jax.jit
+    def extract(image):
+        tensor, scale = preprocess(image)
+        positions, scores, descriptors = extract_core(model, tensor, top_k,
+                                                      threshold)
+        return positions, scores, descriptors, scale
 
     def call(image):
-        tensor, scale = preprocess(image)
-        height, width = tensor.shape[1], tensor.shape[2]
-        outputs = core(*forward(tensor), height, width, top_k, threshold)
-        return finalize(outputs, scale)
+        return finalize(*extract(image))
 
     return call
 
 
-def extract_core(features, logits, heat, height, width, top_k, threshold):
+def extract_core(model, tensor, top_k, threshold):
+    features, logits, heat = model(tensor)
+    height, width = tensor.shape[1], tensor.shape[2]
     features = backend.l2_normalize(features[0], axis=-1)
-    heatmap = backend.keypoint_heatmap(logits[0])
-    grid, scores = backend.dense_scores(heatmap, heat[0], threshold,
-                                        height, width)
+    heatmap = backend.compute_keypoint_heatmap(logits[0])
+    grid, scores = backend.compute_dense_scores(heatmap, heat[0], threshold,
+                                                height, width)
     scores, chosen = jax.lax.top_k(scores, top_k)
     positions = grid[chosen]
     descriptors = backend.sample_features(features, positions, height,
@@ -43,10 +47,11 @@ def extract_core(features, logits, heat, height, width, top_k, threshold):
     return positions, scores, backend.l2_normalize(descriptors, axis=-1)
 
 
-def finalize(outputs, scale):
-    positions, scores, descriptors = (np.asarray(x) for x in outputs)
+def finalize(positions, scores, descriptors, scale):
+    positions, scores = np.asarray(positions), np.asarray(scores)
+    descriptors, scale = np.asarray(descriptors), np.asarray(scale)
     valid = scores > 0
-    keypoints = positions[valid] * np.asarray(scale)
+    keypoints = positions[valid] * scale
     return Features(keypoints, scores[valid], descriptors[valid])
 
 
@@ -63,15 +68,6 @@ def preprocess(image):
 
 
 def XFeatModel(weights="pretrained", name="xfeat"):
-    model = build_xfeat(name)
-    if weights == "pretrained":
-        asset = WEIGHTS_URL.rsplit("/", 1)[-1]
-        path = get_file(asset, WEIGHTS_URL, cache_subdir="paz/models/xfeat")
-        model.load_weights(path)
-    return model
-
-
-def build_xfeat(name):
     image = Input((None, None, 3))
     normed = instance_normalize(to_grayscale(image))
     x1 = build_block(normed, [(4, 3, 1), (8, 3, 2), (8, 3, 1), (24, 3, 2)], "block1")  # fmt: skip
@@ -84,7 +80,17 @@ def build_xfeat(name):
     features = build_fusion(x3 + x4 + x5)
     heatmap = build_heatmap_head(features)
     keypoints = build_keypoint_head(normed)
-    return Model(image, [features, keypoints, heatmap], name=name)
+    model = Model(image, [features, keypoints, heatmap], name=name)
+    load_weights(model, weights, "paz/models/xfeat")
+    return model
+
+
+def load_weights(model, weights, cache):
+    if weights == "pretrained":
+        asset = WEIGHTS_URL.rsplit("/", 1)[-1]
+        weights = get_file(asset, WEIGHTS_URL, cache_subdir=cache)
+    if weights is not None:
+        model.load_weights(weights)
 
 
 def to_grayscale(image):

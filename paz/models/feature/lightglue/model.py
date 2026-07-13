@@ -9,10 +9,6 @@ from keras.utils import get_file
 
 from paz.layers import SplitDim, MergeDims
 
-INPUT_DIM = 64
-DESCRIPTOR_DIM = 96
-HEAD_DIM = 96
-NUM_LAYERS = 6
 WEIGHTS_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.25/xfeat_lighterglue_paz_jax.weights.h5"  # fmt: skip
 
 Matches = namedtuple("Matches", ["matches0", "matches1", "scores0", "scores1"])
@@ -20,14 +16,16 @@ Matches = namedtuple("Matches", ["matches0", "matches1", "scores0", "scores1"])
 
 def LighterGlue(weights="pretrained", filter_threshold=0.1):
     model = LighterGlueModel(weights)
-    forward = jax.jit(lambda inputs: model(inputs))
-    prune = jax.jit(filter_matches, static_argnums=(1,))
 
-    def call(keypoints0, descriptors0, keypoints1, descriptors1, size0, size1):
+    @jax.jit
+    def match(keypoints0, descriptors0, keypoints1, descriptors1, size0, size1):
         first = prepare(keypoints0, descriptors0, size0)
         second = prepare(keypoints1, descriptors1, size1)
-        scores = forward(first + second)[0]
-        outputs = prune(scores, filter_threshold)
+        return filter_matches(model(first + second)[0], filter_threshold)
+
+    def call(keypoints0, descriptors0, keypoints1, descriptors1, size0, size1):
+        outputs = match(keypoints0, descriptors0, keypoints1, descriptors1,
+                        size0, size1)
         return Matches(*(np.asarray(value) for value in outputs))
 
     return call
@@ -38,33 +36,33 @@ def prepare(keypoints, descriptors, size):
 
 
 def LighterGlueModel(weights="pretrained", name="lighterglue"):
-    model = build_lighterglue(name)
-    if weights == "pretrained":
-        asset = WEIGHTS_URL.rsplit("/", 1)[-1]
-        weights = get_file(asset, WEIGHTS_URL,
-                           cache_subdir="paz/models/lightglue")
-    if weights is not None:
-        model.load_weights(weights)
-    return model
-
-
-def build_lighterglue(name):
-    keypoints0, descriptors0 = Input((None, 2)), Input((None, INPUT_DIM))
-    keypoints1, descriptors1 = Input((None, 2)), Input((None, INPUT_DIM))
-    encode = build_encoder("encoding")
-    project = Dense(DESCRIPTOR_DIM, name="input_projection")
+    input_dim, dim, num_layers = 64, 96, 6
+    keypoints0, descriptors0 = Input((None, 2)), Input((None, input_dim))
+    keypoints1, descriptors1 = Input((None, 2)), Input((None, input_dim))
+    encode = build_encoder(dim, "encoding")
+    project = Dense(dim, name="input_projection")
     cosine0, sine0 = encode(keypoints0)
     cosine1, sine1 = encode(keypoints1)
     x0, x1 = project(descriptors0), project(descriptors1)
-    for index in range(NUM_LAYERS):
-        x0, x1 = transformer_layer(x0, x1, cosine0, sine0, cosine1, sine1, index)  # fmt: skip
-    scores = assign_matches(x0, x1, "assignment")
+    for index in range(num_layers):
+        x0, x1 = transformer_layer(x0, x1, cosine0, sine0, cosine1, sine1, dim, index)  # fmt: skip
+    scores = assign_matches(x0, x1, dim, "assignment")
     inputs = [keypoints0, descriptors0, keypoints1, descriptors1]
-    return Model(inputs, scores, name=name)
+    model = Model(inputs, scores, name=name)
+    load_weights(model, weights, "paz/models/lightglue")
+    return model
 
 
-def build_encoder(name):
-    project = Dense(HEAD_DIM // 2, use_bias=False, name=f"{name}_projection")
+def load_weights(model, weights, cache):
+    if weights == "pretrained":
+        asset = WEIGHTS_URL.rsplit("/", 1)[-1]
+        weights = get_file(asset, WEIGHTS_URL, cache_subdir=cache)
+    if weights is not None:
+        model.load_weights(weights)
+
+
+def build_encoder(dim, name):
+    project = Dense(dim // 2, use_bias=False, name=f"{name}_projection")
 
     def encode(keypoints):
         angles = ops.repeat(project(keypoints), 2, axis=-1)
@@ -73,20 +71,20 @@ def build_encoder(name):
     return encode
 
 
-def transformer_layer(x0, x1, cosine0, sine0, cosine1, sine1, index):
-    self_attend = build_self_attention(f"self_attention_{index}")
+def transformer_layer(x0, x1, cosine0, sine0, cosine1, sine1, dim, index):
+    self_attend = build_self_attention(dim, f"self_attention_{index}")
     x0 = self_attend(x0, cosine0, sine0)
     x1 = self_attend(x1, cosine1, sine1)
-    return build_cross_attention(f"cross_attention_{index}")(x0, x1)
+    return build_cross_attention(dim, f"cross_attention_{index}")(x0, x1)
 
 
-def build_self_attention(name):
-    to_qkv = Dense(3 * DESCRIPTOR_DIM, name=f"{name}_qkv")
-    project = Dense(DESCRIPTOR_DIM, name=f"{name}_projection")
-    feed_forward = build_feed_forward(name)
+def build_self_attention(dim, name):
+    to_qkv = Dense(3 * dim, name=f"{name}_qkv")
+    project = Dense(dim, name=f"{name}_projection")
+    feed_forward = build_feed_forward(dim, name)
 
     def attend(x, cosine, sine):
-        heads = SplitDim(-1, (HEAD_DIM, 3))(to_qkv(x))
+        heads = SplitDim(-1, (dim, 3))(to_qkv(x))
         query = rotate(heads[..., 0], cosine, sine)
         key = rotate(heads[..., 1], cosine, sine)
         message = project(scaled_attention(query, key, heads[..., 2]))
@@ -95,11 +93,11 @@ def build_self_attention(name):
     return attend
 
 
-def build_cross_attention(name):
-    to_query = Dense(DESCRIPTOR_DIM, name=f"{name}_query")
-    to_value = Dense(DESCRIPTOR_DIM, name=f"{name}_value")
-    project = Dense(DESCRIPTOR_DIM, name=f"{name}_projection")
-    feed_forward = build_feed_forward(name)
+def build_cross_attention(dim, name):
+    to_query = Dense(dim, name=f"{name}_query")
+    to_value = Dense(dim, name=f"{name}_value")
+    project = Dense(dim, name=f"{name}_projection")
+    feed_forward = build_feed_forward(dim, name)
 
     def attend(x0, x1):
         query0, query1 = scale(to_query(x0)), scale(to_query(x1))
@@ -114,10 +112,10 @@ def build_cross_attention(name):
     return attend
 
 
-def build_feed_forward(name):
-    expand = Dense(2 * DESCRIPTOR_DIM, name=f"{name}_expand")
+def build_feed_forward(dim, name):
+    expand = Dense(2 * dim, name=f"{name}_expand")
     normalize_features = LayerNormalization(epsilon=1e-5, name=f"{name}_norm")
-    project = Dense(DESCRIPTOR_DIM, name=f"{name}_project")
+    project = Dense(dim, name=f"{name}_project")
 
     def transform(x):
         return project(ops.gelu(normalize_features(expand(x)), approximate=False))  # fmt: skip
@@ -125,16 +123,16 @@ def build_feed_forward(name):
     return transform
 
 
-def assign_matches(x0, x1, name):
-    project = Dense(DESCRIPTOR_DIM, name=f"{name}_projection")
+def assign_matches(x0, x1, dim, name):
+    project = Dense(dim, name=f"{name}_projection")
     matchability = Dense(1, name=f"{name}_matchability")
-    scale = DESCRIPTOR_DIM ** 0.25
+    scale = dim ** 0.25
     similarity = ops.einsum("bmd,bnd->bmn", project(x0) / scale, project(x1) / scale)  # fmt: skip
     return double_softmax(similarity, matchability(x0), matchability(x1))
 
 
 def scaled_attention(query, key, value):
-    scores = ops.einsum("bid,bjd->bij", query, key) / HEAD_DIM ** 0.5
+    scores = ops.einsum("bid,bjd->bij", query, key) / query.shape[-1] ** 0.5
     return ops.matmul(ops.softmax(scores, axis=-1), value)
 
 
@@ -143,12 +141,12 @@ def rotate(x, cosine, sine):
 
 
 def rotate_half(x):
-    pairs = SplitDim(-1, (HEAD_DIM // 2, 2))(x)
+    pairs = SplitDim(-1, (x.shape[-1] // 2, 2))(x)
     return MergeDims(-2)(ops.stack([-pairs[..., 1], pairs[..., 0]], axis=-1))
 
 
 def scale(query):
-    return query * HEAD_DIM ** -0.25
+    return query * query.shape[-1] ** -0.25
 
 
 def swap(x):
