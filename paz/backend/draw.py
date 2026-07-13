@@ -478,14 +478,16 @@ def add_occlusion(key, image, num_vertices=6, max_radius_scale=0.5):
 
 def matches(image_A, image_B, points_A, points_B, color=GREEN, thickness=1):
     canvas, shift = stack_side_by_side(image_A, image_B)
+    points_A = paz.to_numpy(points_A).astype(int)
+    points_B = paz.to_numpy(points_B).astype(int)
     for point_A, point_B in zip(points_A, points_B):
-        start = [int(point_A[0]), int(point_A[1])]
-        end = [int(point_B[0]) + shift, int(point_B[1])]
-        line(canvas, start, end, color, thickness)
+        end = [point_B[0] + shift, point_B[1]]
+        line(canvas, list(point_A), end, color, thickness)
     return canvas
 
 
 def stack_side_by_side(image_A, image_B):
+    image_A, image_B = paz.to_numpy(image_A), paz.to_numpy(image_B)
     height = max(image_A.shape[0], image_B.shape[0])
     width = image_A.shape[1] + image_B.shape[1]
     canvas = np.zeros((height, width, 3), np.uint8)

@@ -6,7 +6,7 @@ import numpy as np
 import jax.numpy as jp
 import pytest
 
-from paz.models.feature.xfeat import backend
+from paz.backend import features
 from paz.models.feature.xfeat.model import XFeatModel
 
 torch = pytest.importorskip("torch")
@@ -31,7 +31,7 @@ def test_sample_features_matches_torch(mode):
     positions = rng.uniform(-20, 660, size=(200, 2)).astype(np.float32)
     reference = torch_sample(feature, positions, 480, 640, mode)
     feature_hwc = jp.asarray(np.transpose(feature, (1, 2, 0)))
-    ours = backend.sample_features(feature_hwc, jp.asarray(positions),
+    ours = features.sample_features(feature_hwc, jp.asarray(positions),
                                    480, 640, mode)
     assert np.allclose(np.asarray(ours), reference, atol=1e-4)
 
@@ -53,7 +53,7 @@ def test_mutual_nearest_neighbors_matches_torch(min_cosine):
     descriptors1 = normalize(rng.standard_normal((300, 64)))
     descriptors2 = normalize(rng.standard_normal((280, 64)))
     reference = torch_mutual(descriptors1, descriptors2, min_cosine)
-    ours = backend.find_mutual_nearest_neighbors(
+    ours = features.find_mutual_nearest_neighbors(
         jp.asarray(descriptors1), jp.asarray(descriptors2), min_cosine)
     assert np.array_equal(ours[0], reference[0])
     assert np.array_equal(ours[1], reference[1])
@@ -66,8 +66,8 @@ def normalize(x):
 def test_model_output_shapes():
     model = XFeatModel(weights=None)
     image = np.zeros((1, 480, 640, 3), np.float32)
-    features, keypoints, heatmap = model.predict(image, verbose=0)
-    assert features.shape == (1, 60, 80, 64)
+    feature_map, keypoints, heatmap = model.predict(image, verbose=0)
+    assert feature_map.shape == (1, 60, 80, 64)
     assert keypoints.shape == (1, 60, 80, 65)
     assert heatmap.shape == (1, 60, 80, 1)
 

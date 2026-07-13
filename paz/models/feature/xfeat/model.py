@@ -1,6 +1,5 @@
 from collections import namedtuple
 
-import numpy as np
 import jax
 import jax.numpy as jp
 from keras import ops
@@ -9,6 +8,7 @@ from keras.layers import AveragePooling2D, BatchNormalization, UpSampling2D
 from keras import Model
 from keras.utils import get_file
 
+from paz.backend import features
 from paz.models.feature.xfeat import backend
 
 INSTANCE_NORM_EPSILON = 1e-5
@@ -34,22 +34,20 @@ def XFeat(weights="pretrained", top_k=4096, threshold=0.05):
 
 
 def extract_core(model, tensor, top_k, threshold):
-    features, logits, heat = model(tensor)
+    feature_map, logits, heat = model(tensor)
     height, width = tensor.shape[1], tensor.shape[2]
-    features = backend.l2_normalize(features[0], axis=-1)
+    feature_map = features.l2_normalize(feature_map[0], axis=-1)
     heatmap = backend.compute_keypoint_heatmap(logits[0])
     grid, scores = backend.compute_dense_scores(heatmap, heat[0], threshold,
                                                 height, width)
     scores, chosen = jax.lax.top_k(scores, top_k)
     positions = grid[chosen]
-    descriptors = backend.sample_features(features, positions, height,
-                                          width, "bicubic")
-    return positions, scores, backend.l2_normalize(descriptors, axis=-1)
+    descriptors = features.sample_features(feature_map, positions, height,
+                                           width, "bicubic")
+    return positions, scores, features.l2_normalize(descriptors, axis=-1)
 
 
 def finalize(positions, scores, descriptors, scale):
-    positions, scores = np.asarray(positions), np.asarray(scores)
-    descriptors, scale = np.asarray(descriptors), np.asarray(scale)
     valid = scores > 0
     keypoints = positions[valid] * scale
     return Features(keypoints, scores[valid], descriptors[valid])
@@ -70,17 +68,17 @@ def preprocess(image):
 def XFeatModel(weights="pretrained", name="xfeat"):
     image = Input((None, None, 3))
     normed = instance_normalize(to_grayscale(image))
-    x1 = build_block(normed, [(4, 3, 1), (8, 3, 2), (8, 3, 1), (24, 3, 2)], "block1")  # fmt: skip
-    x2 = build_block(x1 + build_skip(normed), [(24, 3, 1), (24, 3, 1)], "block2")  # fmt: skip
-    x3 = build_block(x2, [(64, 3, 2), (64, 3, 1), (64, 1, 1)], "block3")
-    x4 = build_block(x3, [(64, 3, 2), (64, 3, 1), (64, 3, 1)], "block4")
-    x5 = build_block(x4, [(128, 3, 2), (128, 3, 1), (128, 3, 1), (64, 1, 1)], "block5")  # fmt: skip
-    x4 = UpSampling2D(2, interpolation="bilinear")(x4)
-    x5 = UpSampling2D(4, interpolation="bilinear")(x5)
-    features = build_fusion(x3 + x4 + x5)
-    heatmap = build_heatmap_head(features)
+    x_1 = build_block(normed, [(4, 3, 1), (8, 3, 2), (8, 3, 1), (24, 3, 2)], "block1")  # fmt: skip
+    x_2 = build_block(x_1 + build_skip(normed), [(24, 3, 1), (24, 3, 1)], "block2")  # fmt: skip
+    x_3 = build_block(x_2, [(64, 3, 2), (64, 3, 1), (64, 1, 1)], "block3")
+    x_4 = build_block(x_3, [(64, 3, 2), (64, 3, 1), (64, 3, 1)], "block4")
+    x_5 = build_block(x_4, [(128, 3, 2), (128, 3, 1), (128, 3, 1), (64, 1, 1)], "block5")  # fmt: skip
+    x_4 = UpSampling2D(2, interpolation="bilinear")(x_4)
+    x_5 = UpSampling2D(4, interpolation="bilinear")(x_5)
+    feature_map = build_fusion(x_3 + x_4 + x_5)
+    heatmap = build_heatmap_head(feature_map)
     keypoints = build_keypoint_head(normed)
-    model = Model(image, [features, keypoints, heatmap], name=name)
+    model = Model(image, [feature_map, keypoints, heatmap], name=name)
     load_weights(model, weights, "paz/models/xfeat")
     return model
 

@@ -1,7 +1,5 @@
 from paz.models.feature.lightglue.model import LighterGlueModel
 
-NUM_LAYERS = 6
-
 
 def port_weights(torch_path):
     import torch
@@ -24,7 +22,7 @@ def matcher_state(state):
 def set_weights(model, state):
     dense(model, state, "input_projection", "input_proj")
     kernel(model, state, "encoding_projection", "posenc.Wr")
-    for index in range(NUM_LAYERS):
+    for index in range(6):
         set_self_attention(model, state, index)
         set_cross_attention(model, state, index)
     dense(model, state, "assignment_projection", "log_assignment.5.final_proj")

@@ -14,26 +14,26 @@ REPO = os.environ.get("LIGHTGLUE_REPO")
 
 def numpy_filter(scores, threshold):
     valid = scores[:-1, :-1]
-    match0, match1 = valid.argmax(1), valid.argmax(0)
-    mutual0 = np.arange(len(match0)) == match1[match0]
-    mutual1 = np.arange(len(match1)) == match0[match1]
-    strength0 = np.where(mutual0, np.exp(valid.max(1)), 0.0)
-    valid0 = mutual0 & (strength0 > threshold)
-    valid1 = mutual1 & valid0[match1]
-    return (np.where(valid0, match0, -1), np.where(valid1, match1, -1),
-            strength0, np.where(mutual1, strength0[match1], 0.0))
+    match_0, match_1 = valid.argmax(1), valid.argmax(0)
+    mutual_0 = np.arange(len(match_0)) == match_1[match_0]
+    mutual_1 = np.arange(len(match_1)) == match_0[match_1]
+    strength_0 = np.where(mutual_0, np.exp(valid.max(1)), 0.0)
+    valid_0 = mutual_0 & (strength_0 > threshold)
+    valid_1 = mutual_1 & valid_0[match_1]
+    return (np.where(valid_0, match_0, -1), np.where(valid_1, match_1, -1),
+            strength_0, np.where(mutual_1, strength_0[match_1], 0.0))
 
 
 def test_filter_matches_matches_reference():
     rng = np.random.default_rng(0)
     scores = rng.standard_normal((80, 65)).astype(np.float32)
-    matches0, matches1, scores0, scores1 = numpy_filter(scores, 0.1)
-    mask0, mask1 = jp.ones(scores.shape[0] - 1), jp.ones(scores.shape[1] - 1)
-    ours = lightglue.filter_matches(jp.asarray(scores), mask0, mask1, 0.1)
-    assert np.array_equal(np.asarray(ours[0]), matches0)
-    assert np.array_equal(np.asarray(ours[1]), matches1)
-    assert np.allclose(np.asarray(ours[2]), scores0, atol=1e-4)
-    assert np.allclose(np.asarray(ours[3]), scores1, atol=1e-4)
+    matches_0, matches_1, scores_0, scores_1 = numpy_filter(scores, 0.1)
+    mask_0, mask_1 = jp.ones(scores.shape[0] - 1), jp.ones(scores.shape[1] - 1)
+    ours = lightglue.filter_matches(jp.asarray(scores), mask_0, mask_1, 0.1)
+    assert np.array_equal(np.asarray(ours[0]), matches_0)
+    assert np.array_equal(np.asarray(ours[1]), matches_1)
+    assert np.allclose(np.asarray(ours[2]), scores_0, atol=1e-4)
+    assert np.allclose(np.asarray(ours[3]), scores_1, atol=1e-4)
 
 
 def test_rotate_half_is_quarter_turn():
@@ -50,15 +50,15 @@ def test_matches_torch_reference(tmp_path):
 
     weights_path = str(tmp_path / "lighterglue.weights.h5")
     port_weights(WEIGHTS).save_weights(weights_path)
-    keypoints0, descriptors0 = random_features(0, 300)
-    keypoints1, descriptors1 = correlated_features(descriptors0, 1)
+    keypoints_0, descriptors_0 = random_features(0, 300)
+    keypoints_1, descriptors_1 = correlated_features(descriptors_0, 1)
     size = jp.array([640.0, 480.0])
     match = lightglue.LighterGlue(weights=weights_path)
-    ours = match(keypoints0, descriptors0, keypoints1, descriptors1,
+    ours = match(keypoints_0, descriptors_0, keypoints_1, descriptors_1,
                  size, size)
-    expected = reference_matches(keypoints0, descriptors0, keypoints1,
-                                 descriptors1)
-    assert np.array_equal(ours.matches0, expected)
+    expected = reference_matches(keypoints_0, descriptors_0, keypoints_1,
+                                 descriptors_1)
+    assert np.array_equal(ours.matches_0, expected)
 
 
 def random_features(seed, count):
@@ -68,11 +68,12 @@ def random_features(seed, count):
     return jp.asarray(keypoints), jp.asarray(descriptors)
 
 
-def correlated_features(descriptors0, seed):
+def correlated_features(descriptors_0, seed):
     rng = np.random.default_rng(seed)
-    descriptors0 = np.asarray(descriptors0)
+    descriptors_0 = np.asarray(descriptors_0)
     keypoints = rng.uniform([0, 0], [640, 480], (280, 2)).astype(np.float32)
-    descriptors = normalize(descriptors0[:280] + rng.normal(0, 0.05, (280, 64)))
+    noise = rng.normal(0, 0.05, (280, 64))
+    descriptors = normalize(descriptors_0[:280] + noise)
     return jp.asarray(keypoints), jp.asarray(descriptors)
 
 
@@ -81,7 +82,7 @@ def normalize(descriptors):
     return (descriptors / norm).astype(np.float32)
 
 
-def reference_matches(keypoints0, descriptors0, keypoints1, descriptors1):
+def reference_matches(keypoints_0, descriptors_0, keypoints_1, descriptors_1):
     import importlib.util
     import torch
 
@@ -90,8 +91,8 @@ def reference_matches(keypoints0, descriptors0, keypoints1, descriptors1):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     net = build_reference(module, torch)
-    data = reference_data(torch, keypoints0, descriptors0, keypoints1,
-                          descriptors1)
+    data = reference_data(torch, keypoints_0, descriptors_0, keypoints_1,
+                          descriptors_1)
     with torch.inference_mode():
         return net(data)["matches0"][0].numpy()
 
@@ -116,11 +117,12 @@ def rename(state, index):
     return state
 
 
-def reference_data(torch, keypoints0, descriptors0, keypoints1, descriptors1):
+def reference_data(torch, keypoints_0, descriptors_0, keypoints_1,
+                   descriptors_1):
     def image(keypoints, descriptors):
         return {"keypoints": torch.tensor(np.asarray(keypoints))[None],
                 "descriptors": torch.tensor(np.asarray(descriptors))[None],
                 "image_size": torch.tensor([[640.0, 480.0]])}
 
-    return {"image0": image(keypoints0, descriptors0),
-            "image1": image(keypoints1, descriptors1)}
+    return {"image0": image(keypoints_0, descriptors_0),
+            "image1": image(keypoints_1, descriptors_1)}

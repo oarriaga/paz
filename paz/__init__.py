@@ -27,6 +27,7 @@ from paz.backend import bijectors
 
 from paz import graphics
 from paz.backend import points2D
+from paz.backend import features
 from paz.backend import gaussian_mixture
 from paz.backend import poses
 from paz.backend import algebra
