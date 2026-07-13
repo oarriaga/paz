@@ -35,3 +35,6 @@ from .foundation.dinov3.models.vision_transformer import DINOV3VITB
 from .foundation.dinov3.models.vision_transformer import DINOV3VITL
 from .foundation.whisper.model import Whisper
 from .foundation.gemma4.model import Gemma4
+from .feature.xfeat.model import XFeatModel
+from .feature.xfeat.model import XFeat
+from .feature.lightglue.model import LighterGlue
