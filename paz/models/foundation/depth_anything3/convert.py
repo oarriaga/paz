@@ -14,6 +14,8 @@ import numpy as np
 
 from paz.models.foundation.depth_anything3.models import build_da3_small
 from paz.models.foundation.depth_anything3.models import build_da3_base
+from paz.models.foundation.depth_anything3.models import build_da3_mono_large
+from paz.models.foundation.depth_anything3.models import build_da3_metric_large
 from paz.models.foundation.depth_anything3 import port_weights
 
 UPSTREAM = "https://github.com/ByteDance-Seed/Depth-Anything-3"
@@ -22,6 +24,10 @@ LICENSE = "Apache-2.0"
 IMAGE_SHAPE = (518, 518, 3)
 SMALL = ("depth-anything/DA3-SMALL", build_da3_small, 384, "da3_small_paz_jax")
 BASE = ("depth-anything/DA3-BASE", build_da3_base, 768, "da3_base_paz_jax")
+MONO = ("depth-anything/DA3MONO-LARGE", build_da3_mono_large,
+        "da3_mono_large_paz_jax")
+METRIC = ("depth-anything/DA3METRIC-LARGE", build_da3_metric_large,
+          "da3_metric_large_paz_jax")
 
 
 def convert(size, output_directory, image_shape=IMAGE_SHAPE, views=2):
@@ -34,6 +40,31 @@ def convert(size, output_directory, image_shape=IMAGE_SHAPE, views=2):
     verify_reload(builder, hidden_size, weights_path, state, image_shape, views)
     write_metadata(output_directory, repository, stem, checkpoint, weights_path)
     return weights_path
+
+
+def convert_mono(size, output_directory, image_shape=IMAGE_SHAPE):
+    repository, builder, stem = size
+    checkpoint = download_checkpoint(repository)
+    state = load_state(checkpoint)
+    model = build_and_port_mono(builder, state, image_shape)
+    weights_path = os.path.join(output_directory, f"{stem}.weights.h5")
+    model.save_weights(weights_path)
+    reloaded = builder(image_shape)
+    reloaded.load_weights(weights_path)
+    data = np.zeros((1, *image_shape), "float32")
+    for expected, actual in zip(model(data), reloaded(data)):
+        assert np.allclose(np.array(expected), np.array(actual), atol=1e-5)
+    write_metadata(output_directory, repository, stem, checkpoint, weights_path)
+    return weights_path
+
+
+def build_and_port_mono(builder, state, image_shape):
+    model = builder(image_shape)
+    positions = count_positions(image_shape)
+    port_weights.port_backbone_weights(model, state, 24, positions, 1024,
+                                       use_camera=False, use_qk_norm=False)
+    port_weights.port_dpt_head_weights(model, state)
+    return model
 
 
 def download_checkpoint(repository):
@@ -88,5 +119,12 @@ def count_positions(image_shape):
 
 if __name__ == "__main__":
     directory = os.environ.get("DA3_OUTPUT", ".")
-    size = BASE if os.environ.get("DA3_MODEL") == "base" else SMALL
-    print("saved:", convert(size, directory))
+    model = os.environ.get("DA3_MODEL", "small")
+    if model == "mono":
+        print("saved:", convert_mono(MONO, directory))
+    elif model == "metric":
+        print("saved:", convert_mono(METRIC, directory))
+    elif model == "base":
+        print("saved:", convert(BASE, directory))
+    else:
+        print("saved:", convert(SMALL, directory))

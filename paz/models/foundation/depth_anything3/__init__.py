@@ -5,4 +5,6 @@
 """
 from paz.models.foundation.depth_anything3.models import build_da3_small
 from paz.models.foundation.depth_anything3.models import build_da3_base
+from paz.models.foundation.depth_anything3.models import build_da3_mono_large
+from paz.models.foundation.depth_anything3.models import build_da3_metric_large
 from paz.models.foundation.depth_anything3.models import build_da3_small_backbone

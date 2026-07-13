@@ -10,15 +10,37 @@ BACKBONE = "backbone.pretrained."
 
 
 def port_backbone_weights(model, state_dict, depth, num_positions,
-                          hidden_size):
+                          hidden_size, use_camera=True, use_qk_norm=True):
     state_dict = strip_model_prefix(state_dict)
     assign(model, "patch_embed_proj", patch_embedding(state_dict))
     assign(model, "cls_token", [reshape(state_dict, "cls_token", hidden_size)])
     assign(model, "pos_embed", [positions(state_dict, num_positions, hidden_size)])
-    assign(model, "camera_token", [take(state_dict, "camera_token").reshape(2, hidden_size)])
+    if use_camera:
+        assign(model, "camera_token",
+               [take(state_dict, "camera_token").reshape(2, hidden_size)])
     assign(model, "norm", norm(state_dict, "norm"))
     for index in range(depth):
-        assign_block(model, state_dict, index)
+        assign_block(model, state_dict, index, use_qk_norm)
+    return model
+
+
+def port_dpt_head_weights(model, state_dict):
+    state_dict = strip_model_prefix(state_dict)
+    for stage in range(4):
+        assign(model, f"head_project_{stage}",
+               conv_bias(state_dict, f"head.projects.{stage}"))
+    for stage in (0, 1, 3):
+        assign(model, f"head_resize_{stage}",
+               conv_bias(state_dict, f"head.resize_layers.{stage}"))
+    for stage in range(1, 5):
+        assign(model, f"head_layer{stage}_rn",
+               [conv_kernel(state_dict, f"head.scratch.layer{stage}_rn")])
+    port_refinenets(model, state_dict, "")
+    assign(model, "head_out1", conv_bias(state_dict, "head.scratch.output_conv1"))
+    assign(model, "head_out2_conv0", conv_bias(state_dict, "head.scratch.output_conv2.0"))
+    assign(model, "head_out2_conv1", conv_bias(state_dict, "head.scratch.output_conv2.2"))
+    assign(model, "head_sky_conv0", conv_bias(state_dict, "head.scratch.sky_output_conv2.0"))
+    assign(model, "head_sky_conv1", conv_bias(state_dict, "head.scratch.sky_output_conv2.2"))
     return model
 
 
@@ -97,7 +119,7 @@ def named_norm(state_dict, source):
             np.asarray(state_dict[source + ".bias"])]
 
 
-def assign_block(model, state_dict, index):
+def assign_block(model, state_dict, index, use_qk_norm=True):
     source = f"blocks.{index}."
     name = f"block_{index}"
     assign(model, f"{name}_norm1", norm(state_dict, source + "norm1"))
@@ -108,7 +130,7 @@ def assign_block(model, state_dict, index):
     assign(model, f"{name}_mlp_fc2", dense(state_dict, source + "mlp.fc2"))
     assign(model, f"{name}_ls1", [take(state_dict, source + "ls1.gamma")])
     assign(model, f"{name}_ls2", [take(state_dict, source + "ls2.gamma")])
-    if index >= 4:
+    if use_qk_norm and index >= 4:
         assign(model, f"{name}_q_norm", norm(state_dict, source + "attn.q_norm"))
         assign(model, f"{name}_k_norm", norm(state_dict, source + "attn.k_norm"))
 

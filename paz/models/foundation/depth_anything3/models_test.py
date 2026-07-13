@@ -4,6 +4,7 @@ import jax
 from paz.models.foundation.depth_anything3.models import build_da3_small_backbone
 from paz.models.foundation.depth_anything3.models import build_da3_small
 from paz.models.foundation.depth_anything3.models import build_da3_base
+from paz.models.foundation.depth_anything3.models import build_da3_mono_large
 from paz.models.foundation.depth_anything3.models import grid_shape
 from paz.models.foundation.depth_anything3.port_weights import port_backbone_weights
 
@@ -70,6 +71,17 @@ def test_da3_base_output_order_and_shapes():
     assert tuple(depth.shape) == (1, VIEWS, 70, 70)
     assert tuple(extrinsics.shape) == (1, VIEWS, 3, 4)
     assert tuple(rays.shape) == (1, VIEWS, 40, 40, 6)
+
+
+def test_mono_large_returns_depth_and_sky():
+    model = build_da3_mono_large(IMAGE_SHAPE)
+    image = np.random.RandomState(0).randn(1, *IMAGE_SHAPE).astype("float32")
+    outputs = model(image)
+    assert not isinstance(outputs, dict)
+    assert len(outputs) == 2
+    depth, sky = outputs
+    assert tuple(depth.shape) == (1, 70, 70)
+    assert tuple(sky.shape) == (1, 70, 70)
 
 
 def test_da3_small_jit_runs():

@@ -74,6 +74,27 @@ def test_da3_base_matches_reference():
     check_da3_reference("DA3-BASE", build_da3_base, 768)
 
 
+@pytest.mark.skipif(not REFERENCE, reason="set DA3_REFERENCE to run")
+def test_da3_mono_large_matches_reference():
+    import torch
+    from paz.models.foundation.depth_anything3.models import build_da3_mono_large
+    from paz.models.foundation.depth_anything3 import port_weights
+    net, state = load_reference_backbone("DA3MONO-LARGE")
+    height, width = 154, 154
+    image = np.random.RandomState(8).randn(1, 1, 3, height, width).astype("float32")
+    with torch.no_grad():
+        feats, _ = net.backbone(torch.from_numpy(image))
+        head = net.head(feats, height, width, patch_start_idx=0)
+    model = build_da3_mono_large((height, width, 3))
+    positions = (height // 14) ** 2 + 1
+    port_weights.port_backbone_weights(model, state, 24, positions, 1024,
+                                       use_camera=False, use_qk_norm=False)
+    port_weights.port_dpt_head_weights(model, state)
+    depth, sky = model(np.transpose(image[:, 0], (0, 2, 3, 1)))
+    assert np.allclose(np.array(depth), head["depth"].numpy(), atol=1e-3)
+    assert np.allclose(np.array(sky), head["sky"].numpy(), atol=1e-3)
+
+
 def check_da3_reference(model_name, builder, hidden_size):
     import torch
     from depth_anything_3.model.utils.transform import pose_encoding_to_extri_intri
