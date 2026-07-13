@@ -2,7 +2,7 @@ import numpy as np
 import keras
 from keras import Input, Model
 
-from paz.models.foundation.dinov2.layers.block import block, apply_FFN
+from paz.models.foundation.dinov2_legacy.layers.block import block, apply_FFN
 
 
 def make_block_args(name="block_0"):

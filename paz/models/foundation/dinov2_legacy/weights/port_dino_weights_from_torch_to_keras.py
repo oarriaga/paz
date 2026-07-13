@@ -1,19 +1,11 @@
 import os
 
-os.environ["KERAS_BACKEND"] = "jax"
-script_path = os.path.abspath(__file__)
-script_dir = os.path.dirname(script_path)
-project_root = os.path.abspath(os.path.join(script_dir, "..", "..", "..", ".."))
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
-import sys
-
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
 
 import keras
 import torch
 import numpy as np
-from paz.models.foundation.dinov2.models.vision_transformer import (
+from paz.models.foundation.dinov2_legacy.models.vision_transformer import (
     DINOV2Small,
     DINOV2Base,
     DINOV2Large,
@@ -41,22 +33,22 @@ def port_weights_from_state_dict(keras_model, state_dict):
     """
     logging.info(f"Starting weight porting for Keras model '{keras_model.name}'...")
 
-    cls_token_layer = keras_model.get_layer("cls_token")
-    embedding_dimension = cls_token_layer.embeddings.shape[-1]
-    cls_torch = state_dict["cls_token"].numpy().reshape(1, embedding_dimension)
-    cls_token_layer.embeddings.assign(cls_torch)
-    logging.info("✓ Ported classification_token.")
+    CLS_token_layer = keras_model.get_layer("cls_token")
+    embedding_dimension = CLS_token_layer.embeddings.shape[-1]
+    CLS_torch = state_dict["cls_token"].numpy().reshape(1, embedding_dimension)
+    CLS_token_layer.embeddings.assign(CLS_torch)
+    logging.info("Ported classification_token.")
 
-    pos_embed_layer = keras_model.get_layer("pos_embed")
+    POS_embed_layer = keras_model.get_layer("pos_embed")
     torch_positional_embedding = state_dict["pos_embed"]
-    target_length = pos_embed_layer.embeddings.shape[0]
+    target_length = POS_embed_layer.embeddings.shape[0]
     target_shape = (1, target_length, embedding_dimension)
 
     if tuple(torch_positional_embedding.shape) != target_shape:
         logging.info(
             f"  - Resizing positional embedding from {list(torch_positional_embedding.shape)} to {list(target_shape)}..."
         )
-        torch_cls_position_embedding = torch_positional_embedding[:, :1, :]
+        torch_CLS_position_embedding = torch_positional_embedding[:, :1, :]
         torch_patch_position_embedding = torch_positional_embedding[:, 1:, :]
         number_of_source_patches = torch_patch_position_embedding.shape[1]
         number_of_target_patches = target_length - 1
@@ -77,20 +69,20 @@ def port_weights_from_state_dict(keras_model, state_dict):
             )
         )
         final_positional_embedding = torch.cat(
-            [torch_cls_position_embedding, resized_patch_position_embedding], dim=1
+            [torch_CLS_position_embedding, resized_patch_position_embedding], dim=1
         )
-        pos_embed_layer.embeddings.assign(
+        POS_embed_layer.embeddings.assign(
             final_positional_embedding.numpy().reshape(
                 target_length, embedding_dimension
             )
         )
     else:
-        pos_embed_layer.embeddings.assign(
+        POS_embed_layer.embeddings.assign(
             torch_positional_embedding.numpy().reshape(
                 target_length, embedding_dimension
             )
         )
-    logging.info("✓ Ported positional_embedding.")
+    logging.info("Ported positional_embedding.")
 
     patch_embedding_w = (
         state_dict["patch_embed.proj.weight"].permute(2, 3, 1, 0).numpy()
@@ -99,7 +91,7 @@ def port_weights_from_state_dict(keras_model, state_dict):
     keras_model.get_layer("patch_embed_proj").set_weights(
         [patch_embedding_w, patch_embedding_b]
     )
-    logging.info("✓ Ported patch_embed weights.")
+    logging.info("Ported patch_embed weights.")
 
     number_of_blocks = count_blocks(keras_model)
     logging.info(f"Found {number_of_blocks} transformer blocks to port...")
@@ -131,8 +123,8 @@ def port_weights_from_state_dict(keras_model, state_dict):
             ]
         )
 
-        mlp_fully_connected_layer_1_key = f"blocks.{i}.mlp.fc1.weight"
-        if mlp_fully_connected_layer_1_key in state_dict:
+        MLP_fully_connected_layer_1_key = f"blocks.{i}.mlp.fc1.weight"
+        if MLP_fully_connected_layer_1_key in state_dict:
             keras_model.get_layer(f"{block_prefix}_mlp_fc1").set_weights(
                 [
                     state_dict[f"blocks.{i}.mlp.fc1.weight"].T.numpy(),
@@ -179,13 +171,13 @@ def port_weights_from_state_dict(keras_model, state_dict):
         if layer_scale_2_key in state_dict and hasattr(ls2_layer, "kernel"):
             ls2_layer.kernel.assign(state_dict[layer_scale_2_key].numpy())
 
-    logging.info("✓ Ported all transformer blocks.")
+    logging.info("Ported all transformer blocks.")
 
     final_normalization_layer = keras_model.get_layer("norm")
     final_normalization_layer.set_weights(
         [state_dict["norm.weight"].numpy(), state_dict["norm.bias"].numpy()]
     )
-    logging.info("✓ Ported final LayerNormalization.")
+    logging.info("Ported final LayerNormalization.")
 
     logging.info("\n--- Weight porting complete! ---")
     return keras_model
@@ -263,14 +255,14 @@ if __name__ == "__main__":
         }
         del pytorch_model
         gc.collect()
-        logging.info("✓ PyTorch weights extracted; model object released.")
+        logging.info("PyTorch weights extracted; model object released.")
 
         logging.info("Instantiating Keras 3 DINOv2 model architecture...")
         keras_dinov2_model = model_constructor(
             img_size=518,
             patch_size=14,
             init_values=1.0e-5,
-            num_reg_tokens=0,
+            num_register_tokens=0,
             name=f"dino_{model_name}",
         )
 
@@ -283,7 +275,7 @@ if __name__ == "__main__":
             f"Saving final native Keras model to '{final_keras_model_path}'..."
         )
         keras_dinov2_model.save(final_keras_model_path)
-        logging.info("✓ Save complete.")
+        logging.info("Save complete.")
 
         del keras_dinov2_model
         gc.collect()

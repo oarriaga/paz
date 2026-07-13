@@ -14,7 +14,7 @@ import sys
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from paz.models.foundation.dinov2.layers.attention import (
+from paz.models.foundation.dinov2_legacy.layers.attention import (
     split_query_key_value,
     compute_scores,
     apply_attention,

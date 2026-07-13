@@ -5,7 +5,7 @@ import torch
 import numpy as np
 import keras
 
-from paz.models.foundation.dinov2.layers.attention import (
+from paz.models.foundation.dinov2_legacy.layers.attention import (
     split_query_key_value,
     compute_scores,
     flatten_heads,

@@ -4,7 +4,7 @@ from collections import namedtuple
 import keras
 from keras import Input, Model, layers, ops, initializers
 
-from paz.models.foundation.dinov2.layers import (
+from paz.models.foundation.dinov2_legacy.layers import (
     attend,
     mlp,
     apply_layer_scale,

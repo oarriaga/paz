@@ -4,7 +4,7 @@ import numpy as np
 import keras
 from keras import Input, Model, layers, ops, initializers
 
-from paz.models.foundation.dinov2.layers import build_patch_embedding, block
+from paz.models.foundation.dinov2_legacy.layers import build_patch_embedding, block
 
 CLS_TOKEN = "cls_token"
 POS_EMBED = "pos_embed"

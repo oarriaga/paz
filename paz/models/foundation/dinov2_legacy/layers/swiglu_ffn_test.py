@@ -2,7 +2,7 @@ import numpy as np
 import keras
 from keras import Input, Model
 
-from paz.models.foundation.dinov2.layers.swiglu_ffn import (
+from paz.models.foundation.dinov2_legacy.layers.swiglu_ffn import (
     swiglu_ffn_fused,
     fused_hidden_dim,
 )
