@@ -3,6 +3,7 @@ import jax
 
 from paz.models.foundation.depth_anything3.models import build_da3_small_backbone
 from paz.models.foundation.depth_anything3.models import build_da3_small
+from paz.models.foundation.depth_anything3.models import build_da3_base
 from paz.models.foundation.depth_anything3.models import grid_shape
 from paz.models.foundation.depth_anything3.port_weights import port_backbone_weights
 
@@ -59,6 +60,16 @@ def test_da3_small_output_order_and_shapes():
     assert tuple(intrinsics.shape) == (1, VIEWS, 3, 3)
     assert tuple(rays.shape) == (1, VIEWS, ray_size[0], ray_size[1], 6)
     assert tuple(ray_conf.shape) == (1, VIEWS, ray_size[0], ray_size[1])
+
+
+def test_da3_base_output_order_and_shapes():
+    model = build_da3_base(VIEWS, IMAGE_SHAPE)
+    outputs = model(make_input())
+    assert len(outputs) == 6
+    depth, depth_conf, extrinsics, intrinsics, rays, ray_conf = outputs
+    assert tuple(depth.shape) == (1, VIEWS, 70, 70)
+    assert tuple(extrinsics.shape) == (1, VIEWS, 3, 4)
+    assert tuple(rays.shape) == (1, VIEWS, 40, 40, 6)
 
 
 def test_da3_small_jit_runs():

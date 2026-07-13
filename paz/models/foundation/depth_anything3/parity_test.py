@@ -14,14 +14,14 @@ import pytest
 REFERENCE = os.environ.get("DA3_REFERENCE")
 
 
-def load_reference_backbone():
+def load_reference_backbone(model_name="DA3-SMALL"):
     from depth_anything_3.cfg import import_item
     from safetensors.torch import load_file
     pattern = os.path.expanduser("~/.cache/huggingface/hub/"
-                                 "models--depth-anything--DA3-SMALL/snapshots/*")
+                                 f"models--depth-anything--{model_name}/snapshots/*")
     snapshots = glob.glob(pattern)
     if not snapshots:
-        pytest.skip("DA3-SMALL checkpoint not cached")
+        pytest.skip(f"{model_name} checkpoint not cached")
     config = json.load(open(os.path.join(snapshots[0], "config.json")))["config"]
     net = build_object(config, import_item).eval()
     state = load_file(os.path.join(snapshots[0], "model.safetensors"))
@@ -64,25 +64,34 @@ def test_backbone_matches_reference():
 
 @pytest.mark.skipif(not REFERENCE, reason="set DA3_REFERENCE to run")
 def test_da3_small_matches_reference():
+    from paz.models.foundation.depth_anything3.models import build_da3_small
+    check_da3_reference("DA3-SMALL", build_da3_small, 384)
+
+
+@pytest.mark.skipif(not REFERENCE, reason="set DA3_REFERENCE to run")
+def test_da3_base_matches_reference():
+    from paz.models.foundation.depth_anything3.models import build_da3_base
+    check_da3_reference("DA3-BASE", build_da3_base, 768)
+
+
+def check_da3_reference(model_name, builder, hidden_size):
     import torch
     from depth_anything_3.model.utils.transform import pose_encoding_to_extri_intri
     from depth_anything_3.utils.geometry import affine_inverse
-    from paz.models.foundation.depth_anything3.models import build_da3_small
     from paz.models.foundation.depth_anything3 import port_weights
-    net, state = load_reference_backbone()
+    net, state = load_reference_backbone(model_name)
     views, height, width = 2, 154, 154
     image = np.random.RandomState(5).randn(1, views, 3, height, width).astype("float32")
-    tensor = torch.from_numpy(image)
     with torch.no_grad():
-        feats, _ = net.backbone(tensor)
+        feats, _ = net.backbone(torch.from_numpy(image))
         head = net.head(feats, height, width, patch_start_idx=0)
         camera_to_world, intrinsics = pose_encoding_to_extri_intri(
             net.cam_dec(feats[-1][1]), (height, width))
         extrinsics = affine_inverse(camera_to_world)
 
-    model = build_da3_small(views, (height, width, 3))
+    model = builder(views, (height, width, 3))
     positions = (height // 14) * (width // 14) + 1
-    port_weights.port_backbone_weights(model, state, 12, positions, 384)
+    port_weights.port_backbone_weights(model, state, 12, positions, hidden_size)
     port_weights.port_head_weights(model, state)
     port_weights.port_camera_decoder_weights(model, state)
     outputs = model(np.transpose(image, (0, 1, 3, 4, 2)))
