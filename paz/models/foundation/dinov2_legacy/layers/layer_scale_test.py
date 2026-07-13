@@ -3,7 +3,7 @@ import keras
 from keras import Input, Model
 from keras.layers import EinsumDense
 
-from paz.models.foundation.dinov2.layers.layer_scale import (
+from paz.models.foundation.dinov2_legacy.layers.layer_scale import (
     apply_layer_scale,
     scale,
 )

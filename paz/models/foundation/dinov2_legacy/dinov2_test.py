@@ -3,7 +3,7 @@ import os
 import numpy as np
 import pytest
 
-from paz.models.foundation.dinov2.models.vision_transformer import (
+from paz.models.foundation.dinov2_legacy.models.vision_transformer import (
     DINOV2Small,
     DINOV2Base,
     DINOV2Large,

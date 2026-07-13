@@ -2,7 +2,7 @@ import numpy as np
 import keras
 from keras import Input, Model
 
-from paz.models.foundation.dinov2.layers.patch_embed import (
+from paz.models.foundation.dinov2_legacy.layers.patch_embed import (
     build_patch_embedding,
     to_pair,
 )

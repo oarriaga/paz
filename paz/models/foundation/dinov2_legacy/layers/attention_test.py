@@ -3,8 +3,8 @@ import keras
 import pytest
 from keras import Input, Model
 
-from paz.models.foundation.dinov2.layers.attention import attend
-from paz.models.foundation.dinov2.layers.block import block
+from paz.models.foundation.dinov2_legacy.layers.attention import attend
+from paz.models.foundation.dinov2_legacy.layers.block import block
 
 
 def build_attention_model(

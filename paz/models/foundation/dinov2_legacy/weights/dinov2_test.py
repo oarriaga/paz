@@ -18,13 +18,13 @@ def _evict_other_entries(cache: Dict[str, Any], keep_key: str) -> None:
         jax.clear_caches()
 
 
-from paz.models.foundation.dinov2.layers.attention import (
+from paz.models.foundation.dinov2_legacy.layers.attention import (
     split_query_key_value,
     compute_scores,
     apply_attention,
     flatten_heads,
 )
-from paz.models.foundation.dinov2.models.vision_transformer import (
+from paz.models.foundation.dinov2_legacy.models.vision_transformer import (
     DINOV2Small,
     DINOV2Base,
     DINOV2Large,

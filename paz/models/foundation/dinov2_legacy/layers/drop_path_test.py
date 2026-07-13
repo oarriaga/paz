@@ -2,7 +2,7 @@ import numpy as np
 import keras
 from keras import Input, Model
 
-from paz.models.foundation.dinov2.layers.drop_path import (
+from paz.models.foundation.dinov2_legacy.layers.drop_path import (
     apply_drop_path,
     build_noise_shape,
 )
