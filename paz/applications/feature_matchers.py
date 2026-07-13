@@ -8,7 +8,7 @@ from paz.models.feature.lightglue.model import match_pairs
 
 def MatchXFeat(top_k=4096, threshold=0.05, min_score=0.1, draw=None):
     extract = XFeat("pretrained", top_k, threshold)
-    match = LighterGlue("pretrained", filter_threshold=min_score)
+    match = LighterGlue("pretrained", min_score, capacity=top_k)
 
     def call(image_A, image_B):
         features_A = extract(image_A)
