@@ -19,7 +19,7 @@ import jax
 import paz
 from paz.applications import DescribeImageGemma4
 from paz.models import Gemma4
-from paz.models.foundation.gemma4.model import (
+from paz.models.foundation.gemma4.pretrained import (
     resolve_dir, load_vision_encoder)
 
 SAMPLE_IMAGE_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.9.1/image_with_everyday_classes.jpg"  # fmt: skip
