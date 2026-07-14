@@ -6,7 +6,7 @@ from keras import ops
 
 from paz import place_on_model_device
 from paz.models import Gemma4
-from paz.models.foundation.gemma4.model import resolve_dir
+from paz.models.foundation.gemma4.pretrained import resolve_dir
 from paz.models.foundation.gemma4.tokenizer import Gemma4Tokenizer
 from paz.models.foundation.gemma4.image_converter import preprocess_images
 from paz.models.foundation.gemma4.multimodal_decoding import (
@@ -23,8 +23,7 @@ def GenerateGemma4(model_name="gemma4_2b", max_tokens=64, max_seq=512,
     tokenizer = build_gemma4_tokenizer(model_dir)
     stop_id = tokenizer.get_stop_token_ids()[-1]
     stream = build_token_printer(tokenizer, stop_id)
-    args = (models.decoder_step, models.per_layer_step, models.config,
-            stop_id, max_tokens, max_seq, max_prompt)
+    args = (models.model, stop_id, max_tokens, max_seq, max_prompt)
     decode = build_text_generator(*args, emit=stream)
 
     def generate(prompt):
@@ -53,8 +52,7 @@ def DescribeImageGemma4(model_name="gemma4_2b", max_tokens=64, max_seq=512,
     vision = VisionEncoderArgs(**read_vision_config(model_dir))
     stop_id = tokenizer.get_stop_token_ids()[-1]
     stream = build_token_printer(tokenizer, stop_id)
-    args = (models.decoder_step, models.per_layer_step, models.config,
-            stop_id, max_tokens, max_seq, max_prompt)
+    args = (models.model, stop_id, max_tokens, max_seq, max_prompt)
     generate = build_generator(*args, emit=stream)
 
     def encode(image):

@@ -6,12 +6,12 @@ It writes the split inference artifacts that demo_e2b.py loads: config.json,
 decoder_step.weights.h5 and embedding_step.weights.h5.
 """
 import argparse
-import gc
 import re
 import sys
 from pathlib import Path
 
 import numpy as np
+import jax.numpy as jp
 from keras import ops
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -19,8 +19,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from paz.models.foundation.gemma4.configuration import save_config
-from paz.models.foundation.gemma4.model import (
-    Gemma4DecoderStep, Gemma4PerLayerEmbeddingStep)
+from paz.models.foundation.gemma4.model import Gemma4Backbone
 from paz.models.foundation.gemma4.configuration import TextBackboneArgs
 
 ROLE_SYNONYMS = {
@@ -28,6 +27,7 @@ ROLE_SYNONYMS = {
     "per_layer_input_gate": "per_layer_gate",
     "per_layer_up_proj": "per_layer_projection",
     "post_per_layer_input_norm": "post_per_layer_norm",
+    "attention_attention_output": "attention_output",
 }
 
 
@@ -40,20 +40,22 @@ def convert(preset, output_dir):
     return save_paz_models(backbone, output_dir)
 
 
-def save_paz_models(backbone, output_dir):
+def save_paz_models(source, output_dir):
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
-    config = build_paz_config(backbone)
+    config = build_paz_config(source)
     save_config(config, output_dir / "config.json")
-    decoder_step = Gemma4DecoderStep(config)
-    transfer(backbone, decoder_step)
-    decoder_step.save_weights(str(output_dir / "decoder_step.weights.h5"))
-    del decoder_step
-    gc.collect()
-    embedding_step = Gemma4PerLayerEmbeddingStep(config)
-    transfer(backbone, embedding_step)
-    embedding_step.save_weights(str(output_dir / "embedding_step.weights.h5"))
+    backbone = build_target_backbone(config)
+    transfer(source, backbone)
+    backbone.save_weights(str(output_dir / "backbone.weights.h5"))
     return config
+
+
+def build_target_backbone(config):
+    backbone = Gemma4Backbone(config)
+    backbone({"token_ids": jp.zeros((1, 1), "int32"),
+              "padding_mask": jp.ones((1, 1), "int32")})
+    return backbone
 
 
 def transfer(source, target):
@@ -74,7 +76,10 @@ def role(path):
         if "layer_scalar" in rest:
             rest = "layer_scalar"
         return "b{}:{}".format(int(match.group(1)), canonical(rest))
-    return "g:" + canonical(path.replace("/", "_"))
+    # Globals: key on the owning layer + variable only, so a subclassed
+    # model-name prefix (e.g. "gemma4_backbone/") does not shift the role.
+    leaf = "_".join(path.split("/")[-2:])
+    return "g:" + canonical(leaf)
 
 
 def canonical(name):
