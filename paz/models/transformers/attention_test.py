@@ -48,7 +48,8 @@ def test_split_recovers_fused_qkv_layout():
     num_heads, head_dim = 2, 4
     hidden = num_heads * head_dim
     ramp = np.arange(3 * hidden, dtype="float32").reshape(1, 1, 3 * hidden)
-    query, key, value = split_query_key_value(ops.array(ramp), num_heads, head_dim)
+    fused = ops.array(ramp)
+    query, key, value = split_query_key_value(fused, num_heads, head_dim)
     expected = ramp.reshape(3, num_heads, head_dim)
     assert np.allclose(np.array(query)[0, :, 0, :], expected[0])
     assert np.allclose(np.array(key)[0, :, 0, :], expected[1])

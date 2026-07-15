@@ -42,12 +42,18 @@ def assign_position_embedding(model, state_dict, num_positions, hidden_size,
 def assign_block(model, state_dict, index, expected):
     prefix = f"blocks.{index}"
     name = f"block_{index}"
-    set_norm(model, state_dict, f"{prefix}.norm1", f"{name}_norm1", expected)
-    set_norm(model, state_dict, f"{prefix}.norm2", f"{name}_norm2", expected)
-    set_dense(model, state_dict, f"{prefix}.attn.qkv", f"{name}_qkv", expected)
-    set_dense(model, state_dict, f"{prefix}.attn.proj", f"{name}_proj", expected)
-    set_dense(model, state_dict, f"{prefix}.mlp.fc1", f"{name}_mlp_fc1", expected)
-    set_dense(model, state_dict, f"{prefix}.mlp.fc2", f"{name}_mlp_fc2", expected)
+
+    def port(setter, source, target):
+        full_source = f"{prefix}.{source}"
+        full_target = f"{name}_{target}"
+        setter(model, state_dict, full_source, full_target, expected)
+
+    port(set_norm, "norm1", "norm1")
+    port(set_norm, "norm2", "norm2")
+    port(set_dense, "attn.qkv", "qkv")
+    port(set_dense, "attn.proj", "proj")
+    port(set_dense, "mlp.fc1", "mlp_fc1")
+    port(set_dense, "mlp.fc2", "mlp_fc2")
     scale1 = take(state_dict, f"{prefix}.ls1.gamma", expected)
     scale2 = take(state_dict, f"{prefix}.ls2.gamma", expected)
     set_layer(model, f"{name}_ls1", [scale1])

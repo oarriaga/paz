@@ -2,7 +2,8 @@ import string
 
 import keras
 from keras import ops
-from keras.layers import Dense, Dropout, EinsumDense, LayerNormalization, Reshape
+from keras.layers import Dense, Dropout, EinsumDense, Reshape
+from keras.layers import LayerNormalization
 
 from paz.models.transformers import cache as kv_cache
 
@@ -176,9 +177,9 @@ def kernel(stddev=0.02):
 
 def project_query_key_value(tokens, hidden_size, use_bias, name):
     units = hidden_size * 3
-    layer = Dense(units, use_bias=use_bias, kernel_initializer=kernel(),
-                  name=f"{name}_qkv")
-    return layer(tokens)
+    name_qkv = f"{name}_qkv"
+    kwargs = dict(use_bias=use_bias, kernel_initializer=kernel(), name=name_qkv)
+    return Dense(units, **kwargs)(tokens)
 
 
 def split_query_key_value(fused, num_heads, head_dim):
@@ -203,6 +204,10 @@ def merge_attention_heads(context):
 
 
 def normalize_query_key(query, key, epsilon, name):
-    query_norm = LayerNormalization(axis=-1, epsilon=epsilon, name=f"{name}_q_norm")
-    key_norm = LayerNormalization(axis=-1, epsilon=epsilon, name=f"{name}_k_norm")
-    return query_norm(query), key_norm(key)
+    query = head_norm(query, epsilon, f"{name}_q_norm")
+    key = head_norm(key, epsilon, f"{name}_k_norm")
+    return query, key
+
+
+def head_norm(values, epsilon, name):
+    return LayerNormalization(axis=-1, epsilon=epsilon, name=name)(values)

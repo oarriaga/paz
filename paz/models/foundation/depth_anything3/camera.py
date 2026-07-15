@@ -1,14 +1,15 @@
 """Camera decoder: camera token to world-to-camera extrinsics and intrinsics.
 
 Quaternions are scalar-last (xyzw). The decoder predicts a camera-to-world
-pose encoding; extrinsics are returned as the world-to-camera inverse.
+pose encoding; extrinsics are returned as the world-to-camera inverse. The
+quaternion-to-matrix and rigid-inverse math is kept here in keras.ops because
+the paz.angles / paz.SE3 equivalents are unbatched jax and cannot run inside
+this batched functional graph.
 """
 from keras import ops
 from keras.layers import Dense, ReLU
 
 from paz.models.transformers.attention import kernel
-
-FOCAL_EPSILON = 1e-6
 
 
 def build_camera_decoder(camera_token, hidden_size, image_shape):
@@ -17,23 +18,23 @@ def build_camera_decoder(camera_token, hidden_size, image_shape):
 
 
 def decode_pose_encoding(camera_token, hidden_size):
-    hidden = dense(camera_token, hidden_size, "cam_dec_fc1")
+    dense_kwargs = dict(use_bias=True, kernel_initializer=kernel())
+    hidden = camera_token
+    hidden = Dense(hidden_size, name="cam_dec_fc1", **dense_kwargs)(hidden)
     hidden = ReLU()(hidden)
-    hidden = dense(hidden, hidden_size, "cam_dec_fc2")
+    hidden = Dense(hidden_size, name="cam_dec_fc2", **dense_kwargs)(hidden)
     hidden = ReLU()(hidden)
-    translation = dense(hidden, 3, "cam_dec_t")
-    quaternion = dense(hidden, 4, "cam_dec_qvec")
-    field_of_view = ReLU()(dense(hidden, 2, "cam_dec_fov"))
+    translation = Dense(3, name="cam_dec_t", **dense_kwargs)(hidden)
+    quaternion = Dense(4, name="cam_dec_qvec", **dense_kwargs)(hidden)
+    field_of_view = ReLU()(Dense(2, name="cam_dec_fov", **dense_kwargs)(hidden))
     return ops.concatenate([translation, quaternion, field_of_view], axis=-1)
 
 
 def pose_encoding_to_camera(pose_encoding, image_shape):
-    translation = pose_encoding[..., :3]
-    quaternion = pose_encoding[..., 3:7]
-    field_of_view = pose_encoding[..., 7:]
+    parts = ops.split(pose_encoding, [3, 7], axis=-1)
+    translation, quaternion, field_of_view = parts
     rotation = quaternion_to_matrix(quaternion)
-    camera_to_world = ops.concatenate([rotation, translation[..., None]],
-                                      axis=-1)
+    camera_to_world = ops.concatenate([rotation, translation[..., None]], -1)
     extrinsics = invert_transform(camera_to_world)
     intrinsics = intrinsics_from_field_of_view(field_of_view, image_shape)
     return extrinsics, intrinsics
@@ -60,10 +61,10 @@ def invert_transform(camera_to_world):
 
 
 def intrinsics_from_field_of_view(field_of_view, image_shape):
-    height, width = image_shape[0], image_shape[1]
-    focal_y = (height / 2.0) / clamp_tan(field_of_view[..., 0])
-    focal_x = (width / 2.0) / clamp_tan(field_of_view[..., 1])
-    return stack_intrinsics(focal_x, focal_y, width / 2.0, height / 2.0)
+    H, W = image_shape[0], image_shape[1]
+    focal_y = (H / 2.0) / clamp_tan(field_of_view[..., 0])
+    focal_x = (W / 2.0) / clamp_tan(field_of_view[..., 1])
+    return stack_intrinsics(focal_x, focal_y, W / 2.0, H / 2.0)
 
 
 def stack_intrinsics(focal_x, focal_y, center_x, center_y):
@@ -76,9 +77,4 @@ def stack_intrinsics(focal_x, focal_y, center_x, center_y):
 
 
 def clamp_tan(angle):
-    return ops.maximum(ops.tan(angle / 2.0), FOCAL_EPSILON)
-
-
-def dense(tokens, units, name):
-    return Dense(units, use_bias=True, kernel_initializer=kernel(),
-                 name=name)(tokens)
+    return ops.maximum(ops.tan(angle / 2.0), 1e-6)

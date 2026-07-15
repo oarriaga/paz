@@ -42,7 +42,8 @@ def test_large_builds():
 
 
 def test_feature_model_returns_ordered_maps():
-    model = DINOv2SmallFeatures(image_shape=IMAGE_SHAPE, out_layers=(5, 7, 9, 11))
+    layers = (5, 7, 9, 11)
+    model = DINOv2SmallFeatures(image_shape=IMAGE_SHAPE, out_layers=layers)
     maps = model(make_input())
     assert not isinstance(maps, dict)
     assert not hasattr(maps, "_fields")

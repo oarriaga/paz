@@ -9,9 +9,9 @@ explicitly; it is never inferred.
 """
 import argparse
 
-import cv2
 import numpy as np
 
+import paz
 from paz.applications import EstimateDepthAnything3MetricLarge
 
 if __name__ == "__main__":
@@ -22,12 +22,12 @@ if __name__ == "__main__":
     parser.add_argument("--image_size", type=int, default=518)
     args = parser.parse_args()
 
-    estimate = EstimateDepthAnything3MetricLarge(
-        args.weights, args.focal_length, args.image_size)
-    image = cv2.cvtColor(cv2.imread(args.image), cv2.COLOR_BGR2RGB)
-    depth_meters, sky = estimate(image)
+    settings = args.weights, args.focal_length, args.image_size
+    estimate = EstimateDepthAnything3MetricLarge(*settings)
+    depth_meters, sky = estimate(paz.image.load(args.image))
 
     depth_meters = np.array(depth_meters)[0]
+    lowest = round(float(depth_meters.min()), 3)
+    highest = round(float(depth_meters.max()), 3)
     print("median depth (m):", round(float(np.median(depth_meters)), 3))
-    print("range (m):", round(float(depth_meters.min()), 3),
-          round(float(depth_meters.max()), 3))
+    print("range (m):", lowest, highest)

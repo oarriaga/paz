@@ -1,4 +1,4 @@
-"""Development-only weight conversion for DA3-SMALL (Apache-2.0).
+"""Development-only weight conversion for Depth Anything 3 (Apache-2.0).
 
 Downloads the official checkpoint, ports it into the Keras model, saves a
 ``.weights.h5`` next to a metadata file, and verifies save/reload. Requires
@@ -12,69 +12,43 @@ import hashlib
 
 import numpy as np
 
-from paz.models.foundation.depth_anything3.models import build_da3_small
-from paz.models.foundation.depth_anything3.models import build_da3_base
-from paz.models.foundation.depth_anything3.models import build_da3_mono_large
-from paz.models.foundation.depth_anything3.models import build_da3_metric_large
+from paz.models.foundation.depth_anything3 import models
 from paz.models.foundation.depth_anything3 import port_weights
 
 UPSTREAM = "https://github.com/ByteDance-Seed/Depth-Anything-3"
 UPSTREAM_COMMIT = "e74fd796e96b7e781a5506fd8503b6bd7232513c"
 LICENSE = "Apache-2.0"
 IMAGE_SHAPE = (518, 518, 3)
-SMALL = ("depth-anything/DA3-SMALL", build_da3_small, 384, "da3_small_paz_jax")
-BASE = ("depth-anything/DA3-BASE", build_da3_base, 768, "da3_base_paz_jax")
-MONO = ("depth-anything/DA3MONO-LARGE", build_da3_mono_large,
+SMALL = ("depth-anything/DA3-SMALL", models.DepthAnything3Small, 384,
+         "da3_small_paz_jax")
+BASE = ("depth-anything/DA3-BASE", models.DepthAnything3Base, 768,
+        "da3_base_paz_jax")
+MONO = ("depth-anything/DA3MONO-LARGE", models.DepthAnything3MonoLarge,
         "da3_mono_large_paz_jax")
-METRIC = ("depth-anything/DA3METRIC-LARGE", build_da3_metric_large,
+METRIC = ("depth-anything/DA3METRIC-LARGE", models.DepthAnything3MetricLarge,
           "da3_metric_large_paz_jax")
 
 
 def convert(size, output_directory, image_shape=IMAGE_SHAPE, views=2):
     repository, builder, hidden_size, stem = size
-    checkpoint = download_checkpoint(repository)
-    state = load_state(checkpoint)
+    state = load_checkpoint(repository)
     model = build_and_port(builder, hidden_size, state, image_shape, views)
-    weights_path = os.path.join(output_directory, f"{stem}.weights.h5")
-    model.save_weights(weights_path)
-    verify_reload(builder, hidden_size, weights_path, state, image_shape, views)
-    write_metadata(output_directory, repository, stem, checkpoint, weights_path)
-    return weights_path
+    path = os.path.join(output_directory, f"{stem}.weights.h5")
+    model.save_weights(path)
+    verify_reload(model, builder(views, image_shape), path, image_shape, views)
+    write_metadata(output_directory, repository, stem, state, path)
+    return path
 
 
 def convert_mono(size, output_directory, image_shape=IMAGE_SHAPE):
     repository, builder, stem = size
-    checkpoint = download_checkpoint(repository)
-    state = load_state(checkpoint)
+    state = load_checkpoint(repository)
     model = build_and_port_mono(builder, state, image_shape)
-    weights_path = os.path.join(output_directory, f"{stem}.weights.h5")
-    model.save_weights(weights_path)
-    reloaded = builder(image_shape)
-    reloaded.load_weights(weights_path)
-    data = np.zeros((1, *image_shape), "float32")
-    for expected, actual in zip(model(data), reloaded(data)):
-        assert np.allclose(np.array(expected), np.array(actual), atol=1e-5)
-    write_metadata(output_directory, repository, stem, checkpoint, weights_path)
-    return weights_path
-
-
-def build_and_port_mono(builder, state, image_shape):
-    model = builder(image_shape)
-    positions = count_positions(image_shape)
-    port_weights.port_backbone_weights(model, state, 24, positions, 1024,
-                                       use_camera=False, use_qk_norm=False)
-    port_weights.port_dpt_head_weights(model, state)
-    return model
-
-
-def download_checkpoint(repository):
-    from huggingface_hub import hf_hub_download
-    return hf_hub_download(repository, "model.safetensors")
-
-
-def load_state(checkpoint):
-    from safetensors.numpy import load_file
-    return load_file(checkpoint)
+    path = os.path.join(output_directory, f"{stem}.weights.h5")
+    model.save_weights(path)
+    verify_reload(model, builder(image_shape), path, image_shape, None)
+    write_metadata(output_directory, repository, stem, state, path)
+    return path
 
 
 def build_and_port(builder, hidden_size, state, image_shape, views):
@@ -86,23 +60,42 @@ def build_and_port(builder, hidden_size, state, image_shape, views):
     return model
 
 
-def verify_reload(builder, hidden_size, weights_path, state, image_shape, views):
-    model = build_and_port(builder, hidden_size, state, image_shape, views)
-    reloaded = builder(views, image_shape)
-    reloaded.load_weights(weights_path)
-    data = np.zeros((1, views, *image_shape), "float32")
+def build_and_port_mono(builder, state, image_shape):
+    model = builder(image_shape)
+    positions = count_positions(image_shape)
+    args = model, state, 24, positions, 1024
+    port_weights.port_backbone_weights(*args, use_camera=False,
+                                       use_qk_norm=False)
+    port_weights.port_dpt_head_weights(model, state)
+    return model
+
+
+def verify_reload(model, reloaded, path, image_shape, views):
+    reloaded.load_weights(path)
+    shape = (1, *image_shape) if views is None else (1, views, *image_shape)
+    data = np.zeros(shape, "float32")
     for expected, actual in zip(model(data), reloaded(data)):
         assert np.allclose(np.array(expected), np.array(actual), atol=1e-5)
 
 
-def write_metadata(output_directory, repository, stem, checkpoint, weights_path):
-    metadata = {"repository": repository, "upstream": UPSTREAM,
-                "upstream_commit": UPSTREAM_COMMIT, "license": LICENSE,
-                "source_sha256": sha256(checkpoint),
-                "converted_sha256": sha256(weights_path)}
-    path = os.path.join(output_directory, f"{stem}.json")
-    with open(path, "w") as metadata_file:
-        json.dump(metadata, metadata_file, indent=2)
+def write_metadata(output_directory, repository, stem, state, path):
+    checkpoint = find_checkpoint(repository)
+    metadata = dict(repository=repository, upstream=UPSTREAM,
+                    upstream_commit=UPSTREAM_COMMIT, license=LICENSE,
+                    source_sha256=sha256(checkpoint),
+                    converted_sha256=sha256(path))
+    with open(os.path.join(output_directory, f"{stem}.json"), "w") as opened:
+        json.dump(metadata, opened, indent=2)
+
+
+def load_checkpoint(repository):
+    from safetensors.numpy import load_file
+    return load_file(find_checkpoint(repository))
+
+
+def find_checkpoint(repository):
+    from huggingface_hub import hf_hub_download
+    return hf_hub_download(repository, "model.safetensors")
 
 
 def sha256(path):
@@ -119,12 +112,8 @@ def count_positions(image_shape):
 
 if __name__ == "__main__":
     directory = os.environ.get("DA3_OUTPUT", ".")
-    model = os.environ.get("DA3_MODEL", "small")
-    if model == "mono":
-        print("saved:", convert_mono(MONO, directory))
-    elif model == "metric":
-        print("saved:", convert_mono(METRIC, directory))
-    elif model == "base":
-        print("saved:", convert(BASE, directory))
-    else:
-        print("saved:", convert(SMALL, directory))
+    selection = os.environ.get("DA3_MODEL", "small")
+    table = dict(small=SMALL, base=BASE, mono=MONO, metric=METRIC)
+    size = table[selection]
+    convert_size = convert_mono if selection in ("mono", "metric") else convert
+    print("saved:", convert_size(size, directory))

@@ -1,10 +1,11 @@
 """Depth Anything 3 built from canonical DINOv2 and transformer primitives.
 
-``build_da3_small`` returns a Keras model whose outputs are, in order:
+The any-view constructors return a Keras model whose outputs are, in order:
 ``depth, depth_confidence, extrinsics, intrinsics, rays, ray_confidence``.
+The monocular constructors return ``depth, sky``.
 """
-from paz.models.foundation.depth_anything3.models import build_da3_small
-from paz.models.foundation.depth_anything3.models import build_da3_base
-from paz.models.foundation.depth_anything3.models import build_da3_mono_large
-from paz.models.foundation.depth_anything3.models import build_da3_metric_large
-from paz.models.foundation.depth_anything3.models import build_da3_small_backbone
+from .models import DepthAnything3Small
+from .models import DepthAnything3Base
+from .models import DepthAnything3MonoLarge
+from .models import DepthAnything3MetricLarge
+from .models import build_da3_small_backbone

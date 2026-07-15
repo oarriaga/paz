@@ -2,12 +2,12 @@ import numpy as np
 import jax
 from keras import Input, Model
 
-from paz.models.foundation.dinov2.blocks import build_dinov2_block
+from paz.models.foundation.dinov2 import blocks
 
 
 def build_block_model():
     tokens = Input((26, 384), name="tokens")
-    output = build_dinov2_block(tokens, 384, 6, 4.0, 1e-5, "block_0")
+    output = blocks.build(tokens, 384, 6, 4.0, 1e-5, "block_0")
     return Model(tokens, output)
 
 

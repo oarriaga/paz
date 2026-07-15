@@ -6,9 +6,9 @@ Convert the Apache-2.0 DA3-SMALL checkpoint first:
 """
 import argparse
 
-import cv2
 import numpy as np
 
+import paz
 from paz.applications import EstimateDepthAnything3Small
 
 if __name__ == "__main__":
@@ -19,12 +19,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     estimate = EstimateDepthAnything3Small(args.weights, args.image_size)
-    images = [cv2.cvtColor(cv2.imread(path), cv2.COLOR_BGR2RGB)
-              for path in args.images]
-    depth, confidence, extrinsics, intrinsics, rays, ray_confidence = estimate(images)
+    images = [paz.image.load(path) for path in args.images]
+    outputs = estimate(images)
+    depth, confidence, extrinsics, intrinsics, rays, ray_confidence = outputs
 
     print("depth", tuple(depth.shape))
-    for view, (extrinsic, intrinsic) in enumerate(zip(np.array(extrinsics)[0],
-                                                      np.array(intrinsics)[0])):
-        print(f"view {view} focal", round(float(intrinsic[0, 0]), 1),
-              "translation", extrinsic[:, 3].round(3).tolist())
+    extrinsics = np.array(extrinsics)[0]
+    intrinsics = np.array(intrinsics)[0]
+    for view in range(len(extrinsics)):
+        focal = round(float(intrinsics[view][0, 0]), 1)
+        translation = extrinsics[view][:, 3].round(3).tolist()
+        print(f"view {view} focal", focal, "translation", translation)

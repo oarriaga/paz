@@ -1,26 +1,26 @@
 """DualDPT head: dense depth (+confidence) and camera rays (+confidence).
 
-Channels-last throughout. The primary depth chain upsamples to full image
-resolution; the auxiliary (ray) chain stops at the finest fusion scale
-(eight times the patch grid). Depth uses exp, confidences use exp(x)+1.
-Dimensions (feature_dim, out_channels, fusion_features) are size-specific.
+DPT is the dense prediction transformer head. This dual variant runs two
+independent fusion chains: a primary depth chain upsampled to full image
+resolution, and an auxiliary ray chain that stops at the finest fusion scale
+(eight times the patch grid). Channels-last throughout. Depth uses exp,
+confidences use exp(x)+1. Dimensions are size-specific.
 """
 import numpy as np
 from keras import ops
-from keras.layers import Conv2D, Conv2DTranspose, LayerNormalization, ReLU
+from keras.layers import Conv2D, Conv2DTranspose
+from keras.layers import LayerNormalization, ReLU
 
 from paz.backend.image import resize_bilinear_align_corners
 
-HEAD_FEATURES = 32
-POS_RATIO = 0.1
-OMEGA = 100.0
 
-
-def build_dual_dpt(feature_maps, grid, image_shape, feature_dim, out_channels,
-                   fusion_features):
+def build(feature_maps, grid, image_shape, feature_dim, out_channels,
+          fusion_features):
     norm = LayerNormalization(epsilon=1e-5, name="head_norm")
-    stages = [project_stage(feature_maps[k], norm, k, grid, image_shape,
-                            feature_dim, out_channels) for k in range(4)]
+    stages = []
+    for arg in range(4):
+        args = feature_maps[arg], norm, arg, grid, image_shape, feature_dim
+        stages.append(project_stage(*args, out_channels))
     main, aux = fuse_pyramid(stages, fusion_features)
     depth, depth_confidence = depth_head(main, image_shape)
     rays, ray_confidence = ray_head(aux, image_shape)
@@ -30,119 +30,144 @@ def build_dual_dpt(feature_maps, grid, image_shape, feature_dim, out_channels,
 def project_stage(tokens, norm, stage, grid, image_shape, feature_dim,
                   out_channels):
     grid_height, grid_width = grid
-    projected = norm(tokens)
-    projected = ops.reshape(projected, (-1, grid_height, grid_width, feature_dim))
-    projected = Conv2D(out_channels[stage], 1, name=f"head_project_{stage}")(projected)
+    shape = -1, grid_height, grid_width, feature_dim
+    reshaped = ops.reshape(norm(tokens), shape)
+    projected = conv(out_channels[stage], 1, f"head_project_{stage}")(reshaped)
     projected = add_pos_embed(projected, image_shape)
     return resize_stage(projected, stage, out_channels)
 
 
 def resize_stage(features, stage, out_channels):
-    if stage == 0:
-        return Conv2DTranspose(out_channels[0], 4, strides=4,
-                               name="head_resize_0")(features)
-    if stage == 1:
-        return Conv2DTranspose(out_channels[1], 2, strides=2,
-                               name="head_resize_1")(features)
-    if stage == 2:
-        return features
-    return Conv2D(out_channels[3], 3, strides=2, padding="same",
-                  name="head_resize_3")(features)
+    builders = upsample_4x, upsample_2x, keep, downsample_2x
+    return builders[stage](features, out_channels[stage])
+
+
+def upsample_4x(features, channels):
+    layer = Conv2DTranspose(channels, 4, strides=4, name="head_resize_0")
+    return layer(features)
+
+
+def upsample_2x(features, channels):
+    layer = Conv2DTranspose(channels, 2, strides=2, name="head_resize_1")
+    return layer(features)
+
+
+def keep(features, channels):
+    return features
+
+
+def downsample_2x(features, channels):
+    kwargs = dict(strides=2, padding="same", name="head_resize_3")
+    return Conv2D(channels, 3, **kwargs)(features)
 
 
 def fuse_pyramid(stages, fusion_features):
-    lateral = [reassemble(stages[k], k, fusion_features) for k in range(4)]
+    lateral = build_lateral(stages, fusion_features)
     main = fuse_chain(lateral, "", fusion_features)
     aux = fuse_chain(lateral, "_aux", fusion_features)
-    main = Conv2D(fusion_features // 2, 3, padding="same", name="head_out1")(main)
+    main = conv(fusion_features // 2, 3, "head_out1")(main)
     aux = aux_pre_head(aux, fusion_features)
     return main, aux
 
 
+def build_lateral(stages, fusion_features):
+    lateral = []
+    for arg in range(4):
+        lateral.append(reassemble(stages[arg], arg, fusion_features))
+    return lateral
+
+
 def reassemble(features, stage, fusion_features):
     name = f"head_layer{stage + 1}_rn"
-    return Conv2D(fusion_features, 3, padding="same", use_bias=False,
-                  name=name)(features)
+    return conv(fusion_features, 3, name, False)(features)
 
 
 def fuse_chain(lateral, suffix, fusion_features):
+    targets = fuse_targets(lateral)
+    fused = None
+    for step in range(4):
+        name = f"head_refine{4 - step}{suffix}"
+        args = fused, lateral[3 - step], targets[step], name
+        fused = fusion_block(*args, fusion_features)
+    return fused
+
+
+def fuse_targets(lateral):
     sizes = [ops.shape(level)[1:3] for level in lateral]
-    fused = fusion_block(None, lateral[3], sizes[2], f"head_refine4{suffix}", fusion_features)
-    fused = fusion_block(fused, lateral[2], sizes[1], f"head_refine3{suffix}", fusion_features)
-    fused = fusion_block(fused, lateral[1], sizes[0], f"head_refine2{suffix}", fusion_features)
-    double = (sizes[0][0] * 2, sizes[0][1] * 2)
-    return fusion_block(fused, lateral[0], double, f"head_refine1{suffix}", fusion_features)
+    doubled = sizes[0][0] * 2, sizes[0][1] * 2
+    return [sizes[2], sizes[1], sizes[0], doubled]
 
 
 def fusion_block(previous, lateral, size, name, fusion_features):
-    fused = lateral if previous is None else previous + residual_unit(lateral, f"{name}_unit1", fusion_features)
+    fused = fuse_lateral(previous, lateral, name, fusion_features)
     fused = residual_unit(fused, f"{name}_unit2", fusion_features)
     fused = resize_bilinear_align_corners(fused, size)
-    return Conv2D(fusion_features, 1, name=f"{name}_out")(fused)
+    return conv(fusion_features, 1, f"{name}_out")(fused)
+
+
+def fuse_lateral(previous, lateral, name, fusion_features):
+    if previous is None:
+        return lateral
+    return previous + residual_unit(lateral, f"{name}_unit1", fusion_features)
 
 
 def residual_unit(features, name, fusion_features):
     hidden = ReLU()(features)
-    hidden = Conv2D(fusion_features, 3, padding="same", name=f"{name}_conv1")(hidden)
+    hidden = conv(fusion_features, 3, f"{name}_conv1")(hidden)
     hidden = ReLU()(hidden)
-    hidden = Conv2D(fusion_features, 3, padding="same", name=f"{name}_conv2")(hidden)
+    hidden = conv(fusion_features, 3, f"{name}_conv2")(hidden)
     return features + hidden
 
 
 def aux_pre_head(features, fusion_features):
     half = fusion_features // 2
-    widths = (half, fusion_features, half, fusion_features, half)
-    for index, width in enumerate(widths):
-        features = Conv2D(width, 3, padding="same",
-                          name=f"head_out1_aux_{index}")(features)
+    widths = half, fusion_features, half, fusion_features, half
+    for arg, width in enumerate(widths):
+        features = conv(width, 3, f"head_out1_aux_{arg}")(features)
     return features
 
 
 def depth_head(features, image_shape):
     upsampled = resize_bilinear_align_corners(features, image_shape[:2])
     upsampled = add_pos_embed(upsampled, image_shape)
-    hidden = Conv2D(HEAD_FEATURES, 3, padding="same", name="head_out2_conv0")(upsampled)
-    hidden = ReLU()(hidden)
-    logits = Conv2D(2, 1, name="head_out2_conv1")(hidden)
+    hidden = conv(32, 3, "head_out2_conv0")(upsampled)
+    logits = conv(2, 1, "head_out2_conv1")(ReLU()(hidden))
     depth = ops.exp(logits[..., 0])
-    depth_confidence = ops.exp(logits[..., 1]) + 1.0
-    return depth, depth_confidence
+    return depth, ops.exp(logits[..., 1]) + 1.0
 
 
 def ray_head(features, image_shape):
     features = add_pos_embed(features, image_shape)
-    hidden = Conv2D(HEAD_FEATURES, 3, padding="same", name="head_out2_aux_conv0")(features)
+    hidden = conv(32, 3, "head_out2_aux_conv0")(features)
     hidden = LayerNormalization(epsilon=1e-5, name="head_out2_aux_ln")(hidden)
-    hidden = ReLU()(hidden)
-    logits = Conv2D(7, 1, name="head_out2_aux_conv1")(hidden)
-    rays = logits[..., :6]
-    ray_confidence = ops.exp(logits[..., 6]) + 1.0
-    return rays, ray_confidence
+    logits = conv(7, 1, "head_out2_aux_conv1")(ReLU()(hidden))
+    return logits[..., :6], ops.exp(logits[..., 6]) + 1.0
 
 
 def add_pos_embed(features, image_shape):
-    _, height, width, channels = features.shape
-    embedding = build_uv_position_embedding(height, width, channels, image_shape)
+    batch, H, W, channels = features.shape
+    embedding = build_uv_position_embedding(H, W, channels, image_shape)
     return features + ops.array(embedding)
 
 
-def build_uv_position_embedding(height, width, channels, image_shape):
+def build_uv_position_embedding(H, W, channels, image_shape):
     aspect = image_shape[1] / image_shape[0]
-    grid = build_uv_grid(width, height, aspect)
+    grid = build_uv_grid(W, H, aspect)
     embedding = position_grid_to_embedding(grid, channels)
-    return (embedding * POS_RATIO).astype("float32")
+    return (embedding * 0.1).astype("float32")
 
 
-def build_uv_grid(width, height, aspect):
+def build_uv_grid(W, H, aspect):
     diagonal = (aspect ** 2 + 1.0) ** 0.5
-    span_x = aspect / diagonal
-    span_y = 1.0 / diagonal
-    x = np.linspace(-span_x * (width - 1) / width,
-                    span_x * (width - 1) / width, width)
-    y = np.linspace(-span_y * (height - 1) / height,
-                    span_y * (height - 1) / height, height)
+    x = build_axis(aspect / diagonal, W)
+    y = build_axis(1.0 / diagonal, H)
     columns, rows = np.meshgrid(x, y)
     return np.stack([columns, rows], axis=-1)
+
+
+def build_axis(span, count):
+    limit = span * (count - 1) / count
+    return np.linspace(-limit, limit, count)
 
 
 def position_grid_to_embedding(grid, channels):
@@ -155,6 +180,11 @@ def position_grid_to_embedding(grid, channels):
 
 def sincos_embedding(dimension, positions):
     omega = np.arange(dimension // 2) / (dimension / 2.0)
-    omega = 1.0 / (OMEGA ** omega)
+    omega = 1.0 / (100.0 ** omega)
     angles = np.outer(positions, omega)
     return np.concatenate([np.sin(angles), np.cos(angles)], axis=-1)
+
+
+def conv(units, kernel_size, name, use_bias=True):
+    kwargs = dict(padding="same", use_bias=use_bias, name=name)
+    return Conv2D(units, kernel_size, **kwargs)

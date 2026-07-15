@@ -13,7 +13,7 @@ def apply(inputs, wavelength, scaling_factor, denominator, positions=None):
     return (inputs * cosine) + (rotated * sine)
 
 
-def apply_2d(tokens, positions, base_frequency=100.0):
+def apply_2D(tokens, positions, base_frequency=100.0):
     vertical, horizontal = ops.split(tokens, 2, axis=-1)
     vertical = apply_axis(vertical, positions[..., 0], base_frequency)
     horizontal = apply_axis(horizontal, positions[..., 1], base_frequency)
@@ -26,8 +26,8 @@ def apply_axis(tokens, positions, base_frequency):
     inverse = 1.0 / (base_frequency ** exponents)
     angles = ops.cast(positions, "float32")[..., None] * inverse
     angles = ops.concatenate([angles, angles], axis=-1)
-    cosine = ops.cos(angles)[:, None, :, :]
-    sine = ops.sin(angles)[:, None, :, :]
+    cosine = ops.expand_dims(ops.cos(angles), axis=1)
+    sine = ops.expand_dims(ops.sin(angles), axis=1)
     return tokens * cosine + rotate_half(tokens) * sine
 
 

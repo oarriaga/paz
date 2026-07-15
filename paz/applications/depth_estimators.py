@@ -10,73 +10,67 @@ Any-view estimators return, in order:
 Monocular estimators return ``depth, sky``; the metric estimator returns
 ``depth_meters, sky``.
 """
-import cv2
 import numpy as np
 from keras import ops
 
-from paz.models.foundation.depth_anything3.models import build_da3_small
-from paz.models.foundation.depth_anything3.models import build_da3_base
-from paz.models.foundation.depth_anything3.models import build_da3_mono_large
-from paz.models.foundation.depth_anything3.models import build_da3_metric_large
-
-IMAGENET_MEAN = np.array([0.485, 0.456, 0.406], "float32")
-IMAGENET_STD = np.array([0.229, 0.224, 0.225], "float32")
-METRIC_DIVISOR = 300.0
+from paz.backend.image import resize_opencv, standardize
+from paz.models import DepthAnything3Small, DepthAnything3Base
+from paz.models import DepthAnything3MonoLarge, DepthAnything3MetricLarge
 
 
 def EstimateDepthAnything3Small(weights_path, image_size=518):
-    return build_any_view_estimator(build_da3_small, weights_path, image_size)
+    args = DepthAnything3Small, weights_path, image_size
+    return build_any_view_estimator(*args)
 
 
 def EstimateDepthAnything3Base(weights_path, image_size=518):
-    return build_any_view_estimator(build_da3_base, weights_path, image_size)
+    args = DepthAnything3Base, weights_path, image_size
+    return build_any_view_estimator(*args)
 
 
 def build_any_view_estimator(builder, weights_path, image_size):
-    models = {}
+    cache = {}
 
     def estimate(images):
         views = preprocess_views(images, image_size)
-        model = load_for_views(models, builder, views.shape[1], image_size,
-                               weights_path)
-        depth, confidence, extrinsics, intrinsics, rays, ray_confidence = model(views)
-        return depth, confidence, extrinsics, intrinsics, rays, ray_confidence
+        args = cache, builder, views.shape[1], image_size, weights_path
+        return load_view_model(*args)(views)
 
     return estimate
 
 
 def EstimateDepthAnything3MonoLarge(weights_path, image_size=518):
-    model = build_mono_model(build_da3_mono_large, weights_path, image_size)
+    model = load_mono_model(DepthAnything3MonoLarge, weights_path, image_size)
 
     def estimate(image):
-        depth, sky = model(preprocess_batch(image, image_size))
-        return depth, sky
+        return model(preprocess_batch(image, image_size))
 
     return estimate
 
 
-def EstimateDepthAnything3MetricLarge(weights_path, focal_length, image_size=518):
-    model = build_mono_model(build_da3_metric_large, weights_path, image_size)
+def EstimateDepthAnything3MetricLarge(weights_path, focal_length,
+                                      image_size=518):
+    model = load_mono_model(DepthAnything3MetricLarge, weights_path, image_size)
 
     def estimate(image):
         depth, sky = model(preprocess_batch(image, image_size))
-        return focal_length * depth / METRIC_DIVISOR, sky
+        return focal_length * depth / 300.0, sky
 
     return estimate
 
 
-def build_mono_model(builder, weights_path, image_size):
+def load_mono_model(builder, weights_path, image_size):
     model = builder((image_size, image_size, 3))
     model.load_weights(weights_path)
     return model
 
 
-def load_for_views(models, builder, num_views, image_size, weights_path):
-    if num_views not in models:
+def load_view_model(cache, builder, num_views, image_size, weights_path):
+    if num_views not in cache:
         model = builder(num_views, (image_size, image_size, 3))
         model.load_weights(weights_path)
-        models[num_views] = model
-    return models[num_views]
+        cache[num_views] = model
+    return cache[num_views]
 
 
 def preprocess_views(images, image_size):
@@ -89,10 +83,15 @@ def preprocess_batch(image, image_size):
 
 
 def preprocess_image(image, image_size):
+    mean = np.array([0.485, 0.456, 0.406], "float32")
+    std = np.array([0.229, 0.224, 0.225], "float32")
+    array = ops.convert_to_tensor(to_float(image))
+    resized = resize_opencv(array, (image_size, image_size))
+    return standardize(resized, mean, std)
+
+
+def to_float(image):
     image = np.asarray(image)
     if image.dtype == np.uint8:
-        image = image.astype("float32") / 255.0
-    resized = cv2.resize(image.astype("float32"), (image_size, image_size),
-                         interpolation=cv2.INTER_AREA)
-    normalized = (resized - IMAGENET_MEAN) / IMAGENET_STD
-    return ops.convert_to_tensor(normalized, dtype="float32")
+        return image.astype("float32") / 255.0
+    return image.astype("float32")

@@ -46,7 +46,8 @@ def add_torch_parameters(state_dict, layer):
     name = layer.name
     weights = layer.get_weights()
     if name == "patch_embed_proj":
-        state_dict["patch_embed.proj.weight"] = np.transpose(weights[0], (3, 2, 0, 1))  # noqa: E501
+        kernel = np.transpose(weights[0], (3, 2, 0, 1))
+        state_dict["patch_embed.proj.weight"] = kernel
         state_dict["patch_embed.proj.bias"] = weights[1]
     elif name == "cls_token":
         state_dict["cls_token"] = weights[0].reshape(1, 1, -1)

@@ -1,8 +1,8 @@
 """Development-only converter from the official DA3 checkpoint to Keras.
 
 Torch, numpy, and safetensors are imported lazily; nothing here runs at
-model call time. Covers the backbone; head and camera converters are added
-with their modules.
+model call time. Covers the backbone, the DualDPT head, the standard DPT
+head, and the camera decoder.
 """
 import numpy as np
 
@@ -14,10 +14,11 @@ def port_backbone_weights(model, state_dict, depth, num_positions,
     state_dict = strip_model_prefix(state_dict)
     assign(model, "patch_embed_proj", patch_embedding(state_dict))
     assign(model, "cls_token", [reshape(state_dict, "cls_token", hidden_size)])
-    assign(model, "pos_embed", [positions(state_dict, num_positions, hidden_size)])
+    pos = positions(state_dict, num_positions, hidden_size)
+    assign(model, "pos_embed", [pos])
     if use_camera:
-        assign(model, "camera_token",
-               [take(state_dict, "camera_token").reshape(2, hidden_size)])
+        camera = take(state_dict, "camera_token").reshape(2, hidden_size)
+        assign(model, "camera_token", [camera])
     assign(model, "norm", norm(state_dict, "norm"))
     for index in range(depth):
         assign_block(model, state_dict, index, use_qk_norm)
@@ -26,51 +27,50 @@ def port_backbone_weights(model, state_dict, depth, num_positions,
 
 def port_dpt_head_weights(model, state_dict):
     state_dict = strip_model_prefix(state_dict)
-    for stage in range(4):
-        assign(model, f"head_project_{stage}",
-               conv_bias(state_dict, f"head.projects.{stage}"))
-    for stage in (0, 1, 3):
-        assign(model, f"head_resize_{stage}",
-               conv_bias(state_dict, f"head.resize_layers.{stage}"))
-    for stage in range(1, 5):
-        assign(model, f"head_layer{stage}_rn",
-               [conv_kernel(state_dict, f"head.scratch.layer{stage}_rn")])
+    port_projections(model, state_dict)
     port_refinenets(model, state_dict, "")
-    assign(model, "head_out1", conv_bias(state_dict, "head.scratch.output_conv1"))
-    assign(model, "head_out2_conv0", conv_bias(state_dict, "head.scratch.output_conv2.0"))
-    assign(model, "head_out2_conv1", conv_bias(state_dict, "head.scratch.output_conv2.2"))
-    assign(model, "head_sky_conv0", conv_bias(state_dict, "head.scratch.sky_output_conv2.0"))
-    assign(model, "head_sky_conv1", conv_bias(state_dict, "head.scratch.sky_output_conv2.2"))
+    head_conv(model, state_dict, "head_out1", "output_conv1")
+    head_conv(model, state_dict, "head_out2_conv0", "output_conv2.0")
+    head_conv(model, state_dict, "head_out2_conv1", "output_conv2.2")
+    head_conv(model, state_dict, "head_sky_conv0", "sky_output_conv2.0")
+    head_conv(model, state_dict, "head_sky_conv1", "sky_output_conv2.2")
     return model
 
 
 def port_head_weights(model, state_dict):
     state_dict = strip_model_prefix(state_dict)
     assign(model, "head_norm", named_norm(state_dict, "head.norm"))
-    for stage in range(4):
-        assign(model, f"head_project_{stage}",
-               conv_bias(state_dict, f"head.projects.{stage}"))
-    for stage in (0, 1, 3):
-        assign(model, f"head_resize_{stage}",
-               conv_bias(state_dict, f"head.resize_layers.{stage}"))
-    for stage in range(1, 5):
-        assign(model, f"head_layer{stage}_rn",
-               [conv_kernel(state_dict, f"head.scratch.layer{stage}_rn")])
+    port_projections(model, state_dict)
     for suffix in ("", "_aux"):
         port_refinenets(model, state_dict, suffix)
-    assign(model, "head_out1", conv_bias(state_dict, "head.scratch.output_conv1"))
-    assign(model, "head_out2_conv0", conv_bias(state_dict, "head.scratch.output_conv2.0"))
-    assign(model, "head_out2_conv1", conv_bias(state_dict, "head.scratch.output_conv2.2"))
-    for index in range(5):
-        assign(model, f"head_out1_aux_{index}",
-               conv_bias(state_dict, f"head.scratch.output_conv1_aux.3.{index}"))
-    assign(model, "head_out2_aux_conv0",
-           conv_bias(state_dict, "head.scratch.output_conv2_aux.3.0"))
-    assign(model, "head_out2_aux_ln",
-           named_norm(state_dict, "head.scratch.output_conv2_aux.0.2"))
-    assign(model, "head_out2_aux_conv1",
-           conv_bias(state_dict, "head.scratch.output_conv2_aux.3.5"))
+    head_conv(model, state_dict, "head_out1", "output_conv1")
+    head_conv(model, state_dict, "head_out2_conv0", "output_conv2.0")
+    head_conv(model, state_dict, "head_out2_conv1", "output_conv2.2")
+    port_aux_outputs(model, state_dict)
     return model
+
+
+def port_projections(model, state_dict):
+    for stage in range(4):
+        source = f"head.projects.{stage}"
+        assign(model, f"head_project_{stage}", conv_bias(state_dict, source))
+    for stage in (0, 1, 3):
+        source = f"head.resize_layers.{stage}"
+        assign(model, f"head_resize_{stage}", conv_bias(state_dict, source))
+    for stage in range(1, 5):
+        source = f"head.scratch.layer{stage}_rn"
+        kernel = [conv_kernel(state_dict, source)]
+        assign(model, f"head_layer{stage}_rn", kernel)
+
+
+def port_aux_outputs(model, state_dict):
+    for index in range(5):
+        source = f"head.scratch.output_conv1_aux.3.{index}"
+        assign(model, f"head_out1_aux_{index}", conv_bias(state_dict, source))
+    head_conv(model, state_dict, "head_out2_aux_conv0", "output_conv2_aux.3.0")
+    ln = named_norm(state_dict, "head.scratch.output_conv2_aux.0.2")
+    assign(model, "head_out2_aux_ln", ln)
+    head_conv(model, state_dict, "head_out2_aux_conv1", "output_conv2_aux.3.5")
 
 
 def port_refinenets(model, state_dict, suffix):
@@ -100,25 +100,6 @@ def port_camera_decoder_weights(model, state_dict):
     return model
 
 
-def conv_bias(state_dict, source):
-    return [conv_kernel(state_dict, source),
-            np.asarray(state_dict[source + ".bias"])]
-
-
-def conv_kernel(state_dict, source):
-    return np.transpose(np.asarray(state_dict[source + ".weight"]), (2, 3, 1, 0))
-
-
-def named_dense(state_dict, source):
-    return [np.asarray(state_dict[source + ".weight"]).T,
-            np.asarray(state_dict[source + ".bias"])]
-
-
-def named_norm(state_dict, source):
-    return [np.asarray(state_dict[source + ".weight"]),
-            np.asarray(state_dict[source + ".bias"])]
-
-
 def assign_block(model, state_dict, index, use_qk_norm=True):
     source = f"blocks.{index}."
     name = f"block_{index}"
@@ -131,8 +112,36 @@ def assign_block(model, state_dict, index, use_qk_norm=True):
     assign(model, f"{name}_ls1", [take(state_dict, source + "ls1.gamma")])
     assign(model, f"{name}_ls2", [take(state_dict, source + "ls2.gamma")])
     if use_qk_norm and index >= 4:
-        assign(model, f"{name}_q_norm", norm(state_dict, source + "attn.q_norm"))
-        assign(model, f"{name}_k_norm", norm(state_dict, source + "attn.k_norm"))
+        assign_qk_norm(model, state_dict, source, name)
+
+
+def assign_qk_norm(model, state_dict, source, name):
+    assign(model, f"{name}_q_norm", norm(state_dict, source + "attn.q_norm"))
+    assign(model, f"{name}_k_norm", norm(state_dict, source + "attn.k_norm"))
+
+
+def head_conv(model, state_dict, target, source):
+    assign(model, target, conv_bias(state_dict, "head.scratch." + source))
+
+
+def conv_bias(state_dict, source):
+    return [conv_kernel(state_dict, source),
+            np.asarray(state_dict[source + ".bias"])]
+
+
+def conv_kernel(state_dict, source):
+    kernel = np.asarray(state_dict[source + ".weight"])
+    return np.transpose(kernel, (2, 3, 1, 0))
+
+
+def named_dense(state_dict, source):
+    return [np.asarray(state_dict[source + ".weight"]).T,
+            np.asarray(state_dict[source + ".bias"])]
+
+
+def named_norm(state_dict, source):
+    return [np.asarray(state_dict[source + ".weight"]),
+            np.asarray(state_dict[source + ".bias"])]
 
 
 def patch_embedding(state_dict):

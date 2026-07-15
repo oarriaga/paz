@@ -1,37 +1,31 @@
-from keras.layers import Add
-
-from paz.models.transformers import attention
 from paz.models.transformers.embeddings import rotary
+from paz.models.transformers.attention import project_query_key_value
+from paz.models.transformers.attention import split_query_key_value
+from paz.models.transformers.attention import normalize_query_key
+from paz.models.transformers.attention import compute_attention
+from paz.models.transformers.attention import merge_attention_heads
+from paz.models.foundation.dinov2.blocks import add_residual
 from paz.models.foundation.dinov2.blocks import apply_feedforward
-from paz.models.foundation.dinov2.blocks import apply_layer_scale
 from paz.models.foundation.dinov2.blocks import normalize
 from paz.models.foundation.dinov2.blocks import project_output
 
-QK_NORM_EPSILON = 1e-5
+
+def build(tokens, positions, args, name):
+    hidden_size, num_heads, MLP_ratio, scale_init = args
+    attended = apply_attention(tokens, positions, hidden_size, num_heads, name)
+    tokens = add_residual(tokens, attended, hidden_size, scale_init, name, 1)
+    forwarded = apply_feedforward(tokens, hidden_size, MLP_ratio, name)
+    return add_residual(tokens, forwarded, hidden_size, scale_init, name, 2)
 
 
-def build_da3_block(tokens, positions, hidden_size, num_heads, mlp_ratio,
-                    layer_scale_init, name):
-    attended = apply_da3_attention(tokens, positions, hidden_size, num_heads,
-                                   name)
-    scaled = apply_layer_scale(attended, hidden_size, layer_scale_init,
-                               f"{name}_ls1")
-    tokens = Add(name=f"{name}_add1")([tokens, scaled])
-    forwarded = apply_feedforward(tokens, hidden_size, mlp_ratio, name)
-    scaled = apply_layer_scale(forwarded, hidden_size, layer_scale_init,
-                               f"{name}_ls2")
-    return Add(name=f"{name}_add2")([tokens, scaled])
-
-
-def apply_da3_attention(tokens, positions, hidden_size, num_heads, name):
+def apply_attention(tokens, positions, hidden_size, num_heads, name):
     normed = normalize(tokens, f"{name}_norm1")
-    fused = attention.project_query_key_value(normed, hidden_size, True, name)
+    fused = project_query_key_value(normed, hidden_size, True, name)
     head_dim = hidden_size // num_heads
-    query, key, value = attention.split_query_key_value(fused, num_heads,
-                                                        head_dim)
-    query, key = attention.normalize_query_key(query, key, QK_NORM_EPSILON, name)
-    query = rotary.apply_2d(query, positions)
-    key = rotary.apply_2d(key, positions)
-    context = attention.compute_attention(query, key, value)
-    merged = attention.merge_attention_heads(context)
+    query, key, value = split_query_key_value(fused, num_heads, head_dim)
+    query, key = normalize_query_key(query, key, 1e-5, name)
+    query = rotary.apply_2D(query, positions)
+    key = rotary.apply_2D(key, positions)
+    context = compute_attention(query, key, value)
+    merged = merge_attention_heads(context)
     return project_output(merged, hidden_size, f"{name}_proj")

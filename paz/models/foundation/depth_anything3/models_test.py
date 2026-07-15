@@ -1,12 +1,12 @@
 import numpy as np
 import jax
 
-from paz.models.foundation.depth_anything3.models import build_da3_small_backbone
-from paz.models.foundation.depth_anything3.models import build_da3_small
-from paz.models.foundation.depth_anything3.models import build_da3_base
-from paz.models.foundation.depth_anything3.models import build_da3_mono_large
+from paz.models.foundation.depth_anything3 import build_da3_small_backbone
+from paz.models.foundation.depth_anything3.models import DepthAnything3Small
+from paz.models.foundation.depth_anything3.models import DepthAnything3Base
+from paz.models.foundation.depth_anything3.models import DepthAnything3MonoLarge
 from paz.models.foundation.depth_anything3.models import grid_shape
-from paz.models.foundation.depth_anything3.port_weights import port_backbone_weights
+from paz.models.foundation.depth_anything3 import port_weights
 
 IMAGE_SHAPE = (70, 70, 3)
 VIEWS = 2
@@ -47,7 +47,7 @@ def test_backbone_jit_matches_eager():
 
 
 def test_da3_small_output_order_and_shapes():
-    model = build_da3_small(VIEWS, IMAGE_SHAPE)
+    model = DepthAnything3Small(VIEWS, IMAGE_SHAPE)
     outputs = model(make_input())
     assert not isinstance(outputs, dict)
     assert not hasattr(outputs, "_fields")
@@ -64,7 +64,7 @@ def test_da3_small_output_order_and_shapes():
 
 
 def test_da3_base_output_order_and_shapes():
-    model = build_da3_base(VIEWS, IMAGE_SHAPE)
+    model = DepthAnything3Base(VIEWS, IMAGE_SHAPE)
     outputs = model(make_input())
     assert len(outputs) == 6
     depth, depth_conf, extrinsics, intrinsics, rays, ray_conf = outputs
@@ -74,7 +74,7 @@ def test_da3_base_output_order_and_shapes():
 
 
 def test_mono_large_returns_depth_and_sky():
-    model = build_da3_mono_large(IMAGE_SHAPE)
+    model = DepthAnything3MonoLarge(IMAGE_SHAPE)
     image = np.random.RandomState(0).randn(1, *IMAGE_SHAPE).astype("float32")
     outputs = model(image)
     assert not isinstance(outputs, dict)
@@ -85,7 +85,7 @@ def test_mono_large_returns_depth_and_sky():
 
 
 def test_da3_small_jit_runs():
-    model = build_da3_small(VIEWS, IMAGE_SHAPE)
+    model = DepthAnything3Small(VIEWS, IMAGE_SHAPE)
     data = make_input()
     eager = np.array(model(data)[0])
     jitted = np.array(jax.jit(lambda x: model(x))(data)[0])
@@ -104,7 +104,8 @@ def add_parameters(state, layer):
     weights = layer.get_weights()
     prefix = "model.backbone.pretrained."
     if name == "patch_embed_proj":
-        state[prefix + "patch_embed.proj.weight"] = np.transpose(weights[0], (3, 2, 0, 1))  # noqa: E501
+        kernel = np.transpose(weights[0], (3, 2, 0, 1))
+        state[prefix + "patch_embed.proj.weight"] = kernel
         state[prefix + "patch_embed.proj.bias"] = weights[1]
     elif name == "cls_token":
         state[prefix + "cls_token"] = weights[0].reshape(1, 1, -1)
@@ -142,7 +143,8 @@ def test_converter_reproduces_source_backbone():
     target = build_da3_small_backbone(VIEWS, IMAGE_SHAPE)
     num_positions = grid_shape(IMAGE_SHAPE, 14)
     num_positions = num_positions[0] * num_positions[1] + 1
-    port_backbone_weights(target, state, DEPTH, num_positions, HIDDEN)
+    args = target, state, DEPTH, num_positions, HIDDEN
+    port_weights.port_backbone_weights(*args)
     data = make_input()
     expected = np.array(source(data)[0])
     assert np.allclose(np.array(target(data)[0]), expected, atol=1e-5)
