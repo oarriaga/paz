@@ -2,8 +2,8 @@
 
 Preprocessing happens outside the compiled model: images are resized to a
 fixed square resolution (a multiple of the patch size), scaled to [0, 1], and
-ImageNet-normalized. Weights come from a converted ``.weights.h5`` file; pass
-its path explicitly until hosting is available.
+ImageNet-normalized. ``weights="pretrained"`` (the default) downloads the
+hosted weights; pass a local ``.weights.h5`` path to override.
 
 Any-view estimators return, in order:
 ``depth, depth_confidence, extrinsics, intrinsics, rays, ray_confidence``.
@@ -16,15 +16,18 @@ from keras import ops
 from paz.backend.image import resize_opencv, standardize
 from paz.models import DepthAnything3Small, DepthAnything3Base
 from paz.models import DepthAnything3MonoLarge, DepthAnything3MetricLarge
+from paz.models.foundation.depth_anything3 import pretrained
 
 
-def EstimateDepthAnything3Small(weights_path, image_size=518):
-    args = DepthAnything3Small, weights_path, image_size
+def EstimateDepthAnything3Small(weights="pretrained", image_size=518):
+    path = resolve_weights(weights, "da3_small")
+    args = DepthAnything3Small, path, image_size
     return build_any_view_estimator(*args)
 
 
-def EstimateDepthAnything3Base(weights_path, image_size=518):
-    args = DepthAnything3Base, weights_path, image_size
+def EstimateDepthAnything3Base(weights="pretrained", image_size=518):
+    path = resolve_weights(weights, "da3_base")
+    args = DepthAnything3Base, path, image_size
     return build_any_view_estimator(*args)
 
 
@@ -39,8 +42,9 @@ def build_any_view_estimator(builder, weights_path, image_size):
     return estimate
 
 
-def EstimateDepthAnything3MonoLarge(weights_path, image_size=518):
-    model = load_mono_model(DepthAnything3MonoLarge, weights_path, image_size)
+def EstimateDepthAnything3MonoLarge(weights="pretrained", image_size=518):
+    path = resolve_weights(weights, "da3_mono_large")
+    model = load_mono_model(DepthAnything3MonoLarge, path, image_size)
 
     def estimate(image):
         return model(preprocess_batch(image, image_size))
@@ -48,15 +52,22 @@ def EstimateDepthAnything3MonoLarge(weights_path, image_size=518):
     return estimate
 
 
-def EstimateDepthAnything3MetricLarge(weights_path, focal_length,
+def EstimateDepthAnything3MetricLarge(focal_length, weights="pretrained",
                                       image_size=518):
-    model = load_mono_model(DepthAnything3MetricLarge, weights_path, image_size)
+    path = resolve_weights(weights, "da3_metric_large")
+    model = load_mono_model(DepthAnything3MetricLarge, path, image_size)
 
     def estimate(image):
         depth, sky = model(preprocess_batch(image, image_size))
         return focal_length * depth / 300.0, sky
 
     return estimate
+
+
+def resolve_weights(weights, model_name):
+    if weights == "pretrained":
+        return pretrained.download_weights(model_name)
+    return weights
 
 
 def load_mono_model(builder, weights_path, image_size):

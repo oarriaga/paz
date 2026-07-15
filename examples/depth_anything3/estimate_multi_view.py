@@ -13,7 +13,7 @@ from paz.applications import EstimateDepthAnything3Small
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--weights", required=True)
+    parser.add_argument("--weights", default="pretrained")
     parser.add_argument("--images", nargs="+", required=True)
     parser.add_argument("--image_size", type=int, default=518)
     args = parser.parse_args()
