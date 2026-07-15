@@ -1,6 +1,11 @@
-"""Canonical function-only DINOv2 implementation.
+"""Canonical function-only DINOv2 built from reusable transformer primitives.
 
-Reserved for the new implementation built from reusable PAZ transformer
-primitives. The previous work lives in
-``paz.models.foundation.dinov2_legacy`` until the detector migrates.
+Standard models return ``(class_token, patch_tokens)``. Feature models return
+a plain tuple of channels-last feature maps in the requested layer order.
 """
+from paz.models.foundation.dinov2.models import DINOv2Small
+from paz.models.foundation.dinov2.models import DINOv2Base
+from paz.models.foundation.dinov2.models import DINOv2Large
+from paz.models.foundation.dinov2.models import DINOv2SmallFeatures
+from paz.models.foundation.dinov2.models import DINOv2BaseFeatures
+from paz.models.foundation.dinov2.models import DINOv2LargeFeatures

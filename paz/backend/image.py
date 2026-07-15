@@ -81,6 +81,39 @@ def resize(image, size, method="linear", antialias=False):
     return jax.image.resize(image, (*size, image.shape[-1]), method, antialias)
 
 
+def resize_bilinear_align_corners(image, size):
+    """Bilinear resize matching torch F.interpolate(align_corners=True).
+
+    Operates on channels-last ``(batch, height, width, channels)`` tensors and
+    uses ``keras.ops`` so it traces inside functional models and runs eagerly.
+    Separable: interpolate rows, then columns.
+    """
+    from keras import ops
+    rows = interpolate_bilinear_axis(image, 1, size[0], ops)
+    return interpolate_bilinear_axis(rows, 2, size[1], ops)
+
+
+def interpolate_bilinear_axis(image, axis, target, ops):
+    source = image.shape[axis]
+    lower, upper, weight = bilinear_sample_positions(source, target, ops)
+    low = ops.take(image, lower, axis=axis)
+    high = ops.take(image, upper, axis=axis)
+    shape = [1] * len(image.shape)
+    shape[axis] = target
+    weight = ops.reshape(weight, shape)
+    return low * (1.0 - weight) + high * weight
+
+
+def bilinear_sample_positions(source, target, ops):
+    if target == 1 or source == 1:
+        positions = ops.zeros((target,))
+    else:
+        positions = ops.arange(target) * ((source - 1) / (target - 1))
+    lower = ops.cast(ops.floor(positions), "int32")
+    upper = ops.minimum(lower + 1, source - 1)
+    return lower, upper, positions - lower
+
+
 def resize_opencv(image: jax.Array, size: tuple[int, int]) -> jax.Array:
     # TODO change to split size into H, W
     data = jax.ShapeDtypeStruct((size[0], size[1], image.shape[2]), image.dtype)

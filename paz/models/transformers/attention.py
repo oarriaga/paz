@@ -2,7 +2,8 @@ import string
 
 import keras
 from keras import ops
-from keras.layers import Dropout, EinsumDense
+from keras.layers import Dense, Dropout, EinsumDense, Reshape
+from keras.layers import LayerNormalization
 
 from paz.models.transformers import cache as kv_cache
 
@@ -172,3 +173,41 @@ def merge_heads(tensor):
 
 def kernel(stddev=0.02):
     return keras.initializers.TruncatedNormal(stddev=stddev)
+
+
+def project_query_key_value(tokens, hidden_size, use_bias, name):
+    units = hidden_size * 3
+    name_qkv = f"{name}_qkv"
+    kwargs = dict(use_bias=use_bias, kernel_initializer=kernel(), name=name_qkv)
+    return Dense(units, **kwargs)(tokens)
+
+
+def split_query_key_value(fused, num_heads, head_dim):
+    heads = Reshape((-1, 3, num_heads, head_dim))(fused)
+    heads = ops.transpose(heads, (2, 0, 3, 1, 4))
+    return heads[0], heads[1], heads[2]
+
+
+def compute_attention(query, key, value):
+    head_dim = query.shape[-1]
+    scale = head_dim ** -0.5
+    scores = ops.matmul(query, ops.transpose(key, (0, 1, 3, 2))) * scale
+    probabilities = ops.softmax(scores, axis=-1)
+    return ops.matmul(probabilities, value)
+
+
+def merge_attention_heads(context):
+    transposed = ops.transpose(context, (0, 2, 1, 3))
+    num_heads = transposed.shape[2]
+    head_dim = transposed.shape[3]
+    return Reshape((-1, num_heads * head_dim))(transposed)
+
+
+def normalize_query_key(query, key, epsilon, name):
+    query = head_norm(query, epsilon, f"{name}_q_norm")
+    key = head_norm(key, epsilon, f"{name}_k_norm")
+    return query, key
+
+
+def head_norm(values, epsilon, name):
+    return LayerNormalization(axis=-1, epsilon=epsilon, name=name)(values)

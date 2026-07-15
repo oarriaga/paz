@@ -30,6 +30,16 @@ from .segmentation.unet import UNET_VGG19
 from .segmentation.unet import UNET_RESNET50
 from .autoencoder.autoencoder import AutoEncoder
 from .autoencoder.autoencoder import extract_encoder
+from .foundation.dinov2 import DINOv2Small
+from .foundation.dinov2 import DINOv2Base
+from .foundation.dinov2 import DINOv2Large
+from .foundation.dinov2 import DINOv2SmallFeatures
+from .foundation.dinov2 import DINOv2BaseFeatures
+from .foundation.dinov2 import DINOv2LargeFeatures
+from .foundation.depth_anything3 import DepthAnything3Small
+from .foundation.depth_anything3 import DepthAnything3Base
+from .foundation.depth_anything3 import DepthAnything3MonoLarge
+from .foundation.depth_anything3 import DepthAnything3MetricLarge
 from .foundation.dinov3.models.vision_transformer import DINOV3VITS
 from .foundation.dinov3.models.vision_transformer import DINOV3VITB
 from .foundation.dinov3.models.vision_transformer import DINOV3VITL
