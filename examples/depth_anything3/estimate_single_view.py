@@ -13,7 +13,7 @@ from paz.applications import EstimateDepthAnything3MonoLarge
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--weights", required=True)
+    parser.add_argument("--weights", default="pretrained")
     parser.add_argument("--image", required=True)
     parser.add_argument("--image_size", type=int, default=518)
     parser.add_argument("--output", default="depth.png")

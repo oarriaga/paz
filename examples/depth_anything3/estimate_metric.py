@@ -16,13 +16,13 @@ from paz.applications import EstimateDepthAnything3MetricLarge
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--weights", required=True)
+    parser.add_argument("--weights", default="pretrained")
     parser.add_argument("--image", required=True)
     parser.add_argument("--focal_length", type=float, required=True)
     parser.add_argument("--image_size", type=int, default=518)
     args = parser.parse_args()
 
-    settings = args.weights, args.focal_length, args.image_size
+    settings = args.focal_length, args.weights, args.image_size
     estimate = EstimateDepthAnything3MetricLarge(*settings)
     depth_meters, sky = estimate(paz.image.load(args.image))
 
