@@ -1,6 +1,6 @@
 """Monocular relative depth with Depth Anything 3.
 
-Convert the Apache-2.0 DA3MONO-LARGE checkpoint first:
+Convert the DA3MONO-LARGE checkpoint first:
 
     DA3_MODEL=mono python -m paz.models.foundation.depth_anything3.convert
 """

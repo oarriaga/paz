@@ -1,6 +1,6 @@
 """Metric monocular depth in meters with Depth Anything 3.
 
-Convert the Apache-2.0 DA3METRIC-LARGE checkpoint first:
+Convert the DA3METRIC-LARGE checkpoint first:
 
     DA3_MODEL=metric python -m paz.models.foundation.depth_anything3.convert
 

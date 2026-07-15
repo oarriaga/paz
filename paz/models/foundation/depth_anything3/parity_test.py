@@ -1,6 +1,6 @@
 """Optional bit-parity check against the official DA3 reference.
 
-Runs only when DA3_REFERENCE is set and the reference package and Apache-2.0
+Runs only when DA3_REFERENCE is set and the reference package and the
 checkpoints are importable. It ports the real checkpoints into the Keras
 models and compares depth, cameras, and rays.
 """

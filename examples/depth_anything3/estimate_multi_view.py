@@ -1,6 +1,6 @@
 """Any-view depth, rays, and recovered cameras with Depth Anything 3.
 
-Convert the Apache-2.0 DA3-SMALL checkpoint first:
+Convert the DA3-SMALL checkpoint first:
 
     python -m paz.models.foundation.depth_anything3.convert
 """

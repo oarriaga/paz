@@ -1,4 +1,4 @@
-"""Development-only weight conversion for Depth Anything 3 (Apache-2.0).
+"""Development-only weight conversion for Depth Anything 3.
 
 Downloads the official checkpoint, ports it into the Keras model, saves a
 ``.weights.h5`` next to a metadata file, and verifies save/reload. Requires
@@ -17,7 +17,6 @@ from paz.models.foundation.depth_anything3 import port_weights
 
 UPSTREAM = "https://github.com/ByteDance-Seed/Depth-Anything-3"
 UPSTREAM_COMMIT = "e74fd796e96b7e781a5506fd8503b6bd7232513c"
-LICENSE = "Apache-2.0"
 IMAGE_SHAPE = (518, 518, 3)
 SMALL = ("depth-anything/DA3-SMALL", models.DepthAnything3Small, 384,
          "da3_small_paz_jax")
@@ -81,7 +80,7 @@ def verify_reload(model, reloaded, path, image_shape, views):
 def write_metadata(output_directory, repository, stem, state, path):
     checkpoint = find_checkpoint(repository)
     metadata = dict(repository=repository, upstream=UPSTREAM,
-                    upstream_commit=UPSTREAM_COMMIT, license=LICENSE,
+                    upstream_commit=UPSTREAM_COMMIT,
                     source_sha256=sha256(checkpoint),
                     converted_sha256=sha256(path))
     with open(os.path.join(output_directory, f"{stem}.json"), "w") as opened:
