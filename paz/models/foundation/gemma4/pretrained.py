@@ -48,9 +48,10 @@ def build_causal_lm(config):
 
 def materialize_weights(model, config):
     # Subclassed models create variables lazily; run one tiny forward so
-    # load_weights has variables to fill.
-    token_ids = jp.zeros((1, 1), dtype="int32")
-    padding_mask = jp.ones((1, 1), dtype="int32")
+    # load_weights has variables to fill. A seq_len of 2 keeps attention's
+    # key axis above size 1, avoiding a degenerate all-ones softmax.
+    token_ids = jp.zeros((1, 2), dtype="int32")
+    padding_mask = jp.ones((1, 2), dtype="int32")
     model({"token_ids": token_ids, "padding_mask": padding_mask})
 
 
