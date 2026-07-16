@@ -29,12 +29,3 @@ BASE_PLUS = SAM2Config("hiera_base_plus", 112, 2, (2, 3, 16, 3),
                        (12, 16, 20), (8, 4, 14, 7), (14, 14))
 LARGE = SAM2Config("hiera_large", 144, 2, (2, 6, 36, 4), (23, 33, 43),
                    (8, 4, 16, 8), (7, 7))
-
-
-def stage_dimensions(embed_dim, num_stages):
-    return [embed_dim * DIM_MUL ** stage for stage in range(num_stages)]
-
-
-def backbone_channels(config):
-    dimensions = stage_dimensions(config.embed_dim, len(config.stages))
-    return list(reversed(dimensions))

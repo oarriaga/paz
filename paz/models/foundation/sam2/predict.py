@@ -37,7 +37,8 @@ def predict(bundle, features, points=None, labels=None, box=None, mask=None,
               sparse, dense, features.image_pe)
     masks, scores, _ = bundle.mask_decoder(inputs)
     masks, scores = select(masks, scores, multimask)
-    return upscale_masks(masks, features.size), scores, masks
+    upscaled = upscale_masks(masks, features.size)
+    return upscaled, scores, jp.clip(masks, -32.0, 32.0)
 
 
 def build_prompt(points, labels, box, size):

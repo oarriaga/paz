@@ -9,7 +9,7 @@ from paz.models.foundation.sam2 import model as sam2_model, predict
 from paz.models.foundation.sam2 import preprocessing
 from paz.models.foundation.sam2.windows import window_partition
 from paz.models.foundation.sam2.windows import window_unpartition
-from paz.models.foundation.sam2.configuration import TINY, backbone_channels
+from paz.models.foundation.sam2.configuration import TINY
 
 
 def test_preprocess_shape_and_normalization():
@@ -59,10 +59,6 @@ def test_image_encoder_output_shapes():
     assert tuple(embedding.shape) == (None, 64, 64, 256)
     assert tuple(high_res_0.shape) == (None, 256, 256, 32)
     assert tuple(high_res_1.shape) == (None, 128, 128, 64)
-
-
-def test_backbone_channels_follow_embed_dim():
-    assert backbone_channels(TINY) == [768, 384, 192, 96]
 
 
 def test_point_encoder_sparse_shape():
