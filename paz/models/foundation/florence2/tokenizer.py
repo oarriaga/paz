@@ -16,7 +16,7 @@ PAD_TOKEN_ID = 1
 FLOW_TOKEN_ID = 51289
 SPLIT_PATTERN = re.compile(
     r"'s|'t|'re|'ve|'m|'ll|'d| ?[^\W\d_]+| ?\d+"
-    r"| ?[^\s\w]+|\s+(?!\S)|\s+"
+    r"| ?(?:[^\s\w]|_)+|\s+(?!\S)|\s+"
 )
 Tokenizer = namedtuple("Tokenizer", "vocabulary merge_ranks byte_to_char")
 
@@ -25,10 +25,16 @@ def load_tokenizer(path):
     source = json.loads(open(path).read())
     vocabulary = source["model"]["vocab"]
     merges = source["model"]["merges"]
-    pairs = [tuple(merge.split(" ")) for merge in merges]
+    pairs = [unpack_merge(merge) for merge in merges]
     merge_ranks = {pair: rank for rank, pair in enumerate(pairs)}
     byte_to_char = build_byte_to_char()
     return Tokenizer(vocabulary, merge_ranks, byte_to_char)
+
+
+def unpack_merge(merge):
+    if isinstance(merge, str):
+        return tuple(merge.split(" "))
+    return tuple(merge)
 
 
 def build_byte_to_char():

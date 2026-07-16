@@ -117,13 +117,14 @@ class RotaryTable(keras.layers.Layer):
     def build(self, input_shape):
         angles = self.build_angles(input_shape[-1])
         shape = (self.max_positions, input_shape[-1] // 2)
-        kwargs = {"shape": shape, "trainable": False}
         cosine_init = lambda *args, **_: ops.cos(angles)
         sine_init = lambda *args, **_: ops.sin(angles)
-        self.cosine = self.add_weight(
-            name="cosine", initializer=cosine_init, **kwargs)
-        self.sine = self.add_weight(
-            name="sine", initializer=sine_init, **kwargs)
+        cosine_kwargs = {"shape": shape, "trainable": False,
+                         "name": "cosine", "initializer": cosine_init}
+        sine_kwargs = {"shape": shape, "trainable": False,
+                       "name": "sine", "initializer": sine_init}
+        self.cosine = self.add_weight(**cosine_kwargs)
+        self.sine = self.add_weight(**sine_kwargs)
         self.built = True
 
     def build_angles(self, head_dim):

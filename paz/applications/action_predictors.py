@@ -5,15 +5,16 @@ from paz.models.foundation.florence2 import preprocessing
 from paz.models.foundation.florence2 import tokenizer as tokenizers
 from paz.models.foundation.flower.pretrained import FLOWERLiberoObject
 from paz.models.foundation.flower.sampling import sample_actions
+from paz.models.foundation.flower.sampling import sample_noise
 
 
 def PredictFlowerActions(models=None, weights="pretrained", models_path=None,
-                         num_flow_steps=4, seed=0):
+                         num_flow_steps=None, seed=0):
     if models is None:
         models = FLOWERLiberoObject(weights=weights, models_path=models_path)
+    if num_flow_steps is None:
+        num_flow_steps = models.config.num_sampling_steps
     key = jax.random.PRNGKey(seed)
-    horizon = models.config.num_actions
-    action_dim = models.config.action_dim
 
     def tokenize(instruction):
         prompt = tokenizers.build_policy_prompt(instruction)
@@ -26,11 +27,9 @@ def PredictFlowerActions(models=None, weights="pretrained", models_path=None,
         key, noise_key = jax.random.split(key)
         static = preprocessing.preprocess(static_image)
         wrist = preprocessing.preprocess(wrist_image)
-        token_ids = tokenize(instruction)
-        context = models.encoder.predict(
-            [static, wrist, token_ids], verbose=0)
-        shape = (1, horizon, action_dim)
-        noise = jax.random.normal(noise_key, shape, dtype="float32")
+        inputs = [static, wrist, tokenize(instruction)]
+        context = models.encoder.predict(inputs, verbose=0)
+        noise = sample_noise(noise_key, 1, models.config)
         actions = sample_actions(models.dit, context, noise, num_flow_steps)
         return np.asarray(actions[0])
 

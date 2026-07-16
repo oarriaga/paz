@@ -32,6 +32,11 @@ def test_encode_truncates_to_max_length(toy_tokenizer):
     assert token_ids == [0, 7, 2]
 
 
+def test_split_pattern_keeps_underscores():
+    pieces = tokenizer.SPLIT_PATTERN.findall("pick_up KITCHEN_SCENE_1")
+    assert "".join(pieces) == "pick_up KITCHEN_SCENE_1"
+
+
 def test_policy_prompt_matches_reference_format():
     prompt = tokenizer.build_policy_prompt("pick up the milk")
     reference = ("Agent Type: 1-arm Franka Panda, Action Space: "

@@ -69,18 +69,18 @@ def download_weights(model_name):
     model_dir = manifest_path.parent
     manifest = json.loads(manifest_path.read_text())
     for filename, entry in manifest.items():
-        assemble_weights_file(model_dir / filename, entry, subdir)
+        args = (model_dir / filename, entry, subdir, GEMMA4_WEIGHTS_URL)
+        assemble_weights_file(*args)
     return model_dir
 
 
-def assemble_weights_file(path, entry, subdir):
+def assemble_weights_file(path, entry, subdir, url):
     checksum = entry.get("sha256")
     if is_complete(path, checksum):
         return path
     parts = []
     for asset in entry["parts"]:
-        parts.append(get_file(
-            asset, GEMMA4_WEIGHTS_URL + asset, cache_subdir=subdir))
+        parts.append(get_file(asset, url + asset, cache_subdir=subdir))
     concatenate_parts(parts, path)
     if checksum is not None and compute_sha256(path) != checksum:
         raise ValueError("Checksum mismatch after assembling {}".format(path))

@@ -16,54 +16,54 @@ from paz.models.transformers.attention import masked_attend
 NORM_EPSILON = 1e-5
 
 
-def ImageEncoder(args, name="image_encoder"):
-    size = args.image_size
+def ImageEncoder(config, name="image_encoder"):
+    size = config.image_size
     image = Input((size, size, 3), name="image")
-    tokens, side = build_stages(image, args)
-    tokens = add_2d_positions(tokens, side, args)
+    tokens, side = build_stages(image, config)
+    tokens = add_2d_positions(tokens, side, config)
     tokens = add_temporal_embedding(tokens)
     tokens = concatenate_pooled(tokens)
-    project = Dense(args.projection_dim, use_bias=False,
+    project = Dense(config.projection_dim, use_bias=False,
                     name="image_projection")
     tokens = project(tokens)
     norm = build_norm("image_proj_norm")
     return Model(image, norm(tokens), name=name)
 
 
-def build_stages(image, args):
-    x, grid = image, (args.image_size, args.image_size)
-    for stage in range(len(args.stage_dims)):
-        x, grid = embed_patches(x, grid, stage, args)
-        for block in range(args.stage_depths[stage]):
+def build_stages(image, config):
+    x, grid = image, (config.image_size, config.image_size)
+    for stage in range(len(config.stage_dims)):
+        x, grid = embed_patches(x, grid, stage, config)
+        for block in range(config.stage_depths[stage]):
             name = f"blocks_{stage}_{block}"
-            x = spatial_block(x, grid, stage, f"{name}_spatial", args)
-            x = channel_block(x, grid, stage, f"{name}_channel", args)
+            x = spatial_block(x, grid, stage, f"{name}_spatial", config)
+            x = channel_block(x, grid, stage, f"{name}_channel", config)
     return x, grid[0]
 
 
-def embed_patches(x, grid, stage, args):
-    dim = args.stage_dims[stage]
+def embed_patches(x, grid, stage, config):
+    dim = config.stage_dims[stage]
     if len(x.shape) == 3:
-        if args.patch_prenorms[stage]:
+        if config.patch_prenorms[stage]:
             x = build_norm(f"convs_{stage}_norm")(x)
         x = to_grid(x, grid)
-    x = ZeroPadding2D(args.patch_paddings[stage],
+    x = ZeroPadding2D(config.patch_paddings[stage],
                       name=f"convs_{stage}_pad")(x)
-    conv_args = (dim, args.patch_sizes[stage], args.patch_strides[stage])
+    conv_args = (dim, config.patch_sizes[stage], config.patch_strides[stage])
     x = Conv2D(*conv_args, "valid", name=f"convs_{stage}_proj")(x)
     grid = (x.shape[1], x.shape[2])
     x = to_tokens(x)
-    if not args.patch_prenorms[stage]:
+    if not config.patch_prenorms[stage]:
         x = build_norm(f"convs_{stage}_norm")(x)
     return x, grid
 
 
-def spatial_block(x, grid, stage, name, args):
-    dim = args.stage_dims[stage]
-    heads = args.stage_heads[stage]
+def spatial_block(x, grid, stage, name, config):
+    dim = config.stage_dims[stage]
+    heads = config.stage_heads[stage]
     x = add_depthwise(x, grid, f"{name}_conv1")
     y = build_norm(f"{name}_window_attention_norm")(x)
-    window_args = (y, grid, dim, heads, args.window_size)
+    window_args = (y, grid, dim, heads, config.window_size)
     x = x + attend_windows(*window_args, f"{name}_window_attention")
     x = add_depthwise(x, grid, f"{name}_conv2")
     y = build_norm(f"{name}_ffn_norm")(x)
@@ -71,9 +71,9 @@ def spatial_block(x, grid, stage, name, args):
     return x + feedforward.gelu(*ffn_args)
 
 
-def channel_block(x, grid, stage, name, args):
-    dim = args.stage_dims[stage]
-    groups = args.stage_groups[stage]
+def channel_block(x, grid, stage, name, config):
+    dim = config.stage_dims[stage]
+    groups = config.stage_groups[stage]
     num_tokens = grid[0] * grid[1]
     x = add_depthwise(x, grid, f"{name}_conv1")
     y = build_norm(f"{name}_attention_norm")(x)
@@ -132,12 +132,12 @@ def add_depthwise(x, grid, name):
     return x + to_tokens(y)
 
 
-def add_2d_positions(x, side, args):
+def add_2d_positions(x, side, config):
     dim = x.shape[-1]
     half = dim // 2
-    rows = Embedding(args.num_position_rows, half,
+    rows = Embedding(config.num_position_rows, half,
                      name="image_row_embedding")
-    columns = Embedding(args.num_position_rows, dim - half,
+    columns = Embedding(config.num_position_rows, dim - half,
                         name="image_column_embedding")
     column_fn = lambda t: ops.tile(ops.arange(side, dtype="int32"), [side])
     row_fn = lambda t: ops.repeat(ops.arange(side, dtype="int32"), side)

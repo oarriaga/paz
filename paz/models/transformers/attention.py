@@ -8,21 +8,20 @@ from paz.models.transformers import cache as kv_cache
 
 
 def attend(query, value, num_heads, key_dim, dropout, name):
-    output_dim = query.shape[-1]
-    q = transpose_to_heads(project_query(query, num_heads, key_dim, name))
-    k = transpose_to_heads(project_key(value, num_heads, key_dim, name))
-    v = transpose_to_heads(project_value(value, num_heads, key_dim, name))
-    scores = compute_scores(q, k, key_dim)
-    output = apply_attention(scores, v, dropout, name)
-    output = merge_heads(output)
-    query_rank = len(query.shape)
-    return project_output(output, query_rank, output_dim, name)
+    key = project_key(value, num_heads, key_dim, name)
+    return attend_key(query, value, key, None, key_dim, dropout, name)
 
 
 def masked_attend(query, value, mask, num_heads, key_dim, dropout, name):
+    key = project_biased_key(value, num_heads, key_dim, name)
+    return attend_key(query, value, key, mask, key_dim, dropout, name)
+
+
+def attend_key(query, value, key, mask, key_dim, dropout, name):
+    num_heads = key.shape[-2]
     output_dim = query.shape[-1]
     q = transpose_to_heads(project_query(query, num_heads, key_dim, name))
-    k = transpose_to_heads(project_biased_key(value, num_heads, key_dim, name))
+    k = transpose_to_heads(key)
     v = transpose_to_heads(project_value(value, num_heads, key_dim, name))
     scores = compute_scores(q, k, key_dim)
     scores = mask_scores(scores, expand_mask_for_heads(mask))

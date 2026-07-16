@@ -17,14 +17,18 @@ def gelu(x, inner_dim, output_dim, intermediate_name, output_name):
 
 
 def glu(x, inner_dim, output_dim, gate_name, up_name, down_name):
-    gate = build_dense(inner_dim, gate_name, activations.gelu, False)
-    up = build_dense(inner_dim, up_name, None, False)
-    down = build_dense(output_dim, down_name, None, False)
-    return down(gate(x) * up(x))
+    names = (gate_name, up_name, down_name)
+    return gated(x, activations.gelu, inner_dim, output_dim, names)
 
 
 def swiglu(x, inner_dim, output_dim, gate_name, up_name, down_name):
-    gate = build_dense(inner_dim, gate_name, activations.silu, False)
+    names = (gate_name, up_name, down_name)
+    return gated(x, activations.silu, inner_dim, output_dim, names)
+
+
+def gated(x, activation, inner_dim, output_dim, names):
+    gate_name, up_name, down_name = names
+    gate = build_dense(inner_dim, gate_name, activation, False)
     up = build_dense(inner_dim, up_name, None, False)
     down = build_dense(output_dim, down_name, None, False)
     return down(gate(x) * up(x))

@@ -74,7 +74,6 @@ if __name__ == "__main__":
     print(f"instruction: {instruction}")
 
     policy = PredictFlowerActions(
-        weights="pretrained" if args.checkpoint is None else None,
         models_path=args.checkpoint,
         num_flow_steps=args.num_flow_steps,
         seed=args.seed)

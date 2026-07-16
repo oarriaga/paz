@@ -18,14 +18,9 @@ Notes discovered from the reference implementation:
   dead at inference (never referenced by ``dit_forward``).
 """
 import argparse
-import sys
 from pathlib import Path
 
 import numpy as np
-
-ROOT = Path(__file__).resolve().parents[4]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
 from paz.models.foundation.flower.configuration import to_config
 from paz.models.foundation.flower.model import build
@@ -212,6 +207,11 @@ if __name__ == "__main__":
     add("--checkpoint", required=True, help="path to model.safetensors")
     add("--output_dir", required=True, help="directory for weights + report")
     add("--model_name", default="flower_libero_object")
+    add("--tokenizer", default=None,
+        help="Florence-2 tokenizer.json to copy into the artifact dir")
     args = parser.parse_args()
     convert(args.checkpoint, args.output_dir, args.model_name)
+    if args.tokenizer is not None:
+        import shutil
+        shutil.copy(args.tokenizer, Path(args.output_dir) / "tokenizer.json")
     print(f"wrote {args.output_dir}/flower_dit.weights.h5")
