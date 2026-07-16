@@ -1,11 +1,10 @@
 """Metric monocular depth in meters with Depth Anything 3.
 
-Convert the DA3METRIC-LARGE checkpoint first:
+Runs out of the box: with no arguments it downloads the pretrained
+DA3METRIC-LARGE weights and an indoor demo image, then prints depth in meters.
 
-    DA3_MODEL=metric python -m paz.models.foundation.depth_anything3.convert
-
-Focal length is in pixels at the processed resolution and must be given
-explicitly; it is never inferred.
+Focal length is in pixels at the processed resolution; the model never infers
+it. The default suits the demo image; pass --focal_length for your own camera.
 """
 import argparse
 
@@ -14,17 +13,23 @@ import numpy as np
 import paz
 from paz.applications import EstimateDepthAnything3MetricLarge
 
+import demo
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--weights", default="pretrained")
-    parser.add_argument("--image", required=True)
-    parser.add_argument("--focal_length", type=float, required=True)
+    parser.add_argument("--image", default=None)
+    parser.add_argument("--focal_length", type=float, default=470.0)
     parser.add_argument("--image_size", type=int, default=518)
     args = parser.parse_args()
 
     settings = args.focal_length, args.weights, args.image_size
     estimate = EstimateDepthAnything3MetricLarge(*settings)
-    depth_meters, sky = estimate(paz.image.load(args.image))
+    if args.image is None:
+        image = demo.fetch_image("indoor")
+    else:
+        image = paz.image.load(args.image)
+    depth_meters, sky = estimate(image)
 
     depth_meters = np.array(depth_meters)[0]
     lowest = round(float(depth_meters.min()), 3)
