@@ -1,9 +1,11 @@
 """Static-image inference orchestration for SAM 2.
 
-Encodes an image once, then predicts masks for point, box, combined, and
-previous-mask prompts. Coordinates are ``(x, y)`` in the original image; boxes
-are ``XYXY``. Returns masks at the original resolution, predicted quality
-scores, and the low-resolution logits for a follow-up prompt.
+Encode an image once into a ``State`` (weights bundle plus per-image
+features), then predict masks for point, box, combined, and previous-mask
+prompts. Coordinates are ``(x, y)`` in the original image; boxes are ``XYXY``.
+``predict`` returns the four candidate masks at the original resolution, their
+predicted quality scores, and the low-resolution logits for a follow-up
+prompt. ``select`` keeps the multimask candidates or the single mask.
 """
 from collections import namedtuple
 
@@ -16,27 +18,28 @@ from paz.models.foundation.sam2.preprocessing import transform_boxes
 from paz.models.foundation.sam2.prompt_encoder import dense_positional_encoding
 from paz.models.foundation.sam2.prompt_encoder import MASK_INPUT
 
-Features = namedtuple(
-    "Features", "image_embed high_res_0 high_res_1 image_pe size")
+FEATURES = "image_embed high_res_0 high_res_1 image_pe size"
+Features = namedtuple("Features", FEATURES)
+State = namedtuple("State", "bundle features")
 
 
 def encode_image(bundle, image):
     pixels = preprocess_image(image)[None]
     embedding, high_res_0, high_res_1 = bundle.image_encoder(pixels)
     image_pe = dense_positional_encoding(bundle.point_encoder)[None]
-    return Features(embedding, high_res_0, high_res_1, image_pe,
-                    image.shape[:2])
+    size = image.shape[:2]
+    features = Features(embedding, high_res_0, high_res_1, image_pe, size)
+    return State(bundle, features)
 
 
-def predict(bundle, features, points=None, labels=None, box=None, mask=None,
-            multimask=True):
+def predict(state, points=None, labels=None, box=None, mask=None):
+    bundle, features = state
     coordinates, labels = build_prompt(points, labels, box, features.size)
     sparse = bundle.point_encoder((coordinates, labels))
     dense = build_dense(bundle, mask)
-    inputs = (features.image_embed, features.high_res_0, features.high_res_1,
-              sparse, dense, features.image_pe)
+    tensors = (features.image_embed, features.high_res_0, features.high_res_1)
+    inputs = (*tensors, sparse, dense, features.image_pe)
     masks, scores, _ = bundle.mask_decoder(inputs)
-    masks, scores = select(masks, scores, multimask)
     upscaled = upscale_masks(masks, features.size)
     return upscaled, scores, jp.clip(masks, -32.0, 32.0)
 
@@ -67,7 +70,7 @@ def build_dense(bundle, mask):
     return dense
 
 
-def select(masks, scores, multimask):
+def select(masks, scores, multimask=True):
     start = 1 if multimask else 0
     stop = masks.shape[1] if multimask else 1
     return masks[:, start:stop], scores[:, start:stop]

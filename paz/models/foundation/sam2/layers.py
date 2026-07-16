@@ -1,7 +1,8 @@
 """Small serializable layers that own SAM 2 weights not covered by Keras.
 
 ``ChannelBias`` adds a learned per-channel vector, used for ``no_mem_embed``
-and for the mask decoder's dense no-mask embedding.
+and the dense no-mask embedding. ``BroadcastTokens`` broadcasts a learned
+token table across the batch of a reference tensor.
 """
 import keras
 from keras import ops
@@ -16,14 +17,14 @@ class BroadcastTokens(Layer):
         self.hidden_size = hidden_size
 
     def build(self, input_shape):
-        self.tokens = self.add_weight(
-            name="tokens", shape=(self.count, self.hidden_size),
-            initializer="zeros")
+        shape = (self.count, self.hidden_size)
+        kwargs = dict(name="tokens", shape=shape, initializer="zeros")
+        self.tokens = self.add_weight(**kwargs)
 
     def call(self, reference):
         batch = ops.shape(reference)[0]
-        return ops.broadcast_to(
-            self.tokens[None], (batch, self.count, self.hidden_size))
+        shape = (batch, self.count, self.hidden_size)
+        return ops.broadcast_to(self.tokens[None], shape)
 
     def compute_output_shape(self, input_shape):
         return (input_shape[0], self.count, self.hidden_size)
@@ -40,8 +41,9 @@ class ChannelBias(Layer):
         self.channels = channels
 
     def build(self, input_shape):
-        self.bias = self.add_weight(
-            name="bias", shape=(self.channels,), initializer="zeros")
+        shape = (self.channels,)
+        kwargs = dict(name="bias", shape=shape, initializer="zeros")
+        self.bias = self.add_weight(**kwargs)
 
     def call(self, x):
         return x + self.bias

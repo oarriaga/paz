@@ -19,6 +19,11 @@ import demo
 BACKGROUND = (0, 0, 0)
 FOREGROUND = (30, 144, 255)
 
+
+def load_image(path):
+    return demo.fetch_image() if path is None else paz.image.load(path)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--weights", required=True)
@@ -29,18 +34,16 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     model = SAM21HieraSmall(weights=args.weights)
-    image = demo.fetch_image() if args.image is None else \
-        paz.image.load(args.image)
-
-    features = predict.encode_image(model, image)
-    points = [args.positive, args.negative]
-    masks, scores, low_res = predict.predict(
-        model, features, points=points, labels=[1, 0], multimask=True)
+    image = load_image(args.image)
+    state = predict.encode_image(model, image)
+    prompt = dict(points=[args.positive, args.negative], labels=[1, 0])
+    masks, scores, _ = predict.predict(state, **prompt)
+    masks, scores = predict.select(masks, scores, multimask=True)
 
     best = int(np.argmax(np.array(scores)[0]))
     mask = np.array(masks)[0, best] > 0
-    overlaid = overlay_masks(image, mask.astype("int32"),
-                             [BACKGROUND, FOREGROUND])
+    colors = [BACKGROUND, FOREGROUND]
+    overlaid = overlay_masks(image, mask.astype("int32"), colors)
     paz.image.write(args.output, overlaid)
     print("best mask", best, "score", float(np.array(scores)[0, best]))
     print("saved", args.output)

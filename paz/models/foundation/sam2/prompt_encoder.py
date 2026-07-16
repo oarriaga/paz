@@ -27,9 +27,9 @@ class RandomFourierEmbedding(Layer):
         self.num_features = num_features
 
     def build(self, input_shape):
-        self.matrix = self.add_weight(
-            name="matrix", shape=(2, self.num_features), initializer="zeros",
-            trainable=False)
+        shape = (2, self.num_features)
+        kwargs = dict(name="matrix", shape=shape, initializer="zeros")
+        self.matrix = self.add_weight(trainable=False, **kwargs)
 
     def call(self, coordinates):
         coordinates = 2.0 * coordinates - 1.0
@@ -45,25 +45,18 @@ class RandomFourierEmbedding(Layer):
 @keras.saving.register_keras_serializable(package="paz")
 class PointLabelEmbedding(Layer):
     def build(self, input_shape):
-        self.corners = self.add_weight(
-            name="corners", shape=(4, PROMPT_EMBED_DIM), initializer="zeros")
-        self.not_a_point = self.add_weight(
-            name="not_a_point", shape=(1, PROMPT_EMBED_DIM),
-            initializer="zeros")
+        corners = dict(name="corners", shape=(4, PROMPT_EMBED_DIM))
+        point = dict(name="not_a_point", shape=(1, PROMPT_EMBED_DIM))
+        self.corners = self.add_weight(initializer="zeros", **corners)
+        self.not_a_point = self.add_weight(initializer="zeros", **point)
 
     def call(self, inputs):
         encoding, labels = inputs
         labels = labels[..., None]
-        vectors = self.corners[None, None]
         encoding = ops.where(labels == -1, self.not_a_point[None], encoding)
-        encoding = ops.where(labels == 0, encoding + vectors[..., 0, :],
-                             encoding)
-        encoding = ops.where(labels == 1, encoding + vectors[..., 1, :],
-                             encoding)
-        encoding = ops.where(labels == 2, encoding + vectors[..., 2, :],
-                             encoding)
-        encoding = ops.where(labels == 3, encoding + vectors[..., 3, :],
-                             encoding)
+        for label in range(4):
+            corner = self.corners[label]
+            encoding = ops.where(labels == label, encoding + corner, encoding)
         return encoding
 
 
@@ -71,8 +64,8 @@ def build_points(name="sam2_prompt_encoder"):
     coordinates = Input((None, 2), name="point_coords")
     labels = Input((None,), name="point_labels")
     normalized = (coordinates + 0.5) / IMAGE_SIZE
-    encoding = RandomFourierEmbedding(
-        PROMPT_EMBED_DIM // 2, name="prompt_pe")(normalized)
+    layer = RandomFourierEmbedding(PROMPT_EMBED_DIM // 2, name="prompt_pe")
+    encoding = layer(normalized)
     sparse = PointLabelEmbedding(name="point_label_embed")([encoding, labels])
     return Model((coordinates, labels), sparse, name=name)
 
@@ -86,8 +79,8 @@ def build_mask_downscaling(name="sam2_mask_downscaling"):
     x = LayerNormalization(axis=-1, epsilon=1e-6, name="mask_down_ln3")(x)
     x = ops.gelu(x, approximate=False)
     dense = Conv2D(PROMPT_EMBED_DIM, 1, name="mask_down_6")(x)
-    no_mask = ChannelBias(PROMPT_EMBED_DIM,
-                          name="no_mask_embed")(ops.zeros_like(dense))
+    empty = ops.zeros_like(dense)
+    no_mask = ChannelBias(PROMPT_EMBED_DIM, name="no_mask_embed")(empty)
     return Model(masks, (dense, no_mask), name=name)
 
 

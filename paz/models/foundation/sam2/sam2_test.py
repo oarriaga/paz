@@ -90,15 +90,17 @@ def test_mask_downscaling_shape():
     assert np.array(no_mask).shape == (1, 64, 64, 256)
 
 
+def decoder_inputs():
+    embed = np.zeros((1, 64, 64, 256), np.float32)
+    high_res_0 = np.zeros((1, 256, 256, 32), np.float32)
+    high_res_1 = np.zeros((1, 128, 128, 64), np.float32)
+    sparse = np.zeros((1, 2, 256), np.float32)
+    dense = np.zeros((1, 64, 64, 256), np.float32)
+    return [embed, high_res_0, high_res_1, sparse, dense, embed]
+
+
 def test_mask_decoder_shapes():
-    model = mask_decoder.build()
-    inputs = [np.zeros((1, 64, 64, 256), np.float32),
-              np.zeros((1, 256, 256, 32), np.float32),
-              np.zeros((1, 128, 128, 64), np.float32),
-              np.zeros((1, 2, 256), np.float32),
-              np.zeros((1, 64, 64, 256), np.float32),
-              np.zeros((1, 64, 64, 256), np.float32)]
-    masks, iou, obj = model(inputs)
+    masks, iou, obj = mask_decoder.build()(decoder_inputs())
     assert np.array(masks).shape == (1, 4, 256, 256)
     assert np.array(iou).shape == (1, 4)
     assert np.array(obj).shape == (1, 1)
@@ -110,26 +112,24 @@ def bundle():
 
 
 def test_single_and_multimask_selection(bundle):
-    image = np.zeros((80, 120, 3), np.uint8)
-    features = predict.encode_image(bundle, image)
-    multi, scores, _ = predict.predict(
-        bundle, features, points=[[60.0, 40.0]], labels=[1], multimask=True)
-    single, _, _ = predict.predict(
-        bundle, features, points=[[60.0, 40.0]], labels=[1], multimask=False)
+    state = predict.encode_image(bundle, np.zeros((80, 120, 3), np.uint8))
+    point = [[60.0, 40.0]]
+    masks, scores, low = predict.predict(state, points=point, labels=[1])
+    multi, multi_scores = predict.select(masks, scores, multimask=True)
+    single, _ = predict.select(masks, scores, multimask=False)
     assert np.array(multi).shape == (1, 3, 80, 120)
     assert np.array(single).shape == (1, 1, 80, 120)
-    assert np.array(scores).shape == (1, 3)
+    assert np.array(multi_scores).shape == (1, 3)
 
 
 def test_box_and_point_box_shapes(bundle):
-    image = np.zeros((80, 120, 3), np.uint8)
-    features = predict.encode_image(bundle, image)
-    box, _, _ = predict.predict(bundle, features, box=[10.0, 10.0, 60.0, 50.0])
-    combined, _, _ = predict.predict(
-        bundle, features, points=[[30.0, 30.0]], labels=[1],
-        box=[10.0, 10.0, 60.0, 50.0])
-    assert np.array(box).shape == (1, 3, 80, 120)
-    assert np.array(combined).shape == (1, 3, 80, 120)
+    state = predict.encode_image(bundle, np.zeros((80, 120, 3), np.uint8))
+    rectangle = [10.0, 10.0, 60.0, 50.0]
+    box = predict.predict(state, box=rectangle)[0]
+    kwargs = dict(points=[[30.0, 30.0]], labels=[1], box=rectangle)
+    combined = predict.predict(state, **kwargs)[0]
+    assert np.array(box).shape == (1, 4, 80, 120)
+    assert np.array(combined).shape == (1, 4, 80, 120)
 
 
 def test_window_partition_jit_cache_is_stable():

@@ -32,19 +32,22 @@ def build(name="sam2_mask_decoder"):
     queries, keys = two_way_transformer(source, positions, tokens)
     upscaled = upscale(reshape_to_grid(keys), high_res_0, high_res_1)
     masks = hypernetwork(queries[:, 2:TOKENS], upscaled)
-    iou = mlp(queries[:, 1], 256, NUM_MASK_TOKENS, 3, "iou_prediction_head",
-              sigmoid=True)
+    iou_args = queries[:, 1], 256, NUM_MASK_TOKENS, 3, "iou_prediction_head"
+    iou = mlp(*iou_args, sigmoid=True)
     obj = mlp(queries[:, 0], 256, 1, 3, "pred_obj_score_head")
     inputs = (embed, high_res_0, high_res_1, sparse, dense, image_pe)
     return Model(inputs, (masks, iou, obj), name=name)
 
 
 def build_output_tokens(sparse):
-    obj = BroadcastTokens(1, PROMPT_EMBED_DIM, name="obj_score_token")(sparse)
-    iou = BroadcastTokens(1, PROMPT_EMBED_DIM, name="iou_token")(sparse)
-    mask = BroadcastTokens(NUM_MASK_TOKENS, PROMPT_EMBED_DIM,
-                           name="mask_tokens")(sparse)
+    obj = output_token(1, "obj_score_token", sparse)
+    iou = output_token(1, "iou_token", sparse)
+    mask = output_token(NUM_MASK_TOKENS, "mask_tokens", sparse)
     return ops.concatenate([obj, iou, mask, sparse], axis=1)
+
+
+def output_token(count, name, reference):
+    return BroadcastTokens(count, PROMPT_EMBED_DIM, name=name)(reference)
 
 
 def two_way_transformer(source, positions, tokens):

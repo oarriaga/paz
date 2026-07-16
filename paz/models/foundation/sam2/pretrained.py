@@ -12,8 +12,7 @@ from paz.models.foundation.sam2 import model as sam2_model
 from paz.models.foundation.sam2 import convert
 from paz.models.foundation.sam2 import configuration as cfg
 
-WEIGHT_FILES = ("image_encoder", "point_encoder", "mask_downscaling",
-                "mask_decoder")
+NAMES = "image_encoder point_encoder mask_downscaling mask_decoder".split()
 
 
 def SAM2HieraTiny(weights=None):
@@ -58,21 +57,22 @@ def build(config, weights):
 def save_weights(bundle, directory):
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True)
-    for model, name in zip(bundle[:4], WEIGHT_FILES):
+    for model, name in zip(bundle[:4], NAMES):
         model.save_weights(str(directory / f"{name}.weights.h5"))
 
 
 def load_weights(bundle, directory):
     directory = Path(directory)
-    for model, name in zip(bundle[:4], WEIGHT_FILES):
+    for model, name in zip(bundle[:4], NAMES):
         model.load_weights(str(directory / f"{name}.weights.h5"))
 
 
 def convert_checkpoint(checkpoint, config, directory):
     import torch
     state_dict = torch.load(checkpoint, map_location="cpu")["model"]
-    arrays = {key: value.float().cpu().numpy()
-              for key, value in state_dict.items()}
+    arrays = {}
+    for key, value in state_dict.items():
+        arrays[key] = value.float().cpu().numpy()
     bundle = sam2_model.build(config)
     convert.convert(bundle, arrays)
     save_weights(bundle, directory)
