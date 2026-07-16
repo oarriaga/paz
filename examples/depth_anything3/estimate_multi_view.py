@@ -1,8 +1,8 @@
 """Any-view depth, rays, and recovered cameras with Depth Anything 3.
 
-Convert the DA3-SMALL checkpoint first:
-
-    python -m paz.models.foundation.depth_anything3.convert
+Runs out of the box: with no arguments it downloads the pretrained DA3-SMALL
+weights and two Opera House views, then prints per-view depth shapes and the
+camera pose recovered jointly from the unposed images.
 """
 import argparse
 
@@ -11,15 +11,21 @@ import numpy as np
 import paz
 from paz.applications import EstimateDepthAnything3Small
 
+import demo
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--weights", default="pretrained")
-    parser.add_argument("--images", nargs="+", required=True)
+    parser.add_argument("--images", nargs="+", default=None)
     parser.add_argument("--image_size", type=int, default=518)
     args = parser.parse_args()
 
     estimate = EstimateDepthAnything3Small(args.weights, args.image_size)
-    images = [paz.image.load(path) for path in args.images]
+    if args.images is None:
+        names = "opera_house_0", "opera_house_1"
+        images = [demo.fetch_image(name) for name in names]
+    else:
+        images = [paz.image.load(path) for path in args.images]
     outputs = estimate(images)
     depth, confidence, extrinsics, intrinsics, rays, ray_confidence = outputs
 
