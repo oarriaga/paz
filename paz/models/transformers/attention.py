@@ -19,6 +19,19 @@ def attend(query, value, num_heads, key_dim, dropout, name):
     return project_output(output, query_rank, output_dim, name)
 
 
+def masked_attend(query, value, mask, num_heads, key_dim, dropout, name):
+    output_dim = query.shape[-1]
+    q = transpose_to_heads(project_query(query, num_heads, key_dim, name))
+    k = transpose_to_heads(project_biased_key(value, num_heads, key_dim, name))
+    v = transpose_to_heads(project_value(value, num_heads, key_dim, name))
+    scores = compute_scores(q, k, key_dim)
+    scores = mask_scores(scores, expand_mask_for_heads(mask))
+    output = apply_attention(scores, v, dropout, name)
+    output = merge_heads(output)
+    query_rank = len(query.shape)
+    return project_output(output, query_rank, output_dim, name)
+
+
 def kv_attend(query, cache, index, value, mask, num_heads, hidden_dim,
               dropout, name):
     key_dim = hidden_dim // num_heads
@@ -69,6 +82,12 @@ def project_key(key, num_heads, key_dim, name):
     rank = len(key.shape)
     shape = [num_heads, key_dim]
     return project(key, rank - 1, 1, 2, shape, False, f"{name}_key")
+
+
+def project_biased_key(key, num_heads, key_dim, name):
+    rank = len(key.shape)
+    shape = [num_heads, key_dim]
+    return project(key, rank - 1, 1, 2, shape, True, f"{name}_key")
 
 
 def project_value(value, num_heads, key_dim, name):

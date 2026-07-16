@@ -14,3 +14,4 @@ from paz.models.transformers import feedforward
 from paz.models.transformers import attention
 from paz.models.transformers import tokenizers
 from paz.models.transformers import embeddings
+from paz.models.transformers import conditioning
