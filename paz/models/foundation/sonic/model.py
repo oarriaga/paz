@@ -1,7 +1,5 @@
 """Keras architecture for the ported SONIC deploy actor."""
 
-from collections import namedtuple
-
 import keras
 from keras import layers
 
@@ -10,14 +8,14 @@ from paz.models.foundation.sonic.layout import compute_encoder_input_dim
 from paz.models.foundation.sonic.layout import compute_mode_scalar_index
 from paz.models.foundation.sonic.layout import compute_policy_tail_dim
 
-FSQArgs = namedtuple(
-    "FSQArgs", "num_tokens token_dim offset scale rounding_shift divisor")
-
 
 def build_actor(layout, encoder, decoder):
-    encoder_obs = build_input("encoder_obs", compute_encoder_input_dim(layout))
-    policy_obs = build_input(
-        "policy_obs_tail", compute_policy_tail_dim(layout))
+    encoder_dim = compute_encoder_input_dim(layout)
+    encoder_obs = keras.Input(
+        shape=(encoder_dim,), dtype="float32", name="encoder_obs")
+    tail_dim = compute_policy_tail_dim(layout)
+    policy_obs = keras.Input(
+        shape=(tail_dim,), dtype="float32", name="policy_obs_tail")
     encoded_tokens = encoder(encoder_obs)
     decoder_input = compute_cat(encoded_tokens, policy_obs)
     action = decoder(decoder_input)
@@ -26,7 +24,9 @@ def build_actor(layout, encoder, decoder):
 
 
 def build_encoder(layout):
-    encoder_input = build_input("obs_dict", compute_encoder_input_dim(layout))
+    encoder_dim = compute_encoder_input_dim(layout)
+    encoder_input = keras.Input(
+        shape=(encoder_dim,), dtype="float32", name="obs_dict")
     mode_id = compute_mode_id(encoder_input, compute_mode_scalar_index(layout))
     branch_tokens = compute_branch_tokens_list(encoder_input, layout)
     selected_tokens = compute_selected_tokens(
@@ -35,17 +35,15 @@ def build_encoder(layout):
 
 
 def build_decoder(layout):
-    decoder_input = build_input("obs_dict", compute_decoder_input_dim(layout))
+    decoder_dim = compute_decoder_input_dim(layout)
+    decoder_input = keras.Input(
+        shape=(decoder_dim,), dtype="float32", name="obs_dict")
     decoder_features = compute_decoder_features(
         decoder_input, layout.token_dim, compute_policy_tail_dim(layout))
     hidden_dims = (2048, 2048, 1024, 1024, 512, 512)
     args = (decoder_features, hidden_dims, layout.action_dim, "g1_dyn")
     action = compute_dense_stack(*args)
     return keras.Model(decoder_input, action, name="sonic_decoder")
-
-
-def build_input(name, dim):
-    return keras.Input(shape=(dim,), dtype="float32", name=name)
 
 
 def compute_mode_id(encoder_input, mode_index):
@@ -66,8 +64,8 @@ def compute_branch_tokens(encoder_input, mode_layout, token_dim):
     hidden_dims = (2048, 1024, 512, 512)
     args = mode_input, hidden_dims, token_dim, mode_layout.name
     branch_latent = compute_dense_stack(*args)
-    fsq_args = FSQArgs(2, 32, 0.032237, 15.515501, 0.5, 16.0)
-    return compute_release_fsq(branch_latent, fsq_args)
+    return compute_release_fsq(
+        branch_latent, 2, 32, 0.032237, 15.515501, 0.5, 16.0)
 
 
 def compute_selected_tokens(branch_tokens, mode_id, num_modes):
@@ -99,15 +97,20 @@ def compute_mode_input(encoder_input, mode_layout):
     if not mode_layout.feature_spans:
         raise ValueError(f"Encoder mode {mode_layout.name} has no spans")
     if mode_layout.temporal_frames is None:
-        return compute_flat_mode_input(encoder_input, mode_layout.feature_spans)
-    return compute_temporal_mode_input(encoder_input, mode_layout)
+        mode_input = compute_flat_mode_input(
+            encoder_input, mode_layout.feature_spans)
+    else:
+        mode_input = compute_temporal_mode_input(encoder_input, mode_layout)
+    return mode_input
 
 
 def compute_flat_mode_input(encoder_input, spans):
     parts = compute_parts(encoder_input, spans)
     if len(parts) == 1:
-        return parts[0]
-    return keras.ops.concatenate(parts, axis=-1)
+        flat_input = parts[0]
+    else:
+        flat_input = keras.ops.concatenate(parts, axis=-1)
+    return flat_input
 
 
 def compute_temporal_mode_input(encoder_input, mode_layout):
@@ -123,8 +126,10 @@ def compute_temporal_mode_input(encoder_input, mode_layout):
 
 def compute_feature_groups(mode_layout):
     if mode_layout.feature_groups:
-        return mode_layout.feature_groups
-    return tuple((span,) for span in mode_layout.feature_spans)
+        feature_groups = mode_layout.feature_groups
+    else:
+        feature_groups = tuple((span,) for span in mode_layout.feature_spans)
+    return feature_groups
 
 
 def compute_temporal_part(encoder_input, group, num_frames):
@@ -151,12 +156,14 @@ def compute_cat(left, right):
     return keras.ops.concatenate([left, right], axis=-1)
 
 
-def compute_release_fsq(inputs, fsq_args):
+def compute_release_fsq(
+        inputs, num_tokens, token_dim, offset, scale, rounding_shift,
+        divisor):
     inputs = keras.ops.cast(inputs, "float32")
-    token_shape = (-1, fsq_args.num_tokens, fsq_args.token_dim)
+    token_shape = (-1, num_tokens, token_dim)
     inputs = keras.ops.reshape(inputs, token_shape)
-    inputs = keras.ops.tanh(inputs + fsq_args.offset) * fsq_args.scale
-    inputs = keras.ops.round(inputs - fsq_args.rounding_shift)
-    inputs = inputs / fsq_args.divisor
-    flat_shape = (-1, fsq_args.num_tokens * fsq_args.token_dim)
+    inputs = keras.ops.tanh(inputs + offset) * scale
+    inputs = keras.ops.round(inputs - rounding_shift)
+    inputs = inputs / divisor
+    flat_shape = (-1, num_tokens * token_dim)
     return keras.ops.reshape(inputs, flat_shape)

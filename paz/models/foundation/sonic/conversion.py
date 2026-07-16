@@ -3,7 +3,6 @@
 from argparse import ArgumentParser
 from pathlib import Path
 import re
-import shutil
 
 import onnx
 from onnx import numpy_helper
@@ -90,12 +89,11 @@ def find_decoder_kernel_names(decoder_onnx):
     return kernel_names
 
 
-def save_ported_weights(encoder, decoder, obs_config_path, output_dir):
+def save_ported_weights(encoder, decoder, output_dir):
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     encoder.save_weights(output_dir / "sonic_encoder.weights.h5")
     decoder.save_weights(output_dir / "sonic_decoder.weights.h5")
-    shutil.copy(obs_config_path, output_dir / "observation_config.yaml")
     return output_dir
 
 
@@ -114,7 +112,7 @@ def main():
     encoder, decoder, _ = port_weights(
         layout, args.encoder_onnx, args.decoder_onnx)
     output_dir = save_ported_weights(
-        encoder, decoder, args.obs_config, Path(args.output_dir).expanduser())
+        encoder, decoder, Path(args.output_dir).expanduser())
     print(f"Saved ported SONIC weights to {output_dir}")
 
 

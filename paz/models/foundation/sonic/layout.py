@@ -66,15 +66,19 @@ def compute_mode_input_dim(mode):
 
 
 def compute_policy_input_dim(layout):
-    if not layout.policy_spans:
-        return 0
-    return layout.policy_spans[-1].end
+    if layout.policy_spans:
+        dim = layout.policy_spans[-1].end
+    else:
+        dim = 0
+    return dim
 
 
 def compute_encoder_input_dim(layout):
-    if not layout.encoder_spans:
-        return 0
-    return layout.encoder_spans[-1].end
+    if layout.encoder_spans:
+        dim = layout.encoder_spans[-1].end
+    else:
+        dim = 0
+    return dim
 
 
 def compute_decoder_input_dim(layout):
@@ -107,6 +111,10 @@ def find_span(spans, name):
 
 def load_release_observation_layout(obs_config_path):
     config = load_yaml(obs_config_path)
+    return build_observation_layout(config)
+
+
+def build_observation_layout(config):
     encoder_config = config.get("encoder", {})
     token_dim = int(encoder_config["dimension"])
     policy_spans = load_enabled_spans(config.get("observations", []), token_dim)
@@ -175,40 +183,48 @@ def load_encoder_mode(mode_config, encoder_span_map):
 
 def compute_temporal_frames(required_observations):
     frame_counts = []
+    consistent = True
     for name in required_observations:
         if name == "encoder_mode_4":
             continue
         match = _MULTI_FRAME_PATTERN.match(name)
         if match is None:
-            return None
+            consistent = False
+            break
         frame_counts.append(int(match.group("frames")))
-    if frame_counts and len(set(frame_counts)) == 1:
-        return frame_counts[0]
-    return None
+    if consistent and frame_counts and len(set(frame_counts)) == 1:
+        temporal_frames = frame_counts[0]
+    else:
+        temporal_frames = None
+    return temporal_frames
 
 
 def compute_feature_groups(mode_name, feature_spans, encoder_span_map):
     if mode_name not in _RELEASE_ENCODER_GROUPS:
-        return tuple((span,) for span in feature_spans)
-    feature_groups = []
-    for group in _RELEASE_ENCODER_GROUPS[mode_name]:
-        spans = tuple(encoder_span_map[name] for name in group)
-        feature_groups.append(spans)
-    return tuple(feature_groups)
+        feature_groups = tuple((span,) for span in feature_spans)
+    else:
+        groups = []
+        for group in _RELEASE_ENCODER_GROUPS[mode_name]:
+            spans = tuple(encoder_span_map[name] for name in group)
+            groups.append(spans)
+        feature_groups = tuple(groups)
+    return feature_groups
 
 
 def resolve_observation_dim(name, token_dim):
     if name == "token_state":
-        return token_dim
-    if name in _BASE_OBSERVATION_DIMS:
-        return _BASE_OBSERVATION_DIMS[name]
-    match = _MULTI_FRAME_PATTERN.match(name)
-    if match is None:
-        raise ValueError(f"Unsupported observation name: {name}")
-    base_name = match.group("base")
-    if base_name not in _BASE_OBSERVATION_DIMS:
-        raise ValueError(f"Unsupported base observation name: {base_name}")
-    return _BASE_OBSERVATION_DIMS[base_name] * int(match.group("frames"))
+        dim = token_dim
+    elif name in _BASE_OBSERVATION_DIMS:
+        dim = _BASE_OBSERVATION_DIMS[name]
+    else:
+        match = _MULTI_FRAME_PATTERN.match(name)
+        if match is None:
+            raise ValueError(f"Unsupported observation name: {name}")
+        base_name = match.group("base")
+        if base_name not in _BASE_OBSERVATION_DIMS:
+            raise ValueError(f"Unsupported base observation name: {base_name}")
+        dim = _BASE_OBSERVATION_DIMS[base_name] * int(match.group("frames"))
+    return dim
 
 
 def load_enabled_spans(observation_entries, token_dim):

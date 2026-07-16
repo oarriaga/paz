@@ -4,7 +4,6 @@ from paz.models.foundation.sonic.layout import ObservationSpan
 from paz.models.foundation.sonic.layout import compute_decoder_input_dim
 from paz.models.foundation.sonic.layout import compute_encoder_input_dim
 from paz.models.foundation.sonic.layout import compute_policy_tail_dim
-from paz.models.foundation.sonic.model import FSQArgs
 from paz.models.foundation.sonic.model import build_actor
 from paz.models.foundation.sonic.model import build_decoder
 from paz.models.foundation.sonic.model import build_encoder
@@ -54,8 +53,8 @@ def test_mode_routing_selects_matching_branch(toy_layout):
 
 def test_fsq_output_lies_on_quantization_grid():
     inputs = np.random.default_rng(1).normal(size=(2, 8)).astype("float32")
-    fsq_args = FSQArgs(2, 4, 0.032237, 15.515501, 0.5, 16.0)
-    output = np.array(compute_release_fsq(inputs, fsq_args))
+    output = np.array(
+        compute_release_fsq(inputs, 2, 4, 0.032237, 15.515501, 0.5, 16.0))
     scaled = output * 16.0
     assert np.allclose(scaled, np.round(scaled))
 
