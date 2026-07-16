@@ -113,5 +113,5 @@ def load_pretrained_weights(encoder, decoder):
 
 
 def fetch_asset(filename):
-    return get_file(filename, SONIC_ASSETS_URL + filename,
-                     cache_subdir=SONIC_CACHE_SUBDIR)
+    url = SONIC_ASSETS_URL + filename
+    return get_file(filename, url, cache_subdir=SONIC_CACHE_SUBDIR)

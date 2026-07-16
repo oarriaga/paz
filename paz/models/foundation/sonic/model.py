@@ -11,11 +11,9 @@ from paz.models.foundation.sonic.layout import compute_policy_tail_dim
 
 def build_actor(layout, encoder, decoder):
     encoder_dim = compute_encoder_input_dim(layout)
-    encoder_obs = keras.Input(
-        shape=(encoder_dim,), dtype="float32", name="encoder_obs")
+    encoder_obs = keras.Input((encoder_dim,), name="encoder_obs")
     tail_dim = compute_policy_tail_dim(layout)
-    policy_obs = keras.Input(
-        shape=(tail_dim,), dtype="float32", name="policy_obs_tail")
+    policy_obs = keras.Input((tail_dim,), name="policy_obs_tail")
     encoded_tokens = encoder(encoder_obs)
     decoder_input = compute_cat(encoded_tokens, policy_obs)
     action = decoder(decoder_input)
@@ -25,23 +23,23 @@ def build_actor(layout, encoder, decoder):
 
 def build_encoder(layout):
     encoder_dim = compute_encoder_input_dim(layout)
-    encoder_input = keras.Input(
-        shape=(encoder_dim,), dtype="float32", name="obs_dict")
-    mode_id = compute_mode_id(encoder_input, compute_mode_scalar_index(layout))
+    encoder_input = keras.Input((encoder_dim,), name="obs_dict")
+    mode_index = compute_mode_scalar_index(layout)
+    mode_id = compute_mode_id(encoder_input, mode_index)
     branch_tokens = compute_branch_tokens_list(encoder_input, layout)
-    selected_tokens = compute_selected_tokens(
-        branch_tokens, mode_id, len(layout.encoder_modes))
+    args = branch_tokens, mode_id, len(layout.encoder_modes)
+    selected_tokens = compute_selected_tokens(*args)
     return keras.Model(encoder_input, selected_tokens, name="sonic_encoder")
 
 
 def build_decoder(layout):
     decoder_dim = compute_decoder_input_dim(layout)
-    decoder_input = keras.Input(
-        shape=(decoder_dim,), dtype="float32", name="obs_dict")
-    decoder_features = compute_decoder_features(
-        decoder_input, layout.token_dim, compute_policy_tail_dim(layout))
+    decoder_input = keras.Input((decoder_dim,), name="obs_dict")
+    tail_dim = compute_policy_tail_dim(layout)
+    token_dim = layout.token_dim
+    features = compute_decoder_features(decoder_input, token_dim, tail_dim)
     hidden_dims = (2048, 2048, 1024, 1024, 512, 512)
-    args = (decoder_features, hidden_dims, layout.action_dim, "g1_dyn")
+    args = (features, hidden_dims, layout.action_dim, "g1_dyn")
     action = compute_dense_stack(*args)
     return keras.Model(decoder_input, action, name="sonic_decoder")
 
@@ -64,8 +62,8 @@ def compute_branch_tokens(encoder_input, mode_layout, token_dim):
     hidden_dims = (2048, 1024, 512, 512)
     args = mode_input, hidden_dims, token_dim, mode_layout.name
     branch_latent = compute_dense_stack(*args)
-    return compute_release_fsq(
-        branch_latent, 2, 32, 0.032237, 15.515501, 0.5, 16.0)
+    fsq_args = branch_latent, 2, 32, 0.032237, 15.515501, 0.5, 16.0
+    return compute_release_fsq(*fsq_args)
 
 
 def compute_selected_tokens(branch_tokens, mode_id, num_modes):
@@ -83,12 +81,10 @@ def compute_decoder_features(decoder_input, token_dim, tail_dim):
 
 
 def compute_dense_stack(inputs, hidden_dims, output_dim, prefix):
-    x = inputs
-    layer_index = 0
+    x, layer_index = inputs, 0
     for units in hidden_dims:
         x = layers.Dense(units, name=f"{prefix}_module_{layer_index}")(x)
-        x = layers.Activation(
-            "swish", name=f"{prefix}_silu_{layer_index}")(x)
+        x = layers.Activation("swish", name=f"{prefix}_silu_{layer_index}")(x)
         layer_index = layer_index + 2
     return layers.Dense(output_dim, name=f"{prefix}_module_{layer_index}")(x)
 
@@ -97,8 +93,8 @@ def compute_mode_input(encoder_input, mode_layout):
     if not mode_layout.feature_spans:
         raise ValueError(f"Encoder mode {mode_layout.name} has no spans")
     if mode_layout.temporal_frames is None:
-        mode_input = compute_flat_mode_input(
-            encoder_input, mode_layout.feature_spans)
+        spans = mode_layout.feature_spans
+        mode_input = compute_flat_mode_input(encoder_input, spans)
     else:
         mode_input = compute_temporal_mode_input(encoder_input, mode_layout)
     return mode_input

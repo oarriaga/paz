@@ -117,21 +117,22 @@ def load_release_observation_layout(obs_config_path):
 def build_observation_layout(config):
     encoder_config = config.get("encoder", {})
     token_dim = int(encoder_config["dimension"])
-    policy_spans = load_enabled_spans(config.get("observations", []), token_dim)
-    encoder_spans = load_enabled_spans(
-        encoder_config.get("encoder_observations", []), 0)
+    observations = config.get("observations", [])
+    policy_spans = load_enabled_spans(observations, token_dim)
+    encoder_observations = encoder_config.get("encoder_observations", [])
+    encoder_spans = load_enabled_spans(encoder_observations, 0)
     check_policy_spans(policy_spans, token_dim)
     check_encoder_spans(encoder_spans)
-    encoder_span_map = {span.name: span for span in encoder_spans}
-    encoder_modes = load_encoder_modes(encoder_config, encoder_span_map)
-    return SonicObservationLayout(
-        policy_spans, encoder_spans, encoder_modes, token_dim)
+    span_map = {span.name: span for span in encoder_spans}
+    encoder_modes = load_encoder_modes(encoder_config, span_map)
+    args = policy_spans, encoder_spans, encoder_modes, token_dim
+    return SonicObservationLayout(*args)
 
 
-def load_encoder_modes(encoder_config, encoder_span_map):
+def load_encoder_modes(encoder_config, span_map):
     encoder_modes = []
     for mode_config in encoder_config.get("encoder_modes", []):
-        mode = load_encoder_mode(mode_config, encoder_span_map)
+        mode = load_encoder_mode(mode_config, span_map)
         encoder_modes.append(mode)
     if not encoder_modes:
         raise ValueError("No encoder_modes found in observation config")
@@ -164,21 +165,21 @@ def check_encoder_spans(encoder_spans):
         raise ValueError(f"Expected 'encoder_mode_4' first, got {name}")
 
 
-def load_encoder_mode(mode_config, encoder_span_map):
-    required_observations = tuple(
-        mode_config.get("required_observations", []))
+def load_encoder_mode(mode_config, span_map):
+    required = mode_config.get("required_observations", [])
+    required_observations = tuple(required)
     feature_spans = []
     for name in required_observations:
         if name != "encoder_mode_4":
-            feature_spans.append(encoder_span_map[name])
+            feature_spans.append(span_map[name])
     feature_spans = tuple(feature_spans)
     temporal_frames = compute_temporal_frames(required_observations)
-    feature_groups = compute_feature_groups(
-        mode_config["name"], feature_spans, encoder_span_map)
-    return EncoderModeLayout(
-        mode_config["name"], int(mode_config["mode_id"]),
-        required_observations, feature_spans, temporal_frames,
-        feature_groups)
+    mode_name = mode_config["name"]
+    feature_groups = compute_feature_groups(mode_name, feature_spans, span_map)
+    mode_id = int(mode_config["mode_id"])
+    args = (mode_name, mode_id, required_observations, feature_spans,
+            temporal_frames, feature_groups)
+    return EncoderModeLayout(*args)
 
 
 def compute_temporal_frames(required_observations):
@@ -199,13 +200,13 @@ def compute_temporal_frames(required_observations):
     return temporal_frames
 
 
-def compute_feature_groups(mode_name, feature_spans, encoder_span_map):
+def compute_feature_groups(mode_name, feature_spans, span_map):
     if mode_name not in _RELEASE_ENCODER_GROUPS:
         feature_groups = tuple((span,) for span in feature_spans)
     else:
         groups = []
         for group in _RELEASE_ENCODER_GROUPS[mode_name]:
-            spans = tuple(encoder_span_map[name] for name in group)
+            spans = tuple(span_map[name] for name in group)
             groups.append(spans)
         feature_groups = tuple(groups)
     return feature_groups

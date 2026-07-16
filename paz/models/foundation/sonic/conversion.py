@@ -35,9 +35,7 @@ def port_weights(layout, encoder_onnx_path, decoder_onnx_path):
 def check_input_dim(model, expected_dim, name):
     input_dim = model.input_shape[-1]
     if input_dim != expected_dim:
-        raise ValueError(
-            f"{name} input mismatch: expected {expected_dim}, got "
-            f"{input_dim}")
+        raise ValueError(f"{name} dim mismatch: {input_dim} != {expected_dim}")
 
 
 def load_onnx_model(model_path):
@@ -45,8 +43,10 @@ def load_onnx_model(model_path):
 
 
 def load_onnx_initializers(model):
-    return {tensor.name: numpy_helper.to_array(tensor)
-            for tensor in model.graph.initializer}
+    initializers = {}
+    for tensor in model.graph.initializer:
+        initializers[tensor.name] = numpy_helper.to_array(tensor)
+    return initializers
 
 
 def apply_encoder_weights(encoder, encoder_onnx):
@@ -55,10 +55,11 @@ def apply_encoder_weights(encoder, encoder_onnx):
         match = _ENCODER_BRANCH_PATTERN.match(name)
         if match is None:
             continue
-        branch, layer = match.group("branch"), match.group("layer")
-        layer_name = f"{branch}_module_{layer}"
-        set_dense_weight(encoder.get_layer(layer_name), match.group("kind"),
-                          value)
+        branch, layer_id = match.group("branch"), match.group("layer")
+        layer_name = f"{branch}_module_{layer_id}"
+        layer = encoder.get_layer(layer_name)
+        kind = match.group("kind")
+        set_dense_weight(layer, kind, value)
 
 
 def set_dense_weight(layer, kind, value):
@@ -76,8 +77,8 @@ def apply_decoder_weights(decoder, decoder_onnx):
     for layer_id, kernel_name in kernel_names.items():
         layer = decoder.get_layer(f"g1_dyn_module_{layer_id}")
         bias_name = f"module.decoders.g1_dyn.module.{layer_id}.bias"
-        layer.set_weights(
-            [initializers[kernel_name], initializers[bias_name]])
+        weights = [initializers[kernel_name], initializers[bias_name]]
+        layer.set_weights(weights)
 
 
 def find_decoder_kernel_names(decoder_onnx):
@@ -109,10 +110,10 @@ def build_argument_parser():
 def main():
     args = build_argument_parser().parse_args()
     layout = load_release_observation_layout(args.obs_config)
-    encoder, decoder, _ = port_weights(
-        layout, args.encoder_onnx, args.decoder_onnx)
-    output_dir = save_ported_weights(
-        encoder, decoder, Path(args.output_dir).expanduser())
+    encoder_onnx, decoder_onnx = args.encoder_onnx, args.decoder_onnx
+    encoder, decoder, _ = port_weights(layout, encoder_onnx, decoder_onnx)
+    output_dir = Path(args.output_dir).expanduser()
+    output_dir = save_ported_weights(encoder, decoder, output_dir)
     print(f"Saved ported SONIC weights to {output_dir}")
 
 
