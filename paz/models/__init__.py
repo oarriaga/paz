@@ -37,6 +37,8 @@ from .foundation.whisper.model import Whisper
 from .foundation.gemma4.pretrained import Gemma4
 from .foundation.gemma4.model import Gemma4Backbone
 from .foundation.gemma4.causal_lm import Gemma4CausalLM
+from .foundation.flower.pretrained import FLOWER
+from .foundation.flower.pretrained import FLOWERLiberoObject
 from .feature.xfeat.model import XFeatModel
 from .feature.xfeat.model import XFeat
 from .feature.lightglue.model import LighterGlue
