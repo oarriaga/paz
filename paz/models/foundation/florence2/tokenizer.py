@@ -13,6 +13,7 @@ from paz.models.transformers.tokenizers import build_character_to_byte
 BOS_TOKEN_ID = 0
 EOS_TOKEN_ID = 2
 PAD_TOKEN_ID = 1
+FLOW_TOKEN_ID = 51289
 SPLIT_PATTERN = re.compile(
     r"'s|'t|'re|'ve|'m|'ll|'d| ?[^\W\d_]+| ?\d+"
     r"| ?[^\s\w]+|\s+(?!\S)|\s+"
