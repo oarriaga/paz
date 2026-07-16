@@ -5,9 +5,6 @@ from collections import namedtuple
 import keras
 from keras import layers
 
-from paz.models.foundation.sonic.layout import EncoderModeLayout
-from paz.models.foundation.sonic.layout import ObservationSpan
-from paz.models.foundation.sonic.layout import SonicObservationLayout
 from paz.models.foundation.sonic.layout import compute_decoder_input_dim
 from paz.models.foundation.sonic.layout import compute_encoder_input_dim
 from paz.models.foundation.sonic.layout import compute_mode_scalar_index
@@ -156,35 +153,10 @@ def compute_cat(left, right):
 
 def compute_release_fsq(inputs, fsq_args):
     inputs = keras.ops.cast(inputs, "float32")
-    inputs = keras.ops.reshape(
-        inputs, (-1, fsq_args.num_tokens, fsq_args.token_dim))
+    token_shape = (-1, fsq_args.num_tokens, fsq_args.token_dim)
+    inputs = keras.ops.reshape(inputs, token_shape)
     inputs = keras.ops.tanh(inputs + fsq_args.offset) * fsq_args.scale
     inputs = keras.ops.round(inputs - fsq_args.rounding_shift)
     inputs = inputs / fsq_args.divisor
-    return keras.ops.reshape(
-        inputs, (-1, fsq_args.num_tokens * fsq_args.token_dim))
-
-
-def build_toy_layout():
-    # A small layout for tests: one flat mode, one temporal mode. token_dim
-    # must stay 64 (2 * 32) to satisfy compute_release_fsq's fixed reshape.
-    token_dim = 64
-    mode_span = ObservationSpan("encoder_mode_4", 0, 4, 4)
-    flat_span = ObservationSpan("motion_root_z_position", 4, 5, 1)
-    temporal_span = ObservationSpan(
-        "motion_anchor_orientation_10frame_step5", 5, 65, 60)
-    flat_mode = EncoderModeLayout(
-        "flat", 0, ("encoder_mode_4", "motion_root_z_position"),
-        (flat_span,))
-    temporal_mode = EncoderModeLayout(
-        "temporal", 1,
-        ("encoder_mode_4", "motion_anchor_orientation_10frame_step5"),
-        (temporal_span,), temporal_frames=10)
-    policy_spans = (
-        ObservationSpan("token_state", 0, token_dim, token_dim),
-        ObservationSpan("policy_tail", token_dim, token_dim + 6, 6),
-    )
-    encoder_spans = (mode_span, flat_span, temporal_span)
-    modes = (flat_mode, temporal_mode)
-    return SonicObservationLayout(policy_spans, encoder_spans, modes,
-                                   token_dim)
+    flat_shape = (-1, fsq_args.num_tokens * fsq_args.token_dim)
+    return keras.ops.reshape(inputs, flat_shape)

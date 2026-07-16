@@ -8,47 +8,42 @@ from paz.models.foundation.sonic.model import FSQArgs
 from paz.models.foundation.sonic.model import build_actor
 from paz.models.foundation.sonic.model import build_decoder
 from paz.models.foundation.sonic.model import build_encoder
-from paz.models.foundation.sonic.model import build_toy_layout
 from paz.models.foundation.sonic.model import compute_release_fsq
 from paz.models.foundation.sonic.model import compute_temporal_part
 
 
-def test_encoder_output_shape_matches_token_dim():
-    layout = build_toy_layout()
-    encoder = build_encoder(layout)
-    x = np.zeros((1, compute_encoder_input_dim(layout)), dtype="float32")
+def test_encoder_output_shape_matches_token_dim(toy_layout):
+    encoder = build_encoder(toy_layout)
+    x = np.zeros((1, compute_encoder_input_dim(toy_layout)), dtype="float32")
     tokens = np.array(encoder(x, training=False))
-    assert tokens.shape == (1, layout.token_dim)
+    assert tokens.shape == (1, toy_layout.token_dim)
 
 
-def test_decoder_output_shape_matches_action_dim():
-    layout = build_toy_layout()
-    decoder = build_decoder(layout)
-    x = np.zeros((1, compute_decoder_input_dim(layout)), dtype="float32")
+def test_decoder_output_shape_matches_action_dim(toy_layout):
+    decoder = build_decoder(toy_layout)
+    x = np.zeros((1, compute_decoder_input_dim(toy_layout)), dtype="float32")
     action = np.array(decoder(x, training=False))
-    assert action.shape == (1, layout.action_dim)
+    assert action.shape == (1, toy_layout.action_dim)
 
 
-def test_actor_composes_encoder_and_decoder():
-    layout = build_toy_layout()
-    encoder = build_encoder(layout)
-    decoder = build_decoder(layout)
-    actor = build_actor(layout, encoder, decoder)
+def test_actor_composes_encoder_and_decoder(toy_layout):
+    encoder = build_encoder(toy_layout)
+    decoder = build_decoder(toy_layout)
+    actor = build_actor(toy_layout, encoder, decoder)
     inputs = {
         "encoder_obs": np.zeros(
-            (1, compute_encoder_input_dim(layout)), dtype="float32"),
+            (1, compute_encoder_input_dim(toy_layout)), dtype="float32"),
         "policy_obs_tail": np.zeros(
-            (1, compute_policy_tail_dim(layout)), dtype="float32"),
+            (1, compute_policy_tail_dim(toy_layout)), dtype="float32"),
     }
     action = np.array(actor(inputs, training=False))
-    assert action.shape == (1, layout.action_dim)
+    assert action.shape == (1, toy_layout.action_dim)
 
 
-def test_mode_routing_selects_matching_branch():
-    layout = build_toy_layout()
-    encoder = build_encoder(layout)
+def test_mode_routing_selects_matching_branch(toy_layout):
+    encoder = build_encoder(toy_layout)
     x_flat = np.random.default_rng(0).normal(
-        size=(1, compute_encoder_input_dim(layout))).astype("float32")
+        size=(1, compute_encoder_input_dim(toy_layout))).astype("float32")
     x_temporal = x_flat.copy()
     x_flat[0, 0] = 0
     x_temporal[0, 0] = 1
@@ -73,6 +68,7 @@ def test_temporal_part_concatenates_before_reshaping():
     span_a = ObservationSpan("a", 0, 4, 4)
     span_b = ObservationSpan("b", 4, 8, 4)
     encoder_input = np.array([[1, 2, 3, 4, 10, 20, 30, 40]], dtype="float32")
-    output = np.array(compute_temporal_part(encoder_input, (span_a, span_b), 2))
+    output = np.array(
+        compute_temporal_part(encoder_input, (span_a, span_b), 2))
     expected = np.array([[[1, 2, 3, 4], [10, 20, 30, 40]]], dtype="float32")
     assert np.array_equal(output, expected)

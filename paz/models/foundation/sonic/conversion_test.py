@@ -6,7 +6,6 @@ from paz.models.foundation.sonic.conversion import apply_decoder_weights
 from paz.models.foundation.sonic.conversion import apply_encoder_weights
 from paz.models.foundation.sonic.model import build_decoder
 from paz.models.foundation.sonic.model import build_encoder
-from paz.models.foundation.sonic.model import build_toy_layout
 
 
 def find_dense_layers(model, prefix):
@@ -50,9 +49,8 @@ def build_fake_decoder_onnx(decoder):
     return helper.make_model(graph), expected
 
 
-def test_apply_encoder_weights_matches_injected_values():
-    layout = build_toy_layout()
-    encoder = build_encoder(layout)
+def test_apply_encoder_weights_matches_injected_values(toy_layout):
+    encoder = build_encoder(toy_layout)
     encoder_onnx, expected = build_fake_encoder_onnx(encoder, "flat")
     apply_encoder_weights(encoder, encoder_onnx)
     for layer_name, (kernel, bias) in expected.items():
@@ -61,9 +59,8 @@ def test_apply_encoder_weights_matches_injected_values():
         assert np.array_equal(actual_bias, bias)
 
 
-def test_apply_decoder_weights_matches_injected_values():
-    layout = build_toy_layout()
-    decoder = build_decoder(layout)
+def test_apply_decoder_weights_matches_injected_values(toy_layout):
+    decoder = build_decoder(toy_layout)
     decoder_onnx, expected = build_fake_decoder_onnx(decoder)
     apply_decoder_weights(decoder, decoder_onnx)
     for layer_name, (kernel, bias) in expected.items():
