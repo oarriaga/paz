@@ -11,9 +11,9 @@ from onnx import numpy_helper
 from paz.models.foundation.sonic.layout import compute_decoder_input_dim
 from paz.models.foundation.sonic.layout import compute_encoder_input_dim
 from paz.models.foundation.sonic.layout import load_release_observation_layout
-from paz.models.foundation.sonic.model import build_sonic_actor
-from paz.models.foundation.sonic.model import build_sonic_decoder
-from paz.models.foundation.sonic.model import build_sonic_encoder
+from paz.models.foundation.sonic.model import build_actor
+from paz.models.foundation.sonic.model import build_decoder
+from paz.models.foundation.sonic.model import build_encoder
 
 _ENCODER_BRANCH_PATTERN = re.compile(
     r"^module\.encoders\.(?P<branch>[^.]+)\.module\.(?P<layer>\d+)"
@@ -22,14 +22,14 @@ _DECODER_NODE_PATTERN = re.compile(
     r"^/g1_dyn/module/module\.(?P<layer>\d+)/MatMul$")
 
 
-def port_sonic_weights(layout, encoder_onnx_path, decoder_onnx_path):
-    encoder = build_sonic_encoder(layout)
-    decoder = build_sonic_decoder(layout)
+def port_weights(layout, encoder_onnx_path, decoder_onnx_path):
+    encoder = build_encoder(layout)
+    decoder = build_decoder(layout)
     check_input_dim(encoder, compute_encoder_input_dim(layout), "encoder")
     check_input_dim(decoder, compute_decoder_input_dim(layout), "decoder")
     apply_encoder_weights(encoder, load_onnx_model(encoder_onnx_path))
     apply_decoder_weights(decoder, load_onnx_model(decoder_onnx_path))
-    actor = build_sonic_actor(layout, encoder, decoder)
+    actor = build_actor(layout, encoder, decoder)
     return encoder, decoder, actor
 
 
@@ -111,7 +111,7 @@ def build_argument_parser():
 def main():
     args = build_argument_parser().parse_args()
     layout = load_release_observation_layout(args.obs_config)
-    encoder, decoder, _ = port_sonic_weights(
+    encoder, decoder, _ = port_weights(
         layout, args.encoder_onnx, args.decoder_onnx)
     output_dir = save_ported_weights(
         encoder, decoder, args.obs_config, Path(args.output_dir).expanduser())

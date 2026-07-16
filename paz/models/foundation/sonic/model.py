@@ -13,15 +13,11 @@ from paz.models.foundation.sonic.layout import compute_encoder_input_dim
 from paz.models.foundation.sonic.layout import compute_mode_scalar_index
 from paz.models.foundation.sonic.layout import compute_policy_tail_dim
 
-_ENCODER_HIDDEN_DIMS = (2048, 1024, 512, 512)
-_DECODER_HIDDEN_DIMS = (2048, 2048, 1024, 1024, 512, 512)
-
 FSQArgs = namedtuple(
     "FSQArgs", "num_tokens token_dim offset scale rounding_shift divisor")
-_RELEASE_FSQ_ARGS = FSQArgs(2, 32, 0.032237, 15.515501, 0.5, 16.0)
 
 
-def build_sonic_actor(layout, encoder, decoder):
+def build_actor(layout, encoder, decoder):
     encoder_obs = build_input("encoder_obs", compute_encoder_input_dim(layout))
     policy_obs = build_input(
         "policy_obs_tail", compute_policy_tail_dim(layout))
@@ -32,7 +28,7 @@ def build_sonic_actor(layout, encoder, decoder):
     return keras.Model(inputs, action, name="sonic_actor")
 
 
-def build_sonic_encoder(layout):
+def build_encoder(layout):
     encoder_input = build_input("obs_dict", compute_encoder_input_dim(layout))
     mode_id = compute_mode_id(encoder_input, compute_mode_scalar_index(layout))
     branch_tokens = compute_branch_tokens_list(encoder_input, layout)
@@ -41,12 +37,12 @@ def build_sonic_encoder(layout):
     return keras.Model(encoder_input, selected_tokens, name="sonic_encoder")
 
 
-def build_sonic_decoder(layout):
+def build_decoder(layout):
     decoder_input = build_input("obs_dict", compute_decoder_input_dim(layout))
     decoder_features = compute_decoder_features(
         decoder_input, layout.token_dim, compute_policy_tail_dim(layout))
-    args = (decoder_features, _DECODER_HIDDEN_DIMS, layout.action_dim,
-            "g1_dyn")
+    hidden_dims = (2048, 2048, 1024, 1024, 512, 512)
+    args = (decoder_features, hidden_dims, layout.action_dim, "g1_dyn")
     action = compute_dense_stack(*args)
     return keras.Model(decoder_input, action, name="sonic_decoder")
 
@@ -70,9 +66,11 @@ def compute_branch_tokens_list(encoder_input, layout):
 
 def compute_branch_tokens(encoder_input, mode_layout, token_dim):
     mode_input = compute_mode_input(encoder_input, mode_layout)
-    args = mode_input, _ENCODER_HIDDEN_DIMS, token_dim, mode_layout.name
+    hidden_dims = (2048, 1024, 512, 512)
+    args = mode_input, hidden_dims, token_dim, mode_layout.name
     branch_latent = compute_dense_stack(*args)
-    return compute_release_fsq(branch_latent, _RELEASE_FSQ_ARGS)
+    fsq_args = FSQArgs(2, 32, 0.032237, 15.515501, 0.5, 16.0)
+    return compute_release_fsq(branch_latent, fsq_args)
 
 
 def compute_selected_tokens(branch_tokens, mode_id, num_modes):
@@ -91,12 +89,13 @@ def compute_decoder_features(decoder_input, token_dim, tail_dim):
 
 def compute_dense_stack(inputs, hidden_dims, output_dim, prefix):
     x = inputs
-    layer_id = 0
+    layer_index = 0
     for units in hidden_dims:
-        x = layers.Dense(units, name=f"{prefix}_module_{layer_id}")(x)
-        x = layers.Activation("swish", name=f"{prefix}_silu_{layer_id}")(x)
-        layer_id += 2
-    return layers.Dense(output_dim, name=f"{prefix}_module_{layer_id}")(x)
+        x = layers.Dense(units, name=f"{prefix}_module_{layer_index}")(x)
+        x = layers.Activation(
+            "swish", name=f"{prefix}_silu_{layer_index}")(x)
+        layer_index = layer_index + 2
+    return layers.Dense(output_dim, name=f"{prefix}_module_{layer_index}")(x)
 
 
 def compute_mode_input(encoder_input, mode_layout):
@@ -168,7 +167,7 @@ def compute_release_fsq(inputs, fsq_args):
 
 def build_toy_layout():
     # A small layout for tests: one flat mode, one temporal mode. token_dim
-    # must stay 64 (2 * 32) to satisfy _RELEASE_FSQ_ARGS' fixed reshape.
+    # must stay 64 (2 * 32) to satisfy compute_release_fsq's fixed reshape.
     token_dim = 64
     mode_span = ObservationSpan("encoder_mode_4", 0, 4, 4)
     flat_span = ObservationSpan("motion_root_z_position", 4, 5, 1)

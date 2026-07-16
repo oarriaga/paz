@@ -4,8 +4,8 @@ from onnx import numpy_helper
 
 from paz.models.foundation.sonic.conversion import apply_decoder_weights
 from paz.models.foundation.sonic.conversion import apply_encoder_weights
-from paz.models.foundation.sonic.model import build_sonic_decoder
-from paz.models.foundation.sonic.model import build_sonic_encoder
+from paz.models.foundation.sonic.model import build_decoder
+from paz.models.foundation.sonic.model import build_encoder
 from paz.models.foundation.sonic.model import build_toy_layout
 
 
@@ -52,7 +52,7 @@ def build_fake_decoder_onnx(decoder):
 
 def test_apply_encoder_weights_matches_injected_values():
     layout = build_toy_layout()
-    encoder = build_sonic_encoder(layout)
+    encoder = build_encoder(layout)
     encoder_onnx, expected = build_fake_encoder_onnx(encoder, "flat")
     apply_encoder_weights(encoder, encoder_onnx)
     for layer_name, (kernel, bias) in expected.items():
@@ -63,7 +63,7 @@ def test_apply_encoder_weights_matches_injected_values():
 
 def test_apply_decoder_weights_matches_injected_values():
     layout = build_toy_layout()
-    decoder = build_sonic_decoder(layout)
+    decoder = build_decoder(layout)
     decoder_onnx, expected = build_fake_decoder_onnx(decoder)
     apply_decoder_weights(decoder, decoder_onnx)
     for layer_name, (kernel, bias) in expected.items():

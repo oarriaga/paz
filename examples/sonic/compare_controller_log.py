@@ -11,7 +11,7 @@ os.environ.setdefault("KERAS_BACKEND", "jax")
 import jax
 import numpy as np
 
-from paz.models.foundation.sonic.conversion import port_sonic_weights
+from paz.models.foundation.sonic.conversion import port_weights
 from paz.models.foundation.sonic.layout import load_release_observation_layout
 
 from simulation import build_encoder_obs
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     release_dir = sonic_root / "policy" / "release"
     layout = load_release_observation_layout(
         release_dir / "observation_config.yaml")
-    encoder, decoder, _ = port_sonic_weights(
+    encoder, decoder, _ = port_weights(
         layout,
         release_dir / "model_encoder.onnx",
         release_dir / "model_decoder.onnx",

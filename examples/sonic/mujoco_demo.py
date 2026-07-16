@@ -12,7 +12,7 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 
-from paz.models.foundation.sonic.conversion import port_sonic_weights
+from paz.models.foundation.sonic.conversion import port_weights
 from paz.models.foundation.sonic.layout import compute_encoder_input_dim
 from paz.models.foundation.sonic.layout import compute_policy_tail_dim
 from paz.models.foundation.sonic.layout import load_release_observation_layout
@@ -160,7 +160,7 @@ if __name__ == "__main__":
     print(f"Loading PAZ SONIC weights from {release_dir}")
     config_path = release_dir / "observation_config.yaml"
     layout = load_release_observation_layout(config_path)
-    _, _, actor = port_sonic_weights(
+    _, _, actor = port_weights(
         layout,
         release_dir / "model_encoder.onnx",
         release_dir / "model_decoder.onnx",

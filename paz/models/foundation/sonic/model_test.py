@@ -5,9 +5,9 @@ from paz.models.foundation.sonic.layout import compute_decoder_input_dim
 from paz.models.foundation.sonic.layout import compute_encoder_input_dim
 from paz.models.foundation.sonic.layout import compute_policy_tail_dim
 from paz.models.foundation.sonic.model import FSQArgs
-from paz.models.foundation.sonic.model import build_sonic_actor
-from paz.models.foundation.sonic.model import build_sonic_decoder
-from paz.models.foundation.sonic.model import build_sonic_encoder
+from paz.models.foundation.sonic.model import build_actor
+from paz.models.foundation.sonic.model import build_decoder
+from paz.models.foundation.sonic.model import build_encoder
 from paz.models.foundation.sonic.model import build_toy_layout
 from paz.models.foundation.sonic.model import compute_release_fsq
 from paz.models.foundation.sonic.model import compute_temporal_part
@@ -15,7 +15,7 @@ from paz.models.foundation.sonic.model import compute_temporal_part
 
 def test_encoder_output_shape_matches_token_dim():
     layout = build_toy_layout()
-    encoder = build_sonic_encoder(layout)
+    encoder = build_encoder(layout)
     x = np.zeros((1, compute_encoder_input_dim(layout)), dtype="float32")
     tokens = np.array(encoder(x, training=False))
     assert tokens.shape == (1, layout.token_dim)
@@ -23,7 +23,7 @@ def test_encoder_output_shape_matches_token_dim():
 
 def test_decoder_output_shape_matches_action_dim():
     layout = build_toy_layout()
-    decoder = build_sonic_decoder(layout)
+    decoder = build_decoder(layout)
     x = np.zeros((1, compute_decoder_input_dim(layout)), dtype="float32")
     action = np.array(decoder(x, training=False))
     assert action.shape == (1, layout.action_dim)
@@ -31,9 +31,9 @@ def test_decoder_output_shape_matches_action_dim():
 
 def test_actor_composes_encoder_and_decoder():
     layout = build_toy_layout()
-    encoder = build_sonic_encoder(layout)
-    decoder = build_sonic_decoder(layout)
-    actor = build_sonic_actor(layout, encoder, decoder)
+    encoder = build_encoder(layout)
+    decoder = build_decoder(layout)
+    actor = build_actor(layout, encoder, decoder)
     inputs = {
         "encoder_obs": np.zeros(
             (1, compute_encoder_input_dim(layout)), dtype="float32"),
@@ -46,7 +46,7 @@ def test_actor_composes_encoder_and_decoder():
 
 def test_mode_routing_selects_matching_branch():
     layout = build_toy_layout()
-    encoder = build_sonic_encoder(layout)
+    encoder = build_encoder(layout)
     x_flat = np.random.default_rng(0).normal(
         size=(1, compute_encoder_input_dim(layout))).astype("float32")
     x_temporal = x_flat.copy()

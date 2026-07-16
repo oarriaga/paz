@@ -12,7 +12,7 @@ import pytest
 
 ort = pytest.importorskip("onnxruntime")
 
-from paz.models.foundation.sonic.conversion import port_sonic_weights
+from paz.models.foundation.sonic.conversion import port_weights
 from paz.models.foundation.sonic.layout import compute_mode_scalar_index
 from paz.models.foundation.sonic.layout import load_release_observation_layout
 
@@ -39,7 +39,7 @@ def build_release_runtime():
     encoder_onnx = release_dir / "model_encoder.onnx"
     decoder_onnx = release_dir / "model_decoder.onnx"
     layout = load_release_observation_layout(obs_config)
-    encoder, decoder, actor = port_sonic_weights(
+    encoder, decoder, actor = port_weights(
         layout, encoder_onnx, decoder_onnx)
     encoder_session = ort.InferenceSession(str(encoder_onnx))
     decoder_session = ort.InferenceSession(str(decoder_onnx))
