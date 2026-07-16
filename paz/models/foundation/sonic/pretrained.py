@@ -1,10 +1,10 @@
 """Download and build the pretrained SONIC deploy actor.
 
-The v0.27 weight assets are not uploaded yet: run
-paz.models.foundation.sonic.conversion against a real release directory
-(see conversion.py's main()) to produce them, then publish that output
-directory's contents to SONIC_ASSETS_URL before SONIC(weights="pretrained")
-can succeed.
+Weights are Model Derivatives licensed by NVIDIA Corporation under the
+NVIDIA Open Model License (see the release's sonic_LICENSE.txt /
+sonic_NOTICE.txt at SONIC_ASSETS_URL). By calling SONIC(weights=
+"pretrained") you agree to that Agreement and to NVIDIA's Trustworthy AI
+terms (https://www.nvidia.com/en-us/agreements/trustworthy-ai/terms/).
 """
 
 from collections import namedtuple
@@ -16,7 +16,7 @@ from paz.models.foundation.sonic.model import build_actor
 from paz.models.foundation.sonic.model import build_decoder
 from paz.models.foundation.sonic.model import build_encoder
 
-SONIC_ASSETS_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.27/"  # fmt: skip
+SONIC_ASSETS_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.28/"  # fmt: skip
 SONIC_CACHE_SUBDIR = "paz/models/sonic"
 
 SonicModels = namedtuple("SonicModels", "layout encoder decoder actor")
