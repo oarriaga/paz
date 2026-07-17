@@ -62,13 +62,15 @@ noisy two-view   direction error  0.345 deg (reference 1.216)
 PnP-RANSAC       rotation error   0.052 deg (reference 0.052)
 PnP-RANSAC       translation      4.9 mm    (reference 4.9 mm)
 refined RMSE     0.658 px         (reference 0.658 px)
-stereo ATE RMSE  11.8 mm          (reference per-frame PnP 5.5 mm,
+stereo ATE RMSE  5.5 mm           (reference per-frame PnP 5.5 mm,
                                    bound 30 mm)
 ```
 
-The stereo gap versus the reference comes from hypothesis counts
-(300 JAX hypotheses per frame versus OpenCV's adaptive 500 at
-confidence 0.9999); both sit far inside the acceptance bound.
+The stereo trajectory mirrors the reference protocol: RANSAC followed
+by an explicit refinement on the consensus set. Without the
+refinement step one frame's pose stops 65 mm short of convergence
+from a poor minimal hypothesis, which is why the protocol includes
+it (the reference's solvePnPRansac + solvePnP does the same).
 
 ## Baseline update policy
 

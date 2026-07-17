@@ -193,7 +193,8 @@ def compute_refined_rmse(scene, estimate):
 
 def evaluate_stereo(sequence, bounds):
     solve = jax.jit(paz.pnp.estimate_pose_RANSAC, static_argnums=5)
-    poses, frame_times = estimate_trajectory(solve, sequence)
+    refine = jax.jit(paz.pnp.refine_pose, static_argnums=5)
+    poses, frame_times = estimate_trajectory(solve, refine, sequence)
     poses_true = np.asarray(sequence.poses)
     ate = metrics.compute_ATE(poses, poses_true)
     rpe_translation, rpe_rotation = metrics.compute_RPE(poses, poses_true)
@@ -206,7 +207,9 @@ def evaluate_stereo(sequence, bounds):
                     compute_median_reprojection(sequence, poses),
                     bounds["stereo_median_reprojection"]),
         check_true(section, "all_finite", np.all(np.isfinite(poses))),
-        check_true(section, "compiled_once", solve._cache_size() == 1),
+        check_true(section, "compiled_once",
+                   solve._cache_size() == 1
+                   and refine._cache_size() == 1),
         report_value(section, "rpe_translation", rpe_translation),
         report_value(section, "rpe_rotation", rpe_rotation),
         report_value(section, "drift_translation_percent",
@@ -218,7 +221,7 @@ def evaluate_stereo(sequence, bounds):
     ]
 
 
-def estimate_trajectory(solve, sequence):
+def estimate_trajectory(solve, refine, sequence):
     poses, frame_times = [], []
     for frame in range(len(sequence.observations_left)):
         key = jax.random.PRNGKey(100 + frame)
@@ -227,7 +230,10 @@ def estimate_trajectory(solve, sequence):
                 sequence.visibility_left[frame], 300, 2.0)
         start = time.perf_counter()
         estimate = solve(*args)
-        pose = np.asarray(estimate.pose)
+        refine_args = (estimate.pose, sequence.points3D,
+                       sequence.observations_left[frame],
+                       sequence.intrinsics, estimate.inliers, 10)
+        pose = np.asarray(refine(*refine_args).pose)
         frame_times.append(time.perf_counter() - start)
         poses.append(pose)
     return np.stack(poses), frame_times
