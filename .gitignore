@@ -8,6 +8,9 @@
 !requirements.txt
 !README.md
 !*.md
+!LICENSE
+!tests/slam/data/*.npz
+!tests/slam/data/*.json
 
 # extend exceptions to subdirectories
 !*/
