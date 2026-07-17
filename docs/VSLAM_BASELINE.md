@@ -46,7 +46,10 @@ Quick mode:
   1.1x the reference error plus a small absolute slack, refined
   reprojection RMSE within 5% of the SciPy reference.
 
-Full mode adds the stereo-sequence trajectory: per-frame jitted
+Full mode adds Schur-complement bundle adjustment on the six-pose
+fixture (final robust cost below initial, final RMSE < 0.75 px and
+within 1.1x the SciPy reference, pose errors within 1.1x the
+reference) and the stereo-sequence trajectory: per-frame jitted
 PnP-RANSAC over 40 frames with fixed-capacity visibility masks
 (ATE RMSE < 0.03 m, median reprojection < 1 px, no NaN, exactly one
 compilation), plus informational RPE, drift, and runtime numbers.
@@ -62,6 +65,7 @@ noisy two-view   direction error  0.345 deg (reference 1.216)
 PnP-RANSAC       rotation error   0.052 deg (reference 0.052)
 PnP-RANSAC       translation      4.9 mm    (reference 4.9 mm)
 refined RMSE     0.658 px         (reference 0.658 px)
+bundle RMSE      31.94 -> 0.5738  (reference 31.94 -> 0.5738 px)
 stereo ATE RMSE  5.5 mm           (reference per-frame PnP 5.5 mm,
                                    bound 30 mm)
 ```

@@ -3,6 +3,12 @@ import os
 import sys
 from collections import namedtuple
 
+from jax import config
+
+# the baseline evaluates production code on float64 fixtures; scripts
+# own their process, unlike tests collected next to float32 suites
+config.update("jax_enable_x64", True)
+
 import jax
 import numpy as np
 

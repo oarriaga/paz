@@ -1,13 +1,22 @@
-from jax import config
-
-config.update("jax_enable_x64", True)
-
+import functools
 from collections import namedtuple
 
 import jax
 import jax.numpy as jp
+from jax.experimental import enable_x64
 
 import paz
+
+
+def in_double_precision(function):
+    # scenes need float64 geometry, but flipping the global x64 flag
+    # would leak into every other test collected in the same process
+    @functools.wraps(function)
+    def wrapped(*args):
+        with enable_x64():
+            return function(*args)
+
+    return wrapped
 
 TwoViewScene = namedtuple(
     "TwoViewScene",
@@ -42,6 +51,7 @@ DegenerateScenes = namedtuple(
 )
 
 
+@in_double_precision
 def build_two_view_scene(key, num_points, noise_stdv, outlier_fraction):
     point_key, noise_A, noise_B, outlier_key = jax.random.split(key, 4)
     box = ((-2.0, -1.5, 4.0), (2.0, 1.5, 8.0))
@@ -61,6 +71,7 @@ def build_two_view_scene(key, num_points, noise_stdv, outlier_fraction):
     return TwoViewScene(*scene)
 
 
+@in_double_precision
 def build_pnp_scene(key, num_points, noise_stdv, outlier_fraction):
     point_key, noise_key, outlier_key = jax.random.split(key, 3)
     box = ((-2.0, -1.5, 4.0), (2.0, 1.5, 8.0))
@@ -78,6 +89,7 @@ def build_pnp_scene(key, num_points, noise_stdv, outlier_fraction):
     return PnPScene(*scene)
 
 
+@in_double_precision
 def build_bundle_adjustment_scene(
     key, num_poses, num_points, noise_stdv, pose_noise, point_noise
 ):
@@ -98,6 +110,7 @@ def build_bundle_adjustment_scene(
     return BundleScene(*scene)
 
 
+@in_double_precision
 def build_stereo_sequence(
     key, num_frames, num_points, noise_stdv, outlier_fraction
 ):
@@ -124,6 +137,7 @@ def build_stereo_sequence(
     return StereoSequence(*sequence)
 
 
+@in_double_precision
 def build_degenerate_scenes(key):
     keys = jax.random.split(key, 6)
     scenes = (build_planar_scene(keys[0]),
@@ -199,10 +213,12 @@ def assemble_two_view(points3D, pose_A, pose_B, valid_mask):
     return TwoViewScene(*scene)
 
 
+@in_double_precision
 def compute_relative_transform(pose_A, pose_B):
     return pose_B @ paz.SE3.invert(pose_A)
 
 
+@in_double_precision
 def compute_essential(pose_A, pose_B):
     relative = compute_relative_transform(pose_A, pose_B)
     rotation = paz.SE3.get_rotation_matrix(relative)
@@ -210,6 +226,7 @@ def compute_essential(pose_A, pose_B):
     return paz.SO3.hat(translation) @ rotation
 
 
+@in_double_precision
 def compute_fundamental(intrinsics_A, intrinsics_B, pose_A, pose_B):
     essential = compute_essential(pose_A, pose_B)
     inverse_A = jp.linalg.inv(intrinsics_A)

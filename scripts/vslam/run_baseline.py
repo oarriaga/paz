@@ -11,6 +11,8 @@ import metrics
 import synthetic
 
 import jax
+import jax.numpy as jp
+
 import paz
 
 Check = namedtuple("Check", ["section", "name", "value", "bound", "passed"])
@@ -191,6 +193,60 @@ def compute_refined_rmse(scene, estimate):
     return float(np.sqrt(np.mean(errors**2)))
 
 
+def evaluate_bundle(scene, reference, bounds):
+    problem = build_bundle_problem(scene)
+    result = paz.slam.bundle_adjust(problem, 30, 3.0, 1e-3)
+    rotation_errors, translation_errors = [], []
+    for pose, pose_true in zip(np.asarray(result.poses),
+                               np.asarray(scene.poses)):
+        rotation_errors.append(metrics.compute_rotation_error(
+            pose[:3, :3], pose_true[:3, :3]))
+        translation_errors.append(np.linalg.norm(
+            pose[:3, 3] - pose_true[:3, 3]))
+    factor = bounds["bundle_rmse_factor"]
+    section = "bundle_adjustment"
+    return [
+        check_true(section, "valid", result.valid),
+        check_true(section, "cost_decreased",
+                   float(result.final_cost) < float(result.initial_cost)),
+        check_below(section, "final_rmse", float(result.final_rmse),
+                    bounds["bundle_final_rmse"]),
+        check_below(section, "final_rmse_vs_reference",
+                    float(result.final_rmse),
+                    factor * reference["final_rmse"]
+                    + bounds["bundle_rmse_slack"]),
+        check_below(section, "max_rotation_error",
+                    float(np.max(rotation_errors)),
+                    factor * reference["max_rotation_error"]
+                    + bounds["rotation_slack"]),
+        check_below(section, "max_translation_error",
+                    float(np.max(translation_errors)),
+                    factor * reference["max_translation_error"]
+                    + bounds["translation_slack"]),
+        report_value(section, "initial_rmse", float(result.initial_rmse)),
+        report_value(section, "num_accepted", float(result.num_accepted)),
+    ]
+
+
+def build_bundle_problem(scene):
+    visibility = np.asarray(scene.visibility)
+    pose_index, landmark_index = np.nonzero(visibility)
+    observed = np.asarray(scene.observations)[pose_index, landmark_index]
+    initial_poses = np.asarray(scene.noisy_poses).copy()
+    initial_poses[0] = np.asarray(scene.poses)[0]
+    num_poses, num_landmarks = visibility.shape
+    capacity = len(pose_index)
+    fields = (jp.asarray(initial_poses),
+              jp.ones(num_poses, dtype=bool),
+              jp.asarray(scene.noisy_points3D),
+              jp.ones(num_landmarks, dtype=bool),
+              jp.asarray(scene.intrinsics)[None], jp.eye(4)[None],
+              jp.asarray(observed), jp.asarray(pose_index),
+              jp.asarray(landmark_index), jp.zeros(capacity, jp.int32),
+              jp.ones(capacity), jp.ones(capacity, dtype=bool))
+    return paz.slam.BundleProblem(*fields)
+
+
 def evaluate_stereo(sequence, bounds):
     solve = jax.jit(paz.pnp.estimate_pose_RANSAC, static_argnums=5)
     refine = jax.jit(paz.pnp.refine_pose, static_argnums=5)
@@ -294,6 +350,8 @@ if __name__ == "__main__":
         scenes.two_view_noisy, reference_metrics["two_view_noisy"], bounds)
     checks += evaluate_pnp(scenes.pnp, reference_metrics["pnp"], bounds)
     if arguments.mode == "full":
+        checks += evaluate_bundle(scenes.bundle,
+                                  reference_metrics["bundle"], bounds)
         checks += evaluate_stereo(scenes.stereo, bounds)
     print_table(checks)
     write_artifacts(checks, arguments.mode, baseline)

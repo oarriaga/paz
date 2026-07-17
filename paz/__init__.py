@@ -57,6 +57,7 @@ from paz.abstract import Model, Node, Input, Sequential, Tree
 from paz.models.decomposition import pca as PCA
 from paz.models import transformers
 from paz import applications
+from paz import slam
 from paz import utils
 from paz.utils import pytree
 from paz.utils import assert_snapshot, cache, jit_and_cache, clear_cache
