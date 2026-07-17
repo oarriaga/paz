@@ -206,3 +206,169 @@ def test_sample_SE3(sample_key):
         jp.dot(rotation_matrix, rotation_matrix.T), jp.eye(3), atol=1e-6
     )
     assert jp.array_equal(SE3_matrix[3, :], jp.array([0, 0, 0, 1]))
+
+
+def build_tangent(angle):
+    axis = jp.array([0.36, 0.48, 0.8])
+    linear = jp.array([0.5, -0.3, 0.2])
+    return jp.concatenate([angle * axis, linear])
+
+
+@pytest.fixture
+def pose_A():
+    return SE3.sample(jax.random.PRNGKey(1), -1.0, 1.0)
+
+
+@pytest.fixture
+def pose_B():
+    return SE3.sample(jax.random.PRNGKey(2), -1.0, 1.0)
+
+
+def test_between_recovers_composed(pose_A, pose_B):
+    composed = SE3.compose(pose_A, pose_B)
+    assert jp.allclose(SE3.between(pose_A, composed), pose_B, atol=1e-5)
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_retract_local_coordinates_round_trip(seed):
+    key_A, key_B = jax.random.split(jax.random.PRNGKey(seed))
+    pose_A = SE3.sample(key_A, -1.0, 1.0)
+    pose_B = SE3.sample(key_B, -1.0, 1.0)
+    delta = SE3.local_coordinates(pose_A, pose_B)
+    assert jp.allclose(SE3.retract(pose_A, delta), pose_B, atol=2e-3)
+
+
+@pytest.mark.parametrize("angle", [0.0, 1e-8, 0.5, 1.0, 2.0])
+def test_Log_Exp_round_trip(angle):
+    tangent = build_tangent(angle)
+    assert jp.allclose(SE3.Log(SE3.Exp(tangent)), tangent, atol=1e-5)
+
+
+def test_Log_Exp_round_trip_tiny_tangent():
+    tangent = jp.full(6, 1e-8)
+    assert jp.allclose(SE3.Log(SE3.Exp(tangent)), tangent, atol=1e-7)
+
+
+@pytest.mark.parametrize("angle", [math.pi - 0.3, math.pi - 0.1])
+def test_Log_Exp_round_trip_near_pi(angle):
+    tangent = build_tangent(angle)
+    assert jp.allclose(SE3.Log(SE3.Exp(tangent)), tangent, atol=1e-3)
+
+
+@pytest.mark.parametrize("seed", range(6))
+def test_Exp_Log_round_trip(seed):
+    pose = SE3.sample(jax.random.PRNGKey(seed), -1.0, 1.0)
+    assert jp.allclose(SE3.Exp(SE3.Log(pose)), pose, atol=1e-3)
+
+
+def test_retract_at_identity():
+    tangent = build_tangent(0.7)
+    retracted = SE3.retract(jp.eye(4), tangent)
+    assert jp.allclose(retracted, SE3.Exp(tangent), atol=1e-6)
+
+
+def test_retract_first_order(pose_A):
+    small_tangent = 1e-3 * build_tangent(0.7)
+    linearized = pose_A + pose_A @ SE3.hat(small_tangent)
+    retracted = SE3.retract(pose_A, small_tangent)
+    assert jp.allclose(retracted, linearized, atol=1e-5)
+
+
+def test_left_jacobian_at_zero():
+    assert jp.allclose(SE3.left_jacobian(jp.zeros(6)), jp.eye(6))
+
+
+JACOBIAN_ANGLES = [1e-8, 0.5, 1.5, 2.5, math.pi - 1e-3, math.pi]
+
+
+@pytest.mark.parametrize("angle", JACOBIAN_ANGLES)
+def test_left_jacobian_inverse_consistency(angle):
+    tangent = build_tangent(angle)
+    jacobian = SE3.left_jacobian(tangent)
+    inverse = SE3.left_jacobian_inverse(tangent)
+    assert jp.allclose(jacobian @ inverse, jp.eye(6), atol=1e-5)
+
+
+def test_left_jacobian_inverse_random_tangents():
+    tangents = jax.random.normal(jax.random.PRNGKey(9), (32, 6))
+    jacobians = jax.vmap(SE3.left_jacobian)(tangents)
+    inverses = jax.vmap(SE3.left_jacobian_inverse)(tangents)
+    products = jp.einsum("bij,bjk->bik", jacobians, inverses)
+    assert jp.allclose(products, jp.eye(6), atol=1e-5)
+
+
+@pytest.mark.parametrize("angle", [0.0, 0.5, 1.5, math.pi - 0.1])
+def test_left_jacobian_first_order(angle):
+    tangent = build_tangent(angle)
+    delta = jax.random.normal(jax.random.PRNGKey(4), (6,))
+    delta = 1e-2 * delta / jp.linalg.norm(delta)
+    perturbed = SE3.Exp(tangent + delta)
+    step = SE3.Exp(SE3.left_jacobian(tangent) @ delta)
+    approximated = SE3.compose(step, SE3.Exp(tangent))
+    residual = SE3.local_coordinates(approximated, perturbed)
+    assert jp.linalg.norm(residual) < 1e-4
+
+
+def compute_difference_column(tangent, direction, step):
+    inverse = SE3.invert(SE3.Exp(tangent))
+    plus = SE3.Log(SE3.Exp(tangent + step * direction) @ inverse)
+    minus = SE3.Log(SE3.Exp(tangent - step * direction) @ inverse)
+    return (plus - minus) / (2.0 * step)
+
+
+@pytest.mark.parametrize("angle", [0.0, 0.5, 1.5, math.pi - 0.1])
+def test_left_jacobian_matches_finite_differences(angle):
+    tangent = build_tangent(angle)
+    columns = []
+    for index in range(6):
+        direction = jp.zeros(6).at[index].set(1.0)
+        columns.append(compute_difference_column(tangent, direction, 1e-2))
+    difference_jacobian = jp.stack(columns, axis=1)
+    assert jp.allclose(difference_jacobian, SE3.left_jacobian(tangent),
+                       atol=2e-4)
+
+
+@pytest.mark.parametrize("angle", [0.0, 1e-8, 0.5, math.pi - 1e-3, math.pi])
+def test_retract_gradient_is_finite(pose_A, angle):
+    loss = lambda tangent: jp.sum(SE3.retract(pose_A, tangent) ** 2)
+    assert jp.all(jp.isfinite(jax.grad(loss)(build_tangent(angle))))
+
+
+def test_retract_gradient_is_finite_at_zero_tangent(pose_A):
+    loss = lambda tangent: jp.sum(SE3.retract(pose_A, tangent) ** 2)
+    assert jp.all(jp.isfinite(jax.grad(loss)(jp.zeros(6))))
+
+
+@pytest.mark.parametrize("angle", [0.0, 1e-8, 0.5, math.pi - 0.1])
+def test_local_coordinates_gradient_is_finite(pose_A, angle):
+    def loss(tangent):
+        moved = SE3.retract(pose_A, tangent)
+        return jp.sum(SE3.local_coordinates(pose_A, moved) ** 2)
+
+    assert jp.all(jp.isfinite(jax.grad(loss)(build_tangent(angle))))
+
+
+def test_local_coordinates_gradient_is_finite_at_zero_tangent(pose_A):
+    def loss(tangent):
+        moved = SE3.retract(pose_A, tangent)
+        return jp.sum(SE3.local_coordinates(pose_A, moved) ** 2)
+
+    assert jp.all(jp.isfinite(jax.grad(loss)(jp.zeros(6))))
+
+
+def test_jit_and_vmap_over_batch():
+    keys = jax.random.split(jax.random.PRNGKey(8), 64)
+    sample_pose = lambda key: SE3.sample(key, -1.0, 1.0)
+    poses_A = jax.vmap(sample_pose)(keys[:32])
+    poses_B = jax.vmap(sample_pose)(keys[32:])
+    tangents = jax.random.normal(jax.random.PRNGKey(9), (32, 6))
+    retracted = jax.jit(jax.vmap(SE3.retract))(poses_A, tangents)
+    deltas = jax.jit(jax.vmap(SE3.local_coordinates))(poses_A, poses_B)
+    jacobians = jax.jit(jax.vmap(SE3.left_jacobian))(tangents)
+    inverses = jax.jit(jax.vmap(SE3.left_jacobian_inverse))(tangents)
+    assert jp.all(jp.isfinite(retracted))
+    assert jp.all(jp.isfinite(deltas))
+    assert jp.all(jp.isfinite(jacobians))
+    assert jp.all(jp.isfinite(inverses))
+    recovered = jax.vmap(SE3.retract)(poses_A, deltas)
+    assert jp.allclose(recovered, poses_B, atol=1e-3)
