@@ -34,6 +34,7 @@ from paz.backend import algebra
 from paz.backend import scene
 from paz.backend import plane
 from paz.backend import epipolar
+from paz.backend import pnp
 from paz.backend import triangulation
 from paz.backend import mesh
 from paz.backend import cage
