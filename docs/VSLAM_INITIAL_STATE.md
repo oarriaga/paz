@@ -32,6 +32,14 @@ pytest -q paz/models/feature
   XFEAT_WEIGHTS / LIGHTERGLUE_WEIGHTS environment variables)
 ```
 
+```text
+pytest -q paz/optimization
+  16 failed, 27 passed (pre-existing on paz-jax with this machine's
+  optax 0.2.4: stopping.py/minimization.py use
+  optax.tree_utils.tree_norm, added in a later optax; identical
+  failures occur on the untouched paz-jax checkout)
+```
+
 `pytest -q paz/models/foundation/depth_anything3` was not run here; it
 depends on downloaded foundation weights and is unrelated to the SLAM
 geometry baseline.
