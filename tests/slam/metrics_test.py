@@ -70,7 +70,7 @@ def test_ATE_detects_error():
 
 def test_RPE_identity():
     poses = build_line_trajectory(10)
-    translation_RPE, rotation_RPE = metrics.compute_RPE(poses, poses)
+    translation_RPE, rotation_RPE = metrics.compute_RPE(poses, poses, 1)
     assert translation_RPE < 1e-12
     assert rotation_RPE < 1e-5
 

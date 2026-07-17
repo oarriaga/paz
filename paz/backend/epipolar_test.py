@@ -153,6 +153,19 @@ def test_RANSAC_insufficient_correspondences():
     RANSAC_args = (key, points_A, points_B, valid_mask, 50, 1.0)
     estimate = epipolar.estimate_fundamental_matrix_RANSAC(*RANSAC_args)
     assert not bool(estimate.valid)
+    assert bool(jp.all(jp.isfinite(estimate.fundamental_matrix)))
+
+
+def test_RANSAC_all_outliers_stays_finite():
+    key = jax.random.PRNGKey(3)
+    key_A, key_B = jax.random.split(key)
+    points_A = jax.random.uniform(key_A, (40, 2)) * 640.0
+    points_B = jax.random.uniform(key_B, (40, 2)) * 640.0
+    valid_mask = jp.ones(len(points_A), dtype=bool)
+    RANSAC_args = (key, points_A, points_B, valid_mask, 50, 1e-6)
+    estimate = epipolar.estimate_fundamental_matrix_RANSAC(*RANSAC_args)
+    assert not bool(estimate.valid)
+    assert bool(jp.all(jp.isfinite(estimate.fundamental_matrix)))
 
 
 def test_RANSAC_jit_does_not_recompile():

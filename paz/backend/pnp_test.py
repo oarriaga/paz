@@ -246,9 +246,10 @@ def test_refine_pose_huber_beats_plain_on_outliers():
     assert huber_translation < plain_translation
 
 
-def test_apply_huber_weights():
+def test_huber_weights():
+    from paz.optimization.robust import huber_weights
     residual_norms = jp.array([0.0, 1.0, 2.0, 8.0])
-    weights = pnp.apply_huber_weights(residual_norms, 2.0)
+    weights = huber_weights(residual_norms, 2.0)
     assert jp.allclose(weights, jp.array([1.0, 1.0, 1.0, 0.25]))
 
 

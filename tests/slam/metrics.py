@@ -32,7 +32,7 @@ def compute_ATE(poses_estimated, poses_true):
     return float(np.sqrt(np.mean(errors**2)))
 
 
-def compute_RPE(poses_estimated, poses_true, delta=1):
+def compute_RPE(poses_estimated, poses_true, delta):
     estimated = np.asarray(poses_estimated, dtype=np.float64)
     true = np.asarray(poses_true, dtype=np.float64)
     translation_errors, rotation_errors = [], []

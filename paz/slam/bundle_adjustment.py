@@ -9,10 +9,10 @@ from paz.optimization.robust import huber_weights
 from paz.slam.factors import compute_observation_jacobians
 from paz.slam.factors import compute_observation_residuals
 
-RESULT_FIELDS = ("poses", "landmarks", "initial_cost", "final_cost",
-                 "initial_rmse", "final_rmse", "cost_trace",
-                 "damping_trace", "num_accepted", "valid")
-BundleAdjustment = namedtuple("BundleAdjustment", RESULT_FIELDS)
+BundleAdjustment = namedtuple(
+    "BundleAdjustment",
+    ["poses", "landmarks", "initial_cost", "final_cost", "initial_rmse",
+     "final_rmse", "cost_trace", "damping_trace", "num_accepted", "valid"])
 
 
 def bundle_adjust(problem, num_iterations, huber_scale, damping):

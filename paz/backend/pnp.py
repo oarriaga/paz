@@ -7,6 +7,7 @@ from paz.backend import algebra
 from paz.backend import pinhole
 from paz.backend.epipolar import normalize_weighted_points
 from paz.backend.lie import SE3
+from paz.optimization.robust import huber_weights
 
 PnPEstimate = namedtuple("PnPEstimate", ["pose", "valid"])
 
@@ -154,16 +155,11 @@ def refine_pose(initial_pose, points3D, points2D, intrinsics, valid_mask,
 
 def refine_pose_huber(initial_pose, points3D, points2D, intrinsics,
                       valid_mask, iterations, scale):
-    def huber_weights(residual_norms):
-        return apply_huber_weights(residual_norms, scale)
+    def compute_weights(residual_norms):
+        return huber_weights(residual_norms, scale)
 
     args = (initial_pose, points3D, points2D, intrinsics, valid_mask)
-    return run_gauss_newton(*args, iterations, huber_weights)
-
-
-def apply_huber_weights(residual_norms, scale):
-    safe_norms = jp.maximum(residual_norms, 1e-12)
-    return jp.minimum(1.0, scale / safe_norms)
+    return run_gauss_newton(*args, iterations, compute_weights)
 
 
 def run_gauss_newton(initial_pose, points3D, points2D, intrinsics,

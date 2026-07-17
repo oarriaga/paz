@@ -6,12 +6,12 @@ import jax.numpy as jp
 from paz.backend import pinhole
 from paz.backend.lie import SE3
 
-PROBLEM_FIELDS = ("poses", "pose_active", "landmarks", "landmark_active",
-                  "intrinsics", "rig_extrinsics", "observations_uv",
-                  "observation_pose", "observation_landmark",
-                  "observation_camera", "observation_weight",
-                  "observation_active")
-BundleProblem = namedtuple("BundleProblem", PROBLEM_FIELDS)
+BundleProblem = namedtuple(
+    "BundleProblem",
+    ["poses", "pose_active", "landmarks", "landmark_active", "intrinsics",
+     "rig_extrinsics", "observations_uv", "observation_pose",
+     "observation_landmark", "observation_camera", "observation_weight",
+     "observation_active"])
 
 
 def compute_observation_residuals(problem):

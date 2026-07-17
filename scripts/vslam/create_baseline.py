@@ -47,13 +47,15 @@ def compute_two_view_reference(scene):
     rotation, translation, _ = reference.recover_pose_reference(*pose_args)
     relative = np.asarray(
         synthetic.compute_relative_transform(scene.pose_A, scene.pose_B))
+    rotation_error = metrics.compute_rotation_error(
+        rotation, relative[:3, :3])
+    direction_error = metrics.compute_translation_direction_error(
+        translation, relative[:3, 3])
     return {
         "precision": precision,
         "recall": recall,
-        "rotation_error": float(metrics.compute_rotation_error(
-            rotation, relative[:3, :3])),
-        "direction_error": float(metrics.compute_translation_direction_error(
-            translation, relative[:3, 3])),
+        "rotation_error": float(rotation_error),
+        "direction_error": float(direction_error),
     }
 
 
@@ -72,13 +74,14 @@ def compute_pnp_reference(scene):
         refined, intrinsics, points3D[true_inliers],
         points2D[true_inliers])
     pose_true = np.asarray(scene.pose)
+    rotation_error = metrics.compute_rotation_error(
+        pose[:3, :3], pose_true[:3, :3])
+    translation_error = np.linalg.norm(pose[:3, 3] - pose_true[:3, 3])
     return {
         "precision": precision,
         "recall": recall,
-        "rotation_error": float(metrics.compute_rotation_error(
-            pose[:3, :3], pose_true[:3, :3])),
-        "translation_error": float(np.linalg.norm(
-            pose[:3, 3] - pose_true[:3, 3])),
+        "rotation_error": float(rotation_error),
+        "translation_error": float(translation_error),
         "refined_rmse": float(np.sqrt(np.mean(errors**2))),
     }
 
@@ -114,7 +117,7 @@ def compute_stereo_reference(sequence):
     poses = estimate_stereo_trajectory(sequence)
     poses_true = np.asarray(sequence.poses)
     ate = metrics.compute_ATE(poses, poses_true)
-    rpe_translation, rpe_rotation = metrics.compute_RPE(poses, poses_true)
+    rpe_translation, rpe_rotation = metrics.compute_RPE(poses, poses_true, 1)
     return {
         "ate_rmse": ate,
         "rpe_translation": rpe_translation,

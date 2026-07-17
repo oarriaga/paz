@@ -17,9 +17,6 @@ import paz
 
 Check = namedtuple("Check", ["section", "name", "value", "bound", "passed"])
 
-ARTIFACTS = os.path.join(fixtures.REPO_ROOT, "artifacts",
-                         "vslam_baseline_results.json")
-
 
 def check_below(section, name, value, bound):
     passed = bool(np.isfinite(value)) and float(value) < float(bound)
@@ -160,24 +157,24 @@ def evaluate_pnp(scene, reference, bounds):
     translation_error = float(np.linalg.norm(
         pose[:3, 3] - pose_true[:3, 3]))
     factor = bounds["relative_factor"]
+    precision_bound = reference["precision"] - bounds["precision_recall_slack"]
+    recall_bound = reference["recall"] - bounds["precision_recall_slack"]
+    rotation_bound = factor * reference["rotation_error"] \
+        + bounds["rotation_slack"]
+    translation_bound = factor * reference["translation_error"] \
+        + bounds["translation_slack"]
+    refined_rmse = compute_refined_rmse(scene, estimate)
+    rmse_bound = bounds["refine_rmse_factor"] * reference["refined_rmse"]
     section = "pnp"
     return [
         check_true(section, "ransac_valid", estimate.valid),
-        check_at_least(section, "precision", precision,
-                       reference["precision"]
-                       - bounds["precision_recall_slack"]),
-        check_at_least(section, "recall", recall,
-                       reference["recall"]
-                       - bounds["precision_recall_slack"]),
+        check_at_least(section, "precision", precision, precision_bound),
+        check_at_least(section, "recall", recall, recall_bound),
         check_below(section, "rotation_error", rotation_error,
-                    factor * reference["rotation_error"]
-                    + bounds["rotation_slack"]),
+                    rotation_bound),
         check_below(section, "translation_error", translation_error,
-                    factor * reference["translation_error"]
-                    + bounds["translation_slack"]),
-        check_below(section, "refined_rmse", compute_refined_rmse(
-            scene, estimate),
-            bounds["refine_rmse_factor"] * reference["refined_rmse"]),
+                    translation_bound),
+        check_below(section, "refined_rmse", refined_rmse, rmse_bound),
     ]
 
 
@@ -253,7 +250,7 @@ def evaluate_stereo(sequence, bounds):
     poses, frame_times = estimate_trajectory(solve, refine, sequence)
     poses_true = np.asarray(sequence.poses)
     ate = metrics.compute_ATE(poses, poses_true)
-    rpe_translation, rpe_rotation = metrics.compute_RPE(poses, poses_true)
+    rpe_translation, rpe_rotation = metrics.compute_RPE(poses, poses_true, 1)
     drift_translation, drift_rotation = metrics.compute_drift(
         poses, poses_true)
     section = "stereo_pnp_trajectory"
@@ -314,15 +311,20 @@ def print_table(checks):
     print(header)
     print("-" * len(header))
     for entry in checks:
-        status = "PASS" if entry.passed else "FAIL"
         if np.isinf(entry.bound):
             status = "info"
+        elif entry.passed:
+            status = "PASS"
+        else:
+            status = "FAIL"
         print(f"{entry.section:22} {entry.name:28} {entry.value:12.6g} "
               f"{entry.bound:12.6g} {status}")
 
 
 def write_artifacts(checks, mode, baseline):
-    os.makedirs(os.path.dirname(ARTIFACTS), exist_ok=True)
+    artifacts = os.path.join(fixtures.REPO_ROOT, "artifacts",
+                             "vslam_baseline_results.json")
+    os.makedirs(os.path.dirname(artifacts), exist_ok=True)
     results = {
         "mode": mode,
         "baseline_git_commit": baseline["git_commit"],
@@ -330,7 +332,7 @@ def write_artifacts(checks, mode, baseline):
         "checks": [entry._asdict() for entry in checks],
         "failed": [entry.name for entry in checks if not entry.passed],
     }
-    with open(ARTIFACTS, "w") as opened_file:
+    with open(artifacts, "w") as opened_file:
         json.dump(results, opened_file, indent=2, sort_keys=True)
 
 

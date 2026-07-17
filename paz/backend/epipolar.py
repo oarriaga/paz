@@ -50,15 +50,25 @@ def estimate_fundamental_matrix_RANSAC(key, points_A, points_B, valid_mask,
     # one guarded refit is not converged when the consensus set grows;
     # a second round refits on the grown set (LO-RANSAC, as in pnp)
     for _ in range(2):
-        refit_weights = inliers.astype(points_A.dtype)
-        refit_F = compute_weighted_fundamental_matrix(
-            points_A, points_B, refit_weights)
-        refit_inliers, refit_count = find_inliers(refit_F)
-        keep_refit = refit_count >= count
-        F = jp.where(keep_refit, refit_F, F)
-        inliers = jp.where(keep_refit, refit_inliers, inliers)
-        count = jp.where(keep_refit, refit_count, count)
+        F, inliers, count = refit_fundamental_matrix(
+            points_A, points_B, F, inliers, count, find_inliers)
     return FundamentalEstimate(F, inliers, count, count >= 8)
+
+
+def refit_fundamental_matrix(points_A, points_B, F, inliers, count,
+                             find_inliers):
+    refit_weights = inliers.astype(points_A.dtype)
+    refit_F = compute_weighted_fundamental_matrix(
+        points_A, points_B, refit_weights)
+    refit_inliers, refit_count = find_inliers(refit_F)
+    # a zero-inlier refit divides by zero total weight and returns NaN;
+    # only accept a finite refit that keeps the consensus set
+    finite = jp.all(jp.isfinite(refit_F))
+    keep_refit = finite & (refit_count >= count)
+    F = jp.where(keep_refit, refit_F, F)
+    inliers = jp.where(keep_refit, refit_inliers, inliers)
+    count = jp.where(keep_refit, refit_count, count)
+    return F, inliers, count
 
 
 def compute_fundamental_matrix(points_A, points_B):
