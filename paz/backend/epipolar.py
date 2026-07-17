@@ -47,14 +47,17 @@ def estimate_fundamental_matrix_RANSAC(key, points_A, points_B, valid_mask,
     state = (jp.eye(3, dtype=points_A.dtype), inliers, jp.sum(inliers))
     keys = jax.random.split(key, num_hypotheses)
     (F, inliers, count), _ = jax.lax.scan(step, state, keys)
-    refit_weights = inliers.astype(points_A.dtype)
-    refit_F = compute_weighted_fundamental_matrix(
-        points_A, points_B, refit_weights)
-    refit_inliers, refit_count = find_inliers(refit_F)
-    keep_refit = refit_count >= count
-    F = jp.where(keep_refit, refit_F, F)
-    inliers = jp.where(keep_refit, refit_inliers, inliers)
-    count = jp.where(keep_refit, refit_count, count)
+    # one guarded refit is not converged when the consensus set grows;
+    # a second round refits on the grown set (LO-RANSAC, as in pnp)
+    for _ in range(2):
+        refit_weights = inliers.astype(points_A.dtype)
+        refit_F = compute_weighted_fundamental_matrix(
+            points_A, points_B, refit_weights)
+        refit_inliers, refit_count = find_inliers(refit_F)
+        keep_refit = refit_count >= count
+        F = jp.where(keep_refit, refit_F, F)
+        inliers = jp.where(keep_refit, refit_inliers, inliers)
+        count = jp.where(keep_refit, refit_count, count)
     return FundamentalEstimate(F, inliers, count, count >= 8)
 
 

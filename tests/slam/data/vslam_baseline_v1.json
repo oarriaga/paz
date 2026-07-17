@@ -1,0 +1,246 @@
+{
+  "checksums": {
+    "bundle": "d8f06f077fd77556f5bc3b5d94f7d3432f6d6c81d2ccf0fb6578aaa31f6c9fc5",
+    "pnp": "ed577e67241261629d25115e6449935749db731aa6914be01aa9ede4b1aa5e87",
+    "stereo": "a343d59ecf6162eea1f16b78f3178dfc2c34dbaf7ec733ae31225f2f50818a98",
+    "two_view_clean": "78df59603fc10b41438f938f5eed0292112d6975fb8e5637d3da959bff7f09d4",
+    "two_view_noisy": "7d12315cbdd4b63b5b2e8237663c38299f299dc7a20ec6a281d720fa57f90c54"
+  },
+  "dimensions": {
+    "bundle": {
+      "intrinsics": [
+        3,
+        3
+      ],
+      "noisy_points3D": [
+        200,
+        3
+      ],
+      "noisy_poses": [
+        6,
+        4,
+        4
+      ],
+      "observations": [
+        6,
+        200,
+        2
+      ],
+      "points3D": [
+        200,
+        3
+      ],
+      "poses": [
+        6,
+        4,
+        4
+      ],
+      "visibility": [
+        6,
+        200
+      ]
+    },
+    "pnp": {
+      "inlier_mask": [
+        150
+      ],
+      "intrinsics": [
+        3,
+        3
+      ],
+      "points2D": [
+        150,
+        2
+      ],
+      "points3D": [
+        150,
+        3
+      ],
+      "pose": [
+        4,
+        4
+      ],
+      "valid_mask": [
+        150
+      ]
+    },
+    "stereo": {
+      "intrinsics": [
+        3,
+        3
+      ],
+      "left_to_right": [
+        4,
+        4
+      ],
+      "observations_left": [
+        40,
+        500,
+        2
+      ],
+      "observations_right": [
+        40,
+        500,
+        2
+      ],
+      "outlier_mask_left": [
+        40,
+        500
+      ],
+      "outlier_mask_right": [
+        40,
+        500
+      ],
+      "points3D": [
+        500,
+        3
+      ],
+      "poses": [
+        40,
+        4,
+        4
+      ],
+      "timestamps": [
+        40
+      ],
+      "visibility_left": [
+        40,
+        500
+      ],
+      "visibility_right": [
+        40,
+        500
+      ]
+    },
+    "two_view_clean": {
+      "inlier_mask": [
+        120
+      ],
+      "intrinsics_A": [
+        3,
+        3
+      ],
+      "intrinsics_B": [
+        3,
+        3
+      ],
+      "points3D": [
+        120,
+        3
+      ],
+      "points_A": [
+        120,
+        2
+      ],
+      "points_B": [
+        120,
+        2
+      ],
+      "pose_A": [
+        4,
+        4
+      ],
+      "pose_B": [
+        4,
+        4
+      ],
+      "valid_mask": [
+        120
+      ]
+    },
+    "two_view_noisy": {
+      "inlier_mask": [
+        150
+      ],
+      "intrinsics_A": [
+        3,
+        3
+      ],
+      "intrinsics_B": [
+        3,
+        3
+      ],
+      "points3D": [
+        150,
+        3
+      ],
+      "points_A": [
+        150,
+        2
+      ],
+      "points_B": [
+        150,
+        2
+      ],
+      "pose_A": [
+        4,
+        4
+      ],
+      "pose_B": [
+        4,
+        4
+      ],
+      "valid_mask": [
+        150
+      ]
+    }
+  },
+  "git_commit": "c79076d4fb2b106f31235923d36238d433dad4cd",
+  "reference": {
+    "bundle": {
+      "final_rmse": 0.5738452123669462,
+      "initial_rmse": 31.94353199653699,
+      "max_rotation_error": 1.1345839714662938,
+      "max_translation_error": 0.29758354301590445
+    },
+    "pnp": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "refined_rmse": 0.6575717323125783,
+      "rotation_error": 0.052229741340084734,
+      "translation_error": 0.004916406848103689
+    },
+    "stereo": {
+      "ate_rmse": 0.005498741269977187,
+      "rpe_rotation": 0.04729171324092312,
+      "rpe_translation": 0.0074489890725918315
+    },
+    "two_view_noisy": {
+      "direction_error": 1.2156704069501785,
+      "precision": 0.9920634920634921,
+      "recall": 0.9765625,
+      "rotation_error": 0.3602208451896021
+    }
+  },
+  "seeds": {
+    "bundle": 7,
+    "pnp": 3,
+    "stereo": 4,
+    "two_view_clean": 1,
+    "two_view_noisy": 2
+  },
+  "tolerances": {
+    "bundle_final_rmse": 0.75,
+    "bundle_rmse_factor": 1.1,
+    "bundle_rmse_slack": 0.05,
+    "clean_direction_error": 0.1,
+    "clean_pnp_rotation_error": 0.05,
+    "clean_pnp_translation_error": 0.0001,
+    "clean_rotation_error": 0.05,
+    "clean_sampson_median": 1e-05,
+    "clean_triangulation_rmse": 0.0001,
+    "direction_slack": 0.1,
+    "precision_recall_slack": 0.03,
+    "refine_rmse_factor": 1.05,
+    "relative_factor": 1.1,
+    "rotation_slack": 0.05,
+    "stereo_ate_rmse": 0.03,
+    "stereo_median_reprojection": 1.0,
+    "translation_slack": 0.001
+  },
+  "versions": {
+    "cv2": "4.7.0",
+    "numpy": "1.26.4",
+    "scipy": "1.13.0"
+  }
+}
