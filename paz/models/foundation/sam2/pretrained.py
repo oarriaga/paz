@@ -21,35 +21,35 @@ SAM2_WEIGHTS_URL = ALTAMIRA + "v0.30/"
 SAM2_CACHE = "paz/models/sam2"
 
 
-def SAM2HieraTiny(weights="pretrained"):
+def SAMHieraTiny2(weights="pretrained"):
     return build(cfg.TINY, "sam2_hiera_tiny", weights)
 
 
-def SAM2HieraSmall(weights="pretrained"):
+def SAMHieraSmall2(weights="pretrained"):
     return build(cfg.SMALL, "sam2_hiera_small", weights)
 
 
-def SAM2HieraBasePlus(weights="pretrained"):
+def SAMHieraBasePlus2(weights="pretrained"):
     return build(cfg.BASE_PLUS, "sam2_hiera_base_plus", weights)
 
 
-def SAM2HieraLarge(weights="pretrained"):
+def SAMHieraLarge2(weights="pretrained"):
     return build(cfg.LARGE, "sam2_hiera_large", weights)
 
 
-def SAM21HieraTiny(weights="pretrained"):
+def SAMHieraTiny21(weights="pretrained"):
     return build(cfg.TINY, "sam2.1_hiera_tiny", weights)
 
 
-def SAM21HieraSmall(weights="pretrained"):
+def SAMHieraSmall21(weights="pretrained"):
     return build(cfg.SMALL, "sam2.1_hiera_small", weights)
 
 
-def SAM21HieraBasePlus(weights="pretrained"):
+def SAMHieraBasePlus21(weights="pretrained"):
     return build(cfg.BASE_PLUS, "sam2.1_hiera_base_plus", weights)
 
 
-def SAM21HieraLarge(weights="pretrained"):
+def SAMHieraLarge21(weights="pretrained"):
     return build(cfg.LARGE, "sam2.1_hiera_large", weights)
 
 
