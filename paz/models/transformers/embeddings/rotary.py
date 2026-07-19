@@ -13,6 +13,29 @@ def apply(inputs, wavelength, scaling_factor, denominator, positions=None):
     return (inputs * cosine) + (rotated * sine)
 
 
+def apply_2D(tokens, positions, base_frequency=100.0):
+    vertical, horizontal = ops.split(tokens, 2, axis=-1)
+    vertical = apply_axis(vertical, positions[..., 0], base_frequency)
+    horizontal = apply_axis(horizontal, positions[..., 1], base_frequency)
+    return ops.concatenate([vertical, horizontal], axis=-1)
+
+
+def apply_axis(tokens, positions, base_frequency):
+    half = tokens.shape[-1]
+    exponents = ops.arange(0, half, 2, dtype="float32") / half
+    inverse = 1.0 / (base_frequency ** exponents)
+    angles = ops.cast(positions, "float32")[..., None] * inverse
+    angles = ops.concatenate([angles, angles], axis=-1)
+    cosine = ops.expand_dims(ops.cos(angles), axis=1)
+    sine = ops.expand_dims(ops.sin(angles), axis=1)
+    return tokens * cosine + rotate_half(tokens) * sine
+
+
+def rotate_half(tokens):
+    first_half, second_half = ops.split(tokens, 2, axis=-1)
+    return ops.concatenate([-second_half, first_half], axis=-1)
+
+
 def apply_partial(inputs, wavelength, scaling_factor, partial_rotary_factor,
                   positions=None):
     head_dim = inputs.shape[-1]

@@ -22,6 +22,12 @@ dependencies = [
     "scipy"
 ]
 
+[project.optional-dependencies]
+sonic = [
+    "mujoco>=3.3",
+    "onnx>=1.16",
+]
+
 [project.urls]
 Homepage = "https://github.com/oarriaga/paz"
 Repository = "https://github.com/oarriaga/paz"
