@@ -15,6 +15,8 @@ NECK = "image_encoder.neck."
 PROMPT = "sam_prompt_encoder."
 DECODER = "sam_mask_decoder."
 TRANSFORMER = "sam_mask_decoder.transformer."
+MEMORY_ENCODER = "memory_encoder."
+MEMORY_ATTENTION = "memory_attention."
 
 # Only keys under these prefixes must be mapped; everything else is deferred.
 IMAGE = "image_encoder sam_prompt_encoder sam_mask_decoder no_mem_embed".split()
@@ -132,6 +134,68 @@ def convert_two_way_block(dense, norm, index):
     convert_mlp(dense, f"{name}_mlp", f"{block}.mlp", 2)
     for number in range(1, 5):
         norm(f"{name}_norm{number}", f"{block}.norm{number}")
+
+
+def convert_memory(memory_encoder, memory_attention, state_dict, used=None):
+    used = set() if used is None else used
+    convert_memory_encoder(memory_encoder, state_dict, used)
+    convert_memory_attention(memory_attention, state_dict, used)
+    return used
+
+
+def convert_memory_encoder(model, state_dict, used):
+    def dense(name, source):
+        set_dense(model, name, source, state_dict, used)
+
+    def conv(name, source):
+        set_conv(model, name, source, state_dict, used)
+
+    def norm(name, source):
+        set_norm(model, name, source, state_dict, used)
+
+    conv("mem_pix_proj", MEMORY_ENCODER + "pix_feat_proj")
+    conv("mem_out_proj", MEMORY_ENCODER + "out_proj")
+    encoder = MEMORY_ENCODER + "mask_downsampler.encoder."
+    for index in (0, 3, 6, 9):
+        conv(f"mask_ds_conv_{index}", f"{encoder}{index}")
+        norm(f"mask_ds_ln_{index + 1}", f"{encoder}{index + 1}")
+    conv("mask_ds_final", f"{encoder}12")
+    for index in range(2):
+        block = f"{MEMORY_ENCODER}fuser.layers.{index}"
+        dw_source = f"{block}.dwconv"
+        set_depthwise(model, f"fuser_{index}_dw", dw_source, state_dict, used)
+        norm(f"fuser_{index}_norm", f"{block}.norm")
+        dense(f"fuser_{index}_pw1", f"{block}.pwconv1")
+        dense(f"fuser_{index}_pw2", f"{block}.pwconv2")
+        gamma = take(state_dict, f"{block}.gamma", used)
+        set_layer(model, f"fuser_{index}_gamma", [gamma])
+
+
+def convert_memory_attention(model, state_dict, used):
+    def dense(name, source):
+        set_dense(model, name, source, state_dict, used)
+
+    def norm(name, source):
+        set_norm(model, name, source, state_dict, used)
+
+    for index in range(4):
+        layer = f"{MEMORY_ATTENTION}layers.{index}"
+        for part in ("q", "k", "v", "out"):
+            self_source = f"{layer}.self_attn.{part}_proj"
+            dense(f"mematt_{index}_self_{part}", self_source)
+            cross = f"{layer}.cross_attn_image.{part}_proj"
+            dense(f"mematt_{index}_cross_{part}", cross)
+        for number in (1, 2, 3):
+            norm(f"mematt_{index}_norm{number}", f"{layer}.norm{number}")
+        dense(f"mematt_{index}_mlp1", f"{layer}.linear1")
+        dense(f"mematt_{index}_mlp2", f"{layer}.linear2")
+    norm("mematt_norm", MEMORY_ATTENTION + "norm")
+
+
+def set_depthwise(model, name, source, state_dict, used):
+    kernel = take(state_dict, f"{source}.weight", used)
+    bias = take(state_dict, f"{source}.bias", used)
+    set_layer(model, name, [np.transpose(kernel, (2, 3, 0, 1)), bias])
 
 
 def convert_attention(dense, name, source):

@@ -50,3 +50,21 @@ class ChannelBias(Layer):
 
     def get_config(self):
         return {**super().get_config(), "channels": self.channels}
+
+
+@keras.saving.register_keras_serializable(package="paz")
+class ChannelScale(Layer):
+    def __init__(self, channels, **kwargs):
+        super().__init__(**kwargs)
+        self.channels = channels
+
+    def build(self, input_shape):
+        shape = (self.channels,)
+        kwargs = dict(name="scale", shape=shape, initializer="ones")
+        self.scale = self.add_weight(**kwargs)
+
+    def call(self, x):
+        return x * self.scale
+
+    def get_config(self):
+        return {**super().get_config(), "channels": self.channels}
