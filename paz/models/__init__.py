@@ -51,3 +51,11 @@ from .foundation.sonic.pretrained import SONIC
 from .feature.xfeat.model import XFeatModel
 from .feature.xfeat.model import XFeat
 from .feature.lightglue.model import LighterGlue
+from .foundation.sam2 import SAM2HieraTiny
+from .foundation.sam2 import SAM2HieraSmall
+from .foundation.sam2 import SAM2HieraBasePlus
+from .foundation.sam2 import SAM2HieraLarge
+from .foundation.sam2 import SAM21HieraTiny
+from .foundation.sam2 import SAM21HieraSmall
+from .foundation.sam2 import SAM21HieraBasePlus
+from .foundation.sam2 import SAM21HieraLarge
