@@ -1,8 +1,7 @@
 """Segment an object with SAM 2.1 from one positive and one negative point.
 
-Converted weights come from a directory produced by
-``paz.models.foundation.sam2.pretrained.convert_checkpoint``; pass it with
-``--weights``. The positive point marks the object, the negative point marks
+Runs out of the box: it downloads the pretrained SAM 2.1 small weights and a
+demo image. The positive point marks the object, the negative point marks
 background; the mask with the highest predicted quality is overlaid.
 """
 import argparse
@@ -26,7 +25,7 @@ def load_image(path):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--weights", required=True)
+    parser.add_argument("--weights", default="pretrained")
     parser.add_argument("--image", default=None)
     parser.add_argument("--positive", type=int, nargs=2, default=(340, 260))
     parser.add_argument("--negative", type=int, nargs=2, default=(50, 40))

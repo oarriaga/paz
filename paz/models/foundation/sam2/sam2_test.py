@@ -1,3 +1,5 @@
+import os
+
 import numpy as np
 import jax
 import jax.numpy as jp
@@ -138,3 +140,12 @@ def test_window_partition_jit_cache_is_stable():
         data = jp.asarray(np.random.RandomState(seed).randn(1, 16, 16, 4))
         partition(data)
     assert partition._cache_size() == 1
+
+
+@pytest.mark.skipif(not os.environ.get("PAZ_SAM2_DOWNLOAD"),
+                    reason="set PAZ_SAM2_DOWNLOAD to fetch hosted weights")
+def test_pretrained_download_and_embed_shape():
+    from paz.models import SAM21HieraTiny
+    bundle = SAM21HieraTiny()
+    state = predict.encode_image(bundle, np.zeros((64, 96, 3), np.uint8))
+    assert np.array(state.features.image_embed).shape == (1, 64, 64, 256)
