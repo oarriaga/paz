@@ -4,6 +4,7 @@ Mirrors microsoft/Florence-2-large ``modeling_florence2.py`` (revision
 21a599d4) restricted to inference: dual-attention stages (window and
 channel attention), learned 2D position embeddings, the temporal cosine
 embedding for a single frame, average-pool token, projection and norm.
+Default parameter values are the DaViT-large architecture.
 """
 from keras import ops
 from keras.layers import Conv2D, Dense, DepthwiseConv2D, Embedding
@@ -13,57 +14,59 @@ from keras.models import Model
 from paz.models.transformers import feedforward
 from paz.models.transformers.attention import masked_attend
 
-NORM_EPSILON = 1e-5
 
-
-def ImageEncoder(config, name="image_encoder"):
-    size = config.image_size
-    image = Input((size, size, 3), name="image")
-    tokens, side = build_stages(image, config)
-    tokens = add_2d_positions(tokens, side, config)
+def ImageEncoder(image_size=112, projection_dim=1024,
+                 stage_dims=(256, 512, 1024, 2048),
+                 stage_depths=(1, 1, 9, 1), stage_heads=(8, 16, 32, 64),
+                 stage_groups=(8, 16, 32, 64), window_size=12,
+                 name="image_encoder"):
+    image = Input((image_size, image_size, 3), name="image")
+    stage_args = (stage_dims, stage_depths, stage_heads, stage_groups)
+    tokens, side = build_stages(image, image_size, *stage_args, window_size)
+    tokens = add_2d_positions(tokens, side)
     tokens = add_temporal_embedding(tokens)
     tokens = concatenate_pooled(tokens)
-    project = Dense(config.projection_dim, use_bias=False,
-                    name="image_projection")
-    tokens = project(tokens)
-    norm = build_norm("image_proj_norm")
-    return Model(image, norm(tokens), name=name)
+    project = Dense(projection_dim, use_bias=False, name="image_projection")
+    tokens = build_norm("image_proj_norm")(project(tokens))
+    return Model(image, tokens, name=name)
 
 
-def build_stages(image, config):
-    x, grid = image, (config.image_size, config.image_size)
-    for stage in range(len(config.stage_dims)):
-        x, grid = embed_patches(x, grid, stage, config)
-        for block in range(config.stage_depths[stage]):
+def build_stages(image, image_size, stage_dims, stage_depths, stage_heads,
+                 stage_groups, window_size):
+    x, grid = image, (image_size, image_size)
+    for stage, dim in enumerate(stage_dims):
+        x, grid = embed_patches(x, grid, stage, dim)
+        for block in range(stage_depths[stage]):
             name = f"blocks_{stage}_{block}"
-            x = spatial_block(x, grid, stage, f"{name}_spatial", config)
-            x = channel_block(x, grid, stage, f"{name}_channel", config)
+            heads, groups = stage_heads[stage], stage_groups[stage]
+            spatial_args = (x, grid, dim, heads, window_size)
+            x = spatial_block(*spatial_args, f"{name}_spatial")
+            x = channel_block(x, grid, dim, groups, f"{name}_channel")
     return x, grid[0]
 
 
-def embed_patches(x, grid, stage, config):
-    dim = config.stage_dims[stage]
+def embed_patches(x, grid, stage, dim):
+    patch_sizes, patch_strides = (7, 3, 3, 3), (4, 2, 2, 2)
+    patch_paddings = (3, 1, 1, 1)
+    prenorms = (False, True, True, True)
     if len(x.shape) == 3:
-        if config.patch_prenorms[stage]:
+        if prenorms[stage]:
             x = build_norm(f"convs_{stage}_norm")(x)
         x = to_grid(x, grid)
-    x = ZeroPadding2D(config.patch_paddings[stage],
-                      name=f"convs_{stage}_pad")(x)
-    conv_args = (dim, config.patch_sizes[stage], config.patch_strides[stage])
+    x = ZeroPadding2D(patch_paddings[stage], name=f"convs_{stage}_pad")(x)
+    conv_args = (dim, patch_sizes[stage], patch_strides[stage])
     x = Conv2D(*conv_args, "valid", name=f"convs_{stage}_proj")(x)
     grid = (x.shape[1], x.shape[2])
     x = to_tokens(x)
-    if not config.patch_prenorms[stage]:
+    if not prenorms[stage]:
         x = build_norm(f"convs_{stage}_norm")(x)
     return x, grid
 
 
-def spatial_block(x, grid, stage, name, config):
-    dim = config.stage_dims[stage]
-    heads = config.stage_heads[stage]
+def spatial_block(x, grid, dim, num_heads, window, name):
     x = add_depthwise(x, grid, f"{name}_conv1")
     y = build_norm(f"{name}_window_attention_norm")(x)
-    window_args = (y, grid, dim, heads, config.window_size)
+    window_args = (y, grid, dim, num_heads, window)
     x = x + attend_windows(*window_args, f"{name}_window_attention")
     x = add_depthwise(x, grid, f"{name}_conv2")
     y = build_norm(f"{name}_ffn_norm")(x)
@@ -71,9 +74,7 @@ def spatial_block(x, grid, stage, name, config):
     return x + feedforward.gelu(*ffn_args)
 
 
-def channel_block(x, grid, stage, name, config):
-    dim = config.stage_dims[stage]
-    groups = config.stage_groups[stage]
+def channel_block(x, grid, dim, groups, name):
     num_tokens = grid[0] * grid[1]
     x = add_depthwise(x, grid, f"{name}_conv1")
     y = build_norm(f"{name}_attention_norm")(x)
@@ -132,20 +133,18 @@ def add_depthwise(x, grid, name):
     return x + to_tokens(y)
 
 
-def add_2d_positions(x, side, config):
+def add_2d_positions(x, side, num_position_rows=50):
     dim = x.shape[-1]
     half = dim // 2
-    rows = Embedding(config.num_position_rows, half,
-                     name="image_row_embedding")
-    columns = Embedding(config.num_position_rows, dim - half,
-                        name="image_column_embedding")
+    rows = Embedding(num_position_rows, half, name="image_row_embedding")
+    column_name = "image_column_embedding"
+    columns = Embedding(num_position_rows, dim - half, name=column_name)
     column_fn = lambda t: ops.tile(ops.arange(side, dtype="int32"), [side])
     row_fn = lambda t: ops.repeat(ops.arange(side, dtype="int32"), side)
     column_indices = build_token_indices(x, side, column_fn, "image_columns")
     row_indices = build_token_indices(x, side, row_fn, "image_rows")
-    positions = ops.concatenate([columns(column_indices),
-                                 rows(row_indices)], axis=-1)
-    return x + positions
+    embedded = (columns(column_indices), rows(row_indices))
+    return x + ops.concatenate(embedded, axis=-1)
 
 
 def build_token_indices(x, side, fn, name):
@@ -171,4 +170,4 @@ def to_tokens(x):
 
 
 def build_norm(name):
-    return LayerNormalization(epsilon=NORM_EPSILON, name=name)
+    return LayerNormalization(epsilon=1e-5, name=name)

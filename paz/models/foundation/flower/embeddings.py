@@ -4,18 +4,14 @@ from keras.layers import Dense
 from paz.models.transformers.embeddings import timestep
 
 
-def embed_flow_time(times, config):
-    args = (times, config.sinusoidal_dim, config.flow_time_max_period,
-            config.flow_time_frequency_scale)
-    features = timestep.sinusoidal(*args)
-    return embed_features(features, config.hidden_dim, "flow_time_embedder")
+def embed_flow_time(times, hidden_dim):
+    features = timestep.sinusoidal(times, 256, 10_000.0, 1000.0)
+    return embed_features(features, hidden_dim, "flow_time_embedder")
 
 
-def embed_frequency(frequencies, config):
-    args = (frequencies, config.sinusoidal_dim, config.frequency_max_period,
-            1.0)
-    features = timestep.sinusoidal(*args)
-    return embed_features(features, config.hidden_dim, "frequency_embedder")
+def embed_frequency(frequencies, hidden_dim):
+    features = timestep.sinusoidal(frequencies, 256, 1000.0, 1.0)
+    return embed_features(features, hidden_dim, "frequency_embedder")
 
 
 def embed_features(features, hidden_dim, name):

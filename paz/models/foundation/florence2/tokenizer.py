@@ -10,14 +10,10 @@ from collections import namedtuple
 
 from paz.models.transformers.tokenizers import build_character_to_byte
 
-BOS_TOKEN_ID = 0
-EOS_TOKEN_ID = 2
-PAD_TOKEN_ID = 1
 FLOW_TOKEN_ID = 51289
-SPLIT_PATTERN = re.compile(
-    r"'s|'t|'re|'ve|'m|'ll|'d| ?[^\W\d_]+| ?\d+"
-    r"| ?(?:[^\s\w]|_)+|\s+(?!\S)|\s+"
-)
+GPT2_SPLITS = (r"'s|'t|'re|'ve|'m|'ll|'d| ?[^\W\d_]+| ?\d+"
+               r"| ?(?:[^\s\w]|_)+|\s+(?!\S)|\s+")
+SPLIT_PATTERN = re.compile(GPT2_SPLITS)
 Tokenizer = namedtuple("Tokenizer", "vocabulary merge_ranks byte_to_char")
 
 
@@ -43,11 +39,12 @@ def build_byte_to_char():
 
 
 def encode(tokenizer, text, max_length=77):
-    token_ids = [BOS_TOKEN_ID]
+    start_of_text, end_of_text = 0, 2
+    token_ids = [start_of_text]
     for piece in SPLIT_PATTERN.findall(text):
         token_ids.extend(encode_piece(tokenizer, piece))
     token_ids = token_ids[:max_length - 1]
-    token_ids.append(EOS_TOKEN_ID)
+    token_ids.append(end_of_text)
     return token_ids
 
 
@@ -85,9 +82,8 @@ def find_best_pair(parts, merge_ranks):
 def merge_pair(parts, pair):
     merged, index = [], 0
     while index < len(parts):
-        is_pair_start = (
-            index < len(parts) - 1
-            and (parts[index], parts[index + 1]) == pair)
+        has_next = index < len(parts) - 1
+        is_pair_start = has_next and (parts[index], parts[index + 1]) == pair
         if is_pair_start:
             merged.append(parts[index] + parts[index + 1])
             index = index + 2

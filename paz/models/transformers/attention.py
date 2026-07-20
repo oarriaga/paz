@@ -5,6 +5,8 @@ from keras import ops
 from keras.layers import Dense, Dropout, EinsumDense, Reshape
 from keras.layers import LayerNormalization
 
+from paz.layers import RMSNormalization
+
 from paz.models.transformers import cache as kv_cache
 
 
@@ -214,6 +216,15 @@ def compute_attention(query, key, value):
     return ops.matmul(probabilities, value)
 
 
+def compute_masked_attention(query, key, value, mask):
+    head_dim = query.shape[-1]
+    scale = head_dim ** -0.5
+    scores = ops.matmul(query, ops.transpose(key, (0, 1, 3, 2))) * scale
+    scores = mask_scores(scores, mask)
+    probabilities = ops.softmax(scores, axis=-1)
+    return ops.matmul(probabilities, value)
+
+
 def merge_attention_heads(context):
     transposed = ops.transpose(context, (0, 2, 1, 3))
     num_heads = transposed.shape[2]
@@ -229,3 +240,9 @@ def normalize_query_key(query, key, epsilon, name):
 
 def head_norm(values, epsilon, name):
     return LayerNormalization(axis=-1, epsilon=epsilon, name=name)(values)
+
+
+def rms_normalize_query_key(query, key, name):
+    query = RMSNormalization(name=f"{name}_query_norm")(query)
+    key = RMSNormalization(name=f"{name}_key_norm")(key)
+    return query, key

@@ -18,22 +18,22 @@ from pathlib import Path
 
 import numpy as np
 
-from paz.models.foundation.florence2.configuration import CONFIGS
 from paz.models.foundation.florence2.model import build
 
+STAGE_HEADS = (8, 16, 32, 64)
+ENCODER_HEADS = 16
 ATTENTION_ROLES = {"q": "query", "k": "key", "v": "value"}
 SKIPPED = ["vlm.language_shared.weight", "vlm.language_final_logits_bias",
            "vlm.visual_temporal_embed.pos_idx_to_embed"]
 
 
-def convert(checkpoint_path, output_directory, model_name):
+def convert(checkpoint_path, output_directory):
     from safetensors.numpy import load_file
     state = load_file(checkpoint_path)
     source = {k: v for k, v in state.items() if k.startswith("vlm.")}
     verify_skipped(source)
-    config = CONFIGS[model_name]
-    model = build(config)
-    keymap = build_keymap(source, config)
+    model = build()
+    keymap = build_keymap(source)
     assign(model, source, keymap)
     output_directory = Path(output_directory)
     output_directory.mkdir(parents=True, exist_ok=True)
@@ -53,21 +53,21 @@ def verify_skipped(source):
         raise ValueError("temporal embedding row zero is not [0, 1, ...]")
 
 
-def build_keymap(source, config):
+def build_keymap(source):
     keymap = {}
     for key in sorted(source):
         if key in SKIPPED:
             continue
-        keymap[key] = translate(key, source[key], config)
+        keymap[key] = translate(key, source[key])
     return keymap
 
 
-def translate(key, tensor, config):
-    if key.startswith("vlm.vision_tower."):
-        return translate_vision(key[len("vlm.vision_tower."):], tensor,
-                                config)
+def translate(key, tensor):
+    vision_prefix = "vlm.vision_tower."
+    if key.startswith(vision_prefix):
+        return translate_vision(key[len(vision_prefix):], tensor)
     if key.startswith("vlm.language_encoder.layers."):
-        return translate_encoder_layer(key, tensor, config)
+        return translate_encoder_layer(key, tensor)
     return translate_global(key, tensor)
 
 
@@ -96,15 +96,14 @@ def translate_norm(key, layer, tensor):
     return [(f"{layer}/{role}", tensor)]
 
 
-def translate_encoder_layer(key, tensor, config):
+def translate_encoder_layer(key, tensor):
     pattern = r"vlm\.language_encoder\.layers\.(\d+)\.(.+)"
     layer, rest = re.match(pattern, key).groups()
     name = f"encoder_layer_{layer}"
-    num_heads = config["num_heads"]
     if rest.startswith("self_attn."):
-        return translate_attention(rest[len("self_attn."):],
-                                   f"{name}_self_attention", tensor,
-                                   num_heads)
+        args = (rest[len("self_attn."):], f"{name}_self_attention",
+                tensor, ENCODER_HEADS)
+        return translate_attention(*args)
     if rest.startswith("self_attn_layer_norm."):
         return translate_norm(rest, f"{name}_self_attention_norm", tensor)
     if rest.startswith("final_layer_norm."):
@@ -134,14 +133,14 @@ def translate_attention(rest, name, tensor, num_heads):
     return [(f"{name}_{head}/bias", tensor.reshape(heads_shape))]
 
 
-def translate_vision(key, tensor, config):
+def translate_vision(key, tensor):
     conv_match = re.match(r"convs\.(\d+)\.(proj|norm)\.(weight|bias)", key)
     if conv_match:
         return translate_stem(conv_match, tensor)
     pattern = (r"blocks\.(\d+)\.(\d+)\.(spatial|channel)_block\.(.+)")
     stage, block, kind, rest = re.match(pattern, key).groups()
     name = f"blocks_{stage}_{block}_{kind}"
-    num_heads = config["stage_heads"][int(stage)]
+    num_heads = STAGE_HEADS[int(stage)]
     if rest.startswith("conv1.fn.dw.") or rest.startswith("conv2.fn.dw."):
         conv, role = rest.split(".fn.dw.")
         value = tensor.transpose(2, 3, 0, 1) if role == "weight" else tensor
@@ -167,8 +166,8 @@ def translate_stem(match, tensor):
 def translate_vision_ffn(rest, name, tensor):
     if rest.startswith("ffn.norm."):
         return translate_norm(rest, f"{name}_ffn_norm", tensor)
-    dense, role = re.match(r"ffn\.fn\.net\.(fc\d)\.(weight|bias)",
-                           rest).groups()
+    pattern = r"ffn\.fn\.net\.(fc\d)\.(weight|bias)"
+    dense, role = re.match(pattern, rest).groups()
     value = tensor.T if role == "weight" else tensor
     role = "kernel" if role == "weight" else "bias"
     return [(f"{name}_ffn_{dense}/{role}", value)]
@@ -178,8 +177,8 @@ def translate_window_attention(rest, name, tensor, num_heads):
     name = f"{name}_window_attention"
     if rest.startswith("window_attn.norm."):
         return translate_norm(rest, f"{name}_norm", tensor)
-    part, role = re.match(r"window_attn\.fn\.(qkv|proj)\.(weight|bias)",
-                          rest).groups()
+    pattern = r"window_attn\.fn\.(qkv|proj)\.(weight|bias)"
+    part, role = re.match(pattern, rest).groups()
     if part == "proj":
         dim = tensor.shape[0]
         if role == "weight":
@@ -199,8 +198,8 @@ def split_fused_qkv(tensor, role, name, num_heads):
             value = part.T.reshape(dim, *heads_shape)
             entries.append((f"{name}_{head}/kernel", value))
         else:
-            entries.append((f"{name}_{head}/bias",
-                            part.reshape(heads_shape)))
+            entry = (f"{name}_{head}/bias", part.reshape(heads_shape))
+            entries.append(entry)
     return entries
 
 
@@ -208,8 +207,8 @@ def translate_channel_attention(rest, name, tensor):
     name = f"{name}_attention"
     if rest.startswith("channel_attn.norm."):
         return translate_norm(rest, f"{name}_norm", tensor)
-    part, role = re.match(r"channel_attn\.fn\.(qkv|proj)\.(weight|bias)",
-                          rest).groups()
+    pattern = r"channel_attn\.fn\.(qkv|proj)\.(weight|bias)"
+    part, role = re.match(pattern, rest).groups()
     value = tensor.T if role == "weight" else tensor
     role = "kernel" if role == "weight" else "bias"
     return [(f"{name}_{part}/{role}", value)]
@@ -224,8 +223,9 @@ def assign(model, source, keymap):
                 raise KeyError(f"{key} maps to unknown variable {path}")
             variable = variables[path]
             if tuple(variable.shape) != value.shape:
-                raise ValueError(f"{key}: shape {value.shape} does not "
-                                 f"match {path} {tuple(variable.shape)}")
+                message = (f"{key}: shape {value.shape} does not "
+                           f"match {path} {tuple(variable.shape)}")
+                raise ValueError(message)
             variable.assign(value)
             assigned.add(path)
     missing = sorted(set(variables) - assigned)
@@ -234,9 +234,12 @@ def assign(model, source, keymap):
 
 
 def write_report(keymap, path):
-    lines = [f"{key} -> {', '.join(p for p, _ in entries)}"
-             for key, entries in sorted(keymap.items())]
-    lines += [f"{key} -> skipped (see module docstring)" for key in SKIPPED]
+    lines = []
+    for key, entries in sorted(keymap.items()):
+        paths = ", ".join(entry_path for entry_path, _ in entries)
+        lines.append(f"{key} -> {paths}")
+    for key in SKIPPED:
+        lines.append(f"{key} -> skipped (see module docstring)")
     path.write_text("\n".join(lines) + "\n")
 
 
@@ -246,7 +249,6 @@ if __name__ == "__main__":
     add = parser.add_argument
     add("checkpoint", help="path to FLOWER model.safetensors")
     add("output", help="directory for florence2.weights.h5 and keymap")
-    add("--model_name", default="florence2_large_flower")
     args = parser.parse_args()
-    convert(args.checkpoint, args.output, args.model_name)
+    convert(args.checkpoint, args.output)
     print(f"saved weights and keymap to {args.output}")

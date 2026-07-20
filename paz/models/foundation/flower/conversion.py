@@ -22,8 +22,11 @@ from pathlib import Path
 
 import numpy as np
 
-from paz.models.foundation.flower.configuration import to_config
 from paz.models.foundation.flower.model import build
+
+NUM_LAYERS = 18
+HIDDEN_DIM = 1024
+ACTION_SPACE = "eef_delta"
 
 SKIPPED_PREFIXES = {
     "action_space_embedder.":
@@ -37,13 +40,12 @@ SKIPPED_PREFIXES = {
 }
 
 
-def convert(checkpoint_path, output_dir, model_name):
+def convert(checkpoint_path, output_dir):
     from safetensors import safe_open
     checkpoint = safe_open(str(checkpoint_path), framework="numpy")
-    config = to_config(model_name)
-    model = build(config)
-    used = transfer(checkpoint, model, config)
-    rope_report = report_rope_tables(checkpoint, config)
+    model = build()
+    used = transfer(checkpoint, model)
+    rope_report = report_rope_tables(checkpoint)
     skipped = audit_keys(checkpoint, used)
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -53,7 +55,7 @@ def convert(checkpoint_path, output_dir, model_name):
     return model
 
 
-def transfer(checkpoint, model, config):
+def transfer(checkpoint, model):
     used = {}
 
     def tensor(key, target):
@@ -77,24 +79,23 @@ def transfer(checkpoint, model, config):
     set_dense("frequency_embedder_dense_2", "frequency_embedder.mlp.2")
     set_norm("context_norm", "cond_norm")
     set_dense("context_projection", "cond_linear")
-    space = config.action_space
-    set_dense("action_encoder_fc1", f"action_encoders.{space}.fc1")
-    set_dense("action_encoder_fc2", f"action_encoders.{space}.fc2")
-    set_dense("action_decoder", f"action_decoders.{space}")
-    transfer_shared_adaln(tensor, model, config)
-    for block in range(config.num_layers):
+    set_dense("action_encoder_fc1", f"action_encoders.{ACTION_SPACE}.fc1")
+    set_dense("action_encoder_fc2", f"action_encoders.{ACTION_SPACE}.fc2")
+    set_dense("action_decoder", f"action_decoders.{ACTION_SPACE}")
+    transfer_shared_adaln(tensor, model)
+    for block in range(NUM_LAYERS):
         transfer_block(tensor, set_dense, set_norm, model, block)
     return used
 
 
-def transfer_shared_adaln(tensor, model, config):
-    key = f"adaln.{config.action_space}.modCX.1.weight"
-    weight = tensor(key, "shared_adaln (first 6 of 9 chunks; chunks 6-8 "
-                         "are dead in FlowBlock.forward)")
-    expected_rows = config.num_shared_signals * config.hidden_dim
-    if weight.shape[0] != expected_rows:
+def transfer_shared_adaln(tensor, model):
+    key = f"adaln.{ACTION_SPACE}.modCX.1.weight"
+    note = ("shared_adaln (first 6 of 9 chunks; chunks 6-8 are dead "
+            "in FlowBlock.forward)")
+    weight = tensor(key, note)
+    if weight.shape[0] != 9 * HIDDEN_DIM:
         raise ValueError(f"unexpected shared adaln shape {weight.shape}")
-    num_used_rows = 6 * config.hidden_dim
+    num_used_rows = 6 * HIDDEN_DIM
     model.get_layer("shared_adaln").set_weights([weight[:num_used_rows].T])
 
 
@@ -121,12 +122,8 @@ def transfer_block(tensor, set_dense, set_norm, model, block):
 
 def transfer_self_attention(tensor, set_norm, model, source, target):
     name = f"{target}_self_attention"
-    fused = tensor(f"{source}.self_attn.qkv.weight",
-                   f"{name}_query/key/value (fused rows split in thirds)")
-    query, key, value = np.split(fused, 3, axis=0)
-    model.get_layer(f"{name}_query").set_weights([query.T])
-    model.get_layer(f"{name}_key").set_weights([key.T])
-    model.get_layer(f"{name}_value").set_weights([value.T])
+    fused = tensor(f"{source}.self_attn.qkv.weight", f"{name}_qkv")
+    model.get_layer(f"{name}_qkv").set_weights([fused.T])
     set_norm(f"{name}_query_norm", f"{source}.self_attn.q_norm")
     set_norm(f"{name}_key_norm", f"{source}.self_attn.k_norm")
     output = tensor(f"{source}.self_attn.proj.weight", f"{name}_output")
@@ -136,19 +133,21 @@ def transfer_self_attention(tensor, set_norm, model, source, target):
     model.get_layer(f"{name}_rotary").set_weights([cosine, sine])
 
 
-def report_rope_tables(checkpoint, config):
+def report_rope_tables(checkpoint):
     lines = []
-    for block in range(config.num_layers):
+    for block in range(NUM_LAYERS):
         cosine = checkpoint.get_tensor(f"dit.{block}.self_attn.cos")
         sine = checkpoint.get_tensor(f"dit.{block}.self_attn.sin")
         errors = {}
-        for wavelength in (config.rope_wavelength, 1000.0):
+        for wavelength in (32.0, 1000.0):
             reference = build_rope_tables(wavelength, cosine.shape)
-            errors[wavelength] = max(np.abs(cosine - reference[0]).max(),
-                                     np.abs(sine - reference[1]).max())
+            cosine_error = np.abs(cosine - reference[0]).max()
+            sine_error = np.abs(sine - reference[1]).max()
+            errors[wavelength] = max(cosine_error, sine_error)
         wavelength = min(errors, key=errors.get)
-        lines.append(f"dit.{block}.self_attn.cos/sin: closest wavelength "
-                     f"{wavelength:g} (max err {errors[wavelength]:.2e})")
+        line = (f"dit.{block}.self_attn.cos/sin: closest wavelength "
+                f"{wavelength:g} (max err {errors[wavelength]:.2e})")
+        lines.append(line)
         if errors[wavelength] > 2e-3:
             raise ValueError(f"unrecognized RoPE table in block {block}")
     return lines
@@ -206,11 +205,10 @@ if __name__ == "__main__":
     add = parser.add_argument
     add("--checkpoint", required=True, help="path to model.safetensors")
     add("--output_dir", required=True, help="directory for weights + report")
-    add("--model_name", default="flower_libero_object")
     add("--tokenizer", default=None,
         help="Florence-2 tokenizer.json to copy into the artifact dir")
     args = parser.parse_args()
-    convert(args.checkpoint, args.output_dir, args.model_name)
+    convert(args.checkpoint, args.output_dir)
     if args.tokenizer is not None:
         import shutil
         shutil.copy(args.tokenizer, Path(args.output_dir) / "tokenizer.json")

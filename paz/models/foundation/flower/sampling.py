@@ -8,8 +8,8 @@ import jax.numpy as jp
 from jax import random
 
 
-def sample_noise(key, batch_size, config):
-    shape = (batch_size, config.num_actions, config.action_dim)
+def sample_noise(key, batch_size, num_actions=10, action_dim=7):
+    shape = (batch_size, num_actions, action_dim)
     return random.normal(key, shape, "float32")
 
 

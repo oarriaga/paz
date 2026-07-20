@@ -11,18 +11,15 @@ from pathlib import Path
 
 from keras.utils import get_file
 
-from paz.models.foundation.florence2.configuration import CONFIGS
 from paz.models.foundation.florence2 import model as florence2
 from paz.models.foundation.florence2 import tokenizer as tokenizers
-from paz.models.foundation.flower import configuration
 from paz.models.foundation.flower import model as flow_dit
 from paz.models.foundation.gemma4.pretrained import assemble_weights_file
 
 ALTAMIRA = "https://github.com/oarriaga/altamira-data/releases/download"
 FLOWER_WEIGHTS_URL = ALTAMIRA + "/v0.29/"
 FLOWER_CACHE = "paz/models/flower"
-FLORENCE2_VARIANT = "florence2_large_flower"
-FLOWERModels = namedtuple("FLOWER", "config encoder dit tokenizer")
+FLOWERModels = namedtuple("FLOWER", "encoder dit tokenizer")
 
 
 def FLOWERLiberoObject(weights="pretrained", models_path=None):
@@ -31,15 +28,14 @@ def FLOWERLiberoObject(weights="pretrained", models_path=None):
 
 def FLOWER(model_name="flower_libero_object", weights="pretrained",
            models_path=None):
-    config = configuration.to_config(model_name)
-    encoder = florence2.build(CONFIGS[FLORENCE2_VARIANT])
-    dit = flow_dit.build(config)
+    encoder = florence2.build()
+    dit = flow_dit.build()
     model_dir = resolve_dir(model_name, models_path)
     tokenizer = tokenizers.load_tokenizer(model_dir / "tokenizer.json")
     if weights is not None:
         encoder.load_weights(str(model_dir / "florence2.weights.h5"))
         dit.load_weights(str(model_dir / "flower_dit.weights.h5"))
-    return FLOWERModels(config, encoder, dit, tokenizer)
+    return FLOWERModels(encoder, dit, tokenizer)
 
 
 def resolve_dir(model_name, models_path):

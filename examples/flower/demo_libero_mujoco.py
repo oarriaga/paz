@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 import cv2
+import jax
 import numpy as np
 
 from paz.applications import PredictFlowerActions
@@ -73,10 +74,10 @@ if __name__ == "__main__":
     print(f"task: {task.name}")
     print(f"instruction: {instruction}")
 
-    policy = PredictFlowerActions(
-        models_path=args.checkpoint,
-        num_flow_steps=args.num_flow_steps,
-        seed=args.seed)
+    kwargs = {"models_path": args.checkpoint,
+              "num_flow_steps": args.num_flow_steps}
+    policy = PredictFlowerActions(**kwargs)
+    key = jax.random.PRNGKey(args.seed)
 
     env = build_environment(task, args.image_size)
     env.seed(args.seed)
@@ -89,14 +90,14 @@ if __name__ == "__main__":
     while num_steps < args.max_steps and not success:
         static_image = obs["agentview_image"]
         wrist_image = obs["robot0_eye_in_hand_image"]
-        action_chunk = policy(static_image, wrist_image, instruction)
-        for action in action_chunk[:args.replan_interval]:
-            obs, reward, done, info = env.step(np.asarray(action))
+        key, noise_key = jax.random.split(key)
+        chunk = policy(noise_key, static_image, wrist_image, instruction)
+        for action in np.asarray(chunk)[:args.replan_interval]:
+            obs, reward, done, info = env.step(action)
             num_steps = num_steps + 1
             success = success or bool(done)
-            frame = annotate_frame(obs["agentview_image"], instruction,
-                                   success)
-            frames.append(frame)
+            frame_args = (obs["agentview_image"], instruction, success)
+            frames.append(annotate_frame(*frame_args))
             if success or num_steps >= args.max_steps:
                 break
 

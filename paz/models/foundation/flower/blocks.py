@@ -11,80 +11,75 @@ from keras.layers import Dense, Reshape
 
 from paz.layers import RMSNormalization
 from paz.models.transformers import conditioning, feedforward, mask
-from paz.models.transformers.attention import apply_attention
-from paz.models.transformers.attention import compute_scores
+from paz.models.transformers.attention import compute_masked_attention
 from paz.models.transformers.attention import expand_mask_for_heads
-from paz.models.transformers.attention import mask_scores, merge_heads
-from paz.models.transformers.attention import transpose_to_heads
+from paz.models.transformers.attention import merge_attention_heads
+from paz.models.transformers.attention import project_query_key_value
+from paz.models.transformers.attention import rms_normalize_query_key
+from paz.models.transformers.attention import split_query_key_value
 
 
-def flow_block(x, condition, shared_signals, context, context_mask, config,
-               name):
-    signals = compute_block_signals(condition, shared_signals, config, name)
+def flow_block(x, condition, shared_signals, context, context_mask,
+               num_heads, head_dim, mlp_dim, adaln_dim, max_positions,
+               wavelength, name):
+    hidden_dim = num_heads * head_dim
+    signal_args = (condition, shared_signals, adaln_dim, hidden_dim, name)
+    signals = compute_block_signals(*signal_args)
     shift_attn, scale_attn, gate_attn, shift_mlp, scale_mlp, gate_mlp = signals
     hidden = RMSNormalization(name=f"{name}_norm_1")(x)
     hidden = conditioning.modulate(hidden, shift_attn, scale_attn)
-    hidden = attend_self(hidden, config, f"{name}_self_attention")
+    self_args = (hidden, num_heads, head_dim, max_positions, wavelength)
+    hidden = attend_self(*self_args, f"{name}_self_attention")
     x = x + conditioning.gate(hidden, gate_attn)
     hidden = RMSNormalization(name=f"{name}_norm_2")(x)
-    cross_args = (hidden, context, context_mask, config)
+    cross_args = (hidden, context, context_mask, num_heads, head_dim)
     x = x + attend_context(*cross_args, f"{name}_cross_attention")
     hidden = RMSNormalization(name=f"{name}_norm_3")(x)
     hidden = conditioning.modulate(hidden, shift_mlp, scale_mlp)
     names = (f"{name}_mlp_gate", f"{name}_mlp_up", f"{name}_mlp_down")
-    hidden = feedforward.swiglu(hidden, config.mlp_dim, config.hidden_dim,
-                                *names)
+    hidden = feedforward.swiglu(hidden, mlp_dim, hidden_dim, *names)
     return x + conditioning.gate(hidden, gate_mlp)
 
 
-def compute_block_signals(condition, shared_signals, config, name):
+def compute_block_signals(condition, shared_signals, adaln_dim, hidden_dim,
+                          name):
     hidden = ops.silu(condition)
-    hidden = Dense(config.adaln_dim, name=f"{name}_adaln_dense_1")(hidden)
-    up_project = Dense(6 * config.hidden_dim, name=f"{name}_adaln_dense_2")
+    hidden = Dense(adaln_dim, name=f"{name}_adaln_dense_1")(hidden)
+    up_project = Dense(6 * hidden_dim, name=f"{name}_adaln_dense_2")
     signals = ops.split(up_project(hidden), 6, axis=-1)
     return [block + shared for block, shared in zip(signals, shared_signals)]
 
 
-def attend_self(x, config, name):
-    query = project_heads(x, config, f"{name}_query")
-    key = project_heads(x, config, f"{name}_key")
-    value = project_heads(x, config, f"{name}_value")
-    query = RMSNormalization(name=f"{name}_query_norm")(query)
-    key = RMSNormalization(name=f"{name}_key_norm")(key)
-    rotary_args = (config.rope_max_positions, config.rope_wavelength)
-    rotate = RotaryTable(*rotary_args, name=f"{name}_rotary")
+def attend_self(x, num_heads, head_dim, max_positions, wavelength, name):
+    hidden_dim = num_heads * head_dim
+    fused = project_query_key_value(x, hidden_dim, False, name)
+    query, key, value = split_query_key_value(fused, num_heads, head_dim)
+    query, key = rms_normalize_query_key(query, key, name)
+    rotate = RotaryTable(max_positions, wavelength, name=f"{name}_rotary")
     query, key = rotate(query), rotate(key)
     causal_mask = build_causal_mask(x)
-    return attend_heads(query, key, value, causal_mask, config, name)
+    output = compute_masked_attention(query, key, value, causal_mask)
+    output = merge_attention_heads(output)
+    return Dense(hidden_dim, use_bias=False, name=f"{name}_output")(output)
 
 
-def attend_context(x, context, context_mask, config, name):
-    query = project_heads(x, config, f"{name}_query")
-    key = project_heads(context, config, f"{name}_key")
-    value = project_heads(context, config, f"{name}_value")
-    query = RMSNormalization(name=f"{name}_query_norm")(query)
-    key = RMSNormalization(name=f"{name}_key_norm")(key)
-    context_mask = expand_mask_for_heads(context_mask)
-    return attend_heads(query, key, value, context_mask, config, name)
+def attend_context(x, context, context_mask, num_heads, head_dim, name):
+    query = project_heads(x, num_heads, head_dim, f"{name}_query")
+    key = project_heads(context, num_heads, head_dim, f"{name}_key")
+    value = project_heads(context, num_heads, head_dim, f"{name}_value")
+    query, key = rms_normalize_query_key(query, key, name)
+    attention_mask = expand_mask_for_heads(context_mask)
+    output = compute_masked_attention(query, key, value, attention_mask)
+    output = merge_attention_heads(output)
+    hidden_dim = num_heads * head_dim
+    return Dense(hidden_dim, use_bias=False, name=f"{name}_output")(output)
 
 
-def attend_heads(query, key, value, attention_mask, config, name):
-    query = transpose_to_heads(query)
-    key = transpose_to_heads(key)
-    value = transpose_to_heads(value)
-    scores = compute_scores(query, key, config.head_dim)
-    scores = mask_scores(scores, attention_mask)
-    output = merge_heads(apply_attention(scores, value, 0.0, name))
-    flat_shape = (-1, config.num_heads * config.head_dim)
-    output = Reshape(flat_shape, name=f"{name}_merge_heads")(output)
-    return Dense(config.hidden_dim, use_bias=False,
-                 name=f"{name}_output")(output)
-
-
-def project_heads(x, config, name):
-    hidden = Dense(config.hidden_dim, use_bias=False, name=name)(x)
-    heads_shape = (-1, config.num_heads, config.head_dim)
-    return Reshape(heads_shape, name=f"{name}_split_heads")(hidden)
+def project_heads(x, num_heads, head_dim, name):
+    hidden = Dense(num_heads * head_dim, use_bias=False, name=name)(x)
+    heads_shape = (-1, num_heads, head_dim)
+    heads = Reshape(heads_shape, name=f"{name}_split_heads")(hidden)
+    return ops.transpose(heads, (0, 2, 1, 3))
 
 
 def build_causal_mask(x):
@@ -100,7 +95,8 @@ class RotaryTable(keras.layers.Layer):
     The FLOWER checkpoint carries the tables as buffers and their values do
     not all match the configured wavelength (blocks inherited from an
     earlier pretraining stage use a different one), so the tables are
-    weights loaded from the checkpoint rather than recomputed.
+    weights loaded from the checkpoint rather than recomputed. Inputs are
+    head-major: (batch, heads, tokens, head_dim).
     """
 
     def __init__(self, max_positions, wavelength, **kwargs):
@@ -137,8 +133,8 @@ class RotaryTable(keras.layers.Layer):
         return input_shape
 
     def call(self, x):
-        num_positions = x.shape[1]
-        table_shape = (1, num_positions, 1, -1)
+        num_positions = x.shape[2]
+        table_shape = (1, 1, num_positions, -1)
         cosine = ops.reshape(self.cosine[:num_positions], table_shape)
         sine = ops.reshape(self.sine[:num_positions], table_shape)
         first, second = ops.split(x, 2, axis=-1)

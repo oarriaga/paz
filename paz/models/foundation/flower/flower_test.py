@@ -6,36 +6,32 @@ import numpy as np
 import pytest
 
 from paz.models.foundation.flower import losses, sampling
-from paz.models.foundation.flower.configuration import FlowerArgs, to_config
 from paz.models.foundation.flower.model import build
 
-TINY = FlowerArgs(
-    context_dim=16, hidden_dim=32, num_layers=2, num_heads=4, head_dim=8,
-    mlp_dim=24, adaln_dim=8, num_shared_signals=9, action_dim=3,
-    num_actions=5, action_space="eef_delta", rope_wavelength=32.0,
-    rope_max_positions=20, sinusoidal_dim=8, flow_time_max_period=10_000.0,
-    flow_time_frequency_scale=1000.0, frequency_max_period=1000.0,
-    control_frequency=3.0, num_sampling_steps=4)
+TINY = {"context_dim": 16, "hidden_dim": 32, "num_layers": 2,
+        "num_heads": 4, "head_dim": 8, "mlp_dim": 24,
+        "adaln_dim": 8, "action_dim": 3, "num_actions": 5,
+        "rope_max_positions": 20}
 
 
 def build_tiny_inputs(seed=0):
     rng = np.random.default_rng(seed)
-    context = rng.normal(size=(2, 7, TINY.context_dim)).astype("float32")
+    context = rng.normal(size=(2, 7, TINY["context_dim"])).astype("float32")
     context_mask = np.ones((2, 7), "float32")
-    shape = (2, TINY.num_actions, TINY.action_dim)
+    shape = (2, TINY["num_actions"], TINY["action_dim"])
     actions = rng.normal(size=shape).astype("float32")
     flow_time = np.full((2,), 0.5, "float32")
     return [context, context_mask, actions, flow_time]
 
 
 def test_velocity_shape():
-    model = build(TINY)
+    model = build(**TINY)
     velocity = model(build_tiny_inputs())
-    assert velocity.shape == (2, TINY.num_actions, TINY.action_dim)
+    assert velocity.shape == (2, TINY["num_actions"], TINY["action_dim"])
 
 
 def test_deterministic_outputs():
-    model = build(TINY)
+    model = build(**TINY)
     inputs = build_tiny_inputs()
     first = np.asarray(model(inputs))
     second = np.asarray(model(inputs))
@@ -43,7 +39,7 @@ def test_deterministic_outputs():
 
 
 def test_causal_self_attention():
-    model = build(TINY)
+    model = build(**TINY)
     inputs = build_tiny_inputs()
     reference = np.asarray(model(inputs))
     perturbed = [array.copy() for array in inputs]
@@ -90,7 +86,7 @@ def test_rectified_flow_loss_masks_positions():
 
 def test_euler_sampler_integrates_constant_velocity():
     rng = np.random.default_rng(4)
-    context = rng.normal(size=(1, 7, TINY.context_dim)).astype("float32")
+    context = rng.normal(size=(1, 7, TINY["context_dim"])).astype("float32")
     noise = rng.normal(size=(1, 5, 3)).astype("float32")
 
     def constant_velocity(inputs, training=False):
@@ -102,17 +98,19 @@ def test_euler_sampler_integrates_constant_velocity():
 
 
 def missing_weight_variables():
-    return not (os.environ.get("FLOWER_WEIGHTS_TEST") == "1"
-                and os.environ.get("FLOWER_WEIGHTS")
-                and os.environ.get("FLOWER_FIXTURES"))
+    enabled = os.environ.get("FLOWER_WEIGHTS_TEST") == "1"
+    weights = os.environ.get("FLOWER_WEIGHTS")
+    fixtures = os.environ.get("FLOWER_FIXTURES")
+    return not (enabled and weights and fixtures)
 
 
-@pytest.mark.skipif(missing_weight_variables(),
-                    reason="set FLOWER_WEIGHTS_TEST=1, FLOWER_WEIGHTS and "
-                           "FLOWER_FIXTURES to run checkpoint parity")
+SKIP_REASON = ("set FLOWER_WEIGHTS_TEST=1, FLOWER_WEIGHTS and "
+               "FLOWER_FIXTURES to run checkpoint parity")
+
+
+@pytest.mark.skipif(missing_weight_variables(), reason=SKIP_REASON)
 def test_checkpoint_parity_against_torch_fixtures():
-    config = to_config("flower_libero_object")
-    model = build(config)
+    model = build()
     model.load_weights(os.environ["FLOWER_WEIGHTS"])
     fixtures = np.load(os.environ["FLOWER_FIXTURES"])
     context = fixtures["encoder_hidden_states"]
@@ -123,6 +121,6 @@ def test_checkpoint_parity_against_torch_fixtures():
     error = np.abs(np.asarray(velocity) - fixtures["velocity_t0_5"]).max()
     assert error < 1e-4
     chunk = sampling.sample_actions(model, context, noise, 4)
-    chunk_error = np.abs(
-        np.asarray(chunk) - fixtures["final_action_chunk"]).max()
+    chunk_delta = np.asarray(chunk) - fixtures["final_action_chunk"]
+    chunk_error = np.abs(chunk_delta).max()
     assert chunk_error < 1e-4
