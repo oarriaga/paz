@@ -15,6 +15,14 @@ from paz.applications.detectors import EFFICIENTDETD0VOC
 from paz.applications.detectors import DetectMiniXceptionFER
 from paz.applications.detectors import DetectMiniXceptionIMDB
 from paz.applications.detectors import DetectMiniXception
+from paz.applications.segmenters import SAMHieraTiny2
+from paz.applications.segmenters import SAMHieraSmall2
+from paz.applications.segmenters import SAMHieraBasePlus2
+from paz.applications.segmenters import SAMHieraLarge2
+from paz.applications.segmenters import SAMHieraTiny21
+from paz.applications.segmenters import SAMHieraSmall21
+from paz.applications.segmenters import SAMHieraBasePlus21
+from paz.applications.segmenters import SAMHieraLarge21
 from paz.models.detection.haar_cascade import HaarCascadeFrontalFaceDetector
 from paz.models.detection.haar_cascade import HaarCascadeEyeDetector
 from paz.applications.classifiers import ClassifyMiniXceptionFER
