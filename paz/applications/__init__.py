@@ -54,6 +54,7 @@ from paz.applications.generators import DescribeImageGemma4
 from paz.applications.generators import DescribeImageGemma42B
 from paz.applications.generators import DescribeImageGemma44B
 from paz.applications.feature_matchers import MatchXFeat
+from paz.applications.action_predictors import PredictFlowerActions
 from paz.applications.depth_estimators import EstimateDepthAnything3Small
 from paz.applications.depth_estimators import EstimateDepthAnything3Base
 from paz.applications.depth_estimators import EstimateDepthAnything3MonoLarge

@@ -2,17 +2,43 @@ import numpy as np
 from keras import ops
 
 from paz.models.transformers.attention import attend, kv_attend, build_cache
+from paz.models.transformers.attention import masked_attend
 from paz.models.transformers.attention import project_query_key_value
 from paz.models.transformers.attention import split_query_key_value
 from paz.models.transformers.attention import compute_attention
 from paz.models.transformers.attention import merge_attention_heads
 from paz.models.transformers.attention import normalize_query_key
+from paz.models.transformers.attention import compute_masked_attention
+from paz.models.transformers.attention import rms_normalize_query_key
 
 
 def test_attend_preserves_query_shape():
     x = ops.zeros((1, 4, 16))
     output = attend(x, x, 2, 8, 0.0, "attend_test")
     assert tuple(output.shape) == (1, 4, 16)
+
+
+def test_masked_attend_preserves_query_shape():
+    x = ops.zeros((1, 4, 16))
+    mask = ops.ones((1, 4))
+    output = masked_attend(x, x, mask, 2, 8, 0.0, "masked_test")
+    assert tuple(output.shape) == (1, 4, 16)
+
+
+def test_masked_attend_ignores_masked_keys():
+    from keras import Input, Model
+    x = Input((4, 16), name="masked_keys_x")
+    mask = Input((4,), name="masked_keys_mask")
+    y = masked_attend(x, x, mask, 2, 8, 0.0, "masked_keys_test")
+    model = Model([x, mask], y)
+    values = np.random.default_rng(0).normal(size=(1, 4, 16))
+    values = values.astype("float32")
+    altered = np.copy(values)
+    altered[0, 3] = 100.0
+    mask_values = np.array([[1.0, 1.0, 1.0, 0.0]], "float32")
+    kept = model.predict([values, mask_values], verbose=0)
+    changed = model.predict([altered, mask_values], verbose=0)
+    assert np.allclose(kept[:, :3], changed[:, :3], atol=1e-6)
 
 
 def test_build_cache_stacks_key_and_value():
@@ -86,3 +112,23 @@ def test_normalize_query_key_normalizes_over_head_dim():
     assert np.allclose(query.mean(axis=-1), 0.0, atol=1e-5)
     assert np.allclose(query.std(axis=-1), 1.0, atol=1e-2)
     assert np.allclose(query, np.array(key))
+
+
+def test_compute_masked_attention_ignores_masked_keys():
+    rng = np.random.default_rng(1)
+    query = ops.array(rng.standard_normal((1, 2, 3, 8)).astype("float32"))
+    key = ops.array(rng.standard_normal((1, 2, 5, 8)).astype("float32"))
+    value = ops.array(rng.standard_normal((1, 2, 5, 8)).astype("float32"))
+    mask = ops.array(np.array([[[[True, True, True, False, False]]]]))
+    masked = compute_masked_attention(query, key, value, mask)
+    reference = compute_attention(query, key[:, :, :3], value[:, :, :3])
+    assert np.allclose(np.array(masked), np.array(reference), atol=1e-6)
+
+
+def test_rms_normalize_query_key_keeps_shape_and_scale():
+    values = np.random.RandomState(3).randn(2, 3, 5, 16).astype("float32")
+    args = (ops.array(values), ops.array(values), "rms_blk")
+    query, key = rms_normalize_query_key(*args)
+    root_mean_square = np.sqrt((np.array(query) ** 2).mean(axis=-1))
+    assert np.allclose(root_mean_square, 1.0, atol=1e-3)
+    assert np.allclose(np.array(query), np.array(key))

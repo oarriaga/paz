@@ -5,15 +5,29 @@ from keras import ops
 from keras.layers import Dense, Dropout, EinsumDense, Reshape
 from keras.layers import LayerNormalization
 
+from paz.layers import RMSNormalization
+
 from paz.models.transformers import cache as kv_cache
 
 
 def attend(query, value, num_heads, key_dim, dropout, name):
+    key = project_key(value, num_heads, key_dim, name)
+    return attend_key(query, value, key, None, key_dim, dropout, name)
+
+
+def masked_attend(query, value, mask, num_heads, key_dim, dropout, name):
+    key = project_biased_key(value, num_heads, key_dim, name)
+    return attend_key(query, value, key, mask, key_dim, dropout, name)
+
+
+def attend_key(query, value, key, mask, key_dim, dropout, name):
+    num_heads = key.shape[-2]
     output_dim = query.shape[-1]
     q = transpose_to_heads(project_query(query, num_heads, key_dim, name))
-    k = transpose_to_heads(project_key(value, num_heads, key_dim, name))
+    k = transpose_to_heads(key)
     v = transpose_to_heads(project_value(value, num_heads, key_dim, name))
     scores = compute_scores(q, k, key_dim)
+    scores = mask_scores(scores, expand_mask_for_heads(mask))
     output = apply_attention(scores, v, dropout, name)
     output = merge_heads(output)
     query_rank = len(query.shape)
@@ -70,6 +84,12 @@ def project_key(key, num_heads, key_dim, name):
     rank = len(key.shape)
     shape = [num_heads, key_dim]
     return project(key, rank - 1, 1, 2, shape, False, f"{name}_key")
+
+
+def project_biased_key(key, num_heads, key_dim, name):
+    rank = len(key.shape)
+    shape = [num_heads, key_dim]
+    return project(key, rank - 1, 1, 2, shape, True, f"{name}_key")
 
 
 def project_value(value, num_heads, key_dim, name):
@@ -196,6 +216,15 @@ def compute_attention(query, key, value):
     return ops.matmul(probabilities, value)
 
 
+def compute_masked_attention(query, key, value, mask):
+    head_dim = query.shape[-1]
+    scale = head_dim ** -0.5
+    scores = ops.matmul(query, ops.transpose(key, (0, 1, 3, 2))) * scale
+    scores = mask_scores(scores, mask)
+    probabilities = ops.softmax(scores, axis=-1)
+    return ops.matmul(probabilities, value)
+
+
 def merge_attention_heads(context):
     transposed = ops.transpose(context, (0, 2, 1, 3))
     num_heads = transposed.shape[2]
@@ -211,3 +240,9 @@ def normalize_query_key(query, key, epsilon, name):
 
 def head_norm(values, epsilon, name):
     return LayerNormalization(axis=-1, epsilon=epsilon, name=name)(values)
+
+
+def rms_normalize_query_key(query, key, name):
+    query = RMSNormalization(name=f"{name}_query_norm")(query)
+    key = RMSNormalization(name=f"{name}_key_norm")(key)
+    return query, key

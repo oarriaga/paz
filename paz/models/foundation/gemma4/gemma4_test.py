@@ -65,7 +65,8 @@ def test_assemble_detects_corruption(tmp_path, monkeypatch):
         lambda asset, url, cache_subdir: str(tmp_path / "part0"))
     entry = {"parts": ["part0"], "sha256": "0" * 64}
     with pytest.raises(ValueError):
-        pretrained.assemble_weights_file(tmp_path / "out.h5", entry, "sub")
+        args = (tmp_path / "out.h5", entry, "sub", "http://x/")
+        pretrained.assemble_weights_file(*args)
 
 
 @pytest.mark.skipif(not run_weights_test(), reason="set GEMMA4_WEIGHTS_TEST=1")
