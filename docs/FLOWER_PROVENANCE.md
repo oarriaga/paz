@@ -62,5 +62,18 @@ Inference-first port of FLOWER (Florence With Embodied Flow) to paz.
 - Florence-2 (Microsoft): MIT.
 - LIBERO: MIT.
 
-Parity results, converted-weight checksums, and known limitations are
-recorded in the pull request body and test suite.
+## Converted weights
+
+Hosted on the `oarriaga/altamira-data` GitHub release `v0.29` as sharded
+assets with a reassembly manifest; `FLOWER(weights="pretrained")`
+downloads, reassembles, and checksum-verifies them into the Keras cache.
+
+- `florence2.weights.h5` sha256
+  27d4197375f1c904c77fda85266e87f6a258d27d73d1a2342cfb6705a1c4d956
+- `flower_dit.weights.h5` sha256
+  7646f56063c62a85d3cc63a5df673cbd1775738b0971616ef727483bc1ec2888
+- `tokenizer.json` sha256
+  847bbeab6174d66a88898f729d52fa8d355fafe1bea101cf960dd404581df70e
+
+Parity results and known limitations are recorded in the pull request
+body and test suite.
