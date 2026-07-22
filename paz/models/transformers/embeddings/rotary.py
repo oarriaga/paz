@@ -1,16 +1,11 @@
 """Rotary position embedding (RoPE)."""
 from keras import ops
 
-from paz.layers import MergeDims
-
 
 def apply(inputs, wavelength, scaling_factor, denominator, positions=None):
     args = (inputs, wavelength, scaling_factor, denominator, positions)
     cosine, sine = build(*args)
-    first_half, second_half = ops.split(inputs, 2, axis=-1)
-    rotated = ops.stack((-second_half, first_half), axis=-2)
-    rotated = MergeDims(axis=-2)(rotated)
-    return (inputs * cosine) + (rotated * sine)
+    return (inputs * cosine) + (rotate_half(inputs) * sine)
 
 
 def apply_2D(tokens, positions, base_frequency=100.0):
@@ -77,7 +72,7 @@ def build(inputs, wavelength, scaling_factor, denominator, positions=None):
 
 def build_positions(inputs):
     trailing = tuple(range(2, len(inputs.shape)))
-    ones = ops.ones_like(inputs)
+    ones = ops.ones_like(inputs, dtype="float32")
     if trailing:
         ones = ops.mean(ones, axis=trailing)
     ones = ops.mean(ones, axis=0, keepdims=False)

@@ -99,6 +99,14 @@ class Gemma4DecoderLayer(Layer):
 
     def call_with_cache(self, x, cache, index, positions=None,
                         per_layer_embedding=None, shared_kv_cache=None):
+        # `call` receives inputs autocast to compute_dtype by Keras __call__;
+        # this direct method must cast the same way or the two paths diverge.
+        x = ops.cast(x, self.compute_dtype)
+        if per_layer_embedding is not None:
+            per_layer_embedding = ops.cast(
+                per_layer_embedding, self.compute_dtype)
+        if shared_kv_cache is not None:
+            shared_kv_cache = ops.cast(shared_kv_cache, self.compute_dtype)
         x = clip_bfloat_guard(x)
         hidden, cache = self.cached_attention(
             x, cache, index, positions, shared_kv_cache)

@@ -90,6 +90,28 @@ def test_prefill_parity_call_matches_call_with_cache():
         assert_close(step_logits[0, 0], full[0, position], tol=1e-3)
 
 
+def test_bfloat16_prefill_parity_beyond_sliding_window():
+    # Regression: the cached path once lost precision against the full
+    # forward in bfloat16 (float32 RoPE keys truncated by the bfloat16
+    # cache, missing __call__ autocast, bfloat16 RoPE positions past 256).
+    config = full_feature_config()._replace(dtype="bfloat16")
+    model = Gemma4Backbone(config)
+    length = 300
+    token_ids = jp.arange(length, dtype=jp.int32)[None] % 60 + 2
+    embedding = model.token_embedding(token_ids)
+    padding_mask = jp.ones_like(token_ids)
+    full = model.forward_from_embedding(embedding, padding_mask, token_ids)
+    per_layer = model.per_layer_lookup(token_ids)
+    cache = jp.asarray(model.build_cache(length))
+    positions = jp.arange(length, dtype=jp.int32)[None]
+    index = jp.array(0, dtype=jp.int32)
+    cached, _ = model.call_with_cache(
+        embedding, cache, index, positions, per_layer)
+    full = jp.asarray(full, jp.float32)
+    cached = jp.asarray(cached, jp.float32)
+    assert_close(full, cached, tol=1e-3)
+
+
 def test_causal_lm_cached_step_shapes():
     config = build_text_backbone_args(hidden_size_per_layer_input=2)
     model = Gemma4CausalLM(config)
