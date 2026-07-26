@@ -5,7 +5,6 @@ import jax.numpy as jp
 import paz
 
 from paz.graphics.geometry import compute_hits_to_light
-from paz.graphics.phong import compute_base_color
 
 
 Cosines = namedtuple(
@@ -94,24 +93,21 @@ def compute_direct_lighting(material, base_color, points, normals, eye, light):
     return (diffuse + specular) * visible * light.intensity
 
 
-def compute_ambient(shape, material, light, points):
-    base_color = compute_base_color(shape, material, light, points)
-    return base_color * material.ambient
+def compute_ambient(albedo, material, light):
+    return albedo * light.intensity * material.ambient
 
 
-def compute_colors(shape, material, points, normals, eye, light):
-    base_color = compute_base_color(shape, material, light, points)
+def compute_colors(albedo, material, points, normals, eye, light):
+    base_color = albedo * light.intensity
     ambient = base_color * material.ambient
-    direct = compute_direct_lighting(
-        material, base_color, points, normals, eye, light
-    )
-    return ambient + direct
+    args = material, base_color, points, normals, eye, light
+    return ambient + compute_direct_lighting(*args)
 
 
 def compute_colors_with_shadow(
-    shape, material, points, normals, eye, light, is_shadow
+    albedo, material, points, normals, eye, light, is_shadow
 ):
-    full = compute_colors(shape, material, points, normals, eye, light)
-    ambient = compute_ambient(shape, material, light, points)
+    full = compute_colors(albedo, material, points, normals, eye, light)
+    ambient = compute_ambient(albedo, material, light)
     is_shadow = jp.expand_dims(is_shadow, 1)
     return ambient * is_shadow + full * (1.0 - is_shadow)

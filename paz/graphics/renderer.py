@@ -270,13 +270,19 @@ def color_without_shadow(lights, shapes, points, normals, eyes, hit_shape_args):
         final_arg = start_arg + len(group)
         group = paz.graphics.shapes.merge(*group)
         data = split_shape_data(points, normals, eyes, start_arg, final_arg)
-        args, axes = (group, group.material, *data), (0, 0, 0, 0, 0, None)
+        albedo = compute_group_albedo(group, data[0])
+        args, axes = (albedo, group.material, *data), (0, 0, 0, 0, 0, None)
         shader = select_shader(group.material)
         color_per_light = jax.vmap(shader.compute_colors, axes)
         color = jax.vmap(color_per_light, (None, None, None, None, None, 0))
         colors.append(jp.sum(color(*args, merged_lights), axis=0))
         start_arg = final_arg
     return take_closest(jp.concatenate(colors, axis=0), hit_shape_args)
+
+
+def compute_group_albedo(group, points):
+    compute_albedo = paz.graphics.albedo.compute_shape_albedo
+    return jax.vmap(compute_albedo)(group, group.material, points)
 
 
 def split_shape_data(points, normals, eyes, start_arg, final_arg):
@@ -420,10 +426,11 @@ def compute_shadowed_colors(*args):
         final_arg = start_arg + len(group)
         group = paz.graphics.shapes.merge(*group)
         data = split_shape_data(points, normals, eyes, start_arg, final_arg)
+        albedo = compute_group_albedo(group, data[0])
         axes = 0, 0, 0, 0, 0, None, None
         shader = select_shader(group.material)
         color = jax.vmap(shader.compute_colors_with_shadow, axes)
-        color_args = group, group.material, *data, light, is_shadow
+        color_args = albedo, group.material, *data, light, is_shadow
         colors.append(color(*color_args))
         start_arg = final_arg
     return jp.concatenate(colors, axis=0)

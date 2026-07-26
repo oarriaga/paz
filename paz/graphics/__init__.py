@@ -35,6 +35,7 @@ from paz.graphics.constants import (
     EPSILON,
     FARAWAY,
 )
+from paz.graphics import albedo
 from paz.graphics import geometry
 from paz.graphics import shapes
 from paz.graphics import camera

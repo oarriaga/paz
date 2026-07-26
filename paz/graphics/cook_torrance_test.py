@@ -1,7 +1,7 @@
 import pytest
 import jax.numpy as jp
 
-from paz.graphics import cook_torrance
+from paz.graphics import albedo, cook_torrance
 from paz.graphics.types import (
     PointLight,
     CookTorranceMaterial,
@@ -142,8 +142,10 @@ def test_compute_colors_runs_with_dielectric(
     points = jp.array([[0.0, 0.0, 0.0]])
     normals = jp.array([[0.0, 1.0, 0.0]])
     eye = jp.array([[0.0, 1.0, 0.0]])
+    args = simple_shape, dielectric_material, points
+    shape_albedo = albedo.compute_shape_albedo(*args)
     colors = cook_torrance.compute_colors(
-        simple_shape, dielectric_material, points, normals, eye, simple_light
+        shape_albedo, dielectric_material, points, normals, eye, simple_light
     )
     assert colors.shape == (1, 3)
     assert jp.all(colors >= 0.0)
@@ -155,8 +157,10 @@ def test_compute_colors_is_zero_for_back_facing_normals(
     points = jp.array([[0.0, 0.0, 0.0]])
     normals = jp.array([[0.0, -1.0, 0.0]])
     eye = jp.array([[0.0, 1.0, 0.0]])
+    args = simple_shape, dielectric_material, points
+    shape_albedo = albedo.compute_shape_albedo(*args)
     colors = cook_torrance.compute_colors(
-        simple_shape, dielectric_material, points, normals, eye, simple_light
+        shape_albedo, dielectric_material, points, normals, eye, simple_light
     )
     base_color = dielectric_material.color * simple_light.intensity
     expected_ambient = base_color * dielectric_material.ambient
@@ -174,11 +178,12 @@ def test_smoother_surfaces_concentrate_specular(
         roughness=0.05, metallic=0.0,
     )
     rough = smooth._replace(roughness=0.9)
+    shape_albedo = albedo.compute_shape_albedo(simple_shape, smooth, points)
     smooth_colors = cook_torrance.compute_colors(
-        simple_shape, smooth, points, normals, eye, simple_light
+        shape_albedo, smooth, points, normals, eye, simple_light
     )
     rough_colors = cook_torrance.compute_colors(
-        simple_shape, rough, points, normals, eye, simple_light
+        shape_albedo, rough, points, normals, eye, simple_light
     )
     assert jp.sum(smooth_colors) > jp.sum(rough_colors)
 
@@ -190,11 +195,13 @@ def test_compute_colors_with_shadow_uses_ambient(
     normals = jp.array([[0.0, 1.0, 0.0]])
     eye = jp.array([[0.0, 1.0, 0.0]])
     is_shadow = jp.array([1.0])
+    args = simple_shape, dielectric_material, points
+    shape_albedo = albedo.compute_shape_albedo(*args)
     colors = cook_torrance.compute_colors_with_shadow(
-        simple_shape, dielectric_material, points, normals, eye,
+        shape_albedo, dielectric_material, points, normals, eye,
         simple_light, is_shadow,
     )
     expected = cook_torrance.compute_ambient(
-        simple_shape, dielectric_material, simple_light, points
+        shape_albedo, dielectric_material, simple_light
     )
     assert jp.allclose(colors, expected)
