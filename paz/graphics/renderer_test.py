@@ -92,7 +92,8 @@ def build_legacy_rays(image_shape, y_fov, world_to_camera):
     H_world, W_world = paz.graphics.camera.compute_image_sizes(
         y_fov, aspect_ratio
     )
-    directions = paz.graphics.camera.build_ray_directions(H, W, H_world, W_world)
+    args = H, W, H_world, W_world
+    directions = paz.graphics.camera.build_ray_directions(*args)
     origins = paz.graphics.camera.build_ray_origins(H, W)
     camera_to_world = jp.linalg.inv(world_to_camera)
     return paz.algebra.transform_rays(camera_to_world, origins, directions)
@@ -134,11 +135,11 @@ def compute_selected_shadow_depths(camera_pose, image_shape=(120, 160)):
         shadow_masks,
         depths,
         shape_indices,
-        closest.shape_idx,
+        closest.primitive_index,
         closest.normal,
         light_directions,
     )
-    return shadow_masks, depths, shape_indices, closest.shape_idx
+    return shadow_masks, depths, shape_indices, closest.primitive_index
 
 
 def take_shape_depths(depths, shape_indices, receiver_indices, shape_index):
@@ -165,7 +166,8 @@ def test_compute_soft_occlusion():
     depths = jp.array(
         [[paz.graphics.FARAWAY, 5.0, 10.0, 15.0], [11.0, 11.0, 10.0, 11.0]]
     )
-    hit_masks = jp.array([[True, True, True, True], [False, False, True, False]])
+    rows = [[True, True, True, True], [False, False, True, False]]
+    hit_masks = jp.array(rows)
     result = renderer.compute_soft_occlusion(
         hit_masks, depths, light_lengths, slope=10.0
     )
@@ -266,7 +268,8 @@ def test_select_shadow_depths_keep_back_side_second_root():
         receiver_normals,
         light_directions,
     )
-    result = renderer.compute_soft_occlusion(hit_masks, depths, jp.array([0.01]))
+    args = hit_masks, depths, jp.array([0.01])
+    result = renderer.compute_soft_occlusion(*args)
     assert bool(hit_masks[0, 0])
     assert float(depths[0, 0]) == pytest.approx(0.2)
     assert bool(hit_masks[1, 0])
@@ -728,7 +731,8 @@ def test_saved_pose_sphere_self_shadow_keeps_later_roots():
     _, depths, shape_indices, receiver_indices = compute_selected_shadow_depths(
         OLD_CAMERA_POSE
     )
-    sphere_depths = take_shape_depths(depths, shape_indices, receiver_indices, 0)
+    args = depths, shape_indices, receiver_indices, 0
+    sphere_depths = take_shape_depths(*args)
     assert int(jp.sum(sphere_depths < 1e-2)) > 0
     assert float(jp.min(sphere_depths)) > renderer.SHADOW_SELF_HIT_EPSILON
 

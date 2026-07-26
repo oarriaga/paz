@@ -14,6 +14,10 @@ from paz.graphics.constants import (
     CYLINDRICAL_PATTERN,
 )
 
+HIT_NAMES = "hit_mask depth point normal eye primitive_index"
+Hit = namedtuple("Hit", HIT_NAMES.split())
+
+
 PointLight = namedtuple("PointLight", ["intensity", "position"])
 
 AreaLight = namedtuple(

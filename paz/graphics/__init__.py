@@ -1,4 +1,5 @@
 from paz.graphics.types import (
+    Hit,
     PointLight,
     AreaLight,
     Material,

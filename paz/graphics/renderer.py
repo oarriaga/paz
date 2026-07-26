@@ -13,13 +13,11 @@ RENDER_NAMES = "shape y_FOV pose scene mask lights tiles chunk_size shadows "
 RENDER_NAMES += "shadow_mask num_bounces"
 STATE_NAMES = "color depth hit_mask throughput active_mask "
 STATE_NAMES += "refractive_index rays"
-CLOSEST_NAMES = "hit_mask depth point normal eye shape_idx"
 SHADOW_COLOR_NAMES = "rays shapes lights indices mask shadow_mask "
 SHADOW_COLOR_NAMES += "point normal points normals eyes"
 
 RenderArgs = namedtuple("RenderArgs", RENDER_NAMES.split())
 RenderState = namedtuple("RenderState", STATE_NAMES.split())
-ClosestHit = namedtuple("ClosestHit", CLOSEST_NAMES.split())
 ShadowColorArgs = namedtuple("ShadowColorArgs", SHADOW_COLOR_NAMES.split())
 
 
@@ -257,7 +255,7 @@ def gather_closest(hit_masks, depths, points, normals, indices, eyes):
     args += (take_closest(normals, closest_args),)
     args += (take_closest(eyes, closest_args),)
     args += (indices[closest_args],)
-    return ClosestHit(*args)
+    return paz.graphics.Hit(*args)
 
 
 def select_shader(material):
@@ -496,7 +494,7 @@ def reshape_depth_image(depths, height, width):
 
 
 def update_state(state, shapes, closest, intersected_colors):
-    material = get_material_properties(shapes, closest.shape_idx)
+    material = get_material_properties(shapes, closest.primitive_index)
     reflectivities, transparencies, refractivities = material
     color_args = state.color, state.throughput, state.active_mask
     color_args += intersected_colors, reflectivities, transparencies
