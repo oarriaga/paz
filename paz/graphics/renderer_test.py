@@ -3,7 +3,7 @@ import jax
 import jax.numpy as jp
 import paz
 from paz import SE3
-from paz.graphics import renderer
+from paz.graphics import composite, renderer
 from paz.graphics.shapes.sphere import intersect_canonical_sphere
 from paz.graphics.types import (
     Shape,
@@ -157,7 +157,7 @@ def test_take_closest():
     )
     indices = jp.array([0, 1, 0])
     expected = jp.array([[1, 1, 1], [5, 5, 5], [3, 3, 3]])
-    result = renderer.take_closest(array, indices)
+    result = composite.take_closest(array, indices)
     assert jp.array_equal(result, expected)
 
 
@@ -280,7 +280,7 @@ def test_select_shadow_depths_keep_back_side_second_root():
 def test_compute_scene_hit_mask():
     hit_masks = jp.array([[False, True, False], [False, False, True]])
     expected = jp.array([False, True, True])
-    result = renderer.compute_scene_hit_mask(hit_masks)
+    result = composite.compute_scene_hit_mask(hit_masks)
     assert jp.array_equal(result, expected)
 
 
@@ -296,7 +296,7 @@ def test_select_colors():
     depths = jp.array([[10.0, 2.0], [5.0, 8.0]])
     colors = jp.array([[[1, 0, 0], [0, 1, 0]], [[0, 0, 1], [1, 1, 0]]])
     expected = jp.array([[0, 0, 1], [0, 1, 0]])
-    result = renderer.select_colors(depths, colors)
+    result = composite.select_colors(depths, colors)
     assert jp.array_equal(result, expected)
 
 
@@ -317,7 +317,7 @@ def test_initialize_render_state():
 def test_find_closest_intersection_args():
     hit_masks = jp.array([[True, False], [False, True]])
     depths = jp.array([[1.0, 10.0], [10.0, 2.0]])
-    indices = renderer.find_closest_intersection_args(hit_masks, depths)
+    indices = composite.find_closest_intersection_args(hit_masks, depths)
     assert jp.array_equal(indices, jp.array([0, 1]))
 
 

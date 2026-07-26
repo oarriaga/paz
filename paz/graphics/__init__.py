@@ -36,6 +36,7 @@ from paz.graphics.constants import (
     FARAWAY,
 )
 from paz.graphics import albedo
+from paz.graphics import composite
 from paz.graphics import geometry
 from paz.graphics import shapes
 from paz.graphics import camera
