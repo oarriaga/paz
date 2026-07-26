@@ -2,8 +2,8 @@ import jax
 import jax.numpy as jp
 import pytest
 import paz
-from paz.graphics.constants import FARAWAY
-from paz.graphics.types import PointLight, Material
+from paz.graphics.constants import FARAWAY, NO_PATTERN
+from paz.graphics.types import PointLight, Material, Pattern
 from paz.backend.lie import SE3, SO3
 from paz.graphics.mesh.silhouette import blend_fragments
 from paz.graphics.mesh.silhouette import build_empty_fragments
@@ -391,6 +391,132 @@ def test_render_gradient_through_vertices():
     assert jp.any(grad != 0.0)
 
 
+def snapshot_path(filename):
+    return f"paz/graphics/snapshots/{filename}"
+
+
+def assert_snapshot(array, filename, atol):
+    paz.assert_snapshot(array, snapshot_path(filename), atol=atol)
+
+
+def build_vertex_colors(vertices, color):
+    return jp.repeat(jp.array([color]), len(vertices), axis=0)
+
+
+def build_cube_mesh():
+    vertices, faces, edges = build_cube(1.0)
+    colors = build_vertex_colors(vertices, [0.7, 0.3, 0.1])
+    transform = SE3.translation(jp.array([-0.45, 0.0, 0.0]))
+    material = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100)
+    args = vertices, colors, transform, material, faces, edges
+    return Mesh(*args)
+
+
+def build_sphere_mesh():
+    vertices, faces, edges = build_sphere(0.6, 1)
+    colors = build_vertex_colors(vertices, [0.1, 0.4, 0.8])
+    transform = SE3.translation(jp.array([0.5, 0.15, -0.3]))
+    material = Material(jp.zeros(3), 0.15, 0.8, 0.15, 50)
+    args = vertices, colors, transform, material, faces, edges
+    return Mesh(*args)
+
+
+def make_multi_mesh_scene(image_shape=(24, 24)):
+    camera_origin = jp.array([0.0, 0.7, -2.5])
+    camera_pose = SE3.view_transform(
+        camera_origin, jp.zeros(3), jp.array([0.0, 1.0, 0.0])
+    )
+    lights = [PointLight(jp.full((3,), 1.0), camera_origin)]
+    meshes, mask = merge_meshes(build_cube_mesh(), build_sphere_mesh())
+    return image_shape, jp.pi / 4.0, camera_pose, meshes, mask, lights
+
+
+def render_multi_mesh(image_shape=(24, 24), tiles=(1, 1), chunk_size=1024):
+    args = make_multi_mesh_scene(image_shape)
+    return render(*args, tiles, chunk_size)
+
+
+def test_multi_mesh_render_matches_snapshot():
+    image, depth = render_multi_mesh()
+    assert_snapshot(image, "mesh_multi_image.npy", 1e-3)
+    assert_snapshot(depth, "mesh_multi_depth.npy", 3e-3)
+
+
+def test_multi_mesh_render_is_tile_invariant():
+    expected_image, expected_depth = render_multi_mesh()
+    actual_image, actual_depth = render_multi_mesh((24, 24), (2, 4), 13)
+    assert compute_max_abs_difference(actual_image, expected_image) <= 1e-4
+    assert compute_max_abs_difference(actual_depth, expected_depth) <= 1e-4
+
+
+def test_multi_mesh_render_masks_matches_snapshot():
+    shape, y_FOV, pose, meshes, _, lights = make_multi_mesh_scene()
+    args = shape, y_FOV, pose, meshes, lights, (0.1, 10.0), (1, 1), 1024
+    masks = render_masks(*args)
+    assert masks.shape == (2, 24, 24, 1)
+    assert_snapshot(masks, "mesh_multi_masks.npy", 1e-3)
+
+
+def test_multi_mesh_gradient_matches_snapshot():
+    shape, y_FOV, pose, _, _, lights = make_multi_mesh_scene((12, 12))
+    cube, sphere = build_cube_mesh(), build_sphere_mesh()
+
+    def loss_fn(vertices):
+        moved = cube._replace(vertices=vertices)
+        meshes, mask = merge_meshes(moved, sphere)
+        args = shape, y_FOV, pose, meshes, mask, lights
+        return jp.sum(render(*args, (1, 1), 1024)[0])
+
+    gradient = jax.grad(loss_fn)(cube.vertices)
+    assert jp.any(gradient != 0.0)
+    assert_snapshot(gradient, "mesh_multi_gradient.npy", 2e-3)
+
+
+def build_checkered_image(box_size=4, rows=4, cols=4):
+    checkered = jp.indices((rows, cols)).sum(axis=0) % 2
+    tiled = jp.kron(checkered, jp.ones((box_size, box_size)))
+    channels = [0.9 * tiled, 0.45 * tiled, 0.8 * (1.0 - tiled)]
+    return jp.stack(channels, axis=-1)
+
+
+def build_textured_quad_mesh():
+    vertices = jp.array([
+        [-1.0, -1.0, 0.0],
+        [1.0, -1.0, 0.0],
+        [1.0, 1.0, 0.0],
+        [-1.0, 1.0, 0.0],
+    ])
+    faces = jp.array([[0, 1, 2], [0, 2, 3]])
+    edges = jp.array([[0, 1], [1, 2], [2, 3], [3, 0]])
+    vertex_uvs = jp.array([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]])
+    pattern = Pattern(jp.eye(4), NO_PATTERN, build_checkered_image())
+    colors = build_vertex_colors(vertices, [0.0, 0.0, 0.0])
+    material = Material(jp.zeros(3), 0.2, 0.9, 0.0, 100)
+    args = vertices, colors, jp.eye(4), material, faces, edges
+    return Mesh(*args, pattern, vertex_uvs)
+
+
+def make_textured_quad_scene(image_shape=(24, 24)):
+    camera_origin = jp.array([0.0, 0.0, -3.0])
+    camera_pose = SE3.view_transform(
+        camera_origin, jp.zeros(3), jp.array([0.0, 1.0, 0.0])
+    )
+    lights = [PointLight(jp.full((3,), 0.7), camera_origin)]
+    meshes, mask = merge_meshes(build_textured_quad_mesh())
+    return image_shape, jp.pi / 4.0, camera_pose, meshes, mask, lights
+
+
+def test_textured_quad_render_matches_snapshot():
+    image, _ = render(*make_textured_quad_scene(), (1, 1), 1024)
+    assert_snapshot(image, "mesh_uv_texture_image.npy", 1e-3)
+
+
+def test_textured_quad_samples_texture_not_vertex_colors():
+    image, _ = render(*make_textured_quad_scene(), (1, 1), 1024)
+    center_rows = image[8:16, 8:16]
+    assert float(jp.max(center_rows) - jp.min(center_rows)) > 0.1
+
+
 def test_assert_exact_tile_side_valid():
     assert_exact_tile_side(100, 2)
     assert_exact_tile_side(100, 5)
@@ -760,6 +886,7 @@ def test_render_coordinates_mask_matches_render_depth():
     pose = camera_looking_at_origin()
     meshes, mask = merge_meshes(mesh)
     lights = [PointLight(jp.full((3,), 10.0), jp.array([0.0, 1.0, -1.5]))]
-    _, depth = render((20, 20), jp.pi / 4, pose, meshes, mask, lights, (1, 1), 1024)
+    args = (20, 20), jp.pi / 4, pose, meshes, mask, lights
+    _, depth = render(*args, (1, 1), 1024)
     _, hit = render_coordinates((20, 20), jp.pi / 4, pose, mesh, 1024)
     assert jp.array_equal(hit, depth > 0)
