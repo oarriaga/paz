@@ -121,7 +121,7 @@ def prepare_mask(mask, num_shapes, scene):
 
 
 def expand_mask_node(mask_value, node):
-    if isinstance(node, paz.graphics.Shape):
+    if isinstance(node, (paz.graphics.Shape, paz.graphics.Mesh)):
         return [mask_value]
     elif isinstance(node, paz.graphics.Group):
         group_mask = []
@@ -140,7 +140,7 @@ def expand_mask(mask, scene):
 
 
 def flatten(node, accumulated_transform):
-    if isinstance(node, paz.graphics.Shape):
+    if isinstance(node, (paz.graphics.Shape, paz.graphics.Mesh)):
         return [node._replace(transform=accumulated_transform @ node.transform)]
     elif isinstance(node, paz.graphics.Group):
         children, child_transform = [], accumulated_transform @ node.transform
@@ -188,4 +188,76 @@ def compile(scene, lights, mask, shadow_mask=None):
     if shadow_mask is not None:
         shadow_mask = prepare_mask(shadow_mask, len(flat_scene), scene)
 
-    return (*sort_by_group(flat_scene, mask, shadow_mask), lights)
+    shape_args = select_shapes(flat_scene, mask, shadow_mask)
+    shapes, mask, shadow_mask = sort_by_group(*shape_args)
+    triangles = build_triangles(select_meshes(flat_scene))
+    return paz.graphics.CompiledScene(
+        shapes, triangles, lights, mask, shadow_mask
+    )
+
+
+def select_shapes(flat_scene, mask, shadow_mask):
+    args = [arg for arg, node in enumerate(flat_scene) if is_shape(node)]
+    shapes = [flat_scene[arg] for arg in args]
+    args = jp.array(args, dtype=jp.int32)
+    if shadow_mask is not None:
+        shadow_mask = shadow_mask[args]
+    return shapes, mask[args], shadow_mask
+
+
+def select_meshes(flat_scene):
+    return [node for node in flat_scene if not is_shape(node)]
+
+
+def is_shape(node):
+    return isinstance(node, paz.graphics.Shape)
+
+
+def build_triangles(meshes):
+    if len(meshes) == 0:
+        triangles = None
+    else:
+        triangles = build_mesh_triangles(meshes)
+    return triangles
+
+
+def build_mesh_triangles(meshes):
+    vertices = [bake_vertices(mesh) for mesh in meshes]
+    vertex_uvs = [build_vertex_uvs(mesh) for mesh in meshes]
+    vertex_colors = [mesh.vertex_colors for mesh in meshes]
+    args = jp.concatenate(vertices), build_offset_faces(meshes)
+    args += jp.concatenate(vertex_uvs), jp.concatenate(vertex_colors)
+    args += build_primitive_index(meshes), stack_materials(meshes)
+    return paz.graphics.Triangles(*args)
+
+
+def bake_vertices(mesh):
+    return paz.algebra.transform_points(mesh.transform, mesh.vertices)
+
+
+def build_offset_faces(meshes):
+    faces, offset = [], 0
+    for mesh in meshes:
+        faces.append(mesh.faces + offset)
+        offset = offset + len(mesh.vertices)
+    return jp.concatenate(faces)
+
+
+def build_vertex_uvs(mesh):
+    if mesh.vertex_uvs is None:
+        vertex_uvs = jp.zeros((len(mesh.vertices), 2))
+    else:
+        vertex_uvs = mesh.vertex_uvs
+    return vertex_uvs
+
+
+def build_primitive_index(meshes):
+    indices = []
+    for index, mesh in enumerate(meshes):
+        indices.append(jp.full(len(mesh.faces), index, dtype=jp.int32))
+    return jp.concatenate(indices)
+
+
+def stack_materials(meshes):
+    materials = [mesh.material for mesh in meshes]
+    return jax.tree.map(lambda *args: jp.stack(args), *materials)

@@ -157,7 +157,7 @@ def test_compute_bounces_transparent():
 
 
 def test_compute_bounces_mixed(shape_256_A):
-    """Tests that compute_bounces returns 5 if any material is reflective or transparent."""
+    """Returns 5 if any material is reflective or transparent."""
     material_ref = Material(reflective=0.5)
     shape_ref = Shape(jp.eye(4), paz.graphics.SPHERE, material_ref)
     shapes = [shape_256_A, shape_ref]
@@ -175,9 +175,10 @@ def test_compile_sorting(shape_256_A, shape_512, shape_256_B):
     shadow_mask = jp.array([False, True, False]) 
 
     # Compile
-    shapes, mask_out, shadow_mask_out, _ = paz.graphics.scene.compile(
-        scene, lights, mask, shadow_mask
-    )
+    compiled = paz.graphics.scene.compile(scene, lights, mask, shadow_mask)
+    shapes = compiled.shapes
+    mask_out = compiled.mask
+    shadow_mask_out = compiled.shadow_mask
 
     # Expected grouping:
     # (256, 256) group appears first because shape_256_A is first.

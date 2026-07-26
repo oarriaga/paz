@@ -79,12 +79,12 @@ def render_masks(
 
 def compile_render_args(args):
     scene_args = args.scene, args.lights, args.mask, args.shadow_mask
-    shapes, mask, shadow_mask, lights = paz.graphics.scene.compile(*scene_args)
+    compiled = paz.graphics.scene.compile(*scene_args)
     return args._replace(
-        scene=shapes,
-        mask=mask,
-        shadow_mask=shadow_mask,
-        lights=lights,
+        scene=compiled.shapes,
+        mask=compiled.mask,
+        shadow_mask=compiled.shadow_mask,
+        lights=compiled.lights,
     )
 
 

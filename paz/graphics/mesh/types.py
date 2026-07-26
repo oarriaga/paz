@@ -3,23 +3,8 @@ from collections import namedtuple
 import jax.numpy as jp
 
 from paz.graphics.constants import NO_PATTERN
+from paz.graphics.types import Mesh
 import paz
-
-
-Mesh = namedtuple(
-    "Mesh",
-    [
-        "vertices",
-        "vertex_colors",
-        "transform",
-        "material",
-        "faces",
-        "edges",
-        "pattern",
-        "vertex_uvs",
-    ],
-    defaults=(None, None),
-)
 
 
 # TODO split this into two functions one for each branch.

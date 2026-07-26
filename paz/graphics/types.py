@@ -17,6 +17,17 @@ from paz.graphics.constants import (
 HIT_NAMES = "hit_mask depth point normal eye primitive_index"
 Hit = namedtuple("Hit", HIT_NAMES.split())
 
+MESH_NAMES = "vertices vertex_colors transform material faces edges "
+MESH_NAMES += "pattern vertex_uvs"
+Mesh = namedtuple("Mesh", MESH_NAMES.split(), defaults=(None, None))
+
+TRIANGLE_NAMES = "vertices faces vertex_uvs vertex_colors primitive_index "
+TRIANGLE_NAMES += "materials"
+Triangles = namedtuple("Triangles", TRIANGLE_NAMES.split())
+
+COMPILED_NAMES = "shapes triangles lights mask shadow_mask"
+CompiledScene = namedtuple("CompiledScene", COMPILED_NAMES.split())
+
 
 PointLight = namedtuple("PointLight", ["intensity", "position"])
 
@@ -90,8 +101,9 @@ class Scene(_SceneBase):
     def __new__(cls, nodes, parent_array=None):
         if not isinstance(nodes, list):
             raise TypeError("`nodes` must be a list of Shape or Group objects.")
-        if not all(isinstance(node, (Shape, Group)) for node in nodes):
-            raise TypeError("All elements in `nodes` must be a Shape or Group.")
+        node_types = (Shape, Group, Mesh)
+        if not all(isinstance(node, node_types) for node in nodes):
+            raise TypeError("`nodes` must be Shape, Group or Mesh objects.")
 
         if parent_array is None:
             parent_array = jp.full(len(nodes), -1)

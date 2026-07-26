@@ -1,5 +1,8 @@
 from paz.graphics.types import (
     Hit,
+    Mesh,
+    Triangles,
+    CompiledScene,
     PointLight,
     AreaLight,
     Material,
