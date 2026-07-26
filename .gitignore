@@ -9,5 +9,8 @@
 !README.md
 !*.md
 
+# render goldens: tracked so snapshot assertions compare instead of create
+!paz/graphics/snapshots/*.npy
+
 # extend exceptions to subdirectories
 !*/
