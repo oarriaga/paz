@@ -192,9 +192,15 @@ def bounce_step(state, bounce, compiled, shadows):
 
 
 def compute_triangle_hit(compiled, rays):
+    if compiled.triangles is None:
+        triangle_hit = None
+    else:
+        triangle_hit = build_triangle_hit(compiled, rays)
+    return triangle_hit
+
+
+def build_triangle_hit(compiled, rays):
     triangles = compiled.triangles
-    if triangles is None:
-        return None
     result = paz.graphics.mesh.intersect_triangles(triangles, rays)
     hit_mask, depth, points, normals, eyes, face_index, u, v = result
     primitive = triangles.primitive_index[face_index]

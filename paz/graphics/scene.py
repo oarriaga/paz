@@ -199,10 +199,10 @@ def compile(scene, lights, mask, shadow_mask=None):
 def select_shapes(flat_scene, mask, shadow_mask):
     args = [arg for arg, node in enumerate(flat_scene) if is_shape(node)]
     shapes = [flat_scene[arg] for arg in args]
-    args = jp.array(args, dtype=jp.int32)
+    indices = jp.array(args, dtype=jp.int32)
     if shadow_mask is not None:
-        shadow_mask = shadow_mask[args]
-    return shapes, mask[args], shadow_mask
+        shadow_mask = shadow_mask[indices]
+    return shapes, mask[indices], shadow_mask
 
 
 def select_meshes(flat_scene, mask):
