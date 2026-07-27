@@ -297,6 +297,7 @@ def attention_inputs():
     curr = np.zeros((1, 16, 256), np.float32)
     memory = np.zeros((1, 18, 64), np.float32)
     times = np.zeros((1, 18, 7), np.float32)
+    mask = np.ones((1, 18), np.float32)
     cos = np.zeros((1, 16, 128), np.float32)
     keys = np.zeros((1, 18, 128), np.float32)
-    return [curr, curr, memory, memory, times, cos, cos, keys, keys]
+    return [curr, curr, memory, memory, times, mask, cos, cos, keys, keys]

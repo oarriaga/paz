@@ -52,22 +52,51 @@ def test_identity_tables_are_neutral():
     assert np.allclose(sin, 0.0)
 
 
-def memory_attention_inputs(spatial, pointers):
+def memory_attention_inputs(spatial, pointers, generator=None):
     total = spatial * spatial + pointers
-    curr = np.zeros((1, spatial * spatial, 256), np.float32)
-    memory = np.zeros((1, total, 64), np.float32)
-    times = np.zeros((1, total, 7), np.float32)
+    shapes = (1, spatial * spatial, 256), (1, total, 64), (1, total, 7)
+    curr, memory, times = [np.zeros(shape, np.float32) for shape in shapes]
+    if generator is not None:
+        curr = generator.randn(*shapes[0]).astype("float32")
+        memory = generator.randn(*shapes[1]).astype("float32")
+    mask = np.ones((1, total), np.float32)
     cos, sin = ma.rotary_tables(spatial, spatial)
     identity_cos, identity_sin = ma.identity_tables(pointers)
     memory_cos = np.concatenate([cos, identity_cos], axis=0)[None]
     memory_sin = np.concatenate([sin, identity_sin], axis=0)[None]
     rope = [cos[None], sin[None], memory_cos, memory_sin]
-    return [curr, curr, memory, memory, times] + rope
+    return [curr, curr, memory, memory, times, mask] + rope
 
 
 def test_memory_attention_output_shape():
     tokens = np.array(ma.build()(memory_attention_inputs(4, 2)))
     assert tokens.shape == (1, 16, 256)
+
+
+def test_masked_padding_matches_shorter_memory():
+    model = ma.build()
+    randomize(model)
+    generator = np.random.RandomState(3)
+    short = memory_attention_inputs(4, 2, generator)
+    expected = np.array(model(short))
+    padded = pad_memory(short, extra=9)
+    assert padded[2].shape[1] == short[2].shape[1] + 9
+    assert np.allclose(expected, np.array(model(padded)), atol=1e-5)
+
+
+def pad_memory(inputs, extra):
+    padded = list(inputs)
+    for index in (2, 3, 4, 8, 9):
+        pad = ((0, 0), (0, extra), (0, 0))
+        padded[index] = np.pad(padded[index], pad, constant_values=0.7)
+    padded[5] = np.pad(padded[5], ((0, 0), (0, extra)))
+    return padded
+
+
+def randomize(model):
+    generator = np.random.RandomState(2)
+    weights = [generator.randn(*w.shape) for w in model.get_weights()]
+    model.set_weights([w.astype("float32") * 0.05 for w in weights])
 
 
 def test_temporal_encoding_selects_a_table_row():
@@ -139,21 +168,28 @@ def test_select_pointers_stops_at_the_first_frame():
 
 
 def test_build_times_is_one_hot_per_memory_frame():
-    times = np.array(video.build_times([6, 1], 8))
-    assert times.shape == (1, 2 * GRID * GRID + 8, video.NUM_MEMORIES)
+    times = np.array(video.build_times([6, 1]))
+    assert times.shape == (1, 2 * GRID * GRID, video.NUM_MEMORIES)
     assert np.allclose(times[0, 0], np.eye(7)[6])
     assert np.allclose(times[0, GRID * GRID], np.eye(7)[1])
-    assert np.allclose(times[0, -8:], 0.0)
 
 
-def test_memory_rotary_is_neutral_for_pointers():
-    shape = (1, 4, ma.ROPE_DIM)
-    tables = np.ones(shape), np.zeros(shape)
-    constants = video.Constants(None, None, None, *tables, None)
-    cos, sin = video.memory_rotary(constants, 2, 3)
-    assert cos.shape == (1, 11, ma.ROPE_DIM)
+def test_build_mask_keeps_only_the_real_tokens():
+    mask = np.array(video.build_mask(3, 8))
+    assert mask.shape == (1, 8)
+    assert np.allclose(mask[0], [1, 1, 1, 0, 0, 0, 0, 0])
+
+
+def test_rotary_is_neutral_for_pointer_tokens():
+    _, _, cos, sin = video.build_rotary(2, 3)
+    assert cos.shape == (1, 2 * GRID * GRID + 3, ma.ROPE_DIM)
     assert np.allclose(np.array(cos)[0, -3:], 1.0)
     assert np.allclose(np.array(sin)[0, -3:], 0.0)
+
+
+def test_count_prompted_frames_takes_the_busiest_object():
+    prompts = [video.Prompt(0, 1), video.Prompt(4, 1), video.Prompt(2, 2)]
+    assert video.count_prompted_frames(prompts) == 2
 
 
 def test_sine_encoding_is_bounded():
@@ -190,19 +226,37 @@ def test_select_best_takes_the_highest_score():
     assert np.allclose(np.array(token), tokens[:, 3])
 
 
-def test_build_memory_inputs_shapes():
+def test_build_memory_inputs_pads_to_one_shape():
     bundle = sam2_model.build_video(TINY)
-    constants = video.build_constants(bundle)
+    constants = video.build_constants(bundle, 1)
     grid = np.zeros((1, GRID, GRID, 256), np.float32)
     features = video.Frame(None, grid, None, None)
-    track = build_track([0], [8, 9])
+    shapes = []
+    for tracked in ([], [8, 9]):
+        track = build_track([0], tracked)
+        arguments = bundle, features, constants, track, 10, 12
+        inputs = video.build_memory_inputs(*arguments)
+        shapes.append([tuple(tensor.shape) for tensor in inputs])
+    assert shapes[0] == shapes[1]
+    curr, curr_pos, memory, memory_pos, times, mask, _, _, cos, sin = shapes[0]
+    assert curr == (1, GRID * GRID, 256)
+    assert curr_pos == curr
+    assert memory[1] == constants.spatial + constants.pointers
+    assert memory_pos == memory
+    assert times[1] == memory[1]
+    assert mask == (1, memory[1])
+    assert cos[1] == memory[1]
+    assert sin == cos
+
+
+def test_build_memory_inputs_masks_the_unfilled_bank():
+    bundle = sam2_model.build_video(TINY)
+    constants = video.build_constants(bundle, 1)
+    grid = np.zeros((1, GRID, GRID, 256), np.float32)
+    features = video.Frame(None, grid, None, None)
+    track = build_track([0], [9])
     arguments = bundle, features, constants, track, 10, 12
-    inputs = video.build_memory_inputs(*arguments)
-    curr, curr_pos, memory, memory_pos, times, _, _, cos, sin = inputs
-    assert curr.shape == (1, GRID * GRID, 256)
-    assert curr_pos.shape == (1, GRID * GRID, 256)
-    assert memory.shape[1] == 3 * GRID * GRID + 3 * video.POINTER_SPLIT
-    assert memory.shape == memory_pos.shape
-    assert times.shape[1] == memory.shape[1]
-    assert cos.shape[1] == memory.shape[1]
-    assert sin.shape == cos.shape
+    mask = np.array(video.build_memory_inputs(*arguments)[5])
+    assert mask[0, :2 * GRID * GRID].all()
+    assert not mask[0, 2 * GRID * GRID:constants.spatial].any()
+    assert mask[0, constants.spatial:].sum() == 2 * video.POINTER_SPLIT

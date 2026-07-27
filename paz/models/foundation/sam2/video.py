@@ -6,7 +6,8 @@ memory bank, decoded by the SAM heads, and encoded back into memory. The bank
 holds the prompted frames, the last six tracked frames, and up to sixteen
 object pointers. Each object keeps its own bank, mirroring the official
 predictor's per-object slices; frames are shared, so the image encoder runs
-once per frame.
+once per frame. The bank is padded to its maximum size and carries a keep-mask,
+so every frame feeds the same shapes and each sub-model compiles once.
 
 Yielded masks are logits at the video resolution: positive inside the object,
 ``NO_OBJECT`` on frames where the model predicts it is gone. Memories are
@@ -44,12 +45,13 @@ Frame = namedtuple("Frame", "embedding features high_res_0 high_res_1")
 Entry = namedtuple("Entry", "memory pointer masks")
 Track = namedtuple("Track", "prompted tracked")
 Decoded = namedtuple("Decoded", "masks token absent")
-CONSTANTS = "image_pe frame_pos memory_pos cos sin prompt"
+Bank = namedtuple("Bank", "memory positions times mask")
+CONSTANTS = "image_pe frame_pos memory_pos rotary prompt spatial pointers"
 Constants = namedtuple("Constants", CONSTANTS)
 
 
 def track(bundle, images, prompts):
-    constants = build_constants(bundle)
+    constants = build_constants(bundle, count_prompted_frames(prompts))
     size = images[0].shape[:2]
     tracks = start_tracks(bundle, images, prompts, constants, size)
     objects = sorted(tracks)
@@ -65,6 +67,15 @@ def track(bundle, images, prompts):
 
 def select_pending(tracks, objects, frame):
     return [name for name in objects if frame not in tracks[name].prompted]
+
+
+def count_prompted_frames(prompts):
+    # Every prompted frame stays in the bank, so the most-prompted object sets
+    # how large the padded bank has to be for the whole video.
+    counts = {}
+    for prompt in prompts:
+        counts[prompt.object_id] = counts.get(prompt.object_id, 0) + 1
+    return max(counts.values())
 
 
 def start_tracks(bundle, images, prompts, constants, size):
@@ -167,17 +178,27 @@ def condition(bundle, features, constants, track, frame, num_frames):
 
 
 def build_memory_inputs(bundle, features, constants, track, frame, num_frames):
-    entries, slots = select_memories(track, frame)
-    spatial = [flatten(entry.memory) for entry in entries]
-    positions = jp.tile(constants.memory_pos, (1, len(entries), 1))
-    pointers, pointer_pos = build_pointers(bundle, track, frame, num_frames)
-    memory = jp.concatenate(spatial + [pointers], axis=1)
-    memory_pos = jp.concatenate([positions, pointer_pos], axis=1)
-    memory_time = build_times(slots, pointers.shape[1])
-    rotary = memory_rotary(constants, len(entries), pointers.shape[1])
+    spatial = build_spatial(track, frame, constants)
+    found = bundle, track, frame, num_frames, constants.pointers
+    banked = join_banks(spatial, build_pointers(*found))
     current = flatten(features.features), constants.frame_pos
-    banked = memory, memory_pos, memory_time
-    return current + banked + (constants.cos, constants.sin) + rotary
+    return current + tuple(banked) + constants.rotary
+
+
+def join_banks(spatial, pointers):
+    joined = []
+    for parts in zip(spatial, pointers):
+        joined.append(jp.concatenate(parts, axis=1))
+    return Bank(*joined)
+
+
+def build_spatial(track, frame, constants):
+    entries, slots = select_memories(track, frame)
+    memories = [flatten(entry.memory) for entry in entries]
+    memory = pad_tokens(jp.concatenate(memories, axis=1), constants.spatial)
+    times = pad_tokens(build_times(slots), constants.spatial)
+    mask = build_mask(len(entries) * GRID * GRID, constants.spatial)
+    return Bank(memory, constants.memory_pos, times, mask)
 
 
 def select_memories(track, frame):
@@ -191,14 +212,26 @@ def select_memories(track, frame):
     return entries, slots
 
 
-def build_pointers(bundle, track, frame, num_frames):
+def build_pointers(bundle, track, frame, num_frames, length):
     distances, pointers = select_pointers(track, frame, num_frames)
     if pointers:
-        found = bundle, distances, pointers, num_frames
+        found = bundle, distances, pointers, num_frames, length
         tokens, positions = encode_pointers(*found)
     else:
         tokens = positions = jp.zeros((1, 0, MEMORY_DIM))
-    return tokens, positions
+    mask = build_mask(tokens.shape[1], length)
+    times = jp.zeros((1, length, NUM_MEMORIES))
+    padded = pad_tokens(tokens, length), pad_tokens(positions, length)
+    return Bank(*padded, times, mask)
+
+
+def pad_tokens(tokens, length):
+    missing = length - tokens.shape[1]
+    return jp.pad(tokens, ((0, 0), (0, missing), (0, 0)))
+
+
+def build_mask(count, length):
+    return (jp.arange(length) < count).astype(jp.float32)[None]
 
 
 def select_pointers(track, frame, num_frames):
@@ -217,10 +250,11 @@ def select_pointers(track, frame, num_frames):
     return distances, pointers
 
 
-def encode_pointers(bundle, distances, pointers, num_frames):
+def encode_pointers(bundle, distances, pointers, num_frames, length):
     limit = min(num_frames, NUM_POINTERS) - 1
-    sine = sine_encoding(np.asarray(distances, np.float32) / limit)
-    positions = jp.asarray(bundle.pointer_time(sine))
+    scaled = np.zeros(length // POINTER_SPLIT, np.float32)
+    scaled[:len(distances)] = np.asarray(distances, np.float32) / limit
+    positions = jp.asarray(bundle.pointer_time(sine_encoding(scaled)))
     tokens = jp.concatenate(pointers, axis=0)
     repeated = jp.repeat(positions, POINTER_SPLIT, axis=0)
     return jp.reshape(tokens, (1, -1, MEMORY_DIM)), repeated[None]
@@ -233,33 +267,38 @@ def sine_encoding(distances, dim=PROMPT_EMBED_DIM, temperature=10000.0):
     return np.concatenate([np.sin(angles), np.cos(angles)], axis=-1)
 
 
-def build_times(slots, num_pointers):
+def build_times(slots):
     rows = jax.nn.one_hot(jp.asarray(slots), NUM_MEMORIES)
-    spatial = jp.repeat(rows, GRID * GRID, axis=0)[None]
-    pointers = jp.zeros((1, num_pointers, NUM_MEMORIES))
-    return jp.concatenate([spatial, pointers], axis=1)
+    return jp.repeat(rows, GRID * GRID, axis=0)[None]
 
 
-def memory_rotary(constants, num_entries, num_pointers):
-    identity_cos, identity_sin = memory_attention.identity_tables(num_pointers)
-    cos = tile_rotary(constants.cos, num_entries, identity_cos[None])
-    sin = tile_rotary(constants.sin, num_entries, identity_sin[None])
-    return cos, sin
+def build_constants(bundle, num_prompted):
+    entries = num_prompted + NUM_MEMORIES - 1
+    spatial = entries * GRID * GRID
+    pointers = (num_prompted + NUM_POINTERS - 1) * POINTER_SPLIT
+    tables = build_rotary(entries, pointers), build_empty_prompt(bundle)
+    sizes = spatial, pointers
+    return Constants(*build_positions(bundle, entries), *tables, *sizes)
 
 
-def tile_rotary(table, num_entries, pointers):
-    tiled = jp.tile(table, (1, num_entries, 1))
-    return jp.concatenate([tiled, pointers], axis=1)
-
-
-def build_constants(bundle):
+def build_positions(bundle, entries):
     image_pe = dense_positional_encoding(bundle.point_encoder)[None]
     frame_pos = sine_positions(PROMPT_EMBED_DIM)
-    memory_pos = sine_positions(MEMORY_DIM)
+    memory_pos = jp.tile(sine_positions(MEMORY_DIM), (1, entries, 1))
+    return image_pe, frame_pos, memory_pos
+
+
+def build_rotary(entries, pointers):
     cos, sin = memory_attention.rotary_tables(GRID, GRID)
-    rotary = jp.asarray(cos)[None], jp.asarray(sin)[None]
-    prompt = build_empty_prompt(bundle)
-    return Constants(image_pe, frame_pos, memory_pos, *rotary, prompt)
+    identity = memory_attention.identity_tables(pointers)
+    memory_cos = tile_rotary(cos, identity[0], entries)
+    memory_sin = tile_rotary(sin, identity[1], entries)
+    return jp.asarray(cos)[None], jp.asarray(sin)[None], memory_cos, memory_sin
+
+
+def tile_rotary(table, pointers, entries):
+    tiled = np.tile(table, (entries, 1))
+    return jp.asarray(np.concatenate([tiled, pointers], axis=0))[None]
 
 
 def sine_positions(num_features):

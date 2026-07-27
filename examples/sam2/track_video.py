@@ -1,77 +1,80 @@
-"""Track objects through a video with SAM 2.1.
+"""Track objects through a video with SAM 2.1 and write the overlay video.
 
-Point at each object on the first frame and SAM 2 follows it through the rest
-of the video, writing one overlay image per frame. Without ``--video`` the
-example pans across a photo, which needs no download beyond the photo itself
-and still exercises the full memory path.
+Point at each object on the first frame and SAM 2 follows it through the rest of
+the video. Every sub-model is jitted and the memory bank is padded to a fixed
+size, so each one compiles once and the tracker then runs at a steady cost:
+about 0.2 s and 1.3 GB of GPU memory per frame for the small backbone.
+
+Those first-run compiles cost about 30 s. To keep them across runs, export
+``JAX_COMPILATION_CACHE_DIR``, ``JAX_PERSISTENT_CACHE_MIN_ENTRY_SIZE_BYTES=-1``
+and ``JAX_PERSISTENT_CACHE_MIN_COMPILE_TIME_SECS=0`` before running; JAX reads
+them while it initializes, so setting them from Python here would be too late.
+
+The default video and prompts are the two children of the official SAM 2 demo
+clip, downloaded on first use.
 """
-import os
 import argparse
 
-import numpy as np
 import cv2
 from keras.utils import get_file
 
 import paz
 from paz.models.foundation.sam2.video import Prompt
 
-SHIFT = 14
+SAM2_REPO = "https://raw.githubusercontent.com/facebookresearch/sam2/main/"
+DEMO_VIDEO = SAM2_REPO + "notebooks/videos/bedroom.mp4"
+BOY = (250, 220)
+GIRL = (322, 0, 522, 392)
 
 
-def fetch_image():
-    URL = "http://images.cocodataset.org/val2017/000000039769.jpg"
-    path = get_file("sam2_cats.jpg", URL, cache_subdir="paz/examples/sam2")
-    return paz.image.load(path)
+def fetch_video():
+    kwargs = dict(cache_subdir="paz/examples/sam2")
+    return get_file("sam2_bedroom.mp4", DEMO_VIDEO, **kwargs)
 
 
-def build_panning_frames(num_frames=8):
-    image = paz.image.resize(fetch_image(), (768, 768), "linear", True)
-    pixels = np.asarray(paz.to_numpy(image), np.uint8)
-    shifts = [index * SHIFT for index in range(num_frames)]
-    return [np.roll(pixels, shift, axis=1) for shift in shifts]
-
-
-def load_frames(path):
-    if os.path.isdir(path):
-        names = sorted(os.listdir(path))
-        frames = [paz.image.load(os.path.join(path, name)) for name in names]
-    else:
-        frames = read_video(path)
-    return [np.asarray(paz.to_numpy(frame), np.uint8) for frame in frames]
-
-
-def read_video(path):
-    video = cv2.VideoCapture(path)
+def read_frames(path, num_frames, stride):
+    capture = cv2.VideoCapture(path)
     frames = []
-    while True:
-        received, frame = video.read()
+    while len(frames) < num_frames:
+        received, frame = capture.read()
         if not received:
             break
         frames.append(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
-    video.release()
+        for _ in range(stride - 1):
+            capture.read()
+    capture.release()
     return frames
+
+
+def write_video(path, frames, fps):
+    height, width = frames[0].shape[:2]
+    codec = cv2.VideoWriter_fourcc(*"mp4v")
+    writer = cv2.VideoWriter(path, codec, fps, (width, height))
+    for frame in frames:
+        writer.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
+    writer.release()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--video", default=None)
-    parser.add_argument("--point", type=int, nargs=2, default=None)
-    parser.add_argument("--output", default="sam2_track")
+    parser.add_argument("--point", type=int, nargs=2, default=BOY)
+    parser.add_argument("--box", type=int, nargs=4, default=GIRL)
+    parser.add_argument("--num_frames", type=int, default=60)
+    parser.add_argument("--stride", type=int, default=3)
+    parser.add_argument("--output", default="sam2_track.mp4")
     arguments = parser.parse_args()
 
-    if arguments.video is None:
-        frames = build_panning_frames()
-    else:
-        frames = load_frames(arguments.video)
-    height, width = frames[0].shape[:2]
-    point = arguments.point or (width // 2, int(height * 0.6))
-    prompts = [Prompt(0, 1, points=[point], labels=[1])]
-    print("tracking", len(frames), "frames from", point)
+    path = arguments.video or fetch_video()
+    frames = read_frames(path, arguments.num_frames, arguments.stride)
+    print("read", len(frames), "frames of", frames[0].shape)
+    clicked = Prompt(0, 1, points=[arguments.point], labels=[1])
+    prompts = [clicked, Prompt(0, 2, box=arguments.box)]
 
     track = paz.applications.TrackSAMHieraSmall21()
-    os.makedirs(arguments.output, exist_ok=True)
+    overlays = []
     for frame, masks, overlay in track(frames, prompts):
-        path = os.path.join(arguments.output, f"{frame:05d}.png")
-        paz.image.write(path, overlay)
+        overlays.append(overlay)
         print("frame", frame, "covered", int(masks.sum()), "pixels")
-    print("saved overlays to", arguments.output)
+    write_video(arguments.output, overlays, 30.0 / arguments.stride)
+    print("saved", arguments.output)

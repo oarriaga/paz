@@ -7,12 +7,18 @@ object-pointer positions get an identity rotation instead of a runtime slice.
 Each memory token also carries a one-hot row selecting its frame's slot in the
 learned ``maskmem_tpos_enc`` table, which is added to its position; pointer
 tokens get an all-zero row because their position is already temporal.
+
+The memory arrives padded to a fixed length with a keep-mask, so the tracker
+compiles this graph once instead of once per bank size. Masked keys are dropped
+before the softmax, which makes the result identical to passing the shorter
+memory.
 """
 import numpy as np
 from keras import Input, Model, ops
 from keras.layers import Dense, LayerNormalization, Reshape
 
-from paz.models.transformers.attention import compute_attention
+from paz.models.transformers.attention import compute_masked_attention
+from paz.models.transformers.attention import expand_mask_for_heads
 from paz.models.foundation.sam2.configuration import MEMORY_DIM
 from paz.models.foundation.sam2.configuration import NUM_MEMORIES
 
@@ -28,17 +34,19 @@ def build(name="sam2_memory_attention"):
     memory = Input((None, MEMORY_DIM), name="memory")
     memory_pos = Input((None, MEMORY_DIM), name="memory_pos")
     memory_time = Input((None, NUM_MEMORIES), name="memory_time")
+    memory_mask = Input((None,), name="memory_mask")
     curr_cos = Input((None, ROPE_DIM), name="curr_cos")
     curr_sin = Input((None, ROPE_DIM), name="curr_sin")
     memory_cos = Input((None, ROPE_DIM), name="memory_cos")
     memory_sin = Input((None, ROPE_DIM), name="memory_sin")
     tokens = ops.add(curr, 0.1 * curr_pos)
     positions = ops.add(memory_pos, temporal_encoding(memory_time))
+    keep = expand_mask_for_heads(memory_mask)
     rope = curr_cos, curr_sin, memory_cos, memory_sin
     for index in range(NUM_LAYERS):
-        tokens = apply_layer(tokens, memory, positions, rope, index)
+        tokens = apply_layer(tokens, memory, positions, keep, rope, index)
     tokens = normalize(tokens, "mematt_norm")
-    tensors = (curr, curr_pos, memory, memory_pos, memory_time)
+    tensors = (curr, curr_pos, memory, memory_pos, memory_time, memory_mask)
     tables = (curr_cos, curr_sin, memory_cos, memory_sin)
     return Model(tensors + tables, tokens, name=name)
 
@@ -48,25 +56,25 @@ def temporal_encoding(memory_time):
     return Dense(MEMORY_DIM, **kwargs)(memory_time)
 
 
-def apply_layer(tokens, memory, memory_pos, rope, index):
+def apply_layer(tokens, memory, memory_pos, keep, rope, index):
     curr_cos, curr_sin, memory_cos, memory_sin = rope
     name = f"mematt_{index}"
     normed = normalize(tokens, f"{name}_norm1")
     query = (normed, curr_cos, curr_sin)
     key = (normed, curr_cos, curr_sin)
-    attended = attention(query, key, normed, f"{name}_self")
+    attended = attention(query, key, normed, None, f"{name}_self")
     tokens = ops.add(tokens, attended)
     normed = normalize(tokens, f"{name}_norm2")
     query = (normed, curr_cos, curr_sin)
     key = (ops.add(memory, memory_pos), memory_cos, memory_sin)
-    attended = attention(query, key, memory, f"{name}_cross")
+    attended = attention(query, key, memory, keep, f"{name}_cross")
     tokens = ops.add(tokens, attended)
     normed = normalize(tokens, f"{name}_norm3")
     forwarded = feedforward(normed, name)
     return ops.add(tokens, forwarded)
 
 
-def attention(query, key, value, name):
+def attention(query, key, value, keep, name):
     query_tokens, query_cos, query_sin = query
     key_tokens, key_cos, key_sin = key
     q = Dense(MODEL_DIM, name=f"{name}_q")(query_tokens)
@@ -74,7 +82,8 @@ def attention(query, key, value, name):
     v = Dense(MODEL_DIM, name=f"{name}_v")(value)
     q = apply_rotary(q, query_cos, query_sin)
     k = apply_rotary(k, key_cos, key_sin)
-    context = compute_attention(to_head(q), to_head(k), to_head(v))
+    heads = to_head(q), to_head(k), to_head(v)
+    context = compute_masked_attention(*heads, keep)
     return Dense(MODEL_DIM, name=f"{name}_out")(from_head(context))
 
 
