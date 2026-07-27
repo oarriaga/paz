@@ -6,7 +6,7 @@ from jax.image import resize
 import paz
 
 from paz.graphics import render_masks
-from .mesh import unbatch_meshes
+from .mesh import build_scene_meshes, unbatch_meshes
 from .scene import to_render_material
 
 
@@ -89,13 +89,12 @@ def build_mesh_model(camera, meshes, mesh_weights, floor, lights):
         deform = partial(paz.cage.control_mesh, mesh_weights)
         deformed_verts = jax.vmap(deform)(cage_vertices)
         updated = meshes._replace(vertices=deformed_verts)
-        object_meshes = unbatch_meshes(updated)
-        scene = paz.graphics.Scene(object_meshes + [floor])
+        scene = paz.graphics.Scene(build_scene_meshes(updated, floor))
         render_args = image_shape, y_FOV, world_to_camera, scene
         render_args = render_args + (None, lights, tile, chunk_size)
         image, depth = paz.graphics.render(*render_args)
         depth_range = (min_depth, max_depth)
-        object_scene = paz.graphics.Scene(object_meshes)
+        object_scene = paz.graphics.Scene(unbatch_meshes(updated))
         mask_args = image_shape, y_FOV, world_to_camera, object_scene, lights
         mask_args = mask_args + (depth_range, tile, chunk_size)
         masks = render_masks(*mask_args)

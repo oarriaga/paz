@@ -65,6 +65,10 @@ def build_floor(floor_material, size=4.0, divisions=2):
     return paz.graphics.mesh.Mesh(*fields)
 
 
+def build_scene_meshes(batched, floor):
+    return unbatch_meshes(batched) + [floor]
+
+
 def unbatch_meshes(batched):
     meshes = []
     for arg in range(len(batched.vertices)):

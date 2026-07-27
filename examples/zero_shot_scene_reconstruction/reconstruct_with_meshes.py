@@ -96,7 +96,7 @@ from paz.optimization import MAX_STEPS_REACHED
 from paz.optimization import TraceParameters
 from backend.losses import build_mesh_loss, build_mesh_metrics
 from backend.mesh import (
-    append_floor,
+    build_scene_meshes,
     build_floor,
     build_object_meshes,
 )
@@ -259,7 +259,7 @@ mesh_states, scene_states = {}, {}
 for prefix, state in state_map.items():
     image, depth, masks, aux = jit_model(state)
     meshes_now = aux["meshes"]
-    scene_now = append_floor(meshes_now, floor)
+    scene_now = build_scene_meshes(meshes_now, floor)
     mesh_states[prefix] = (image, depth, masks, meshes_now)
     scene_states[prefix] = scene_now
     write_rgb_image(image, root, f"{prefix}_image.png")

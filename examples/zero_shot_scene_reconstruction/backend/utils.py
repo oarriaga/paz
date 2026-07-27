@@ -7,7 +7,6 @@ import paz
 from paz.backend import video as video_utils
 from paz.utils import plot
 
-from .mesh import unbatch_meshes
 import trimesh
 
 DANDELION = (1.0, 0.84, 0.0)
@@ -115,7 +114,7 @@ def export_mesh_orbit(root, round_path, video_name, fps, orbit, camera_origin):
     meshes, image_shape, y_FOV, lights, num_views, chunk_size = orbit
     H, W = image_shape
     directory = paz.directory.make(Path(root) / round_path)
-    scene = paz.graphics.Scene(unbatch_meshes(meshes))
+    scene = paz.graphics.Scene(list(meshes))
     render_args = scene, H, W, y_FOV, lights, False, chunk_size
     render_frame = paz.graphics.scene_renderer(*render_args)
     angles = jp.linspace(1.5 * jp.pi, 3.5 * jp.pi, num_views)
