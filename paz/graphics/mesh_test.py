@@ -861,11 +861,40 @@ def test_scene_rejects_meshes_with_mixed_pattern_sizes():
         )
 
 
-def test_scene_rejects_meshes_with_non_phong_materials():
+def build_cook_torrance_mesh():
     vertices, faces, edges = build_cube(1.0)
     colors = build_vertex_colors(vertices, [0.7, 0.3, 0.1])
-    material = paz.graphics.CookTorranceMaterial()
+    material = paz.graphics.CookTorranceMaterial(
+        jp.zeros(3), 0.1, 0.04, 0.4, 0.0
+    )
     args = vertices, colors, jp.eye(4), material, faces, edges
-    scene = paz.graphics.Scene([Mesh(*args)])
-    with pytest.raises(ValueError, match="must all be a Material"):
+    return Mesh(*args)
+
+
+def render_cook_torrance_scene(meshes):
+    shape, y_FOV, pose, _, _, lights = make_multi_mesh_scene()
+    scene = paz.graphics.Scene(list(meshes))
+    args = shape, y_FOV, pose, scene, None, lights
+    return paz.graphics.render(*args, (1, 1), 1024)
+
+
+def test_cook_torrance_mesh_renders():
+    image, depth = render_cook_torrance_scene([build_cook_torrance_mesh()])
+    assert image.shape == (24, 24, 3)
+    assert jp.any(depth > 0.0)
+    assert jp.all(jp.isfinite(image))
+
+
+def test_cook_torrance_mesh_roughness_changes_shading():
+    smooth = build_cook_torrance_mesh()
+    rough = smooth._replace(material=smooth.material._replace(roughness=0.9))
+    smooth_image, _ = render_cook_torrance_scene([smooth])
+    rough_image, _ = render_cook_torrance_scene([rough])
+    assert compute_max_abs_difference(smooth_image, rough_image) > 1e-3
+
+
+def test_scene_rejects_meshes_with_mixed_material_types():
+    phong = build_cube_mesh()
+    with pytest.raises(ValueError, match="must all be of one type"):
+        scene = paz.graphics.Scene([phong, build_cook_torrance_mesh()])
         paz.graphics.scene.compile(scene, [], None)
