@@ -136,7 +136,8 @@ def decode(bundle, features, embedding, prompts, image_pe, select):
 
 def decode_mask_prompt(bundle, features, constants, prompt):
     low_res = bundle.mask_downsample(prompt)
-    prompts = constants.prompt[0], build_dense(bundle, low_res)
+    sparse, _ = constants.prompt
+    prompts = sparse, build_dense(bundle, low_res)
     arguments = bundle, features, features.features, prompts
     return decode(*arguments, constants.image_pe, select_stable)
 
@@ -174,9 +175,9 @@ def build_memory_inputs(bundle, features, constants, track, frame, num_frames):
     memory_pos = jp.concatenate([positions, pointer_pos], axis=1)
     memory_time = build_times(slots, pointers.shape[1])
     rotary = memory_rotary(constants, len(entries), pointers.shape[1])
-    frame = flatten(features.features), constants.frame_pos
+    current = flatten(features.features), constants.frame_pos
     banked = memory, memory_pos, memory_time
-    return frame + banked + (constants.cos, constants.sin) + rotary
+    return current + banked + (constants.cos, constants.sin) + rotary
 
 
 def select_memories(track, frame):
@@ -191,9 +192,10 @@ def select_memories(track, frame):
 
 
 def build_pointers(bundle, track, frame, num_frames):
-    found = select_pointers(track, frame, num_frames)
-    if found[1]:
-        tokens, positions = encode_pointers(bundle, *found, num_frames)
+    distances, pointers = select_pointers(track, frame, num_frames)
+    if pointers:
+        found = bundle, distances, pointers, num_frames
+        tokens, positions = encode_pointers(*found)
     else:
         tokens = positions = jp.zeros((1, 0, MEMORY_DIM))
     return tokens, positions
@@ -239,9 +241,9 @@ def build_times(slots, num_pointers):
 
 
 def memory_rotary(constants, num_entries, num_pointers):
-    shape = (1, num_pointers, memory_attention.ROPE_DIM)
-    cos = tile_rotary(constants.cos, num_entries, jp.ones(shape))
-    sin = tile_rotary(constants.sin, num_entries, jp.zeros(shape))
+    identity_cos, identity_sin = memory_attention.identity_tables(num_pointers)
+    cos = tile_rotary(constants.cos, num_entries, identity_cos[None])
+    sin = tile_rotary(constants.sin, num_entries, identity_sin[None])
     return cos, sin
 
 
