@@ -1,5 +1,7 @@
 import jax
 import jax.numpy as jp
+from pathlib import Path
+
 import pytest
 import paz
 from paz.graphics.constants import FARAWAY, NO_PATTERN
@@ -300,7 +302,7 @@ def test_render_gradient_through_vertices():
 
 
 def snapshot_path(filename):
-    return f"paz/graphics/snapshots/{filename}"
+    return str(Path(__file__).parent / "snapshots" / filename)
 
 
 def assert_snapshot(array, filename, atol):

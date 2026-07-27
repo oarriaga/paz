@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 import jax
 import jax.numpy as jp
@@ -413,7 +415,7 @@ def camera_pose():
 
 
 def snapshot_path(filename):
-    return f"paz/graphics/snapshots/{filename}"
+    return str(Path(__file__).parent / "snapshots" / filename)
 
 
 def assert_snapshot(array, filename, atol=1e-4):
