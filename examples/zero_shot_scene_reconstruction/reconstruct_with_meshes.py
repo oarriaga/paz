@@ -227,7 +227,8 @@ print("Running ADAMW to optimize cage vertices (Eq. 18)")
 start_time = time.perf_counter()
 opt_args = (cage_vertices, mesh_loss, optimizer, args.max_steps)
 opt_kwargs = dict(stop_fn=stop_fn, metrics=mesh_metrics)
-opt_kwargs.update(metrics_every=args.metrics_every)
+if mesh_metrics is not None:
+    opt_kwargs.update(metrics_every=args.metrics_every)
 opt_kwargs.update(callbacks=callbacks, verbose=True)
 status, cage_vertices, history = paz.minimize(*opt_args, **opt_kwargs)
 total_time = time.perf_counter() - start_time
