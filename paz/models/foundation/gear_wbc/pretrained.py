@@ -13,7 +13,7 @@ from keras.utils import get_file
 
 from paz.models.foundation.gear_wbc.model import build_actor
 
-GEAR_WBC_ASSETS_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.30/"  # fmt: skip
+GEAR_WBC_ASSETS_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.31/"  # fmt: skip
 GEAR_WBC_CACHE_SUBDIR = "paz/models/gear_wbc"
 
 # The release ships two experts over one architecture: "balance" holds a
