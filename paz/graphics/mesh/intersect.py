@@ -36,11 +36,11 @@ def intersect_canonical_mesh(vertices, faces, ray_origins, ray_directions):
     return hit_mask, depth, u, v
 
 
-def _pad_to_chunks(faces, chunk_size):
-    remainder = faces.shape[0] % chunk_size
+def _pad_to_chunks(faces, face_chunk_size):
+    remainder = faces.shape[0] % face_chunk_size
     if remainder == 0:
         return faces
-    pad_size = chunk_size - remainder
+    pad_size = face_chunk_size - remainder
     last = jp.repeat(faces[-1:], pad_size, axis=0)
     return jp.concatenate([faces, last], axis=0)
 
@@ -87,12 +87,12 @@ def _init_carry(num_rays):
     return mask, depth, u, v, idx
 
 
-def intersect_chunked(vertices, faces, rays, chunk_size=1024):
+def intersect_chunked(vertices, faces, rays, face_chunk_size=1024):
     num_faces = faces.shape[0]
-    padded = _pad_to_chunks(faces, chunk_size)
-    num_chunks = padded.shape[0] // chunk_size
-    chunks = jp.reshape(padded, (num_chunks, chunk_size, 3))
-    offsets = jp.arange(num_chunks, dtype=jp.int32) * chunk_size
+    padded = _pad_to_chunks(faces, face_chunk_size)
+    num_chunks = padded.shape[0] // face_chunk_size
+    chunks = jp.reshape(padded, (num_chunks, face_chunk_size, 3))
+    offsets = jp.arange(num_chunks, dtype=jp.int32) * face_chunk_size
     init = _init_carry(rays[0].shape[0])
     step = partial(_chunk_step, vertices=vertices, rays=rays)
     carry, _ = jax.lax.scan(step, init, (chunks, offsets))
@@ -101,9 +101,10 @@ def intersect_chunked(vertices, faces, rays, chunk_size=1024):
     return mask, depth, u, v, idx
 
 
-def intersect_triangles(triangles, rays, chunk_size=1024):
+def intersect_triangles(triangles, rays, face_chunk_size=1024):
     args = triangles.vertices, triangles.faces, rays
-    hit_mask, depth, u, v, face_index = intersect_chunked(*args, chunk_size)
+    args = args + (face_chunk_size,)
+    hit_mask, depth, u, v, face_index = intersect_chunked(*args)
     ray_origins, ray_directions = rays
     points = ray_origins + jp.expand_dims(depth, -1) * ray_directions
     normal_args = triangles.vertices, triangles.faces, face_index
@@ -111,8 +112,9 @@ def intersect_triangles(triangles, rays, chunk_size=1024):
     return hit_mask, depth, points, normals, -ray_directions, face_index, u, v
 
 
-def intersect_mesh(mesh, ray_origins, ray_directions, chunk_size=1024):
+def intersect_mesh(mesh, ray_origins, ray_directions, face_chunk_size=1024):
     world_to_shape = jp.linalg.inv(mesh.transform)
     args = (world_to_shape, ray_origins, ray_directions)
     rays = paz.algebra.transform_rays(*args)
-    return intersect_chunked(mesh.vertices, mesh.faces, rays, chunk_size)
+    args = mesh.vertices, mesh.faces, rays, face_chunk_size
+    return intersect_chunked(*args)
