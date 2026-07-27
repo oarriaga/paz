@@ -263,6 +263,8 @@ def build_primitive_index(meshes):
 
 def stack_materials(meshes):
     materials = [mesh.material for mesh in meshes]
+    if not all(isinstance(each, paz.graphics.Material) for each in materials):
+        raise ValueError("Mesh materials must all be a Material.")
     return jax.tree.map(lambda *args: jp.stack(args), *materials)
 
 

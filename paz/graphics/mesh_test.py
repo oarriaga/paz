@@ -850,3 +850,22 @@ def test_scene_mixes_meshes_and_shapes():
     image, depth = paz.graphics.render(*args, (1, 1), 1024)
     assert image.shape == (24, 24, 3)
     assert jp.any(depth > 0)
+
+
+def test_scene_rejects_meshes_with_mixed_pattern_sizes():
+    plain = build_cube_mesh()
+    textured = build_textured_quad_mesh()
+    with pytest.raises(ValueError, match="pattern images"):
+        paz.graphics.scene.compile(
+            paz.graphics.Scene([plain, textured]), [], None
+        )
+
+
+def test_scene_rejects_meshes_with_non_phong_materials():
+    vertices, faces, edges = build_cube(1.0)
+    colors = build_vertex_colors(vertices, [0.7, 0.3, 0.1])
+    material = paz.graphics.CookTorranceMaterial()
+    args = vertices, colors, jp.eye(4), material, faces, edges
+    scene = paz.graphics.Scene([Mesh(*args)])
+    with pytest.raises(ValueError, match="must all be a Material"):
+        paz.graphics.scene.compile(scene, [], None)

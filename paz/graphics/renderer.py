@@ -223,24 +223,27 @@ def update_active_mask(state, closest):
     return state._replace(active_mask=active_mask)
 
 
-def compute_hit_colors(*args):
-    compiled, indices, triangle_hit = args[1], args[2], args[8]
+def compute_hit_colors(
+    rays, compiled, indices, closest, points, normals, eyes, shadows,
+    triangle_hit,
+):
+    shape_args = rays, compiled, indices, closest, points, normals, eyes
     num_shapes = len(compiled.shapes)
     if num_shapes == 0:
         colors = compute_triangle_colors(compiled, triangle_hit)
     elif triangle_hit is None:
-        colors = compute_shape_colors(*args[:8])
+        colors = compute_shape_colors(*shape_args, shadows)
     else:
-        shape_colors = compute_shape_colors(*args[:8])
+        shape_colors = compute_shape_colors(*shape_args, shadows)
         triangle_colors = compute_triangle_colors(compiled, triangle_hit)
         is_triangle = jp.expand_dims(indices == num_shapes, -1)
         colors = jp.where(is_triangle, triangle_colors, shape_colors)
     return colors
 
 
-def compute_shape_colors(*args):
-    rays, compiled, indices, closest, points = args[:5]
-    normals, eyes, shadows = args[5:]
+def compute_shape_colors(
+    rays, compiled, indices, closest, points, normals, eyes, shadows
+):
     num_shapes = len(compiled.shapes)
     shape_args = jp.minimum(indices, num_shapes - 1)
     points, normals = points[:num_shapes], normals[:num_shapes]
