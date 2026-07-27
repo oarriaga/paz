@@ -31,13 +31,15 @@ scene = Scene([mesh])
 shape = (H, W)
 base_args = shape, y_FOV, camera_pose, scene, None, lights
 render_fn = jax.jit(render, static_argnums=(0, 6, 7))
-image, depth = render_fn(*base_args, (1, 1), 1024)
+num_rays = H * W
+image, depth = render_fn(*base_args, (1, 1), num_rays)
 image = paz.image.denormalize(image)
 paz.image.write("render_full.png", image)
 print("Saved render_full.png")
 
 tile_shape = (4, 4)
-image, depth = render_fn(*base_args, tile_shape, 1024)
+tiled_rays = num_rays // (tile_shape[0] * tile_shape[1])
+image, depth = render_fn(*base_args, tile_shape, tiled_rays)
 image = paz.image.denormalize(image)
 paz.image.write("render_tiled.png", image)
 print("Saved render_tiled.png")
@@ -49,7 +51,7 @@ def loss_fn(verts):
     mesh = Mesh(verts, vertex_colors, transform, material, faces, edges)
     scene = Scene([mesh])
     args = shape, y_FOV, camera_pose, scene, None, lights
-    _, depth = render_fn(*args, (1, 1), 1024)
+    _, depth = render_fn(*args, (1, 1), num_rays)
     return jp.sum(depth)
 
 

@@ -76,7 +76,9 @@ def build_renderer(mesh, image_size, distance, y_FOV=jp.pi / 4.0):
     position = jp.array([1.5, 2.0, 2.5]) * distance
     lights = [PointLight(jp.ones(3) * 1.6, position)]
     H = W = image_size
-    args = scene, H, W, y_FOV, lights, False, 1024 * 8, (2, 2)
+    tiles = (2, 2)
+    tile_rays = (H * W) // (tiles[0] * tiles[1])
+    args = scene, H, W, y_FOV, lights, False, tile_rays, tiles
     return scene_renderer(*args)
 
 

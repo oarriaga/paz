@@ -56,6 +56,8 @@ lights = [
 bunny = make_bunny_mesh(mesh_path)
 scene = Scene([bunny])
 
-render_args = scene, H, W, Y_FOV, lights, False, 1024 * 12, (4, 4)
+TILES = (4, 4)
+tile_rays = (H * W) // (TILES[0] * TILES[1])
+render_args = scene, H, W, Y_FOV, lights, False, tile_rays, TILES
 render_fn = scene_renderer(*render_args)
 viewer(render_fn, camera_pose, H=H, W=W)

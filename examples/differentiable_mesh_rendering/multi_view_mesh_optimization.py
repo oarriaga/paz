@@ -22,7 +22,7 @@ def build_parser():
     add("--momentum", default=0.9, type=float)
     add("--distance", default=2.7, type=float)
     add("--tile_shape", default=[2, 2], nargs=2, type=int)
-    add("--chunk_size", default=256, type=int)
+    add("--chunk_size", default=4096, type=int)
     add("--mask_bin_size", default=16, type=int)
     add("--max_faces_per_bin", default=4608, type=int)
     add("--soft_mask_sigma", default=1e-4, type=float)

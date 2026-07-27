@@ -76,13 +76,14 @@ def build_image_renderer(mesh, size, distance, y_FOV, chunk_size, tiles):
     return scene_renderer(*args)
 
 
-def build_coordinate_renderer(mesh, size, y_FOV, chunk_size):
+def build_coordinate_renderer(mesh, size, y_FOV, face_chunk=128):
     lower = jp.min(mesh.vertices, axis=0)
     upper = jp.max(mesh.vertices, axis=0)
 
     @jax.jit
     def render_nocs(pose):
-        coordinates, hit = render_coordinates(size, y_FOV, pose, mesh, chunk_size)  # fmt: skip
+        args = size, y_FOV, pose, mesh, face_chunk
+        coordinates, hit = render_coordinates(*args)
         nocs = (coordinates - lower) / (upper - lower)
         nocs = nocs * hit[..., None]
         return nocs, hit.astype("float32")

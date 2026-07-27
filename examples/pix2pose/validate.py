@@ -39,7 +39,7 @@ extents = np.asarray(scenes.object_extents(mesh))
 render_image = scenes.build_image_renderer(
     mesh, size, np.mean(args.distance), args.y_FOV, args.chunk_size, tuple(args.tiles))  # fmt: skip
 render_coordinates = scenes.build_coordinate_renderer(
-    mesh, size, args.y_FOV, args.chunk_size)
+    mesh, size, args.y_FOV)
 
 model = paz.models.UNET_VGG16(3, (*size, 3))
 model.load_weights(args.weights)

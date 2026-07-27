@@ -36,7 +36,7 @@ print(f"object extents (m): {np.round(extents, 4)}")
 render_image = scenes.build_image_renderer(
     mesh, size, np.mean(args.distance), args.y_FOV, args.chunk_size, tuple(args.tiles))  # fmt: skip
 render_coordinates = scenes.build_coordinate_renderer(
-    mesh, size, args.y_FOV, args.chunk_size)
+    mesh, size, args.y_FOV)
 
 keys = jax.random.split(jax.random.PRNGKey(args.seed), args.num_samples)
 poses = [scenes.sample_pose(key, args.distance) for key in keys]
