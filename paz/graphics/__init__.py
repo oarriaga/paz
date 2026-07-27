@@ -51,5 +51,5 @@ from paz.graphics.renderer import render, render_masks
 from paz.graphics import patterns
 from paz.graphics import scene
 from paz.graphics.serialization import save, load
-from paz.graphics.viewer import viewer, shape_renderer, mesh_renderer
+from paz.graphics.viewer import viewer, scene_renderer
 from paz.graphics.orbit import orbit_pose, render_orbit

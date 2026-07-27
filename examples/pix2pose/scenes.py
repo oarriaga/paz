@@ -6,9 +6,10 @@ from scipy.spatial import cKDTree
 from keras.utils import get_file
 
 import paz
-from paz.graphics.mesh import Mesh, merge_meshes, render_coordinates
+from paz.graphics import Scene
+from paz.graphics.mesh import Mesh, render_coordinates
 from paz.graphics.types import Material, PointLight
-from paz.graphics.viewer import mesh_renderer
+from paz.graphics.viewer import scene_renderer
 
 MESH_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.12/"
 MESH_FILES = ["texture_map.png", "textured.mtl", "textured.obj"]
@@ -67,11 +68,12 @@ def object_extents(mesh):
 
 
 def build_image_renderer(mesh, size, distance, y_FOV, chunk_size, tiles):
-    meshes, mask = merge_meshes(mesh)
+    scene = Scene([mesh])
     position = jp.array([1.5, 2.0, 2.5]) * distance
     lights = [PointLight(jp.ones(3) * 1.6, position)]
     H, W = size
-    return mesh_renderer(meshes, mask, H, W, y_FOV, lights, chunk_size, tiles)
+    args = scene, H, W, y_FOV, lights, False, chunk_size, tiles
+    return scene_renderer(*args)
 
 
 def build_coordinate_renderer(mesh, size, y_FOV, chunk_size):

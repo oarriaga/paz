@@ -1,12 +1,8 @@
 import jax
 import jax.numpy as jp
 import paz
-from paz.graphics.mesh import (
-    Mesh,
-    build_sphere,
-    merge_meshes,
-    render,
-)
+from paz.graphics import Scene, render
+from paz.graphics.mesh import Mesh, build_sphere
 from paz.graphics.types import PointLight, Material
 
 H, W = 2**8, 2**8
@@ -30,10 +26,10 @@ vertex_colors = jp.repeat(red[None], len(vertices), axis=0)
 material = Material(jp.zeros(3), 0.1, 0.7, 0.5, 100.0)
 transform = paz.SE3.translation(jp.zeros(3))
 mesh = Mesh(vertices, vertex_colors, transform, material, faces, edges)
-meshes, mask = merge_meshes(mesh)
+scene = Scene([mesh])
 
 shape = (H, W)
-base_args = shape, y_FOV, camera_pose, meshes, mask, lights
+base_args = shape, y_FOV, camera_pose, scene, None, lights
 render_fn = jax.jit(render, static_argnums=(0, 6, 7))
 image, depth = render_fn(*base_args, (1, 1), 1024)
 image = paz.image.denormalize(image)
@@ -51,8 +47,8 @@ print("Computing gradient through vertex positions...")
 
 def loss_fn(verts):
     mesh = Mesh(verts, vertex_colors, transform, material, faces, edges)
-    meshes, mask = merge_meshes(mesh)
-    args = shape, y_FOV, camera_pose, meshes, mask, lights
+    scene = Scene([mesh])
+    args = shape, y_FOV, camera_pose, scene, None, lights
     _, depth = render_fn(*args, (1, 1), 1024)
     return jp.sum(depth)
 

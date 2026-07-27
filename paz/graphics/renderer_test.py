@@ -860,11 +860,11 @@ def test_max_bounces_effect(small_image_shape, camera_pose):
     assert not jp.all(img_1b == 1.0)
 
 
-def test_shape_renderer_returns_uint8_frame(small_image_shape, camera_pose):
+def test_scene_renderer_returns_uint8_frame(small_image_shape, camera_pose):
     material = Material(color=jp.array([1.0, 0.0, 0.0]))
     sphere = Sphere(jp.eye(4), material)
     scene = Scene([sphere])
-    render_frame = paz.graphics.shape_renderer(
+    render_frame = paz.graphics.scene_renderer(
         scene,
         small_image_shape[0],
         small_image_shape[1],

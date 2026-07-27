@@ -3,9 +3,10 @@ import jax
 import jax.numpy as jp
 
 import paz
-from paz.graphics.mesh import Mesh, load_mesh, merge_meshes
+from paz.graphics import Scene
+from paz.graphics.mesh import Mesh, load_mesh
 from paz.graphics.types import Material, PointLight
-from paz.graphics.viewer import mesh_renderer
+from paz.graphics.viewer import scene_renderer
 
 FACE_QUADS = [
     [[1, 0, 0], [1, 1, 0], [1, 1, 1], [1, 0, 1]],
@@ -71,11 +72,12 @@ def build_mesh(mesh_path=None):
 
 
 def build_renderer(mesh, image_size, distance, y_FOV=jp.pi / 4.0):
-    meshes, mask = merge_meshes(mesh)
+    scene = Scene([mesh])
     position = jp.array([1.5, 2.0, 2.5]) * distance
     lights = [PointLight(jp.ones(3) * 1.6, position)]
     H = W = image_size
-    return mesh_renderer(meshes, mask, H, W, y_FOV, lights, 1024 * 8, (2, 2))
+    args = scene, H, W, y_FOV, lights, False, 1024 * 8, (2, 2)
+    return scene_renderer(*args)
 
 
 def camera_pose(rotation, distance):

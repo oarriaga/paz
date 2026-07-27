@@ -10,8 +10,6 @@ import datetime
 
 VIEWER_NAMES = "camera_pose shadows light H W y_FOV chunk_size tiles".split()
 VIEWER_DEFAULTS = None, False, None, 480, 640, 0.78, 1024, (1, 1)
-MESH_RENDERER_NAMES = "y_FOV lights chunk_size tiles".split()
-MESH_RENDERER_DEFAULTS = 0.78, None, 1024, (1, 1)
 
 
 def clamp_tilt(tilt, limit=None):
@@ -36,7 +34,7 @@ def _to_uint8(image):
     return (jp.clip(image, 0, 1) * 255.0).astype(jp.uint8)
 
 
-def shape_renderer(
+def scene_renderer(
     scene,
     H,
     W,
@@ -61,38 +59,8 @@ def shape_renderer(
     return render_frame
 
 
-def mesh_renderer(meshes, mask, H, W, *args, **kwargs):
-    y_FOV, lights, chunk_size, tiles = parse_mesh_renderer_args(args, kwargs)
-    if lights is None:
-        lights = _default_lights()
-
-    @jax.jit
-    def render_frame(pose_matrix):
-        args = (H, W), y_FOV, pose_matrix, meshes, mask, lights
-        args = args + (tiles, chunk_size)
-        image, _ = paz.graphics.mesh.render(*args)
-        return _to_uint8(image)
-
-    return render_frame
-
-
-def parse_mesh_renderer_args(args, kwargs):
-    if len(args) > len(MESH_RENDERER_NAMES):
-        raise TypeError("mesh_renderer received too many positional arguments")
-    unknown = set(kwargs) - set(MESH_RENDERER_NAMES)
-    if unknown:
-        raise TypeError("mesh_renderer received unknown keyword arguments")
-    duplicates = set(MESH_RENDERER_NAMES[: len(args)]) & set(kwargs)
-    if duplicates:
-        raise TypeError("mesh_renderer received duplicate arguments")
-    values = dict(zip(MESH_RENDERER_NAMES, MESH_RENDERER_DEFAULTS))
-    values.update(zip(MESH_RENDERER_NAMES, args))
-    values.update(kwargs)
-    return [values[name] for name in MESH_RENDERER_NAMES]
-
-
 def viewer(render_fn_or_scene, *args, **kwargs):
-    # TODO this should all be explicit values instead of args and kwargs since this is a public function.
+    # TODO take explicit values instead of args and kwargs: it is public.
     parsed_args = parse_viewer_args(args, kwargs)
     camera_pose, shadows, light, H, W, y_FOV, chunk_size, tiles = parsed_args
     if callable(render_fn_or_scene):
@@ -102,7 +70,7 @@ def viewer(render_fn_or_scene, *args, **kwargs):
             light = _default_lights()
         args = render_fn_or_scene, H, W, y_FOV, light, shadows
         args = args + (chunk_size, tiles)
-        render_fn = shape_renderer(*args)
+        render_fn = scene_renderer(*args)
     _run_viewer(render_fn, camera_pose, H, W)
 
 
