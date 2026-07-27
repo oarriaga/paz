@@ -12,11 +12,13 @@ from paz.graphics.composite import (
     take_closest,
 )
 
+FACE_CHUNK_SIZE = 128
 SHADOW_ORIGIN_EPSILON = 1e-5
 SHADOW_SELF_HIT_EPSILON = 1e-5
 # BOUNCE_ORIGIN_EPSILON = 3e-3
 BOUNCE_ORIGIN_EPSILON = 1e-2
-RENDER_NAMES = "shape y_FOV pose scene tiles chunk_size shadows num_bounces"
+RENDER_NAMES = "shape y_FOV pose scene tiles chunk_size shadows "
+RENDER_NAMES += "num_bounces face_chunk_size"
 TRIANGLE_HIT_NAMES = "hit_mask depth points normals eyes albedo primitive"
 STATE_NAMES = "color depth hit_mask throughput active_mask "
 STATE_NAMES += "refractive_index rays"
@@ -41,11 +43,12 @@ def render(
     shadows=False,
     shadow_mask=None,
     num_bounces=1,
+    face_chunk_size=FACE_CHUNK_SIZE,
 ):
     scene_args = scene, lights, mask, shadow_mask
     compiled = paz.graphics.scene.compile(*scene_args)
     args = shape, y_FOV, pose, compiled, tiles, chunk_size
-    args = RenderArgs(*args, shadows, num_bounces)
+    args = RenderArgs(*args, shadows, num_bounces, face_chunk_size)
     image, depth = scan_tiles(args, render_tile_step)
     return assemble_image(args, image), assemble_depth(args, depth)
 
@@ -63,6 +66,7 @@ def render_masks(
     shadows=False,
     shadow_mask=None,
     num_bounces=1,
+    face_chunk_size=FACE_CHUNK_SIZE,
 ):
     if num_objects is None:
         num_objects = len(scene.nodes)
@@ -72,7 +76,8 @@ def render_masks(
     for object_arg in range(num_objects):
         mask = jp.zeros((num_nodes,), dtype=bool).at[object_arg].set(True)
         args = shape, y_FOV, pose, scene, mask, lights, tiles, chunk_size
-        _, depth_image = render(*args, shadows, shadow_mask, num_bounces)
+        render_args = args + (shadows, shadow_mask, num_bounces)
+        _, depth_image = render(*render_args, face_chunk_size)
         soft = paz.depth.to_soft_mask(depth_image, min_depth, max_depth)
         masks.append(jp.expand_dims(soft, axis=-1))
     return jp.stack(masks)
@@ -96,6 +101,7 @@ def render_tile_step(carry, tile_arg, args):
     rays = paz.graphics.mesh.build_tile_rays(*tile_args, tile_arg)
     tile_H, tile_W = H // H_tiles, W // W_tiles
     trace_args = args.scene, args.shadows, args.num_bounces
+    trace_args = trace_args + (args.face_chunk_size,)
     hit_mask, depth, color = trace_chunks(rays, trace_args, args.chunk_size)
     post_args = hit_mask, depth, color, args.pose, rays, tile_H, tile_W
     image, depth = postprocess(*post_args)
@@ -122,8 +128,9 @@ def trace_chunks(rays, config, chunk_size):
 
 
 def trace_chunk_step(carry, rays, config):
-    compiled, shadows, num_bounces = config
-    return carry, trace_bounces(rays, compiled, shadows, num_bounces)
+    compiled, shadows, num_bounces, face_chunk = config
+    args = rays, compiled, shadows, num_bounces, face_chunk
+    return carry, trace_bounces(*args)
 
 
 def split_ray_chunks(rays, chunk_size):
@@ -156,9 +163,9 @@ def flatten_chunk_array(array, num_rays):
     return array.reshape(shape)[:num_rays]
 
 
-def trace_bounces(rays, compiled, shadows, bounces):
+def trace_bounces(rays, compiled, shadows, bounces, face_chunk):
     state = initialize_state(rays)
-    bounce = paz.lock(bounce_step, compiled, shadows)
+    bounce = paz.lock(bounce_step, compiled, shadows, face_chunk)
     for step_arg in range(bounces):
         state = bounce(state, step_arg)
     return state.hit_mask, state.depth, state.color
@@ -177,8 +184,8 @@ def initialize_state(rays):
     return RenderState(*args)
 
 
-def bounce_step(state, bounce, compiled, shadows):
-    triangle_hit = compute_triangle_hit(compiled, state.rays)
+def bounce_step(state, bounce, compiled, shadows, face_chunk):
+    triangle_hit = compute_triangle_hit(compiled, state.rays, face_chunk)
     intersections = intersect(compiled, state.rays, triangle_hit)
     hit_masks, depths, points, normals, indices, eyes = intersections
     hit_shape_args = find_closest_intersection_args(hit_masks, depths)
@@ -191,17 +198,18 @@ def bounce_step(state, bounce, compiled, shadows):
     return update_state(state, compiled, closest, colors)
 
 
-def compute_triangle_hit(compiled, rays):
+def compute_triangle_hit(compiled, rays, face_chunk):
     if compiled.triangles is None:
         triangle_hit = None
     else:
-        triangle_hit = build_triangle_hit(compiled, rays)
+        triangle_hit = build_triangle_hit(compiled, rays, face_chunk)
     return triangle_hit
 
 
-def build_triangle_hit(compiled, rays):
+def build_triangle_hit(compiled, rays, face_chunk):
     triangles = compiled.triangles
-    result = paz.graphics.mesh.intersect_triangles(triangles, rays)
+    args = triangles, rays, face_chunk
+    result = paz.graphics.mesh.intersect_triangles(*args)
     hit_mask, depth, points, normals, eyes, face_index, u, v = result
     primitive = triangles.primitive_index[face_index]
     hit_mask = jp.logical_and(hit_mask, compiled.triangle_mask[primitive])

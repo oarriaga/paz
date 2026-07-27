@@ -81,14 +81,14 @@ def plot_losses(losses, directory, filename, step_arg=None):
     plot.save(figure, Path(directory) / filename)
 
 
-def plot_metrics(metrics, directory, filename, step_arg=None):
+def plot_metrics(metrics, directory, filename, step_arg=None, stride=1):
     figure, axis = plot.subplots()
     color_map = plot.plt.get_cmap("tab10")
     metric_names = list(metrics.keys())
     colors = [color_map(i % 10) for i in range(len(metric_names))]
     for color, metric_name in zip(colors, metric_names):
         metric_values = metrics[metric_name]
-        x_values = np.arange(len(metric_values))
+        x_values = np.arange(len(metric_values)) * stride
         y_values = np.array(metric_values)
         line_args = (x_values, y_values, axis)
         plot.line(*line_args, color=color, label=metric_name)
