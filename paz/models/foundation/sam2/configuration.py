@@ -2,14 +2,17 @@
 
 SAM 2 and SAM 2.1 share these architectures and differ only in checkpoint
 weights, so the eight public factories reuse these four configs. The SAM
-prompt encoder and mask decoder are identical across every variant and are
-therefore fixed as module constants instead of configuration fields.
+prompt encoder, mask decoder, and video memory modules are identical across
+every variant and are therefore fixed as module constants instead of
+configuration fields.
 """
 from collections import namedtuple
 
 IMAGE_SIZE = 1024
 BACKBONE_STRIDE = 16
 PROMPT_EMBED_DIM = 256
+MEMORY_DIM = 64
+NUM_MEMORIES = 7
 DIM_MUL = 2
 HEAD_MUL = 2
 QUERY_STRIDE = (2, 2)

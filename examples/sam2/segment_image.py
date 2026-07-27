@@ -42,7 +42,7 @@ def build_segmenter(bundle):
 
     def encode_image(image):
         pixels = preprocess_image(image)[None]
-        embedding, high_res_0, high_res_1 = encode(pixels)
+        embedding, high_res_0, high_res_1, _ = encode(pixels)
         parts = embedding, high_res_0, high_res_1, image_pe, image.shape[:2]
         return predict.State(bundle, predict.Features(*parts))
 

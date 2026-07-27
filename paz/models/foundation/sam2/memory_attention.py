@@ -4,15 +4,19 @@ Four layers of RoPE self-attention over the current frame followed by RoPE
 cross-attention to the memory (spatial memories plus object pointers), then an
 MLP. Rotary tables are passed in as cos/sin inputs so the graph stays static;
 object-pointer positions get an identity rotation instead of a runtime slice.
+Each memory token also carries a one-hot row selecting its frame's slot in the
+learned ``maskmem_tpos_enc`` table, which is added to its position; pointer
+tokens get an all-zero row because their position is already temporal.
 """
 import numpy as np
 from keras import Input, Model, ops
 from keras.layers import Dense, LayerNormalization, Reshape
 
 from paz.models.transformers.attention import compute_attention
+from paz.models.foundation.sam2.configuration import MEMORY_DIM
+from paz.models.foundation.sam2.configuration import NUM_MEMORIES
 
 MODEL_DIM = 256
-MEMORY_DIM = 64
 NUM_HEADS = 1
 NUM_LAYERS = 4
 ROPE_DIM = MODEL_DIM // 2
@@ -23,18 +27,25 @@ def build(name="sam2_memory_attention"):
     curr_pos = Input((None, MODEL_DIM), name="curr_pos")
     memory = Input((None, MEMORY_DIM), name="memory")
     memory_pos = Input((None, MEMORY_DIM), name="memory_pos")
+    memory_time = Input((None, NUM_MEMORIES), name="memory_time")
     curr_cos = Input((None, ROPE_DIM), name="curr_cos")
     curr_sin = Input((None, ROPE_DIM), name="curr_sin")
     memory_cos = Input((None, ROPE_DIM), name="memory_cos")
     memory_sin = Input((None, ROPE_DIM), name="memory_sin")
     tokens = ops.add(curr, 0.1 * curr_pos)
+    positions = ops.add(memory_pos, temporal_encoding(memory_time))
     rope = curr_cos, curr_sin, memory_cos, memory_sin
     for index in range(NUM_LAYERS):
-        tokens = apply_layer(tokens, memory, memory_pos, rope, index)
+        tokens = apply_layer(tokens, memory, positions, rope, index)
     tokens = normalize(tokens, "mematt_norm")
-    tensors = (curr, curr_pos, memory, memory_pos)
+    tensors = (curr, curr_pos, memory, memory_pos, memory_time)
     tables = (curr_cos, curr_sin, memory_cos, memory_sin)
     return Model(tensors + tables, tokens, name=name)
+
+
+def temporal_encoding(memory_time):
+    kwargs = dict(use_bias=False, name="maskmem_tpos_enc")
+    return Dense(MEMORY_DIM, **kwargs)(memory_time)
 
 
 def apply_layer(tokens, memory, memory_pos, rope, index):

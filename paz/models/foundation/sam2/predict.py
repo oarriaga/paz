@@ -25,7 +25,7 @@ State = namedtuple("State", "bundle features")
 
 def encode_image(bundle, image):
     pixels = preprocess_image(image)[None]
-    embedding, high_res_0, high_res_1 = bundle.image_encoder(pixels)
+    embedding, high_res_0, high_res_1, _ = bundle.image_encoder(pixels)
     image_pe = dense_positional_encoding(bundle.point_encoder)[None]
     size = image.shape[:2]
     features = Features(embedding, high_res_0, high_res_1, image_pe, size)
@@ -39,7 +39,7 @@ def predict(state, points=None, labels=None, box=None, mask=None):
     dense = build_dense(bundle, mask)
     tensors = (features.image_embed, features.high_res_0, features.high_res_1)
     inputs = (*tensors, sparse, dense, features.image_pe)
-    masks, scores, _ = bundle.mask_decoder(inputs)
+    masks, scores, _, _ = bundle.mask_decoder(inputs)
     upscaled = upscale_masks(masks, features.size)
     return upscaled, scores, jp.clip(masks, -32.0, 32.0)
 

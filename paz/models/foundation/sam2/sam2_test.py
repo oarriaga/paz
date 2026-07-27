@@ -57,10 +57,11 @@ def test_block_specifications_match_config():
 
 def test_image_encoder_output_shapes():
     model = image_encoder.build(TINY)
-    embedding, high_res_0, high_res_1 = model.outputs
+    embedding, high_res_0, high_res_1, features = model.outputs
     assert tuple(embedding.shape) == (None, 64, 64, 256)
     assert tuple(high_res_0.shape) == (None, 256, 256, 32)
     assert tuple(high_res_1.shape) == (None, 128, 128, 64)
+    assert tuple(features.shape) == (None, 64, 64, 256)
 
 
 def test_point_encoder_sparse_shape():
@@ -102,10 +103,11 @@ def decoder_inputs():
 
 
 def test_mask_decoder_shapes():
-    masks, iou, obj = mask_decoder.build()(decoder_inputs())
+    masks, iou, obj, tokens = mask_decoder.build()(decoder_inputs())
     assert np.array(masks).shape == (1, 4, 256, 256)
     assert np.array(iou).shape == (1, 4)
     assert np.array(obj).shape == (1, 1)
+    assert np.array(tokens).shape == (1, 4, 256)
 
 
 @pytest.fixture(scope="module")

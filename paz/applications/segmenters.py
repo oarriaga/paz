@@ -27,7 +27,7 @@ def SAM(model, multimask, draw):
 
     def encode_image(image):
         pixels = preprocess_image(image)[None]
-        embedding, high_res_0, high_res_1 = encode(pixels)
+        embedding, high_res_0, high_res_1, _ = encode(pixels)
         size = image.shape[:2]
         parts = (embedding, high_res_0, high_res_1, image_pe, size)
         return predict.State(model, predict.Features(*parts))

@@ -1,10 +1,11 @@
-"""Convert an official SAM 2 checkpoint into the PAZ image-inference models.
+"""Convert an official SAM 2 checkpoint into the PAZ inference models.
 
-Maps every image-required parameter explicitly, transposes convolution and
-dense kernels, and fails on any unmapped image-prefix key. Video-memory
-parameters (memory_attention/memory_encoder, maskmem*, obj_ptr*, no_mem_pos*,
-no_obj*, mask_downsample) are deferred and tolerated, never silently mapped.
-Takes a plain ``{key: ndarray}`` state dict so the runtime needs no torch.
+Maps every parameter explicitly, transposes convolution and dense kernels, and
+fails on any unmapped key. ``convert`` covers the image models and tolerates
+the video parameters; ``convert_video`` maps everything and leaves only
+``no_mem_pos_enc`` unused, which the released configurations never read because
+they add ``no_mem_embed`` to the features directly. Takes a plain
+``{key: ndarray}`` state dict so the runtime needs no torch.
 """
 import numpy as np
 
@@ -20,6 +21,7 @@ MEMORY_ATTENTION = "memory_attention."
 
 # Only keys under these prefixes must be mapped; everything else is deferred.
 IMAGE = "image_encoder sam_prompt_encoder sam_mask_decoder no_mem_embed".split()
+DEFERRED = ("no_mem_pos_enc",)
 
 
 def convert(models, state_dict, used=None):
@@ -136,11 +138,36 @@ def convert_two_way_block(dense, norm, index):
         norm(f"{name}_norm{number}", f"{block}.norm{number}")
 
 
+def convert_video(models, state_dict):
+    used = set()
+    convert(models, state_dict, used)
+    memory = models.memory_encoder, models.memory_attention
+    convert_memory(*memory, state_dict, used)
+    downsample = models.mask_downsample, "mask_downsample", "mask_downsample"
+    set_conv(*downsample, state_dict, used)
+    convert_pointer(models.pointer, models.pointer_time, state_dict, used)
+    reject_unmapped_keys(state_dict, used)
+    return models
+
+
 def convert_memory(memory_encoder, memory_attention, state_dict, used=None):
     used = set() if used is None else used
     convert_memory_encoder(memory_encoder, state_dict, used)
     convert_memory_attention(memory_attention, state_dict, used)
     return used
+
+
+def convert_pointer(model, time_model, state_dict, used):
+    def dense(name, source):
+        set_dense(model, name, source, state_dict, used)
+
+    convert_mlp(dense, "obj_ptr_proj", "obj_ptr_proj", 3)
+    set_table(model, "no_obj_ptr", state_dict, used)
+    projection = "obj_ptr_tpos_proj"
+    if f"{projection}.weight" in state_dict:
+        set_dense(time_model, projection, projection, state_dict, used)
+    else:
+        disable_layer(time_model, projection)
 
 
 def convert_memory_encoder(model, state_dict, used):
@@ -169,6 +196,11 @@ def convert_memory_encoder(model, state_dict, used):
         dense(f"fuser_{index}_pw2", f"{block}.pwconv2")
         gamma = take(state_dict, f"{block}.gamma", used)
         set_layer(model, f"fuser_{index}_gamma", [gamma])
+    absent = "no_obj_embed_spatial"
+    if absent in state_dict:
+        set_table(model, absent, state_dict, used)
+    else:
+        disable_layer(model, absent)
 
 
 def convert_memory_attention(model, state_dict, used):
@@ -190,6 +222,19 @@ def convert_memory_attention(model, state_dict, used):
         dense(f"mematt_{index}_mlp1", f"{layer}.linear1")
         dense(f"mematt_{index}_mlp2", f"{layer}.linear2")
     norm("mematt_norm", MEMORY_ATTENTION + "norm")
+    set_table(model, "maskmem_tpos_enc", state_dict, used)
+
+
+def set_table(model, name, state_dict, used):
+    shape = model.get_layer(name).get_weights()[0].shape
+    table = take(state_dict, name, used).reshape(shape)
+    set_layer(model, name, [table])
+
+
+def disable_layer(model, name):
+    """Zero a term that SAM 2 configurations disable and never ship."""
+    weights = model.get_layer(name).get_weights()
+    set_layer(model, name, [np.zeros_like(weight) for weight in weights])
 
 
 def set_depthwise(model, name, source, state_dict, used):
@@ -257,3 +302,10 @@ def reject_unmapped_image_keys(state_dict, used):
     missed = [k for k in unused if any(k.startswith(p) for p in IMAGE)]
     if missed:
         raise KeyError(f"unmapped image keys: {sorted(missed)}")
+
+
+def reject_unmapped_keys(state_dict, used):
+    unused = [key for key in state_dict if key not in used]
+    missed = [key for key in unused if key not in DEFERRED]
+    if missed:
+        raise KeyError(f"unmapped keys: {sorted(missed)}")
