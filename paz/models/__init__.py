@@ -50,6 +50,7 @@ from .foundation.gemma4.causal_lm import Gemma4CausalLM
 from .foundation.flower.pretrained import FLOWER
 from .foundation.flower.pretrained import FLOWERLiberoObject
 from .foundation.sonic.pretrained import SONIC
+from .foundation.gear_wbc.pretrained import GearWBC
 from .feature.xfeat.model import XFeatModel
 from .feature.xfeat.model import XFeat
 from .feature.lightglue.model import LighterGlue
