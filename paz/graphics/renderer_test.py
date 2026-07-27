@@ -115,7 +115,7 @@ def compute_selected_shadow_depths(camera_pose, image_shape=(120, 160)):
     rays = paz.graphics.camera.build_rays(image_shape, jp.pi / 3.0, camera_pose)
     compiled = paz.graphics.scene.compile(scene, lights, None)
     shapes, mask, lights = compiled.shapes, compiled.mask, compiled.lights
-    intersections = renderer.intersect(shapes, rays, mask)
+    intersections = renderer.intersect(compiled, rays, None)
     closest = renderer.gather_closest(*intersections)
     vector = lights[0].position - closest.point
     distance = jp.squeeze(paz.algebra.compute_norms(vector, 1), axis=1)
@@ -327,10 +327,11 @@ def test_get_material_properties():
     mat2 = Material(transparency=0.8)
     shape1 = Sphere(material=mat1)
     shape2 = Sphere(material=mat2)
-    shapes = [shape1, shape2]
+    scene = Scene([shape1, shape2])
+    compiled = paz.graphics.scene.compile(scene, [], None)
     indices = jp.array([0, 1])
     reflectivities, transparencies, refractivities = (
-        renderer.get_material_properties(shapes, indices)
+        renderer.get_material_properties(compiled, indices)
     )
     assert reflectivities[0] == 0.5
     assert transparencies[1] == 0.8

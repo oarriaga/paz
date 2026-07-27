@@ -57,6 +57,14 @@ def compute_normals(vertices, faces, transform, world_points):
     return normals
 
 
+def compute_triangle_normals(vertices, faces, face_indices):
+    hit_faces = faces[face_indices]
+    A = vertices[hit_faces[:, 0]]
+    B = vertices[hit_faces[:, 1]]
+    C = vertices[hit_faces[:, 2]]
+    return paz.algebra.normalize(jp.cross(B - A, C - A))
+
+
 def compute_normals_for_hits(vertices, faces, transform, face_indices):
     hit_faces = faces[face_indices]
     A = vertices[hit_faces[:, 0]]

@@ -16,14 +16,15 @@ SHADOW_ORIGIN_EPSILON = 1e-5
 SHADOW_SELF_HIT_EPSILON = 1e-5
 # BOUNCE_ORIGIN_EPSILON = 3e-3
 BOUNCE_ORIGIN_EPSILON = 1e-2
-RENDER_NAMES = "shape y_FOV pose scene mask lights tiles chunk_size shadows "
-RENDER_NAMES += "shadow_mask num_bounces"
+RENDER_NAMES = "shape y_FOV pose scene tiles chunk_size shadows num_bounces"
+TRIANGLE_HIT_NAMES = "hit_mask depth points normals eyes albedo primitive"
 STATE_NAMES = "color depth hit_mask throughput active_mask "
 STATE_NAMES += "refractive_index rays"
 SHADOW_COLOR_NAMES = "rays shapes lights indices mask shadow_mask "
 SHADOW_COLOR_NAMES += "point normal points normals eyes"
 
 RenderArgs = namedtuple("RenderArgs", RENDER_NAMES.split())
+TriangleHit = namedtuple("TriangleHit", TRIANGLE_HIT_NAMES.split())
 RenderState = namedtuple("RenderState", STATE_NAMES.split())
 ShadowColorArgs = namedtuple("ShadowColorArgs", SHADOW_COLOR_NAMES.split())
 
@@ -41,10 +42,10 @@ def render(
     shadow_mask=None,
     num_bounces=1,
 ):
-    args = shape, y_FOV, pose, scene, mask, lights, tiles, chunk_size
-    args += shadows, shadow_mask, num_bounces
-    args = RenderArgs(*args)
-    args = compile_render_args(args)
+    scene_args = scene, lights, mask, shadow_mask
+    compiled = paz.graphics.scene.compile(*scene_args)
+    args = shape, y_FOV, pose, compiled, tiles, chunk_size
+    args = RenderArgs(*args, shadows, num_bounces)
     image, depth = scan_tiles(args, render_tile_step)
     return assemble_image(args, image), assemble_depth(args, depth)
 
@@ -77,17 +78,6 @@ def render_masks(
     return jp.stack(masks)
 
 
-def compile_render_args(args):
-    scene_args = args.scene, args.lights, args.mask, args.shadow_mask
-    compiled = paz.graphics.scene.compile(*scene_args)
-    return args._replace(
-        scene=compiled.shapes,
-        mask=compiled.mask,
-        shadow_mask=compiled.shadow_mask,
-        lights=compiled.lights,
-    )
-
-
 def scan_tiles(args, render_step):
     H, W = args.shape
     H_tiles, W_tiles = args.tiles
@@ -105,9 +95,7 @@ def render_tile_step(carry, tile_arg, args):
     tile_args = H, W, H_tiles, W_tiles, args.y_FOV, camera_to_world
     rays = paz.graphics.mesh.build_tile_rays(*tile_args, tile_arg)
     tile_H, tile_W = H // H_tiles, W // W_tiles
-    trace_args = args.scene, args.lights, args.mask, args.shadows
-    trace_args += (args.shadow_mask,)
-    trace_args += (args.num_bounces,)
+    trace_args = args.scene, args.shadows, args.num_bounces
     hit_mask, depth, color = trace_chunks(rays, trace_args, args.chunk_size)
     post_args = hit_mask, depth, color, args.pose, rays, tile_H, tile_W
     image, depth = postprocess(*post_args)
@@ -134,9 +122,8 @@ def trace_chunks(rays, config, chunk_size):
 
 
 def trace_chunk_step(carry, rays, config):
-    shapes, lights, mask, shadows, shadow_mask, num_bounces = config
-    args = rays, shapes, lights, mask, shadows, shadow_mask, num_bounces
-    return carry, trace_bounces(*args)
+    compiled, shadows, num_bounces = config
+    return carry, trace_bounces(rays, compiled, shadows, num_bounces)
 
 
 def split_ray_chunks(rays, chunk_size):
@@ -169,9 +156,9 @@ def flatten_chunk_array(array, num_rays):
     return array.reshape(shape)[:num_rays]
 
 
-def trace_bounces(rays, shapes, lights, mask, shadows, shadow_mask, bounces):
+def trace_bounces(rays, compiled, shadows, bounces):
     state = initialize_state(rays)
-    bounce = paz.lock(bounce_step, shapes, lights, mask, shadows, shadow_mask)
+    bounce = paz.lock(bounce_step, compiled, shadows)
     for step_arg in range(bounces):
         state = bounce(state, step_arg)
     return state.hit_mask, state.depth, state.color
@@ -190,17 +177,33 @@ def initialize_state(rays):
     return RenderState(*args)
 
 
-def bounce_step(state, bounce, shapes, lights, mask, shadows, shadow_mask):
-    intersections = intersect(shapes, state.rays, mask)
+def bounce_step(state, bounce, compiled, shadows):
+    triangle_hit = compute_triangle_hit(compiled, state.rays)
+    intersections = intersect(compiled, state.rays, triangle_hit)
     hit_masks, depths, points, normals, indices, eyes = intersections
     hit_shape_args = find_closest_intersection_args(hit_masks, depths)
     closest = gather_closest(*intersections)
     state = update_first_hit(state, closest, bounce)
     state = update_active_mask(state, closest)
-    args = state.rays, shapes, lights, hit_shape_args, mask, shadow_mask
-    args += closest, points, normals, eyes, shadows
+    args = state.rays, compiled, hit_shape_args, closest, points
+    args += normals, eyes, shadows, triangle_hit
     colors = compute_hit_colors(*args)
-    return update_state(state, shapes, closest, colors)
+    return update_state(state, compiled, closest, colors)
+
+
+def compute_triangle_hit(compiled, rays):
+    triangles = compiled.triangles
+    if triangles is None:
+        return None
+    result = paz.graphics.mesh.intersect_triangles(triangles, rays)
+    hit_mask, depth, points, normals, eyes, face_index, u, v = result
+    primitive = triangles.primitive_index[face_index]
+    hit_mask = jp.logical_and(hit_mask, compiled.triangle_mask[primitive])
+    depth = jp.where(hit_mask, depth, paz.graphics.FARAWAY)
+    albedo_args = triangles, face_index, u, v
+    albedo = paz.graphics.albedo.compute_triangle_albedo(*albedo_args)
+    args = hit_mask, depth, points, normals, eyes, albedo, primitive
+    return TriangleHit(*args)
 
 
 def update_first_hit(state, closest, bounce):
@@ -215,26 +218,94 @@ def update_active_mask(state, closest):
 
 
 def compute_hit_colors(*args):
-    rays, shapes, lights, indices, mask, shadow_mask = args[:6]
-    closest, points, normals, eyes, shadows = args[6:]
+    compiled, indices, triangle_hit = args[1], args[2], args[8]
+    num_shapes = len(compiled.shapes)
+    if num_shapes == 0:
+        colors = compute_triangle_colors(compiled, triangle_hit)
+    elif triangle_hit is None:
+        colors = compute_shape_colors(*args[:8])
+    else:
+        shape_colors = compute_shape_colors(*args[:8])
+        triangle_colors = compute_triangle_colors(compiled, triangle_hit)
+        is_triangle = jp.expand_dims(indices == num_shapes, -1)
+        colors = jp.where(is_triangle, triangle_colors, shape_colors)
+    return colors
+
+
+def compute_shape_colors(*args):
+    rays, compiled, indices, closest, points = args[:5]
+    normals, eyes, shadows = args[5:]
+    num_shapes = len(compiled.shapes)
+    shape_args = jp.minimum(indices, num_shapes - 1)
+    points, normals = points[:num_shapes], normals[:num_shapes]
+    eyes = eyes[:num_shapes]
     if shadows:
-        color_args = rays, shapes, lights, indices, mask, shadow_mask
+        color_args = rays, compiled.shapes, compiled.lights, shape_args
+        color_args += compiled.mask, compiled.shadow_mask
         color_args += closest.point, closest.normal, points, normals, eyes
-        return color_with_shadows(ShadowColorArgs(*color_args))
-    args = lights, shapes, points, normals, eyes, indices
-    return color_without_shadow(*args)
+        colors = color_with_shadows(ShadowColorArgs(*color_args))
+    else:
+        color_args = compiled.lights, compiled.shapes, points, normals
+        colors = color_without_shadow(*color_args, eyes, shape_args)
+    return colors
 
 
-def intersect(shapes, rays, mask):
+def compute_triangle_colors(compiled, triangle_hit):
+    materials = compiled.triangles.materials
+    material = gather_triangle_material(materials, triangle_hit.primitive)
+    shader = select_shader(materials)
+    colors = jp.zeros_like(triangle_hit.albedo)
+    for light in compiled.lights:
+        args = triangle_hit.albedo, material, triangle_hit.points
+        args += triangle_hit.normals, triangle_hit.eyes, light
+        colors = colors + shader.compute_colors(*args)
+    return colors
+
+
+def gather_triangle_material(materials, primitive):
+    material = jax.tree.map(lambda field: field[primitive], materials)
+    return jax.tree.map(expand_scalar_field, material)
+
+
+def expand_scalar_field(field):
+    if field.ndim == 1:
+        field = jp.expand_dims(field, -1)
+    return field
+
+
+def intersect(compiled, rays, triangle_hit):
+    rows = []
+    if len(compiled.shapes) > 0:
+        rows.append(intersect_shapes(compiled.shapes, rays, compiled.mask))
+    if triangle_hit is not None:
+        rows.append(build_triangle_row(triangle_hit))
+    return stack_intersection_rows(rows)
+
+
+def intersect_shapes(shapes, rays, mask):
 
     def hide_shapes(mask, hit_masks):
         return jp.where(jp.expand_dims(mask, 1), hit_masks, False)
 
     merge = paz.graphics.shapes.field_merge(shapes, ["transform", "type"])
-    indices = jp.arange(len(shapes))
     intersect_fun = paz.lock(paz.graphics.shapes.intersect, *rays)
     hit_masks, depths, points, normals, eyes = jax.vmap(intersect_fun)(merge)
-    hit_masks = hide_shapes(mask, hit_masks)
+    return hide_shapes(mask, hit_masks), depths, points, normals, eyes
+
+
+def build_triangle_row(triangle_hit):
+    depth = jp.expand_dims(triangle_hit.depth, -1)
+    rows = jp.expand_dims(triangle_hit.hit_mask, 0)
+    rows = rows, jp.expand_dims(depth, 0)
+    rows += (jp.expand_dims(triangle_hit.points, 0),)
+    rows += (jp.expand_dims(triangle_hit.normals, 0),)
+    return rows + (jp.expand_dims(triangle_hit.eyes, 0),)
+
+
+def stack_intersection_rows(rows):
+    joined = tuple(jp.concatenate(fields, axis=0) for fields in zip(*rows))
+    indices = jp.arange(joined[0].shape[0])
+    hit_masks, depths, points, normals, eyes = joined
     return hit_masks, depths, points, normals, indices, eyes
 
 
@@ -427,8 +498,8 @@ def compute_shadowed_colors(*args):
     return jp.concatenate(colors, axis=0)
 
 
-def update_state(state, shapes, closest, intersected_colors):
-    material = get_material_properties(shapes, closest.primitive_index)
+def update_state(state, compiled, closest, intersected_colors):
+    material = get_material_properties(compiled, closest.primitive_index)
     reflectivities, transparencies, refractivities = material
     color_args = state.color, state.throughput, state.active_mask
     color_args += intersected_colors, reflectivities, transparencies
@@ -443,12 +514,16 @@ def update_state(state, shapes, closest, intersected_colors):
     return apply_bounce_update(state._replace(color=color), *update_args)
 
 
-def get_material_properties(shapes, hit_shape_args):
+def get_material_properties(compiled, hit_shape_args):
     reflectivities, transparencies, refractivities = [], [], []
-    for shape in shapes:
+    for shape in compiled.shapes:
         reflectivities.append(shape.material.reflective)
         transparencies.append(shape.material.transparency)
         refractivities.append(shape.material.refractive_index)
+    if compiled.triangles is not None:
+        reflectivities.append(0.0)
+        transparencies.append(0.0)
+        refractivities.append(1.0)
     reflectivities = jp.array(reflectivities)[hit_shape_args]
     transparencies = jp.array(transparencies)[hit_shape_args]
     refractivities = jp.array(refractivities)[hit_shape_args]

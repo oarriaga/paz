@@ -101,6 +101,16 @@ def intersect_chunked(vertices, faces, rays, chunk_size=1024):
     return mask, depth, u, v, idx
 
 
+def intersect_triangles(triangles, rays, chunk_size=1024):
+    args = triangles.vertices, triangles.faces, rays
+    hit_mask, depth, u, v, face_index = intersect_chunked(*args, chunk_size)
+    ray_origins, ray_directions = rays
+    points = ray_origins + jp.expand_dims(depth, -1) * ray_directions
+    normal_args = triangles.vertices, triangles.faces, face_index
+    normals = paz.graphics.mesh.compute_triangle_normals(*normal_args)
+    return hit_mask, depth, points, normals, -ray_directions, face_index, u, v
+
+
 def intersect_mesh(mesh, ray_origins, ray_directions, chunk_size=1024):
     world_to_shape = jp.linalg.inv(mesh.transform)
     args = (world_to_shape, ray_origins, ray_directions)

@@ -22,10 +22,10 @@ MESH_NAMES += "pattern vertex_uvs"
 Mesh = namedtuple("Mesh", MESH_NAMES.split(), defaults=(None, None))
 
 TRIANGLE_NAMES = "vertices faces vertex_uvs vertex_colors primitive_index "
-TRIANGLE_NAMES += "materials"
+TRIANGLE_NAMES += "materials patterns"
 Triangles = namedtuple("Triangles", TRIANGLE_NAMES.split())
 
-COMPILED_NAMES = "shapes triangles lights mask shadow_mask"
+COMPILED_NAMES = "shapes triangles lights mask shadow_mask triangle_mask"
 CompiledScene = namedtuple("CompiledScene", COMPILED_NAMES.split())
 
 

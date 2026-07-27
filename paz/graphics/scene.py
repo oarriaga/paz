@@ -172,7 +172,8 @@ def sort_by_group(shapes, mask, shadow_mask):
     for group in groups.values():
         sorted_shapes.extend(group)
     ID_to_arg = {id(shape): arg for arg, shape in enumerate(shapes)}
-    order = jp.array([ID_to_arg[id(shape)] for shape in sorted_shapes])
+    args = [ID_to_arg[id(shape)] for shape in sorted_shapes]
+    order = jp.array(args, dtype=jp.int32)
 
     mask = mask[order]
     if shadow_mask is not None:
@@ -189,11 +190,10 @@ def compile(scene, lights, mask, shadow_mask=None):
         shadow_mask = prepare_mask(shadow_mask, len(flat_scene), scene)
 
     shape_args = select_shapes(flat_scene, mask, shadow_mask)
-    shapes, mask, shadow_mask = sort_by_group(*shape_args)
-    triangles = build_triangles(select_meshes(flat_scene))
-    return paz.graphics.CompiledScene(
-        shapes, triangles, lights, mask, shadow_mask
-    )
+    shapes, shape_mask, shadow_mask = sort_by_group(*shape_args)
+    meshes, triangle_mask = select_meshes(flat_scene, mask)
+    args = shapes, build_triangles(meshes), lights, shape_mask
+    return paz.graphics.CompiledScene(*args, shadow_mask, triangle_mask)
 
 
 def select_shapes(flat_scene, mask, shadow_mask):
@@ -205,8 +205,10 @@ def select_shapes(flat_scene, mask, shadow_mask):
     return shapes, mask[args], shadow_mask
 
 
-def select_meshes(flat_scene):
-    return [node for node in flat_scene if not is_shape(node)]
+def select_meshes(flat_scene, mask):
+    args = [arg for arg, node in enumerate(flat_scene) if not is_shape(node)]
+    meshes = [flat_scene[arg] for arg in args]
+    return meshes, mask[jp.array(args, dtype=jp.int32)]
 
 
 def is_shape(node):
@@ -228,6 +230,7 @@ def build_mesh_triangles(meshes):
     args = jp.concatenate(vertices), build_offset_faces(meshes)
     args += jp.concatenate(vertex_uvs), jp.concatenate(vertex_colors)
     args += build_primitive_index(meshes), stack_materials(meshes)
+    args += (stack_patterns(meshes),)
     return paz.graphics.Triangles(*args)
 
 
@@ -261,3 +264,19 @@ def build_primitive_index(meshes):
 def stack_materials(meshes):
     materials = [mesh.material for mesh in meshes]
     return jax.tree.map(lambda *args: jp.stack(args), *materials)
+
+
+def stack_patterns(meshes):
+    patterns = [build_mesh_pattern(mesh) for mesh in meshes]
+    shapes = {pattern.image.shape for pattern in patterns}
+    if len(shapes) > 1:
+        raise ValueError("Mesh pattern images must all have equal shape.")
+    return jax.tree.map(lambda *args: jp.stack(args), *patterns)
+
+
+def build_mesh_pattern(mesh):
+    if mesh.pattern is None:
+        pattern = paz.graphics.Pattern()
+    else:
+        pattern = mesh.pattern
+    return pattern

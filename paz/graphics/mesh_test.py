@@ -890,3 +890,55 @@ def test_render_coordinates_mask_matches_render_depth():
     _, depth = render(*args, (1, 1), 1024)
     _, hit = render_coordinates((20, 20), jp.pi / 4, pose, mesh, 1024)
     assert jp.array_equal(hit, depth > 0)
+
+
+def render_scene_meshes(image_shape=(24, 24), tiles=(1, 1), chunk_size=1024):
+    shape, y_FOV, pose, _, _, lights = make_multi_mesh_scene(image_shape)
+    scene = paz.graphics.Scene([build_cube_mesh(), build_sphere_mesh()])
+    args = shape, y_FOV, pose, scene, None, lights
+    return paz.graphics.render(*args, tiles, chunk_size)
+
+
+def test_scene_meshes_render_returns_correct_shapes():
+    image, depth = render_scene_meshes()
+    assert image.shape == (24, 24, 3)
+    assert depth.shape == (24, 24)
+
+
+def test_scene_meshes_cover_same_pixels_as_mesh_render():
+    _, expected_depth = render_multi_mesh()
+    _, actual_depth = render_scene_meshes()
+    assert jp.array_equal(actual_depth > 0, expected_depth > 0)
+
+
+def test_scene_meshes_match_mesh_render_within_precision():
+    expected_image, expected_depth = render_multi_mesh()
+    actual_image, actual_depth = render_scene_meshes()
+    assert compute_max_abs_difference(actual_depth, expected_depth) <= 5e-2
+    assert compute_max_abs_difference(actual_image, expected_image) <= 1e-1
+
+
+def test_scene_meshes_render_is_tile_invariant():
+    expected_image, expected_depth = render_scene_meshes()
+    actual_image, actual_depth = render_scene_meshes((24, 24), (2, 4), 13)
+    assert compute_max_abs_difference(actual_image, expected_image) <= 1e-4
+    assert compute_max_abs_difference(actual_depth, expected_depth) <= 1e-4
+
+
+def test_scene_meshes_respect_mask():
+    shape, y_FOV, pose, _, _, lights = make_multi_mesh_scene()
+    scene = paz.graphics.Scene([build_cube_mesh(), build_sphere_mesh()])
+    mask = jp.zeros(2, dtype=bool)
+    args = shape, y_FOV, pose, scene, mask, lights
+    _, depth = paz.graphics.render(*args, (1, 1), 1024)
+    assert jp.allclose(depth, 0.0)
+
+
+def test_scene_mixes_meshes_and_shapes():
+    shape, y_FOV, pose, _, _, lights = make_multi_mesh_scene()
+    sphere = paz.graphics.Sphere(SE3.translation(jp.array([0.0, 0.0, 2.0])))
+    scene = paz.graphics.Scene([build_cube_mesh(), sphere])
+    args = shape, y_FOV, pose, scene, None, lights
+    image, depth = paz.graphics.render(*args, (1, 1), 1024)
+    assert image.shape == (24, 24, 3)
+    assert jp.any(depth > 0)

@@ -3,6 +3,7 @@ from .intersect import (
     EPSILON,
     compute_f,
     intersect_mesh,
+    intersect_triangles,
     intersect_canonical_mesh,
     intersect_chunked,
 )
@@ -11,6 +12,7 @@ from .geometry import (
     compute_canonical_normals,
     compute_normals,
     compute_normals_for_hits,
+    compute_triangle_normals,
     compute_position,
     extract_points,
     transform_points,

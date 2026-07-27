@@ -49,7 +49,6 @@ def compute_soft_diffuse(albedo, material, light, points, normals, slope=10.0):
 
 def compute_specular(material, light, points, normals, eye):
     reflections = compute_reflections_dot_eye(light, points, normals, eye)
+    reflections = jp.expand_dims(reflections, -1)
     factor = jp.power(reflections, material.shininess)
-    factor = jp.expand_dims(factor, -1)
-    specular = light.intensity * material.specular * factor
-    return specular
+    return light.intensity * material.specular * factor
