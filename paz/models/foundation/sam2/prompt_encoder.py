@@ -4,6 +4,8 @@ Points and box corners share a random-Fourier positional encoding and add a
 learned per-label embedding. Coordinates arrive in the resized 1024 space.
 The dense positional encoding and the no-mask embedding are computed eagerly
 from the loaded weights and fed to the mask decoder as constants.
+``build_mask_downsample`` is the video-only conv that turns a full-resolution
+mask prompt into the low-resolution logits the mask decoder consumes.
 """
 import math
 
@@ -82,6 +84,12 @@ def build_mask_downscaling(name="sam2_mask_downscaling"):
     empty = ops.zeros_like(dense)
     no_mask = ChannelBias(PROMPT_EMBED_DIM, name="no_mask_embed")(empty)
     return Model(masks, (dense, no_mask), name=name)
+
+
+def build_mask_downsample(name="sam2_mask_downsample"):
+    mask = Input((IMAGE_SIZE, IMAGE_SIZE, 1), name="mask")
+    low_res = Conv2D(1, 4, strides=4, name="mask_downsample")(mask)
+    return Model(mask, low_res, name=name)
 
 
 def dense_positional_encoding(point_model):

@@ -4,6 +4,8 @@ Reuses ``compute_attention`` from ``paz.models.transformers`` for scaled
 dot-product attention. Output tokens (object-score, IoU, and four mask
 tokens) attend to the image embedding and back; a hypernetwork projects the
 mask tokens onto the upscaled features to produce four low-resolution masks.
+The mask tokens are also returned, since the video path turns one of them into
+the frame's object pointer.
 """
 from keras import Input, Model, ops
 from keras.layers import Conv2DTranspose, Dense, LayerNormalization, Reshape
@@ -31,12 +33,13 @@ def build(name="sam2_mask_decoder"):
     positions = flatten(image_pe)
     queries, keys = two_way_transformer(source, positions, tokens)
     upscaled = upscale(reshape_to_grid(keys), high_res_0, high_res_1)
-    masks = hypernetwork(queries[:, 2:TOKENS], upscaled)
+    mask_tokens = queries[:, 2:TOKENS]
+    masks = hypernetwork(mask_tokens, upscaled)
     iou_args = queries[:, 1], 256, NUM_MASK_TOKENS, 3, "iou_prediction_head"
     iou = mlp(*iou_args, sigmoid=True)
     obj = mlp(queries[:, 0], 256, 1, 3, "pred_obj_score_head")
     inputs = (embed, high_res_0, high_res_1, sparse, dense, image_pe)
-    return Model(inputs, (masks, iou, obj), name=name)
+    return Model(inputs, (masks, iou, obj, mask_tokens), name=name)
 
 
 def build_output_tokens(sparse):

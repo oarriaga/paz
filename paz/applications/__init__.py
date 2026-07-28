@@ -23,6 +23,14 @@ from paz.applications.segmenters import SAMHieraTiny21
 from paz.applications.segmenters import SAMHieraSmall21
 from paz.applications.segmenters import SAMHieraBasePlus21
 from paz.applications.segmenters import SAMHieraLarge21
+from paz.applications.trackers import TrackSAMHieraTiny2
+from paz.applications.trackers import TrackSAMHieraSmall2
+from paz.applications.trackers import TrackSAMHieraBasePlus2
+from paz.applications.trackers import TrackSAMHieraLarge2
+from paz.applications.trackers import TrackSAMHieraTiny21
+from paz.applications.trackers import TrackSAMHieraSmall21
+from paz.applications.trackers import TrackSAMHieraBasePlus21
+from paz.applications.trackers import TrackSAMHieraLarge21
 from paz.models.detection.haar_cascade import HaarCascadeFrontalFaceDetector
 from paz.models.detection.haar_cascade import HaarCascadeEyeDetector
 from paz.applications.classifiers import ClassifyMiniXceptionFER

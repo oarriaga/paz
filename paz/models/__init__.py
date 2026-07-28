@@ -62,3 +62,11 @@ from .foundation.sam2 import SAMHieraTiny21
 from .foundation.sam2 import SAMHieraSmall21
 from .foundation.sam2 import SAMHieraBasePlus21
 from .foundation.sam2 import SAMHieraLarge21
+from .foundation.sam2 import SAMHieraTiny2Video
+from .foundation.sam2 import SAMHieraSmall2Video
+from .foundation.sam2 import SAMHieraBasePlus2Video
+from .foundation.sam2 import SAMHieraLarge2Video
+from .foundation.sam2 import SAMHieraTiny21Video
+from .foundation.sam2 import SAMHieraSmall21Video
+from .foundation.sam2 import SAMHieraBasePlus21Video
+from .foundation.sam2 import SAMHieraLarge21Video

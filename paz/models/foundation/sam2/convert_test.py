@@ -16,6 +16,8 @@ NECK = convert.NECK
 PROMPT = convert.PROMPT
 DECODER = convert.DECODER
 TRANSFORMER = convert.TRANSFORMER
+ENCODER = convert.MEMORY_ENCODER
+ATTENTION = convert.MEMORY_ATTENTION
 
 
 def setters(model, state):
@@ -44,6 +46,66 @@ def to_torch_state_dict(bundle):
     encode_mask_downscaling(bundle.mask_downscaling, state)
     encode_mask_decoder(bundle.mask_decoder, state)
     return state
+
+
+def to_torch_video_state_dict(bundle):
+    state = to_torch_state_dict(bundle)
+    _, conv, _ = setters(bundle.mask_downsample, state)
+    conv("mask_downsample", "mask_downsample")
+    encode_memory_encoder(bundle.memory_encoder, state)
+    encode_memory_attention(bundle.memory_attention, state)
+    encode_pointer(bundle.pointer, bundle.pointer_time, state)
+    state["no_mem_pos_enc"] = np.zeros((1, 1, 256), np.float32)
+    return state
+
+
+def encode_memory_encoder(model, state):
+    dense, conv, norm = setters(model, state)
+    conv("mem_pix_proj", ENCODER + "pix_feat_proj")
+    conv("mem_out_proj", ENCODER + "out_proj")
+    grid = ENCODER + "mask_downsampler.encoder."
+    for index in (0, 3, 6, 9):
+        conv(f"mask_ds_conv_{index}", f"{grid}{index}")
+        norm(f"mask_ds_ln_{index + 1}", f"{grid}{index + 1}")
+    conv("mask_ds_final", f"{grid}12")
+    for index in range(2):
+        block = f"{ENCODER}fuser.layers.{index}"
+        encode_depthwise(model, f"fuser_{index}_dw", f"{block}.dwconv", state)
+        norm(f"fuser_{index}_norm", f"{block}.norm")
+        dense(f"fuser_{index}_pw1", f"{block}.pwconv1")
+        dense(f"fuser_{index}_pw2", f"{block}.pwconv2")
+        state[f"{block}.gamma"] = layer_weight(model, f"fuser_{index}_gamma")
+    state["no_obj_embed_spatial"] = layer_weight(model, "no_obj_embed_spatial")
+
+
+def encode_memory_attention(model, state):
+    dense, _, norm = setters(model, state)
+    for index in range(4):
+        layer = f"{ATTENTION}layers.{index}"
+        encode_attention(dense, f"mematt_{index}_self", f"{layer}.self_attn")
+        cross = f"{layer}.cross_attn_image"
+        encode_attention(dense, f"mematt_{index}_cross", cross)
+        for number in (1, 2, 3):
+            norm(f"mematt_{index}_norm{number}", f"{layer}.norm{number}")
+        dense(f"mematt_{index}_mlp1", f"{layer}.linear1")
+        dense(f"mematt_{index}_mlp2", f"{layer}.linear2")
+    norm("mematt_norm", ATTENTION + "norm")
+    table = layer_weight(model, "maskmem_tpos_enc")
+    state["maskmem_tpos_enc"] = table.reshape(-1, 1, 1, table.shape[-1])
+
+
+def encode_pointer(model, time_model, state):
+    dense, _, _ = setters(model, state)
+    encode_mlp(dense, "obj_ptr_proj", "obj_ptr_proj", 3)
+    state["no_obj_ptr"] = layer_weight(model, "no_obj_ptr")
+    dense, _, _ = setters(time_model, state)
+    dense("obj_ptr_tpos_proj", "obj_ptr_tpos_proj")
+
+
+def encode_depthwise(model, name, source, state):
+    kernel, bias = model.get_layer(name).get_weights()
+    state[f"{source}.weight"] = np.transpose(kernel, (2, 3, 0, 1))
+    state[f"{source}.bias"] = bias
 
 
 def encode_image_encoder(model, state):
@@ -144,7 +206,7 @@ def layer_weight(model, name):
 
 def randomize(bundle):
     generator = np.random.RandomState(1)
-    for model in bundle[:4]:
+    for _, model in sam2_model.submodels(bundle):
         weights = [generator.randn(*w.shape) for w in model.get_weights()]
         model.set_weights([w.astype("float32") * 0.05 for w in weights])
 
@@ -192,3 +254,50 @@ def test_converter_tolerates_deferred_keys():
     state = to_torch_state_dict(bundle)
     state["memory_encoder.deferred"] = np.zeros((2,), np.float32)
     convert.convert(sam2_model.build(TINY), state)
+
+
+def test_video_converter_maps_every_key():
+    source = sam2_model.build_video(TINY)
+    randomize(source)
+    state = to_torch_video_state_dict(source)
+    target = convert.convert_video(sam2_model.build_video(TINY), state)
+    expected = np.array(source.pointer(pointer_inputs()))
+    result = np.array(target.pointer(pointer_inputs()))
+    assert np.allclose(expected, result, atol=1e-5)
+    expected = np.array(source.memory_attention(attention_inputs()))
+    result = np.array(target.memory_attention(attention_inputs()))
+    assert np.allclose(expected, result, atol=1e-5)
+
+
+def test_video_converter_rejects_unmapped_key():
+    state = to_torch_video_state_dict(sam2_model.build_video(TINY))
+    state["surprise"] = np.zeros((2,), np.float32)
+    with pytest.raises(KeyError):
+        convert.convert_video(sam2_model.build_video(TINY), state)
+
+
+def test_video_converter_zeros_terms_absent_from_sam2():
+    state = to_torch_video_state_dict(sam2_model.build_video(TINY))
+    proj = "obj_ptr_tpos_proj"
+    for key in ("no_obj_embed_spatial", proj + ".weight", proj + ".bias"):
+        del state[key]
+    bundle = convert.convert_video(sam2_model.build_video(TINY), state)
+    embedding = layer_weight(bundle.memory_encoder, "no_obj_embed_spatial")
+    assert np.allclose(embedding, 0.0)
+    distances = np.ones((3, 256), np.float32)
+    assert np.allclose(np.array(bundle.pointer_time(distances)), 0.0)
+
+
+def pointer_inputs():
+    token = np.zeros((1, 256), np.float32)
+    return [token, np.zeros((1, 1), np.float32)]
+
+
+def attention_inputs():
+    curr = np.zeros((1, 16, 256), np.float32)
+    memory = np.zeros((1, 18, 64), np.float32)
+    times = np.zeros((1, 18, 7), np.float32)
+    mask = np.ones((1, 18), np.float32)
+    cos = np.zeros((1, 16, 128), np.float32)
+    keys = np.zeros((1, 18, 128), np.float32)
+    return [curr, curr, memory, memory, times, mask, cos, cos, keys, keys]
