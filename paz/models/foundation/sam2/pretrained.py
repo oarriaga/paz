@@ -20,7 +20,7 @@ from paz.models.foundation.sam2 import configuration as cfg
 
 ALTAMIRA = "https://github.com/oarriaga/altamira-data/releases/download/"
 SAM2_IMAGE_URL = ALTAMIRA + "v0.30/"
-SAM2_VIDEO_URL = ALTAMIRA + "v0.32/"
+SAM2_VIDEO_URL = ALTAMIRA + "v0.34/"
 SAM2_CACHE = "paz/models/sam2"
 
 
