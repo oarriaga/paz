@@ -6,7 +6,9 @@ decoupled_wbc/sim2mujoco/resources/robots/g1/g1_gear_wbc.yaml.
 
 from collections import deque
 from collections import namedtuple
+from functools import partial
 
+import jax
 import mujoco
 import numpy as np
 
@@ -106,19 +108,31 @@ def update_history(history, frame):
     return np.concatenate(history)[np.newaxis]
 
 
-def select_actor(models, command):
+def compile_actors(models):
+    # Called eagerly, these actors cost 7.7 ms and dominate the 20 ms
+    # control period. Both are compiled here so neither expert stalls the
+    # loop the first time a command selects it.
+    balance = jax.jit(partial(models.balance, training=False))
+    walk = jax.jit(partial(models.walk, training=False))
+    observation = np.zeros((1, FRAME_DIM * NUM_HISTORY_FRAMES), "float32")
+    balance(observation)
+    walk(observation)
+    return models._replace(balance=balance, walk=walk)
+
+
+def select_actor(actors, command):
     # The release disagrees with itself at exactly BALANCE_SPEED: the MuJoCo
     # runner uses <= and the deploy policy uses <. This follows the runner.
     if np.linalg.norm(command.velocity) <= BALANCE_SPEED:
-        actor = models.balance
+        actor = actors.balance
     else:
-        actor = models.walk
+        actor = actors.walk
     return actor
 
 
-def compute_action(models, observation, command):
-    actor = select_actor(models, command)
-    return np.asarray(actor(observation, training=False))[0]
+def compute_action(actors, observation, command):
+    actor = select_actor(actors, command)
+    return np.asarray(actor(observation))[0]
 
 
 def compute_target_angles(action):

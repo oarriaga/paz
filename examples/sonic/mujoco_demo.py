@@ -3,6 +3,7 @@
 import argparse
 import os
 from pathlib import Path
+import signal
 import time
 
 os.environ.setdefault("KERAS_BACKEND", "jax")
@@ -108,6 +109,12 @@ def close_viewer(viewer):
     # launch_passive owns a daemon render thread. Give it time to destroy its
     # GLFW resources before Python unloads MuJoCo during a scripted shutdown.
     time.sleep(0.25)
+
+
+def restore_interrupt():
+    # launch_passive keeps SIGINT for itself, so Ctrl-C never reaches Python
+    # and the loop runs until the process is killed. Take the signal back.
+    signal.signal(signal.SIGINT, signal.default_int_handler)
 
 
 if __name__ == "__main__":
@@ -302,6 +309,7 @@ if __name__ == "__main__":
             show_left_ui=False,
             show_right_ui=False,
         )
+        restore_interrupt()
         viewer.cam.azimuth = 120
         viewer.cam.elevation = -20
         viewer.cam.distance = 3.0
@@ -412,6 +420,8 @@ if __name__ == "__main__":
             if realtime:
                 last_time = sleep_to_rate(last_time, args.sim_dt)
             step += 1
+    except KeyboardInterrupt:
+        pass
     finally:
         if viewer is not None:
             close_viewer(viewer)

@@ -3,9 +3,15 @@
 import argparse
 import os
 from pathlib import Path
+import signal
 import time
 
 os.environ.setdefault("KERAS_BACKEND", "jax")
+
+# One 15-joint actor at batch one is bound by launch latency, not by
+# throughput, so the CPU runs it faster per call than a GPU and leaves the
+# GPU free. Set JAX_PLATFORMS to override.
+os.environ.setdefault("JAX_PLATFORMS", "cpu")
 
 import mujoco
 import mujoco.viewer
@@ -14,6 +20,9 @@ import numpy as np
 from paz.models import GearWBC
 from paz.models.foundation.gear_wbc.model import ACTION_DIM
 
+from controller import CONTROLS
+from controller import build_pad
+from controller import read_command
 from simulation import CONTROL_DECIMATION
 from simulation import LOWER_BODY_ANGLES
 from simulation import SIMULATION_STEP
@@ -21,78 +30,13 @@ from simulation import build_command
 from simulation import build_history
 from simulation import build_observation_frame
 from simulation import build_plant
+from simulation import compile_actors
 from simulation import compute_action
 from simulation import compute_control
 from simulation import compute_target_angles
 from simulation import update_history
 
-LINEAR_STEP = 0.2
-ANGULAR_STEP = 0.2
-HEIGHT_STEP = 0.1
-ORIENTATION_STEP = np.deg2rad(10)
-
-VELOCITY_KEYS = "w", "s", "a", "d", "q", "e", "z"
-HEIGHT_KEYS = "1", "2"
-ORIENTATION_KEYS = "3", "4", "5", "6", "7", "8"
-ORIENTATION_AXES = {"3": 0, "4": 0, "5": 1, "6": 1, "7": 2, "8": 2}
-
-CONTROLS = """GEAR-WBC / PAZ controls
-  w / s   forward velocity
-  a / d   lateral velocity
-  q / e   yaw rate
-  z       stop
-  1 / 2   base height
-  3 / 4   torso roll
-  5 / 6   torso pitch
-  7 / 8   torso yaw
-"""
-
-
-def apply_key(command, key):
-    if key in VELOCITY_KEYS:
-        command = apply_velocity_key(command, key)
-    elif key in HEIGHT_KEYS:
-        command = apply_height_key(command, key)
-    elif key in ORIENTATION_KEYS:
-        command = apply_orientation_key(command, key)
-    return command
-
-
-def apply_velocity_key(command, key):
-    velocity = command.velocity.copy()
-    if key == "w":
-        velocity[0] = velocity[0] + LINEAR_STEP
-    elif key == "s":
-        velocity[0] = velocity[0] - LINEAR_STEP
-    elif key == "a":
-        velocity[1] = velocity[1] + LINEAR_STEP
-    elif key == "d":
-        velocity[1] = velocity[1] - LINEAR_STEP
-    elif key == "q":
-        velocity[2] = velocity[2] + ANGULAR_STEP
-    elif key == "e":
-        velocity[2] = velocity[2] - ANGULAR_STEP
-    else:
-        velocity = np.zeros(3, "float32")
-    return command._replace(velocity=velocity)
-
-
-def apply_height_key(command, key):
-    if key == "1":
-        height = command.height + HEIGHT_STEP
-    else:
-        height = command.height - HEIGHT_STEP
-    return command._replace(height=height)
-
-
-def apply_orientation_key(command, key):
-    orientation = command.orientation.copy()
-    axis = ORIENTATION_AXES[key]
-    if key in ("3", "5", "7"):
-        orientation[axis] = orientation[axis] - ORIENTATION_STEP
-    else:
-        orientation[axis] = orientation[axis] + ORIENTATION_STEP
-    return command._replace(orientation=orientation)
+STATUS_STEPS = 100
 
 
 def describe(command):
@@ -113,13 +57,22 @@ def sleep_to_rate(last_time, timestep):
     return rate_time
 
 
-def build_viewer(model, data, key_callback):
-    launch = mujoco.viewer.launch_passive
-    viewer = launch(model, data, key_callback=key_callback)
+def restore_interrupt():
+    # launch_passive keeps SIGINT for itself, so Ctrl-C never reaches Python
+    # and the loop runs until the process is killed. Take the signal back.
+    signal.signal(signal.SIGINT, signal.default_int_handler)
+
+
+def build_viewer(model, data):
+    # The camera tracks the pelvis. Left at the origin it loses the robot
+    # after a couple of metres, which reads as a frozen scene.
+    pelvis = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "pelvis")
+    viewer = mujoco.viewer.launch_passive(model, data)
+    viewer.cam.type = mujoco.mjtCamera.mjCAMERA_TRACKING
+    viewer.cam.trackbodyid = pelvis
     viewer.cam.azimuth = 120
     viewer.cam.elevation = -20
     viewer.cam.distance = 3.0
-    viewer.cam.lookat = np.asarray([0.0, 0.0, 0.8])
     return viewer
 
 
@@ -143,41 +96,45 @@ if __name__ == "__main__":
 
     print(CONTROLS)
     print(f"Loading PAZ GEAR-WBC weights and scene from {scene_path}")
-    models = GearWBC(weights="pretrained")
+    actors = compile_actors(GearWBC(weights="pretrained"))
     model, data = build_plant(scene_path)
+    pad = build_pad()
 
     command = build_command()
     history = build_history()
     action = np.zeros(ACTION_DIM, "float32")
     target_angles = LOWER_BODY_ANGLES.copy()
 
-    def key_callback(keycode):
-        global command
-        command = apply_key(command, chr(keycode).lower())
-        print(describe(command))
-
     if arguments.headless:
         viewer = None
     else:
-        viewer = build_viewer(model, data, key_callback)
+        viewer = build_viewer(model, data)
+        restore_interrupt()
 
+    control_period = SIMULATION_STEP * CONTROL_DECIMATION
     step, last_time = 0, time.perf_counter()
-    while arguments.steps == 0 or step < arguments.steps:
-        if viewer is not None and not viewer.is_running():
-            break
-        data.ctrl[:] = compute_control(data, target_angles)
-        mujoco.mj_step(model, data)
-        step = step + 1
-        if step % CONTROL_DECIMATION == 0:
-            frame = build_observation_frame(data, command, action)
-            observation = update_history(history, frame)
-            action = compute_action(models, observation, command)
-            target_angles = compute_target_angles(action)
-        if viewer is not None:
-            viewer.sync()
-            last_time = sleep_to_rate(last_time, SIMULATION_STEP)
+    try:
+        while arguments.steps == 0 or step < arguments.steps:
+            if viewer is not None and not viewer.is_running():
+                break
+            data.ctrl[:] = compute_control(data, target_angles)
+            mujoco.mj_step(model, data)
+            step = step + 1
+            if step % CONTROL_DECIMATION == 0:
+                command = read_command(pad)
+                frame = build_observation_frame(data, command, action)
+                observation = update_history(history, frame)
+                action = compute_action(actors, observation, command)
+                target_angles = compute_target_angles(action)
+                if viewer is not None:
+                    viewer.sync()
+                    last_time = sleep_to_rate(last_time, control_period)
+            if step % STATUS_STEPS == 0:
+                print(describe(command), end="\r", flush=True)
+    except KeyboardInterrupt:
+        pass
 
-    print(f"Ran {step} steps. Final base height {data.qpos[2]:.3f} m")
+    print(f"\nRan {step} steps. Final base height {data.qpos[2]:.3f} m")
     if viewer is not None:
         viewer.close()
         time.sleep(0.25)

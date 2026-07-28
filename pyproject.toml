@@ -30,6 +30,7 @@ sonic = [
 gear_wbc = [
     "mujoco>=3.3",
     "onnx>=1.16",
+    "pygame>=2.6",
 ]
 
 [project.urls]

@@ -9,7 +9,9 @@ this demo simply holds at their default pose.
 
 Unlike SONIC, GEAR-WBC needs no reference motion. It takes a velocity
 command, a base height and a torso orientation, so it is steered directly
-from the keyboard.
+from a PlayStation controller. The pad is read outside the MuJoCo viewer,
+which leaves the viewer's own key bindings alone instead of toggling
+visualization state on every steering input.
 
 The release ships two experts over one architecture. The demo picks between
 them exactly as the deployment code does: a velocity command norm at or below
@@ -20,6 +22,10 @@ them exactly as the deployment code does: a velocity command norm at or below
 From the PAZ repository:
 
     python3 -m pip install -e '.[gear_wbc]'
+
+A PlayStation controller has to be connected before launching, over USB or
+Bluetooth. SDL reads it through `/dev/input/js0`, so no driver setup is
+needed beyond pairing it.
 
 The demo also needs the G1 MuJoCo plant from a local
 GR00T-WholeBodyControl checkout, at
@@ -42,27 +48,44 @@ MuJoCo fails to parse the pointer files that stand in for the STL meshes.
 
     python3 examples/gear_wbc/mujoco_demo.py
 
-The first launch compiles the actors with JAX and can take several seconds.
-CPU execution is available with:
+Both experts are compiled with `jax.jit` up front, so the first launch takes
+several seconds and neither expert stalls the loop when a command first
+selects it. This matters more than it looks: called eagerly, one actor costs
+7.7 ms on the CPU and 18.5 ms on a laptop GPU, against a 20 ms control
+period, which is enough on its own to drop the demo below real time.
 
-    JAX_PLATFORMS=cpu python3 examples/gear_wbc/mujoco_demo.py
+    eager   7.74 ms/call CPU   18.52 ms/call GPU
+    jitted  0.27 ms/call CPU    1.15 ms/call GPU
 
-A fixed-length headless run is useful as a smoke check:
+The demo therefore runs on the CPU by default. A single 15-joint actor at
+batch one is bound by launch latency rather than throughput, so the CPU wins
+per call and leaves the GPU free. To override:
+
+    JAX_PLATFORMS=cuda python3 examples/gear_wbc/mujoco_demo.py
+
+A fixed-length headless run is useful as a smoke check. It still needs the
+pad connected, and holds whatever command the pad reports:
 
     python3 examples/gear_wbc/mujoco_demo.py --headless --steps 1000
 
 ## Controls
 
-| Key | Action |
+Every input self-centers, so the whole command is a pure function of the
+pad: release it and the robot returns to standing at the default 0.74 m
+height with a level torso, back on the balance expert.
+
+| Input | Action |
 | --- | --- |
-| w / s | Increase or decrease forward velocity |
-| a / d | Increase or decrease lateral velocity |
-| q / e | Increase or decrease yaw rate |
-| z | Stop, returning to the balance expert |
-| 1 / 2 | Raise or lower the commanded base height |
-| 3 / 4 | Torso roll |
-| 5 / 6 | Torso pitch |
-| 7 / 8 | Torso yaw |
+| Left stick | Forward and lateral velocity, up to 0.5 and 0.4 m/s |
+| Right stick, left / right | Yaw rate, up to 1.0 rad/s |
+| Right stick, up / down | Base height, 0.74 m plus or minus 0.15 m |
+| L2 / R2 | Torso roll, up to 20 degrees each way |
+| D-pad up / down | Torso pitch |
+| D-pad left / right | Torso yaw |
+
+Lateral speed is capped lower than forward speed on purpose: upstream
+recommends staying near 0.4 m/s when strafing, because the cross-legged
+foot placement of a side step collides at higher speeds.
 
 ## Weights
 
