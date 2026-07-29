@@ -12,6 +12,8 @@ from paz.graphics.composite import (
     take_closest,
 )
 
+# TODO retune: measured best under 6k faces, but 2048 is 1.75x faster
+# at 82k, so this is wrong for the room-scale meshes ahead.
 FACE_CHUNK_SIZE = 128
 SHADOW_ORIGIN_EPSILON = 1e-5
 SHADOW_SELF_HIT_EPSILON = 1e-5
@@ -242,6 +244,9 @@ def compute_hit_colors(
     elif triangle_hit is None:
         colors = compute_shape_colors(*shape_args, shadows)
     else:
+        # TODO a mixed scene shades both paths for every ray and throws one
+        # away. Joining them before selection needs color_with_shadows to
+        # return rows instead of selecting inside its per-light scan.
         shape_colors = compute_shape_colors(*shape_args, shadows)
         triangle_colors = compute_triangle_colors(compiled, triangle_hit)
         is_triangle = jp.expand_dims(indices == num_shapes, -1)
