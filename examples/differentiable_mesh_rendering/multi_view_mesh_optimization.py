@@ -23,6 +23,7 @@ def build_parser():
     add("--distance", default=2.7, type=float)
     add("--tile_shape", default=[2, 2], nargs=2, type=int)
     add("--chunk_size", default=4096, type=int)
+    add("--mask_chunk_size", default=256, type=int)
     add("--mask_bin_size", default=16, type=int)
     add("--max_faces_per_bin", default=4608, type=int)
     add("--soft_mask_sigma", default=1e-4, type=float)
@@ -54,7 +55,7 @@ from paz.graphics.types import PointLight
 
 Parameters = namedtuple("Parameters", "offsets vertex_colors step_arg")
 MeshArgs = namedtuple("MeshArgs", "vertices faces edges material transform")
-RENDER = "image_shape y_fov tile chunk lights sigma bins"
+RENDER = "image_shape y_fov tile chunk mask_chunk lights sigma bins"
 RenderArgs = namedtuple("RenderArgs", RENDER)
 TargetArgs = namedtuple("TargetArgs", "images masks poses")
 CowArgs = namedtuple("CowArgs", "mesh center scale")
@@ -107,6 +108,8 @@ def validate_config(config):
         raise ValueError("max_steps must be positive.")
     if config.chunk_size < 1:
         raise ValueError("chunk_size must be positive.")
+    if config.mask_chunk_size < 1:
+        raise ValueError("mask_chunk_size must be positive.")
     if config.image_size % config.mask_bin_size != 0:
         raise ValueError("image_size must be divisible by mask_bin_size.")
     if config.max_faces_per_bin < 1:
@@ -296,7 +299,8 @@ def build_render_args(config):
     tile_shape = tuple(config.tile_shape)
     bins = build_bin_args(config)
     lights = [PointLight(jp.ones(3), jp.array([0.0, 0.0, -3.0]))]
-    args = (image_shape, jp.pi / 3.0, tile_shape, config.chunk_size, lights)
+    args = (image_shape, jp.pi / 3.0, tile_shape, config.chunk_size)
+    args = args + (config.mask_chunk_size, lights)
     args = args + (config.soft_mask_sigma, bins)
     return RenderArgs(*args)
 
@@ -433,7 +437,7 @@ def render_mesh(mesh, pose, render_args):
 def render_mesh_mask(mesh, pose, render_args):
     H, W = render_args.image_shape
     args = (render_args.bins, render_args.y_fov, H, W, pose, mesh)
-    args = args + (render_args.sigma, render_args.chunk)
+    args = args + (render_args.sigma, render_args.mask_chunk)
     return paz.graphics.mesh.tile_render_binned_soft_mask(*args)
 
 
