@@ -22,7 +22,7 @@ def render_dataset(mesh, num_views, size, distance, y_FOV, chunk_size, tiles,
     render_image = scenes.build_image_renderer(
         mesh, size, np.mean(distance), y_FOV, chunk_size, tiles)
     render_coordinates = scenes.build_coordinate_renderer(
-        mesh, size, y_FOV, chunk_size)
+        mesh, size, y_FOV)
     H, W = size
     images = np.empty((num_views, H, W, 3), "uint8")
     coordinates = np.empty((num_views, H, W, 3), "uint8")
@@ -42,7 +42,7 @@ def build_evaluation(mesh, size, distance, y_FOV, chunk_size, tiles, camera,
     render_image = scenes.build_image_renderer(
         mesh, size, np.mean(distance), y_FOV, chunk_size, tiles)
     render_coordinates = scenes.build_coordinate_renderer(
-        mesh, size, y_FOV, chunk_size)
+        mesh, size, y_FOV)
     randomize = jax.jit(paz.image.randomize_rendered_image)
     keys = jax.random.split(jax.random.PRNGKey(seed), num_samples)
     inputs, poses_true = [], []

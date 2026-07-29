@@ -36,7 +36,7 @@ extents = np.asarray(scenes.object_extents(mesh))
 render_image = scenes.build_image_renderer(
     mesh, size, np.mean(args.distance), args.y_FOV, args.chunk_size, tuple(args.tiles))  # fmt: skip
 render_coordinates = scenes.build_coordinate_renderer(
-    mesh, size, args.y_FOV, args.chunk_size)
+    mesh, size, args.y_FOV)
 
 pose = scenes.sample_pose(jax.random.PRNGKey(args.seed), args.distance)
 image = np.asarray(render_image(pose))

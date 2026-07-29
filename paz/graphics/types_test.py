@@ -184,11 +184,29 @@ def test_scene_raises_error_for_non_list_nodes(valid_parent_array):
 
 
 def test_scene_raises_error_for_invalid_node_content(valid_parent_array):
-    """Tests that all elements in `nodes` must be a Shape or Group."""
-    with pytest.raises(TypeError, match="All elements in `nodes` must be"):
+    """Tests that all elements in `nodes` must be Shape, Group or Mesh."""
+    with pytest.raises(TypeError, match="must be Shape, Group or Mesh"):
         types.Scene(
             nodes=[types.Sphere(), 123], parent_array=valid_parent_array
         )
+
+
+def build_sample_mesh():
+    vertices = jp.zeros((3, 3))
+    faces = jp.array([[0, 1, 2]])
+    edges = jp.array([[0, 1], [1, 2], [2, 0]])
+    args = vertices, jp.zeros((3, 3)), jp.eye(4), types.Material()
+    return types.Mesh(*args, faces, edges)
+
+
+def test_scene_accepts_a_mesh_node():
+    scene = types.Scene(nodes=[build_sample_mesh()])
+    assert len(scene.nodes) == 1
+
+
+def test_scene_accepts_shapes_and_meshes_together():
+    scene = types.Scene(nodes=[types.Sphere(), build_sample_mesh()])
+    assert len(scene.nodes) == 2
 
 
 def test_scene_raises_error_for_mismatched_lengths(valid_nodes):

@@ -192,20 +192,23 @@ def extract(filepath):
 
 
 def assert_snapshot(now_filedata, filepath, update=False, rtol=1e-07, atol=0):
-    directory = os.path.dirname(filepath)
-    if directory:
-        os.makedirs(directory, exist_ok=True)
-
-    if os.path.isfile(filepath) and not update:
+    if update:
+        save_snapshot(now_filedata, filepath)
+    elif os.path.isfile(filepath):
         old_filedata = jp.load(filepath)
         assert jp.allclose(old_filedata, now_filedata, rtol, atol)
         print_green(f"✅ Snapshot {os.path.basename(filepath)} matches.")
     else:
-        if update:
-            print_yellow(f"Updating golden file: {filepath}")
-        else:
-            print_yellow(f"File not found, creating snapshot: {filepath}")
-        jp.save(filepath, now_filedata)
+        message = f"Missing snapshot {filepath}. Create it with update=True."
+        raise FileNotFoundError(message)
+
+
+def save_snapshot(now_filedata, filepath):
+    directory = os.path.dirname(filepath)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    print_yellow(f"Writing golden file: {filepath}")
+    jp.save(filepath, now_filedata)
 
 
 def print_with_color(text, ansi_code):

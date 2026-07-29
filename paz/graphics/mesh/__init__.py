@@ -1,8 +1,9 @@
-from .types import Mesh, normalize_mesh_batch
+from paz.graphics.types import Mesh
 from .intersect import (
     EPSILON,
     compute_f,
     intersect_mesh,
+    intersect_triangles,
     intersect_canonical_mesh,
     intersect_chunked,
 )
@@ -11,6 +12,7 @@ from .geometry import (
     compute_canonical_normals,
     compute_normals,
     compute_normals_for_hits,
+    compute_triangle_normals,
     compute_position,
     extract_points,
     transform_points,
@@ -24,24 +26,8 @@ from .patterns import (
     interpolate_for_hits,
     compute_base_colors_for_hits,
 )
-from .shading import (
-    compute_ambient,
-    compute_base_color,
-    compute_colors_for_hits,
-    compute_diffuse,
-    compute_mesh_colors,
-    compute_specular,
-    vertex_colors_to_face_colors,
-)
 from .render import (
-    mask_out_mesh,
-    postprocess,
-    render,
     render_coordinates,
-    render_masks,
-    select_closest_color,
-    to_color_image,
-    to_depth_image,
 )
 from .tile import (
     assemble,
@@ -60,8 +46,5 @@ from .silhouette import (
 from .builders import (
     build_cube,
     build_sphere,
-    fill_bottom_with_last,
-    fill_mesh,
     load_mesh,
-    merge_meshes,
 )

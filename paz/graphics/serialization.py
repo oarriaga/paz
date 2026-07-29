@@ -32,6 +32,8 @@ def pattern_contains_image(pattern_node):
 
 
 def to_json(scene_node_field, counter=[0], filepath=None):
+    if isinstance(scene_node_field, paz.graphics.Mesh):
+        raise TypeError("Saving a Mesh node is not supported.")
     if filepath is not None:
         filepath = pathlib.Path(filepath)
     if isinstance(scene_node_field, jp.ndarray):

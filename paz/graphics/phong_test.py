@@ -1,7 +1,7 @@
 import pytest
 import jax.numpy as jp
 
-from paz.graphics import phong
+from paz.graphics import albedo, phong
 from paz import algebra
 from paz.graphics.types import PointLight, Material, Pattern, Shape
 from paz.graphics.constants import NO_PATTERN, PLANAR_PATTERN
@@ -29,11 +29,13 @@ def simple_material():
 
 
 @pytest.fixture
-def simple_shape(simple_pattern):
-    """A simple shape with a basic pattern."""
-    return Shape(
+def simple_albedo(simple_pattern, simple_material):
+    """Albedo of a simple shape whose pattern contributes nothing."""
+    shape = Shape(
         transform=jp.eye(4), type=0, pattern=simple_pattern, material=None
     )
+    points = jp.zeros((1, 3))
+    return albedo.compute_shape_albedo(shape, simple_material, points)
 
 
 @pytest.fixture
@@ -43,7 +45,7 @@ def simple_pattern():
     return Pattern(transform=jp.eye(4), type=NO_PATTERN, image=dummy_image)
 
 
-def test_compute_colors_in_shape_with_transforms():
+def test_compute_points_in_pattern_with_transforms():
     """Tests the full world-to-pattern coordinate transformation."""
     points_world = jp.array([[11.0, 2.0, 3.0]])
     shape_transform = (
@@ -55,56 +57,46 @@ def test_compute_colors_in_shape_with_transforms():
     # Shape -> Pattern: (1, 2, 3) -> (0.5, 2, 3)
     expected_points = jp.array([[0.5, 2.0, 3.0]])
 
-    points_pattern = phong.compute_colors_in_shape(
+    points_pattern = albedo.compute_points_in_pattern(
         pattern_transform, shape_transform, points_world
     )
     assert jp.allclose(points_pattern, expected_points)
 
 
-def test_compute_base_color_scales_pattern_with_light_intensity():
+def test_compute_shape_albedo_adds_pattern_to_material_color():
     pattern_image = jp.broadcast_to(jp.array([0.2, 0.3, 0.1]), (2, 2, 3))
     pattern = Pattern(jp.eye(4), PLANAR_PATTERN, pattern_image)
     shape = Shape(jp.eye(4), 0, None, pattern)
     material = Material(color=jp.array([0.4, 0.1, 0.2]))
-    light = PointLight(
-        intensity=jp.array([0.5, 0.25, 0.8]),
-        position=jp.array([0.0, 1.0, 0.0]),
-    )
     points = jp.array([[0.0, 0.0, 0.0]])
-    expected_color = (jp.array([[0.2, 0.3, 0.1]]) + material.color)
-    expected_color = expected_color * light.intensity
-    color = phong.compute_base_color(shape, material, light, points)
-    assert jp.allclose(color, expected_color)
+    expected = jp.array([[0.2, 0.3, 0.1]]) + material.color
+    colors = albedo.compute_shape_albedo(shape, material, points)
+    assert jp.allclose(colors, expected)
 
 
-def test_compute_base_color_with_pattern_is_zero_for_zero_light():
+def test_compute_shape_albedo_is_independent_of_light():
     pattern_image = jp.full((2, 2, 3), 0.5)
     pattern = Pattern(jp.eye(4), PLANAR_PATTERN, pattern_image)
     shape = Shape(jp.eye(4), 0, None, pattern)
     material = Material(color=jp.array([0.4, 0.1, 0.2]))
-    light = PointLight(
-        intensity=jp.zeros(3),
-        position=jp.array([0.0, 1.0, 0.0]),
-    )
     points = jp.array([[0.0, 0.0, 0.0]])
-    color = phong.compute_base_color(shape, material, light, points)
-    assert jp.allclose(color, jp.zeros((1, 3)))
+    colors = albedo.compute_shape_albedo(shape, material, points)
+    assert jp.allclose(colors, 0.5 + material.color)
 
 
-def test_compute_ambient(simple_shape, simple_material, simple_light):
+def test_compute_ambient(simple_albedo, simple_material, simple_light):
     """Tests the ambient light calculation."""
-    points = jp.array([[0.0, 0.0, 0.0]])
     expected_base = simple_material.color * simple_light.intensity
     expected_ambient = expected_base * simple_material.ambient
 
     ambient = phong.compute_ambient(
-        simple_shape, simple_material, simple_light, points
+        simple_albedo, simple_material, simple_light
     )
     assert jp.allclose(ambient, expected_ambient)
 
 
 def test_compute_diffuse_with_direct_light(
-    simple_shape, simple_material, simple_light
+    simple_albedo, simple_material, simple_light
 ):
     """Tests diffuse component when light is perpendicular to the surface."""
     points = jp.array([[0.0, 0.0, 0.0]])
@@ -116,13 +108,13 @@ def test_compute_diffuse_with_direct_light(
     expected_diffuse = base_color * simple_material.diffuse
 
     diffuse = phong.compute_diffuse(
-        simple_shape, simple_material, light, points, normals
+        simple_albedo, simple_material, light, points, normals
     )
     assert jp.allclose(diffuse, expected_diffuse)
 
 
 def test_compute_diffuse_with_45_degree_light(
-    simple_shape, simple_material, simple_light
+    simple_albedo, simple_material, simple_light
 ):
     """Tests diffuse component when light is at a 45-degree angle."""
     points = jp.array([[0.0, 0.0, 0.0]])
@@ -136,13 +128,13 @@ def test_compute_diffuse_with_45_degree_light(
     expected_diffuse = base_color * simple_material.diffuse * cos_theta
 
     diffuse = phong.compute_diffuse(
-        simple_shape, simple_material, light, points, normals
+        simple_albedo, simple_material, light, points, normals
     )
     assert jp.allclose(diffuse, expected_diffuse)
 
 
 def test_compute_diffuse_with_grazing_light(
-    simple_shape, simple_material, simple_light
+    simple_albedo, simple_material, simple_light
 ):
     """Tests diffuse component is zero when light is at a 90-degree angle."""
     points = jp.array([[0.0, 0.0, 0.0]])
@@ -153,13 +145,13 @@ def test_compute_diffuse_with_grazing_light(
     expected_diffuse = jp.array([0.0, 0.0, 0.0])
 
     diffuse = phong.compute_diffuse(
-        simple_shape, simple_material, light, points, normals
+        simple_albedo, simple_material, light, points, normals
     )
     assert jp.allclose(diffuse, expected_diffuse)
 
 
 def test_compute_diffuse_with_light_behind_surface(
-    simple_shape, simple_material, simple_light
+    simple_albedo, simple_material, simple_light
 ):
     """Tests diffuse component is zero when light is behind the surface."""
     points = jp.array([[0.0, 0.0, 0.0]])
@@ -171,7 +163,7 @@ def test_compute_diffuse_with_light_behind_surface(
     expected_diffuse = jp.array([0.0, 0.0, 0.0])
 
     diffuse = phong.compute_diffuse(
-        simple_shape, simple_material, light, points, normals
+        simple_albedo, simple_material, light, points, normals
     )
     assert jp.allclose(diffuse, expected_diffuse)
 
@@ -282,7 +274,7 @@ def test_compute_specular_shininess_with_non_unit_eye(simple_light):
 
 
 def test_compute_colors_is_sum_of_components(
-    simple_shape, simple_material, simple_light
+    simple_albedo, simple_material, simple_light
 ):
     """Tests that final color is the sum of ambient, diffuse, and specular."""
     points = jp.array([[0.0, 0.0, 0.0]])
@@ -291,10 +283,10 @@ def test_compute_colors_is_sum_of_components(
 
     # Manually calculate each component
     ambient = phong.compute_ambient(
-        simple_shape, simple_material, simple_light, points
+        simple_albedo, simple_material, simple_light
     )
     diffuse = phong.compute_diffuse(
-        simple_shape, simple_material, simple_light, points, normals
+        simple_albedo, simple_material, simple_light, points, normals
     )
     specular = phong.compute_specular(
         simple_material, simple_light, points, normals, eye
@@ -303,14 +295,14 @@ def test_compute_colors_is_sum_of_components(
 
     # Calculate with the main function
     actual_color = phong.compute_colors(
-        simple_shape, simple_material, points, normals, eye, simple_light
+        simple_albedo, simple_material, points, normals, eye, simple_light
     )
 
     assert jp.allclose(actual_color, expected_color, 1e-3)
 
 
 def test_compute_colors_with_shadow_is_ambient(
-    simple_shape, simple_material, simple_light
+    simple_albedo, simple_material, simple_light
 ):
     """Tests that a shadowed color is only the ambient component."""
     points = jp.array([[0.0, 0.0, 0.0]])
@@ -319,10 +311,10 @@ def test_compute_colors_with_shadow_is_ambient(
     shadow_mask = jp.array([True])
 
     expected_ambient = phong.compute_ambient(
-        simple_shape, simple_material, simple_light, points
+        simple_albedo, simple_material, simple_light
     )
     shadowed_color = phong.compute_colors_with_shadow(
-        simple_shape,
+        simple_albedo,
         simple_material,
         points,
         normals,
@@ -335,7 +327,7 @@ def test_compute_colors_with_shadow_is_ambient(
 
 
 def test_compute_colors_with_no_shadow_is_full_color(
-    simple_shape, simple_material, simple_light
+    simple_albedo, simple_material, simple_light
 ):
     """Tests that a non-shadowed color is the full Phong calculation."""
     points = jp.array([[0.0, 0.0, 0.0]])
@@ -344,10 +336,10 @@ def test_compute_colors_with_no_shadow_is_full_color(
     shadow_mask = jp.array([False])
 
     expected_full_color = phong.compute_colors(
-        simple_shape, simple_material, points, normals, eye, simple_light
+        simple_albedo, simple_material, points, normals, eye, simple_light
     )
     non_shadowed_color = phong.compute_colors_with_shadow(
-        simple_shape,
+        simple_albedo,
         simple_material,
         points,
         normals,

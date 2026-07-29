@@ -32,7 +32,7 @@ mesh = scenes.build_mesh(scenes.download_power_drill(), args.target_faces)
 render_image = scenes.build_image_renderer(
     mesh, size, np.mean(args.distance), args.y_FOV, args.chunk_size, tuple(args.tiles))  # fmt: skip
 render_coordinates = scenes.build_coordinate_renderer(
-    mesh, size, args.y_FOV, args.chunk_size)
+    mesh, size, args.y_FOV)
 backgrounds = jp.asarray(pipeline.load_backgrounds(
     args.backgrounds, args.image_size, args.num_backgrounds))
 randomize = jax.jit(paz.image.randomize_rendered_image)
