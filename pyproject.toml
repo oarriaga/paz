@@ -19,7 +19,9 @@ dependencies = [
     "tfp-nightly",
     "matplotlib",
     "optax",
-    "scipy"
+    "scipy",
+    "trimesh",
+    "fast_simplification"
 ]
 
 [project.optional-dependencies]

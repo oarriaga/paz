@@ -28,8 +28,9 @@ def build_face_edges(faces):
 
 
 def simplify_mesh(mesh, target_faces):
+    # trimesh 4 reads the first positional as a percentage, not a count.
     if hasattr(mesh, "simplify_quadric_decimation"):
-        return mesh.simplify_quadric_decimation(target_faces)
+        return mesh.simplify_quadric_decimation(face_count=target_faces)
     return mesh.simplify_quadratic_decimation(target_faces)
 
 
