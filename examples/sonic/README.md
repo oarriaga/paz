@@ -1,18 +1,28 @@
 # SONIC in MuJoCo
 
 This example runs the ported PAZ SONIC actor directly with the Keras JAX
-backend. It imports the released ONNX parameters into the PAZ architecture,
-then closes the loop around the original 43-DoF G1 MuJoCo plant: 29 SONIC
-body joints plus the two 7-DoF Dex3 hands.
-
-The demo intentionally uses the deployment observation layout and controller
-constants. It does not call the older Python Keras model or ONNX Runtime for
-inference.
+backend, closing the loop around the original 43-DoF G1 MuJoCo plant: 29
+SONIC body joints plus the two 7-DoF Dex3 hands. It loads the pretrained PAZ
+actor (paz.models.foundation.sonic.pretrained.SONIC) and the deployment
+observation layout, so it never calls ONNX Runtime or the older Python Keras
+model for inference.
 
 Startup matches the deployment workflow: three seconds of pose
 initialization, then two seconds of paused batch-1 policy ticks to build
 history. The original elastic band is released and playback starts
 automatically.
+
+## Quickstart
+
+To install PAZ and run SONIC out of the box, with nothing else to set up:
+
+    ./install.sh [target_dir]
+
+This clones the `paz-jax` branch (reusing `target_dir` if it already holds a
+checkout), creates a venv there, installs the `sonic` extra, downloads the
+released encoder/decoder weights, and runs one actor step to confirm it
+works. See `quickstart.py` for the few lines that do this from Python
+directly.
 
 ## Install
 
@@ -20,17 +30,20 @@ From the PAZ repository:
 
     python3 -m pip install -e '.[sonic]'
 
-The demo also needs a local GR00T-WholeBodyControl repository. It reads the
-release policy and motions from gear_sonic_deploy and the original 43-DoF
-MuJoCo plant from gear_sonic. It automatically finds that repository when it
-is a sibling of PAZ, as in the current worktrees.
+That's it — `mujoco_demo.py` downloads its G1 MuJoCo scene, meshes, and
+bundled reference motions from the same release as the actor weights on
+first run, so no local GR00T-WholeBodyControl checkout is required.
 
-For another layout, pass the location explicitly:
+If you already have a local checkout (e.g. NVlabs/GR00T-WholeBodyControl) and
+want its full motion library or a newer scene revision instead of the
+bundled set, point at it explicitly:
 
     python3 examples/sonic/mujoco_demo.py \
         --sonic-root /path/to/gear_sonic_deploy
 
-SONIC_DEPLOY_DIR can be set instead of passing the flag every time.
+SONIC_DEPLOY_DIR can be set instead of passing the flag every time. Meshes
+and motions in that checkout are stored with git-lfs, so run `git lfs pull`
+there first.
 
 ## Run
 
@@ -50,7 +63,7 @@ Start in virtual 3-point teleoperation mode:
 The first launch compiles the actor with JAX and can take several seconds.
 Only run one copy on a memory-constrained GPU. CPU execution is available with:
 
-    JAX_PLATFORM_NAME=cpu python3 examples/sonic/mujoco_demo.py
+    JAX_PLATFORMS=cpu python3 examples/sonic/mujoco_demo.py
 
 ## Controls
 
