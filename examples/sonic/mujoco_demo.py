@@ -13,10 +13,11 @@ import mujoco
 import mujoco.viewer
 import numpy as np
 
-from paz.models.foundation.sonic.conversion import port_weights
 from paz.models.foundation.sonic.layout import compute_encoder_input_dim
 from paz.models.foundation.sonic.layout import compute_policy_tail_dim
-from paz.models.foundation.sonic.layout import load_release_observation_layout
+from paz.models.foundation.sonic.pretrained import SONIC
+from paz.models.foundation.sonic.pretrained import fetch_motion_assets
+from paz.models.foundation.sonic.pretrained import fetch_scene_assets
 
 from simulation import DEFAULT_ANGLES
 from simulation import NUM_JOINTS
@@ -118,17 +119,15 @@ def restore_interrupt():
 
 
 if __name__ == "__main__":
-    repositories = Path(__file__).resolve().parents[3]
-    sibling_deploy = repositories / "GR00T-WholeBodyControl"
-    sibling_deploy = sibling_deploy / "gear_sonic_deploy"
-    default_root = os.environ.get("SONIC_DEPLOY_DIR", sibling_deploy)
+    default_root = os.environ.get("SONIC_DEPLOY_DIR")
 
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--sonic-root",
         type=Path,
         default=default_root,
-        help="gear_sonic_deploy directory (or set SONIC_DEPLOY_DIR)",
+        help="local gear_sonic_deploy directory (or set SONIC_DEPLOY_DIR); "
+             "downloads the bundled scene and motions when omitted",
     )
     parser.add_argument("--mode", choices=("g1", "teleop", "smpl"),
                         default="g1")
@@ -145,33 +144,26 @@ if __name__ == "__main__":
     parser.add_argument("--no-realtime", action="store_true")
     args = parser.parse_args()
 
-    sonic_root = args.sonic_root.expanduser().resolve()
-    release_dir = sonic_root / "policy" / "release"
-    scene_path = sonic_root.parent / "gear_sonic" / "data"
-    scene_path = scene_path / "robot_model/model_data/g1/scene_43dof.xml"
-    motion_dir = sonic_root / "reference" / "example"
-    required_paths = (
-        release_dir / "observation_config.yaml",
-        release_dir / "model_encoder.onnx",
-        release_dir / "model_decoder.onnx",
-        scene_path,
-        motion_dir,
-    )
-    missing = [str(path) for path in required_paths if not path.exists()]
-    if missing:
-        parser.error(
-            "SONIC deployment assets are missing: " + ", ".join(missing))
+    if args.sonic_root is None:
+        print("Downloading the SONIC scene and reference motions")
+        scene_path = fetch_scene_assets()
+        motion_dir = fetch_motion_assets()
+    else:
+        sonic_root = args.sonic_root.expanduser().resolve()
+        scene_path = sonic_root.parent / "gear_sonic" / "data"
+        scene_path = scene_path / "robot_model/model_data/g1/scene_43dof.xml"
+        motion_dir = sonic_root / "reference" / "example"
+        missing = [str(p) for p in (scene_path, motion_dir) if not p.exists()]
+        if missing:
+            parser.error(
+                "SONIC deployment assets are missing: " + ", ".join(missing))
     if args.control_dt < args.sim_dt:
         parser.error("--control-dt must be at least --sim-dt")
 
-    print(f"Loading PAZ SONIC weights from {release_dir}")
-    config_path = release_dir / "observation_config.yaml"
-    layout = load_release_observation_layout(config_path)
-    _, _, actor = port_weights(
-        layout,
-        release_dir / "model_encoder.onnx",
-        release_dir / "model_decoder.onnx",
-    )
+    print("Loading the pretrained PAZ SONIC actor")
+    sonic = SONIC(weights="pretrained")
+    layout = sonic.layout
+    actor = sonic.actor
     clips = load_motion_set(motion_dir)
     motion_index = find_motion_index(clips, args.motion)
     available, reason = check_mode_available(clips[motion_index], args.mode)
