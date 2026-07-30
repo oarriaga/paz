@@ -33,6 +33,9 @@ from paz.backend import poses
 from paz.backend import algebra
 from paz.backend import scene
 from paz.backend import plane
+from paz.backend import epipolar
+from paz.backend import pnp
+from paz.backend import triangulation
 from paz.backend import mesh
 from paz.backend import cage
 from paz.backend.standard import (
@@ -56,6 +59,7 @@ from paz.models import transformers
 from paz.models.foundation import dinov2
 from paz.models.foundation import depth_anything3
 from paz import applications
+from paz import slam
 from paz import utils
 from paz.utils import pytree
 from paz.utils import assert_snapshot, cache, jit_and_cache, clear_cache

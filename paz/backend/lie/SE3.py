@@ -137,8 +137,7 @@ def exp(matrix_se3):
     return affine_matrix
 
 
-def xyz_rpy_to_matrix(position, rotation):
-    # TODO change name to xyz_rpy_to_affine_matrix
+def xyz_rpy_to_SE3(position, rotation):
     rotation = SO3.rpy_to_SO3(rotation)
     return to_affine_matrix(rotation, position)
 
@@ -253,7 +252,11 @@ def log(SE3_matrix):
     rotation, position = split(SE3_matrix)
     omega = SO3.log(rotation)
     choose_0 = jp.allclose(omega, jp.zeros((3, 3)))
-    return jp.where(choose_0, case_log_0(SE3_matrix), case_log_1(SE3_matrix))
+    # Feed case_log_1 a safe input when it is not selected, so its
+    # 1 / theta terms at identity cannot leak NaN into gradients.
+    safe_matrix = jp.where(choose_0, rotation_x(1.0), SE3_matrix)
+    case_1 = case_log_1(safe_matrix)
+    return jp.where(choose_0, case_log_0(SE3_matrix), case_1)
 
 
 def Log(SE3_matrix):
@@ -267,6 +270,111 @@ def vee(se3_matrix):
     so3_matrix, se3_position = split(se3_matrix)
     so3_vector = SO3.vee(so3_matrix)
     return jp.concatenate([so3_vector, se3_position])
+
+
+def compose(transform_A, transform_B):
+    return jp.dot(transform_A, transform_B)
+
+
+def between(transform_A, transform_B):
+    return compose(invert(transform_A), transform_B)
+
+
+def Exp(tangent):
+    return exp(hat(tangent))
+
+
+def retract(transform, tangent_delta):
+    # Right (local-frame) perturbation: transform @ Exp(tangent_delta).
+    return compose(transform, Exp(tangent_delta))
+
+
+def local_coordinates(transform_A, transform_B):
+    return Log(between(transform_A, transform_B))
+
+
+def left_jacobian(tangent):
+    omega = get_angular_velocity(tangent)
+    rotation_jacobian = compute_left_jacobian_SO3(omega)
+    Q = compute_Q(tangent)
+    upper = jp.concatenate([rotation_jacobian, jp.zeros((3, 3))], axis=1)
+    lower = jp.concatenate([Q, rotation_jacobian], axis=1)
+    return jp.concatenate([upper, lower], axis=0)
+
+
+def left_jacobian_inverse(tangent):
+    omega = get_angular_velocity(tangent)
+    rotation_inverse = compute_left_jacobian_inverse_SO3(omega)
+    Q = compute_Q(tangent)
+    lower_left = -jp.dot(rotation_inverse, jp.dot(Q, rotation_inverse))
+    upper = jp.concatenate([rotation_inverse, jp.zeros((3, 3))], axis=1)
+    lower = jp.concatenate([lower_left, rotation_inverse], axis=1)
+    return jp.concatenate([upper, lower], axis=0)
+
+
+def compute_left_jacobian_SO3(omega):
+    omega_matrix = SO3.hat(omega)
+    theta_squared = jp.dot(omega, omega)
+    B = SO3.compute_versine_ratio(theta_squared)
+    C = compute_Q_coefficients(theta_squared)[0]
+    even_powers = jp.dot(omega_matrix, omega_matrix)
+    return jp.eye(3) + B * omega_matrix + C * even_powers
+
+
+def compute_left_jacobian_inverse_SO3(omega):
+    omega_matrix = SO3.hat(omega)
+    theta_squared = jp.dot(omega, omega)
+    D = compute_cotangent_deficit_ratio(theta_squared)
+    even_powers = jp.dot(omega_matrix, omega_matrix)
+    return jp.eye(3) - 0.5 * omega_matrix + D * even_powers
+
+
+def compute_Q(tangent):
+    # Q block of the SE(3) left Jacobian (Barfoot, State Estimation, 7.86).
+    omega = get_angular_velocity(tangent)
+    W = SO3.hat(omega)
+    P = SO3.hat(get_linear_velocity(tangent))
+    C_1, C_2, C_3 = compute_Q_coefficients(jp.dot(omega, omega))
+    WP, PW = jp.dot(W, P), jp.dot(P, W)
+    WPW = jp.dot(WP, W)
+    term_1 = WP + PW + WPW
+    term_2 = jp.dot(W, WP) + jp.dot(PW, W) - 3.0 * WPW
+    term_3 = jp.dot(WPW, W) + jp.dot(W, WPW)
+    return 0.5 * P + C_1 * term_1 + C_2 * term_2 + C_3 * term_3
+
+
+def compute_Q_coefficients(theta_squared):
+    # Taylor-safe ratios: C_1 = (th - sin th) / th^3,
+    # C_2 = (th^2 + 2 cos th - 2) / (2 th^4),
+    # C_3 = (2 th - 3 sin th + th cos th) / (2 th^5).
+    use_taylor = theta_squared < 1.0
+    safe = jp.where(use_taylor, 1.0, theta_squared)
+    theta = jp.sqrt(safe)
+    sine, cosine = jp.sin(theta), jp.cos(theta)
+    exact_1 = (theta - sine) / (safe * theta)
+    exact_2 = (safe + 2.0 * cosine - 2.0) / (2.0 * safe**2)
+    exact_3 = (2.0 * theta - 3.0 * sine + theta * cosine)
+    exact_3 = exact_3 / (2.0 * safe**2 * theta)
+    x = theta_squared
+    taylor_1 = 1.0 / 6.0 - x / 120.0 + x**2 / 5040.0
+    taylor_2 = 1.0 / 24.0 - x / 720.0 + x**2 / 40320.0
+    taylor_3 = 1.0 / 120.0 - x / 2520.0 + x**2 / 120960.0
+    C_1 = jp.where(use_taylor, taylor_1, exact_1)
+    C_2 = jp.where(use_taylor, taylor_2, exact_2)
+    C_3 = jp.where(use_taylor, taylor_3, exact_3)
+    return C_1, C_2, C_3
+
+
+def compute_cotangent_deficit_ratio(theta_squared):
+    # D = (1 - (th / 2) * cot(th / 2)) / th^2, Taylor-safe near zero.
+    use_taylor = theta_squared < 1.0
+    safe = jp.where(use_taylor, 1.0, theta_squared)
+    half_theta = 0.5 * jp.sqrt(safe)
+    cotangent = jp.cos(half_theta) / jp.sin(half_theta)
+    exact = (1.0 - half_theta * cotangent) / safe
+    x = theta_squared
+    taylor = 1.0 / 12.0 + x / 720.0 + x**2 / 30240.0
+    return jp.where(use_taylor, taylor, exact)
 
 
 def sample(key, min_value, max_value):

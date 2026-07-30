@@ -4,7 +4,6 @@ import jax.numpy as jp
 import paz
 
 import backend
-import geometry
 
 
 def reconstruct_scene(images, camera_intrinsics, key, match_ratio=0.75,
@@ -54,25 +53,29 @@ def initialize_two_view(key, image1, image2, camera_intrinsics, match_ratio,
         key, points1, points2, residual_thresh)
     colors = backend.extract_keypoints_RGB(image1, points1)
 
-    fundamental_matrix = geometry.compute_fundamental_matrix(
-        jp.asarray(points1), jp.asarray(points2))
-    essential_matrix = geometry.compute_essential_matrix(
-        fundamental_matrix, camera_intrinsics)
-    rotation, translation = geometry.recover_pose(
-        essential_matrix, camera_intrinsics, jp.asarray(points1),
-        jp.asarray(points2))
+    points_A, points_B = jp.asarray(points1), jp.asarray(points2)
+    valid_mask = jp.ones(len(points_A), dtype=bool)
+    fundamental_matrix = paz.epipolar.compute_fundamental_matrix(
+        points_A, points_B)
+    essential_matrix = paz.epipolar.compute_essential_matrix(
+        fundamental_matrix, camera_intrinsics, camera_intrinsics)
+    pose_args = (essential_matrix, camera_intrinsics, camera_intrinsics,
+                 points_A, points_B, valid_mask)
+    pose = paz.epipolar.recover_relative_pose(*pose_args)
+    rotation, translation = pose.rotation, pose.translation
 
     P1 = paz.pinhole.make_camera_matrix(camera_intrinsics, jp.eye(4))
     P2 = build_camera_matrix(camera_intrinsics, rotation, translation)
-    points3D = geometry.triangulate_points(
-        P1, P2, jp.asarray(points1), jp.asarray(points2))
+    points3D, _ = paz.triangulation.triangulate_points(
+        P1, P2, points_A, points_B, valid_mask)
 
     rotation, translation = backend.refine_camera_pose(
         paz.to_numpy(rotation), paz.to_numpy(translation),
         paz.to_numpy(points3D), points2, paz.to_numpy(camera_intrinsics))
     P2 = build_camera_matrix(camera_intrinsics, rotation, translation)
-    points3D = paz.to_numpy(geometry.triangulate_points(
-        P1, P2, jp.asarray(points1), jp.asarray(points2)))
+    points3D, _ = paz.triangulation.triangulate_points(
+        P1, P2, points_A, points_B, valid_mask)
+    points3D = paz.to_numpy(points3D)
 
     _, train_indices = backend.get_match_indices(matches)
     base_indices = train_indices[inliers]
@@ -115,16 +118,19 @@ def triangulate_new_points(key, image_prev, keypoints_prev, descriptors_prev,
         key, points_prev, points_next, residual_thresh)
     colors = backend.extract_keypoints_RGB(image_prev, points_prev)
 
+    points_A, points_B = jp.asarray(points_prev), jp.asarray(points_next)
+    valid_mask = jp.ones(len(points_A), dtype=bool)
     P_next = build_camera_matrix(camera_intrinsics, rotation, translation)
-    points3D = geometry.triangulate_points(
-        P_prev, P_next, jp.asarray(points_prev), jp.asarray(points_next))
+    points3D, _ = paz.triangulation.triangulate_points(
+        P_prev, P_next, points_A, points_B, valid_mask)
 
     rotation, translation = backend.refine_camera_pose(
         rotation, translation, paz.to_numpy(points3D), points_next,
         paz.to_numpy(camera_intrinsics))
     P_next = build_camera_matrix(camera_intrinsics, rotation, translation)
-    points3D = paz.to_numpy(geometry.triangulate_points(
-        P_prev, P_next, jp.asarray(points_prev), jp.asarray(points_next)))
+    points3D, _ = paz.triangulation.triangulate_points(
+        P_prev, P_next, points_A, points_B, valid_mask)
+    points3D = paz.to_numpy(points3D)
 
     train_indices = backend.get_match_indices(matches)[1][inliers]
     base_keypoints = keypoints_next[train_indices]
@@ -141,7 +147,10 @@ def build_camera_matrix(camera_intrinsics, rotation, translation):
 
 def filter_matches(key, points1, points2, threshold):
     """RANSAC-filters correspondences, keeping fundamental-matrix inliers."""
-    _, mask = geometry.estimate_fundamental_matrix_RANSAC(
-        key, jp.asarray(points1), jp.asarray(points2), threshold=threshold)
-    mask = paz.to_numpy(mask)
+    points_A, points_B = jp.asarray(points1), jp.asarray(points2)
+    valid_mask = jp.ones(len(points_A), dtype=bool)
+    num_hypotheses = 1000
+    args = (key, points_A, points_B, valid_mask, num_hypotheses, threshold)
+    estimate = paz.epipolar.estimate_fundamental_matrix_RANSAC(*args)
+    mask = paz.to_numpy(estimate.inliers)
     return points1[mask], points2[mask], mask
