@@ -21,7 +21,6 @@ from paz.models.foundation.sonic.layout import build_observation_layout
 from paz.models.foundation.sonic.model import build_actor
 from paz.models.foundation.sonic.model import build_decoder
 from paz.models.foundation.sonic.model import build_encoder
-from paz.utils import extract
 
 SONIC_ASSETS_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.28/"  # fmt: skip
 SONIC_CACHE_SUBDIR = "paz/models/sonic"
@@ -120,12 +119,17 @@ def load_pretrained_weights(encoder, decoder):
 
 
 def fetch_scene_assets():
-    scene_dir = extract(fetch_asset("sonic_scene.zip"))
-    return Path(scene_dir) / "scene_43dof.xml"
+    return Path(fetch_zipped_asset("sonic_scene.zip")) / "scene_43dof.xml"
 
 
 def fetch_motion_assets():
-    return Path(extract(fetch_asset("sonic_motions.zip")))
+    return Path(fetch_zipped_asset("sonic_motions.zip"))
+
+
+def fetch_zipped_asset(filename):
+    url = SONIC_ASSETS_URL + filename
+    return get_file(
+        filename, url, cache_subdir=SONIC_CACHE_SUBDIR, extract=True)
 
 
 def fetch_asset(filename):
