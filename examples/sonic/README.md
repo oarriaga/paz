@@ -12,18 +12,6 @@ initialization, then two seconds of paused batch-1 policy ticks to build
 history. The original elastic band is released and playback starts
 automatically.
 
-## Quickstart
-
-To install PAZ and run SONIC out of the box, with nothing else to set up:
-
-    ./install.sh [target_dir]
-
-This clones the `paz-jax` branch (reusing `target_dir` if it already holds a
-checkout), creates a venv there, installs the `sonic` extra, downloads the
-released encoder/decoder weights, and runs one actor step to confirm it
-works. See `quickstart.py` for the few lines that do this from Python
-directly.
-
 ## Install
 
 From the PAZ repository:
@@ -33,6 +21,9 @@ From the PAZ repository:
 That's it — `mujoco_demo.py` downloads its G1 MuJoCo scene, meshes, and
 bundled reference motions from the same release as the actor weights on
 first run, so no local GR00T-WholeBodyControl checkout is required.
+`quickstart.py` runs one actor step to confirm the install works:
+
+    python3 examples/sonic/quickstart.py
 
 If you already have a local checkout (e.g. NVlabs/GR00T-WholeBodyControl) and
 want its full motion library or a newer scene revision instead of the
