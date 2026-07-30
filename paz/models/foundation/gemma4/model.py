@@ -27,6 +27,7 @@ class Gemma4Backbone(keras.Model):
     def __init__(self, config, name=BACKBONE_NAME, **kwargs):
         super().__init__(name=name, **kwargs)
         self.config = config
+        self.remat_layers = False  # opt-in gradient checkpointing for long seq
         self.has_per_layer = bool(config.hidden_size_per_layer_input)
         self.kv_source_map = build_kv_source_map(config)
         self.token_embedding = build_token_embedding(
@@ -65,11 +66,17 @@ class Gemma4Backbone(keras.Model):
         layer_kvs = []
         for index, layer in enumerate(self.decoder_layers):
             shared = self.shared_kv(layer_kvs, index)
-            hidden, kv = layer(hidden, padding_mask=padding_mask,
-                               per_layer_embedding=per_layer[index],
-                               shared_kv=shared)
+            args = (layer, padding_mask, per_layer[index], shared)
+            hidden, kv = self.run_layer(hidden, *args)
             layer_kvs.append(kv)
         return hidden
+
+    def run_layer(self, hidden, layer, padding_mask, per_layer, shared):
+        def call(state):
+            return layer(state, padding_mask=padding_mask,
+                         per_layer_embedding=per_layer, shared_kv=shared)
+        wrapped = keras.remat(call) if self.remat_layers else call
+        return wrapped(hidden)
 
     def shared_kv(self, layer_kvs, index):
         source = self.kv_source_map.get(index)
