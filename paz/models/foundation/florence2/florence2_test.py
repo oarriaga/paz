@@ -67,3 +67,41 @@ def test_encoder_hidden_states_match_torch_fixture():
     hidden = model.predict([static, gripper, flow_and_text], verbose=0)
     reference = fixtures["encoder_hidden_states"]
     assert np.abs(hidden - reference).max() < 1e-4
+
+
+def test_default_attends_padding():
+    # The default has to behave like the reference, which attends every token,
+    # so appending padding must reach the real tokens as well.
+    model = build(**TINY)
+    images = np.random.default_rng(2).normal(size=(1, 32, 32, 3))
+    images = images.astype("float32")
+    short = np.array([[5, 6, 7]], "int32")
+    padded = np.array([[5, 6, 7, 1, 1]], "int32")
+    kept = model.predict([images, images, short], verbose=0)
+    grown = model.predict([images, images, padded], verbose=0)
+    assert np.abs(kept - grown[:, :kept.shape[1]]).max() > 1e-6
+
+
+def test_pad_id_hides_padding_from_real_tokens():
+    # With pad_id set, appending padding must not change the real tokens.
+    model = build(pad_id=1, **TINY)
+    images = np.random.default_rng(0).normal(size=(1, 32, 32, 3))
+    images = images.astype("float32")
+    short = np.array([[5, 6, 7]], "int32")
+    padded = np.array([[5, 6, 7, 1, 1]], "int32")
+    kept = model.predict([images, images, short], verbose=0)
+    grown = model.predict([images, images, padded], verbose=0)
+    assert np.abs(kept - grown[:, :kept.shape[1]]).max() < 1e-4
+
+
+def test_pad_id_changes_the_result_when_padding_is_present():
+    # Guard against the mask silently doing nothing.
+    images = np.random.default_rng(1).normal(size=(1, 32, 32, 3))
+    images = images.astype("float32")
+    padded = np.array([[5, 6, 7, 1, 1]], "int32")
+    masked = build(pad_id=1, **TINY)
+    unmasked = build(**TINY)
+    unmasked.set_weights(masked.get_weights())
+    with_mask = masked.predict([images, images, padded], verbose=0)
+    without = unmasked.predict([images, images, padded], verbose=0)
+    assert np.abs(with_mask - without).max() > 1e-6

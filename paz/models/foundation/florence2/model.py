@@ -5,8 +5,15 @@ the FLOWER checkpoints. Two 112x112 views run through a shared DaViT
 image encoder (17 tokens each), token ids (leading ``<Flow>`` prompt
 token plus tokenized instruction) are embedded, and the concatenated
 sequence goes through the BART encoder with BART learned positions
-(offset 2) over the full merged sequence and an all-ones attention
-mask, exactly as FLOWER does at inference.
+(offset 2) over the full merged sequence, exactly as FLOWER does at
+inference.
+
+Pass ``pad_id`` to skip padded instruction tokens in self attention. It
+is off by default because the reference sends one exact-length prompt and
+attends everything; leaving it off keeps the encoder output identical to
+that reference. Batched training pads, so it opts in. The mask is derived
+from the token ids rather than taken as a separate input, so a caller
+cannot hand over a mask that disagrees with the tokens it sent.
 """
 from keras import ops
 from keras.layers import Embedding, Input, Lambda, LayerNormalization
@@ -19,7 +26,7 @@ from paz.models.foundation.florence2.vision import ImageEncoder
 
 def build(image_size=112, vocabulary_size=51290, hidden_dim=1024,
           num_layers=12, num_heads=16, ffn_dim=4096, max_positions=4098,
-          position_offset=2, stage_dims=(256, 512, 1024, 2048),
+          position_offset=2, pad_id=None, stage_dims=(256, 512, 1024, 2048),
           stage_depths=(1, 1, 9, 1), stage_heads=(8, 16, 32, 64),
           stage_groups=(8, 16, 32, 64), window_size=12):
     static_images = Input((image_size, image_size, 3), name="static_images")
@@ -34,12 +41,24 @@ def build(image_size=112, vocabulary_size=51290, hidden_dim=1024,
     text_tokens = embed(token_ids)
     tokens = (static_tokens, wrist_tokens, text_tokens)
     context = ops.concatenate(tokens, axis=1)
+    num_image = static_tokens.shape[1] + wrist_tokens.shape[1]
+    mask = build_padding_mask(token_ids, num_image, pad_id)
     x = add_positions(context, max_positions, position_offset)
     norm = LayerNormalization(epsilon=1e-5, name="layernorm_embedding")
-    encoder_args = (norm(x), None, num_layers, num_heads, ffn_dim)
+    encoder_args = (norm(x), mask, num_layers, num_heads, ffn_dim)
     context_tokens = build_encoder(*encoder_args)
     inputs = [static_images, wrist_images, token_ids]
     return Model(inputs, context_tokens, name="florence2_flower")
+
+
+def build_padding_mask(token_ids, num_image, pad_id):
+    if pad_id is None:
+        return None
+    # Every image token is real, so only the instruction can be padded.
+    text = ops.not_equal(token_ids, pad_id)
+    valid = ops.ones_like(text[:, :1])
+    images = ops.repeat(valid, num_image, axis=1)
+    return ops.concatenate([images, text], axis=1)
 
 
 def add_positions(x, max_positions, position_offset):
