@@ -1,28 +1,37 @@
+import os
+
 import numpy as np
 import pytest
 
-pytest.importorskip("mujoco")
+mujoco = pytest.importorskip("mujoco")
 
+os.environ.setdefault("KERAS_BACKEND", "jax")
+
+from simulation import ACTION_SCALE
 from simulation import DEFAULT_ANGLES
 from simulation import HistoryEntry
 from simulation import MotionClip
+from simulation import POLICY_FROM_SCENE
 from simulation import build_encoder_obs
 from simulation import build_history_buffer
 from simulation import build_history_entry
 from simulation import build_history_entry_from_state
 from simulation import build_policy_tail
 from simulation import check_mode_available
+from simulation import compute_action_targets
 from simulation import compute_heading_state
 from simulation import compute_reference_markers
 from simulation import compute_support_wrench
 from simulation import compute_hand_pd_torque
 from simulation import compute_pd_torque
 from simulation import compute_vr_targets
+from simulation import find_joint_addresses
 from simulation import load_body_indices
 from paz.models.foundation.sonic.layout import EncoderModeLayout
 from paz.models.foundation.sonic.layout import ObservationSpan
 from paz.models.foundation.sonic.layout import SonicObservationLayout
 from paz.models.foundation.sonic.layout import find_encoder_span
+from paz.models.foundation.sonic.pretrained import fetch_scene_assets
 
 
 def build_spans(names_and_dims, start=0):
@@ -204,3 +213,23 @@ def test_pd_torque_uses_original_simulator_limits():
     expected_hand = np.asarray(
         [2.45, 0.7, 0.7, 0.7, 0.7, 0.7, 0.7] * 2, dtype=np.float32)
     assert np.array_equal(hand_torque, expected_hand)
+
+
+def test_action_targets_apply_scale_at_permuted_scene_index():
+    zero_action = np.zeros(29, dtype=np.float32)
+    assert np.array_equal(compute_action_targets(zero_action), DEFAULT_ANGLES)
+
+    scene_index = 0
+    action = np.zeros(29, dtype=np.float32)
+    action[POLICY_FROM_SCENE[scene_index]] = 1.0
+    expected = DEFAULT_ANGLES.copy()
+    expected[scene_index] += ACTION_SCALE[scene_index]
+    assert np.allclose(compute_action_targets(action), expected)
+
+
+def test_find_joint_addresses_matches_bundled_scene():
+    scene_path = fetch_scene_assets()
+    model = mujoco.MjModel.from_xml_path(str(scene_path))
+    joints = find_joint_addresses(model)
+    assert joints.body_qpos.size == 29
+    assert joints.hand_qpos.size == 14

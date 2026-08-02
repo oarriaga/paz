@@ -25,6 +25,8 @@ from simulation import load_motion_clip
 def load_signal(logs_dir, name):
     path = logs_dir / f"{name}.csv"
     values = np.loadtxt(path, delimiter=",", skiprows=1)
+    # The C++ state logger writes 5 leading columns before the payload:
+    # index, t_ms, t_realtime_ms, t_monotonic_ms, t_ros.
     return values[:, 5:].astype(np.float32)
 
 

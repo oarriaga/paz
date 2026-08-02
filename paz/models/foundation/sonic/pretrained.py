@@ -5,9 +5,15 @@ NVIDIA Open Model License (see the release's sonic_LICENSE.txt /
 sonic_NOTICE.txt at SONIC_ASSETS_URL). By calling SONIC(weights=
 "pretrained") you agree to that Agreement and to NVIDIA's Trustworthy AI
 terms (https://www.nvidia.com/en-us/agreements/trustworthy-ai/terms/).
+
+The G1 MuJoCo scene, meshes, and example reference motions fetched by
+fetch_scene_assets/fetch_motion_assets are a separate, Apache-2.0-licensed
+part of the same release (see sonic_scene_LICENSE.txt / sonic_scene_
+NOTICE.txt at SONIC_ASSETS_URL); no agreement is required for those.
 """
 
 from collections import namedtuple
+from pathlib import Path
 
 from keras.utils import get_file
 
@@ -110,6 +116,20 @@ def SONIC(weights="pretrained"):
 def load_pretrained_weights(encoder, decoder):
     encoder.load_weights(fetch_asset("sonic_encoder.weights.h5"))
     decoder.load_weights(fetch_asset("sonic_decoder.weights.h5"))
+
+
+def fetch_scene_assets():
+    return Path(fetch_zipped_asset("sonic_scene.zip")) / "scene_43dof.xml"
+
+
+def fetch_motion_assets():
+    return Path(fetch_zipped_asset("sonic_motions.zip"))
+
+
+def fetch_zipped_asset(filename):
+    url = SONIC_ASSETS_URL + filename
+    return get_file(
+        filename, url, cache_subdir=SONIC_CACHE_SUBDIR, extract=True)
 
 
 def fetch_asset(filename):
