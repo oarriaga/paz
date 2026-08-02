@@ -8,10 +8,6 @@ from paz.graphics.renderer.intersect import intersect_shadow_groups
 
 SHADOW_ORIGIN_EPSILON = 1e-5
 SHADOW_SELF_HIT_EPSILON = 1e-5
-# A shadow ray leaving a mesh re-hits its own triangle at a tiny depth.
-# The shape path rejects that by shape identity; triangles have no such
-# index, so they need a distance large enough to clear the surface.
-TRIANGLE_SELF_HIT_EPSILON = 1e-3
 
 
 def compute_occlusion(compiled, closest, indices, directions, distance,
@@ -43,7 +39,7 @@ def compute_triangle_blockers(compiled, origins, directions, face_chunk):
     hit_mask, depth, _, _, face_index = result
     primitive = triangles.primitive_index[face_index]
     hit_mask = jp.logical_and(hit_mask, compiled.triangle_mask[primitive])
-    hit_mask = jp.logical_and(hit_mask, depth > TRIANGLE_SELF_HIT_EPSILON)
+    hit_mask = jp.logical_and(hit_mask, depth > paz.graphics.EPSILON)
     hit_mask = hide_non_casting_triangles(compiled, hit_mask, primitive)
     return hit_mask, jp.where(hit_mask, depth, paz.graphics.FARAWAY)
 
