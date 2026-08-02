@@ -1,10 +1,10 @@
 import jax
 import jax.numpy as jp
 import paz
-import paz.graphics.renderer as paz_renderer
+from paz.graphics.renderer import shadow
 
-soft_occlusion = paz_renderer.compute_soft_occlusion
-paz_renderer.compute_soft_occlusion = paz.partial(soft_occlusion, slope=1.0)
+soft_occlusion = shadow.compute_soft_occlusion
+shadow.compute_soft_occlusion = paz.partial(soft_occlusion, slope=1.0)
 
 BLUE = jp.array([0.324, 0.692, 0.863])  # MyBlue
 GREEN = jp.array([154 / 255, 213 / 255, 135 / 255])  # YlGnI

@@ -17,6 +17,8 @@ from paz.graphics.constants import (
 HIT_NAMES = "hit_mask depth point normal eye primitive_index"
 Hit = namedtuple("Hit", HIT_NAMES.split())
 
+Surfaces = namedtuple("Surfaces", ["points", "normals", "eyes"])
+
 MESH_NAMES = "vertices vertex_colors transform material faces edges "
 MESH_NAMES += "pattern vertex_uvs"
 Mesh = namedtuple("Mesh", MESH_NAMES.split(), defaults=(None, None))
