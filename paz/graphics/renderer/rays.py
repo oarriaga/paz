@@ -30,12 +30,12 @@ def bounce(state, step_arg, compiled, shadows, face_chunk):
     state = update_active_mask(state, closest)
     color_args = compiled, closest, surfaces, shadows, triangle_hit
     colors = shade.compute_hit_colors(*color_args)
-    return advance(state, compiled, closest, colors)
+    return advance(state, compiled, closest, colors, triangle_hit)
 
 
-def advance(state, compiled, closest, hit_colors):
-    index = closest.primitive_index
-    properties = material.compute_material_properties(compiled, index)
+def advance(state, compiled, closest, hit_colors, triangle_hit):
+    material_args = compiled, closest, triangle_hit
+    properties = material.compute_material_properties(*material_args)
     color_args = state.color, state.throughput, state.active_mask, hit_colors
     color_args += properties.reflectivities, properties.transparencies
     color = accumulate_color(*color_args)

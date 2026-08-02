@@ -311,7 +311,7 @@ def test_find_closest_intersection_args():
     assert jp.array_equal(indices, jp.array([0, 1]))
 
 
-def test_compute_material_properties():
+def test_gather_shape_material():
     mat1 = Material(reflective=0.5)
     mat2 = Material(transparency=0.8)
     shape1 = Sphere(material=mat1)
@@ -319,10 +319,24 @@ def test_compute_material_properties():
     scene = Scene([shape1, shape2])
     compiled = paz.graphics.scene.compile(scene, [], None)
     indices = jp.array([0, 1])
-    material = renderer.material.compute_material_properties(compiled, indices)
+    material = renderer.material.gather_shape_material(compiled, indices)
     assert material.reflectivities[0] == 0.5
     assert material.transparencies[1] == 0.8
     assert material.refractive_indices[0] == 1.0
+
+
+def test_gather_primitive_material_reads_mesh_fields():
+    materials = Material(
+        reflective=jp.array([0.0, 0.6]),
+        transparency=jp.array([0.0, 0.3]),
+        refractive_index=jp.array([1.0, 1.5]),
+    )
+    primitive = jp.array([1, 0, 1])
+    gather = renderer.material.gather_primitive_material
+    material = gather(materials, primitive)
+    expected_indices = jp.array([1.5, 1.0, 1.5])
+    assert jp.array_equal(material.reflectivities, jp.array([0.6, 0.0, 0.6]))
+    assert jp.array_equal(material.refractive_indices, expected_indices)
 
 
 def test_accumulate_color():

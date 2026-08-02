@@ -854,6 +854,38 @@ def test_scene_mixes_meshes_and_shapes():
     assert jp.any(depth > 0)
 
 
+def build_cube_mesh_with_material(material):
+    vertices, faces, edges = build_cube(1.0)
+    colors = build_vertex_colors(vertices, [0.7, 0.3, 0.1])
+    transform = SE3.translation(jp.array([-0.45, 0.0, 0.0]))
+    args = vertices, colors, transform, material, faces, edges
+    return Mesh(*args)
+
+
+def render_mesh_with_material(material):
+    shape, y_FOV, pose, _, _, lights = make_multi_mesh_scene()
+    mesh = build_cube_mesh_with_material(material)
+    scene = paz.graphics.Scene([mesh, build_sphere_mesh()])
+    args = shape, y_FOV, pose, scene, None, lights, (1, 1), 1024
+    return paz.graphics.render(*args, False, None, 2)
+
+
+def test_mesh_reflective_material_changes_render():
+    matte = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100, 0.0)
+    mirror = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100, 0.9)
+    matte_image, _ = render_mesh_with_material(matte)
+    mirror_image, _ = render_mesh_with_material(mirror)
+    assert compute_max_abs_difference(matte_image, mirror_image) > 1e-3
+
+
+def test_mesh_transparent_material_changes_render():
+    opaque = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100, 0.0, 0.0)
+    glass = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100, 0.0, 0.8, 1.5)
+    opaque_image, _ = render_mesh_with_material(opaque)
+    glass_image, _ = render_mesh_with_material(glass)
+    assert compute_max_abs_difference(opaque_image, glass_image) > 1e-3
+
+
 def test_scene_rejects_meshes_with_mixed_pattern_sizes():
     plain = build_cube_mesh()
     textured = build_textured_quad_mesh()
