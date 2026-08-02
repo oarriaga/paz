@@ -189,11 +189,13 @@ def compile(scene, lights, mask, shadow_mask=None):
     if shadow_mask is not None:
         shadow_mask = prepare_mask(shadow_mask, len(flat_scene), scene)
 
+    mesh_args = select_meshes(flat_scene, mask, shadow_mask)
+    meshes, triangle_mask, triangle_shadow_mask = mesh_args
     shape_args = select_shapes(flat_scene, mask, shadow_mask)
     shapes, shape_mask, shadow_mask = sort_by_group(*shape_args)
-    meshes, triangle_mask = select_meshes(flat_scene, mask)
     args = shapes, build_triangles(meshes), lights, shape_mask
-    return paz.graphics.CompiledScene(*args, shadow_mask, triangle_mask)
+    args += shadow_mask, triangle_mask, triangle_shadow_mask
+    return paz.graphics.CompiledScene(*args)
 
 
 def select_shapes(flat_scene, mask, shadow_mask):
@@ -205,10 +207,15 @@ def select_shapes(flat_scene, mask, shadow_mask):
     return shapes, mask[indices], shadow_mask
 
 
-def select_meshes(flat_scene, mask):
+def select_meshes(flat_scene, mask, shadow_mask):
     args = [arg for arg, node in enumerate(flat_scene) if not is_shape(node)]
+    indices = jp.array(args, dtype=jp.int32)
     meshes = [flat_scene[arg] for arg in args]
-    return meshes, mask[jp.array(args, dtype=jp.int32)]
+    if shadow_mask is None:
+        mesh_shadow_mask = None
+    else:
+        mesh_shadow_mask = shadow_mask[indices]
+    return meshes, mask[indices], mesh_shadow_mask
 
 
 def is_shape(node):

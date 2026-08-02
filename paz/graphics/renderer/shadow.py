@@ -8,17 +8,53 @@ from paz.graphics.renderer.intersect import intersect_shadow_groups
 
 SHADOW_ORIGIN_EPSILON = 1e-5
 SHADOW_SELF_HIT_EPSILON = 1e-5
+# A shadow ray leaving a mesh re-hits its own triangle at a tiny depth.
+# The shape path rejects that by shape identity; triangles have no such
+# index, so they need a distance large enough to clear the surface.
+TRIANGLE_SELF_HIT_EPSILON = 1e-3
 
 
-def compute_occlusion(compiled, closest, indices, directions, distance):
+def compute_occlusion(compiled, closest, indices, directions, distance,
+                      face_chunk):
     origins = compute_shadow_ray_origins(closest.point, closest.normal)
+    shape_args = compiled, closest, indices, origins, directions
+    masks, depths = compute_shape_blockers(*shape_args)
+    if compiled.triangles is not None:
+        blocker_args = compiled, origins, directions, face_chunk
+        mask, depth = compute_triangle_blockers(*blocker_args)
+        masks = jp.concatenate([masks, jp.expand_dims(mask, 0)], axis=0)
+        depths = jp.concatenate([depths, jp.expand_dims(depth, 0)], axis=0)
+    return compute_soft_occlusion(masks, depths, distance)
+
+
+def compute_shape_blockers(compiled, closest, indices, origins, directions):
     shadow_args = compiled.shapes, origins, directions
     intersections = intersect_shadow_groups(*shadow_args)
     hit_masks, depths, _, _, _, casters = intersections
     masks = resolve_shadow_masks(compiled, hit_masks)
     depth_args = masks, depths, casters, indices, closest.normal, directions
-    masks, depths = select_shadow_depths(*depth_args)
-    return compute_soft_occlusion(masks, depths, distance)
+    return select_shadow_depths(*depth_args)
+
+
+def compute_triangle_blockers(compiled, origins, directions, face_chunk):
+    triangles = compiled.triangles
+    args = triangles.vertices, triangles.faces, (origins, directions)
+    result = paz.graphics.mesh.intersect_chunked(*args, face_chunk)
+    hit_mask, depth, _, _, face_index = result
+    primitive = triangles.primitive_index[face_index]
+    hit_mask = jp.logical_and(hit_mask, compiled.triangle_mask[primitive])
+    hit_mask = jp.logical_and(hit_mask, depth > TRIANGLE_SELF_HIT_EPSILON)
+    hit_mask = hide_non_casting_triangles(compiled, hit_mask, primitive)
+    return hit_mask, jp.where(hit_mask, depth, paz.graphics.FARAWAY)
+
+
+def hide_non_casting_triangles(compiled, hit_mask, primitive):
+    if compiled.triangle_shadow_mask is None:
+        casting = hit_mask
+    else:
+        casting = compiled.triangle_shadow_mask[primitive]
+        casting = jp.logical_and(hit_mask, casting)
+    return casting
 
 
 def compute_shadow_ray_origins(points, normals):

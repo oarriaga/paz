@@ -11,34 +11,41 @@ from paz.graphics.renderer.intersect import (
 )
 
 
-def compute_hit_colors(compiled, closest, surfaces, shadows, triangle_hit):
+def compute_hit_colors(
+    compiled, closest, surfaces, shadows, triangle_hit, face_chunk
+):
     if len(compiled.shapes) == 0:
         colors = compute_triangle_colors(compiled, triangle_hit)
     elif triangle_hit is None:
-        colors = compute_shape_colors(compiled, closest, surfaces, shadows)
+        shape_args = compiled, closest, surfaces, shadows, face_chunk
+        colors = compute_shape_colors(*shape_args)
     else:
         args = compiled, closest, surfaces, shadows, triangle_hit
-        colors = blend_hit_colors(*args)
+        colors = blend_hit_colors(*args, face_chunk)
     return colors
 
 
-def blend_hit_colors(compiled, closest, surfaces, shadows, triangle_hit):
+def blend_hit_colors(
+    compiled, closest, surfaces, shadows, triangle_hit, face_chunk
+):
     # TODO a mixed scene shades both paths for every ray and throws one
     # away. Joining them before selection needs color_with_shadows to
     # return rows instead of selecting inside its per-light scan.
-    shape_colors = compute_shape_colors(compiled, closest, surfaces, shadows)
+    shape_args = compiled, closest, surfaces, shadows, face_chunk
+    shape_colors = compute_shape_colors(*shape_args)
     triangle_colors = compute_triangle_colors(compiled, triangle_hit)
     is_triangle = closest.primitive_index == len(compiled.shapes)
     is_triangle = jp.expand_dims(is_triangle, -1)
     return jp.where(is_triangle, triangle_colors, shape_colors)
 
 
-def compute_shape_colors(compiled, closest, surfaces, shadows):
+def compute_shape_colors(compiled, closest, surfaces, shadows, face_chunk):
     num_shapes = len(compiled.shapes)
     indices = jp.minimum(closest.primitive_index, num_shapes - 1)
     surfaces = slice_surfaces(surfaces, 0, num_shapes)
     if shadows:
-        colors = color_with_shadows(compiled, closest, surfaces, indices)
+        args = compiled, closest, surfaces, indices, face_chunk
+        colors = color_with_shadows(*args)
     else:
         colors = color_without_shadow(compiled, surfaces, indices)
     return colors
@@ -95,22 +102,27 @@ def compute_group_albedo(group, points):
     return jax.vmap(compute_albedo)(group, group.material, points)
 
 
-def color_with_shadows(compiled, closest, surfaces, indices):
+def color_with_shadows(compiled, closest, surfaces, indices, face_chunk):
     colors = jp.zeros((len(surfaces.points[0]), 3))
     lights = paz.graphics.shapes.merge(*compiled.lights)
-    body = paz.lock(scan_light_step, compiled, closest, surfaces, indices)
+    step_args = compiled, closest, surfaces, indices, face_chunk
+    body = paz.lock(scan_light_step, *step_args)
     return jax.lax.scan(body, colors, lights)[0]
 
 
-def scan_light_step(colors, light, compiled, closest, surfaces, indices):
-    args = compiled, closest, surfaces, indices, light
+def scan_light_step(
+    colors, light, compiled, closest, surfaces, indices, face_chunk
+):
+    args = compiled, closest, surfaces, indices, light, face_chunk
     return colors + compute_light_colors(*args), None
 
 
-def compute_light_colors(compiled, closest, surfaces, indices, light):
+def compute_light_colors(
+    compiled, closest, surfaces, indices, light, face_chunk
+):
     directions, distance = compute_light_directions(light, closest.point)
     occlusion_args = compiled, closest, indices, directions, distance
-    is_shadow = shadow.compute_occlusion(*occlusion_args)
+    is_shadow = shadow.compute_occlusion(*occlusion_args, face_chunk)
     color_args = compiled.shapes, light, surfaces, is_shadow
     return take_closest(compute_shadowed_colors(*color_args), indices)
 

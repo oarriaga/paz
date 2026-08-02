@@ -29,7 +29,7 @@ def bounce(state, step_arg, compiled, shadows, face_chunk):
     state = update_first_hit(state, closest, step_arg)
     state = update_active_mask(state, closest)
     color_args = compiled, closest, surfaces, shadows, triangle_hit
-    colors = shade.compute_hit_colors(*color_args)
+    colors = shade.compute_hit_colors(*color_args, face_chunk)
     return advance(state, compiled, closest, colors, triangle_hit)
 
 

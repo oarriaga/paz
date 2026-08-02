@@ -27,7 +27,8 @@ TRIANGLE_NAMES = "vertices faces vertex_uvs vertex_colors primitive_index "
 TRIANGLE_NAMES += "materials patterns"
 Triangles = namedtuple("Triangles", TRIANGLE_NAMES.split())
 
-COMPILED_NAMES = "shapes triangles lights mask shadow_mask triangle_mask"
+COMPILED_NAMES = "shapes triangles lights mask shadow_mask triangle_mask "
+COMPILED_NAMES += "triangle_shadow_mask"
 CompiledScene = namedtuple("CompiledScene", COMPILED_NAMES.split())
 
 
