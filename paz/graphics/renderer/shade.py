@@ -15,7 +15,8 @@ def compute_hit_colors(
     compiled, closest, surfaces, shadows, triangle_hit, face_chunk
 ):
     if len(compiled.shapes) == 0:
-        colors = compute_triangle_colors(compiled, triangle_hit)
+        triangle_args = compiled, triangle_hit, shadows, face_chunk
+        colors = compute_triangle_colors(*triangle_args)
     elif triangle_hit is None:
         shape_args = compiled, closest, surfaces, shadows, face_chunk
         colors = compute_shape_colors(*shape_args)
@@ -33,7 +34,8 @@ def blend_hit_colors(
     # return rows instead of selecting inside its per-light scan.
     shape_args = compiled, closest, surfaces, shadows, face_chunk
     shape_colors = compute_shape_colors(*shape_args)
-    triangle_colors = compute_triangle_colors(compiled, triangle_hit)
+    triangle_args = compiled, triangle_hit, shadows, face_chunk
+    triangle_colors = compute_triangle_colors(*triangle_args)
     is_triangle = closest.primitive_index == len(compiled.shapes)
     is_triangle = jp.expand_dims(is_triangle, -1)
     return jp.where(is_triangle, triangle_colors, shape_colors)
@@ -51,16 +53,45 @@ def compute_shape_colors(compiled, closest, surfaces, shadows, face_chunk):
     return colors
 
 
-def compute_triangle_colors(compiled, triangle_hit):
-    materials = compiled.triangles.materials
-    material = gather_triangle_material(materials, triangle_hit.primitive)
-    shader = select_shader(materials)
+def compute_triangle_colors(compiled, triangle_hit, shadows, face_chunk):
+    if shadows:
+        args = compiled, triangle_hit, face_chunk
+        colors = color_triangles_with_shadows(*args)
+    else:
+        colors = color_triangles(compiled, triangle_hit)
+    return colors
+
+
+def color_triangles(compiled, triangle_hit):
+    shader, material = select_triangle_shader(compiled, triangle_hit)
     colors = jp.zeros_like(triangle_hit.albedo)
     for light in compiled.lights:
-        args = triangle_hit.albedo, material, triangle_hit.points
-        args += triangle_hit.normals, triangle_hit.eyes, light
+        args = build_triangle_shader_args(triangle_hit, material, light)
         colors = colors + shader.compute_colors(*args)
     return colors
+
+
+def color_triangles_with_shadows(compiled, triangle_hit, face_chunk):
+    shader, material = select_triangle_shader(compiled, triangle_hit)
+    receiver = shadow.build_triangle_receiver(triangle_hit)
+    colors = jp.zeros_like(triangle_hit.albedo)
+    for light in compiled.lights:
+        occlusion_args = compiled, receiver, light, face_chunk
+        is_shadow = shadow.compute_occlusion(*occlusion_args)
+        args = build_triangle_shader_args(triangle_hit, material, light)
+        colors = colors + shader.compute_colors_with_shadow(*args, is_shadow)
+    return colors
+
+
+def select_triangle_shader(compiled, triangle_hit):
+    materials = compiled.triangles.materials
+    material = gather_triangle_material(materials, triangle_hit.primitive)
+    return select_shader(materials), material
+
+
+def build_triangle_shader_args(triangle_hit, material, light):
+    args = triangle_hit.albedo, material, triangle_hit.points
+    return args + (triangle_hit.normals, triangle_hit.eyes, light)
 
 
 def gather_triangle_material(materials, primitive):
@@ -120,17 +151,10 @@ def scan_light_step(
 def compute_light_colors(
     compiled, closest, surfaces, indices, light, face_chunk
 ):
-    directions, distance = compute_light_directions(light, closest.point)
-    occlusion_args = compiled, closest, indices, directions, distance
-    is_shadow = shadow.compute_occlusion(*occlusion_args, face_chunk)
+    receiver = shadow.build_shape_receiver(closest, indices)
+    is_shadow = shadow.compute_occlusion(compiled, receiver, light, face_chunk)
     color_args = compiled.shapes, light, surfaces, is_shadow
     return take_closest(compute_shadowed_colors(*color_args), indices)
-
-
-def compute_light_directions(light, points):
-    vector = light.position - points
-    norm = paz.algebra.compute_norms(vector, 1)
-    return vector / norm, jp.squeeze(norm, axis=1)
 
 
 def compute_shadowed_colors(shapes, light, surfaces, is_shadow):

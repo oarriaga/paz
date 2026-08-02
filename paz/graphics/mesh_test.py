@@ -920,6 +920,35 @@ def test_mesh_shadow_mask_stops_mesh_casting():
     assert jp.all(casting <= blocked + 1e-4)
 
 
+def build_mesh_only_shadow_scene():
+    vertices, faces, edges = build_cube(1.0)
+    colors = build_vertex_colors(vertices, [0.7, 0.4, 0.2])
+    material = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100)
+    blocker_pose = SE3.translation(jp.array([0.0, 1.4, 0.0]))
+    blocker = Mesh(vertices, colors, blocker_pose, material, faces, edges)
+    slab_pose = SE3.translation(jp.array([0.0, -0.6, 0.0]))
+    slab_pose = slab_pose @ SE3.scaling(jp.array([6.0, 0.2, 6.0]))
+    slab = Mesh(vertices, colors, slab_pose, material, faces, edges)
+    return paz.graphics.Scene([blocker, slab])
+
+
+def render_mesh_only_shadow(shadows):
+    camera_pose = SE3.view_transform(
+        jp.array([0.0, 2.4, -5.0]), jp.zeros(3), jp.array([0.0, 1.0, 0.0])
+    )
+    lights = [PointLight(jp.ones(3), jp.array([0.0, 6.0, -1.5]))]
+    scene = build_mesh_only_shadow_scene()
+    args = (32, 32), jp.pi / 3.0, camera_pose, scene, None, lights
+    return paz.graphics.render(*args, (1, 1), 1024, shadows)
+
+
+def test_mesh_receives_shadow_from_mesh():
+    lit, _ = render_mesh_only_shadow(False)
+    shadowed, _ = render_mesh_only_shadow(True)
+    assert compute_max_abs_difference(lit, shadowed) > 1e-2
+    assert jp.all(shadowed <= lit + 1e-4)
+
+
 def test_scene_rejects_meshes_with_mixed_pattern_sizes():
     plain = build_cube_mesh()
     textured = build_textured_quad_mesh()
