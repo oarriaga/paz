@@ -1,13 +1,15 @@
 import pytest
 import torch
 import numpy as np
-import keras
 import sys
 import os
 
-# Resolve project root and reference implementation paths
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../../../")))
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../../../../examples/rf-detr_original_pytorch_implementation")))
+current_dir = os.path.dirname(__file__)
+project_root = os.path.abspath(os.path.join(current_dir, "../../../../../../"))
+sys.path.append(project_root)
+rel_path = "../../../../../../examples/rf-detr_original_pytorch_implementation"
+rf_detr_path = os.path.abspath(os.path.join(current_dir, rel_path))
+sys.path.append(rf_detr_path)
 
 from rfdetr import (
     RFDETRSmall,
@@ -26,14 +28,15 @@ except ImportError:
     box_cxcywh_to_xyxy = box_ops.box_cxcywh_to_xyxy
     generalized_box_iou = box_ops.generalized_box_iou
 
-from paz.models.detection.dino_v2_object_detection.models.matcher.matcher import HungarianMatcher as KerasHungarianMatcher
+from paz.models.detection.dino_v2_object_detection.models.matcher.matcher import (  # fmt: skip
+    compute_cost_matrix,
+)
 
-from paz.models.detection.dino_v2_object_detection.models.matcher.matcher_porting_utils import (
+from paz.models.detection.dino_v2_object_detection.models.matcher.matcher_porting_utils import (  # fmt: skip
     to_numpy, convert_to_keras, extract_matcher_config, 
     build_keras_matcher_from_config, assert_matcher_parity
 )
 
-# Model variants to test against
 MODELS_TO_TEST = [
     RFDETRNano,
     RFDETRSmall,
@@ -45,232 +48,202 @@ MODELS_TO_TEST = [
 ]
 
 def compute_pytorch_cost_matrix(outputs, targets, matcher):
-    """Computes the reference cost matrix for verification.
-
-    Replicates the cost matrix calculation logic using the reference
-    implementation's box ops for direct numerical comparison with the
-    tested matcher's cost matrix.
-
-    Args:
-        outputs (dict): Model predictions with "pred_logits" and
-            "pred_boxes" tensors.
-        targets (list[dict]): Per-image target dicts with "labels" and
-            "boxes" tensors.
-        matcher: Reference matcher instance providing cost weights and
-            focal_alpha.
-
-    Returns:
-        Tensor: Cost matrix of shape (B, Q, total_targets).
-    """
     with torch.no_grad():
         bs, num_queries = outputs["pred_logits"].shape[:2]
         
-        # Flatten predictions for pairwise computation
         out_prob = outputs["pred_logits"].flatten(0, 1).sigmoid()
         out_bbox = outputs["pred_boxes"].flatten(0, 1)
 
-        # Concatenate all targets across batch
         tgt_ids = torch.cat([v["labels"] for v in targets])
         tgt_bbox = torch.cat([v["boxes"] for v in targets])
 
-        # Generalized IoU cost (negated for minimization)
-        cost_giou = -generalized_box_iou(box_cxcywh_to_xyxy(out_bbox), box_cxcywh_to_xyxy(tgt_bbox))
+        out_xyxy = box_cxcywh_to_xyxy(out_bbox)
+        tgt_xyxy = box_cxcywh_to_xyxy(tgt_bbox)
+        cost_giou = -generalized_box_iou(out_xyxy, tgt_xyxy)
 
-        # Focal loss classification cost
         alpha = matcher.focal_alpha
         gamma = 2.0
-        
+
         flat_pred_logits = outputs["pred_logits"].flatten(0, 1)
-        neg_cost_class = (1 - alpha) * (out_prob ** gamma) * (-torch.nn.functional.logsigmoid(-flat_pred_logits))
-        pos_cost_class = alpha * ((1 - out_prob) ** gamma) * (-torch.nn.functional.logsigmoid(flat_pred_logits))
-        
+        neg_logsigmoid = -torch.nn.functional.logsigmoid(-flat_pred_logits)
+        neg_focal = (1 - alpha) * (out_prob ** gamma)
+        neg_cost_class = neg_focal * neg_logsigmoid
+        pos_logsigmoid = -torch.nn.functional.logsigmoid(flat_pred_logits)
+        pos_focal = alpha * ((1 - out_prob) ** gamma)
+        pos_cost_class = pos_focal * pos_logsigmoid
+
         cost_class = pos_cost_class[:, tgt_ids] - neg_cost_class[:, tgt_ids]
 
-        # L1 bounding box cost
         cost_bbox = torch.cdist(out_bbox, tgt_bbox, p=1)
 
-        # Weighted combination of all cost terms
-        C = matcher.cost_bbox * cost_bbox + matcher.cost_class * cost_class + matcher.cost_giou * cost_giou
+        box_term = matcher.cost_bbox * cost_bbox
+        class_term = matcher.cost_class * cost_class
+        giou_term = matcher.cost_giou * cost_giou
+        C = box_term + class_term + giou_term
         
         C = C.view(bs, num_queries, -1).cpu()
         return C
 
 @pytest.mark.parametrize("model_class", MODELS_TO_TEST)
 def test_matcher_config_parity(model_class):
-    """Tests matcher output parity using real model configurations.
-
-    Initializes a model to extract its configuration, builds both
-    reference and tested matchers, and verifies identical outputs.
-    """
     _run_matcher_check(model_class, check_cost_matrix=True)
 
 @pytest.mark.parametrize("overrides", [
-    {"set_cost_class": 5.0, "set_cost_bbox": 0.0, "set_cost_giou": 0.0}, # Class only
+    # Class only
+    {"set_cost_class": 5.0, "set_cost_bbox": 0.0, "set_cost_giou": 0.0},
     {"set_cost_class": 0.0, "set_cost_bbox": 5.0, "set_cost_giou": 0.0},
     {"set_cost_class": 0.0, "set_cost_bbox": 0.0, "set_cost_giou": 5.0},
     {"group_detr": 3},
 ])
 def test_matcher_custom_configs(overrides):
-    """Tests matcher parity with custom configuration overrides."""
-    _run_matcher_check(RFDETRSmall, config_overrides=overrides, check_cost_matrix=True)
+    kwargs = dict(config_overrides=overrides, check_cost_matrix=True)
+    _run_matcher_check(RFDETRSmall, **kwargs)
 
 def test_matcher_empty_targets():
-    """Tests matcher robustness when one image has no targets."""
     _run_matcher_check(RFDETRSmall, empty_targets=True, check_cost_matrix=False)
 
-def _run_matcher_check(model_class, config_overrides=None, empty_targets=False, check_cost_matrix=False):
-    """Runs a full matcher parity check for a given model class.
-
-    Instantiates the model to extract its configuration, builds both
-    reference and tested matchers, generates dummy data matching the
-    model's query/class dimensions, and compares outputs.
-
-    Args:
-        model_class: Model class to instantiate for config extraction.
-        config_overrides (dict): Optional parameter overrides to apply.
-        empty_targets (bool): If True, first image has zero targets.
-        check_cost_matrix (bool): If True, also verifies cost matrix
-            numerical equivalence (skipped for segmentation models due
-            to random mask point sampling).
-    """
-    if config_overrides is None:
-        config_overrides = {}
-
-    print(f"\nTesting Matcher Parity for model: {model_class.__name__}")
-    print(f"  Overrides: {config_overrides}")
-    
-    # Instantiate model to extract its configuration
+def build_matcher_args(model_class, config_overrides):
     try:
         rfdetr_wrapper = model_class(pretrain_weights=None)
-    except Exception as e:
-        print(f"Skipping instantiation with pretrain_weights=None, trying default: {e}")
+    except Exception as error:
+        message = "Skipping instantiation with pretrain_weights=None, "
+        print(message + f"trying default: {error}")
         rfdetr_wrapper = model_class()
-
     args = rfdetr_wrapper.model.args
-    
-    # Apply configuration overrides
-    for k, v in config_overrides.items():
-        if hasattr(args, k):
-            setattr(args, k, v)
-        else:
-            setattr(args, k, v)
+    for key, value in config_overrides.items():
+        setattr(args, key, value)
+    if getattr(args, "segmentation_head", False):
+        defaults = (("mask_ce_loss_coef", 5.0), ("mask_dice_loss_coef", 5.0))
+        for key, value in defaults + (("mask_point_sample_ratio", 16),):
+            if not hasattr(args, key):
+                setattr(args, key, value)
+    return args
 
-    # Inject default mask loss coefficients for segmentation models
-    if getattr(args, 'segmentation_head', False):
-        if not hasattr(args, 'mask_ce_loss_coef'):
-            args.mask_ce_loss_coef = 5.0 
-        if not hasattr(args, 'mask_dice_loss_coef'):
-            args.mask_dice_loss_coef = 5.0
-        if not hasattr(args, 'mask_point_sample_ratio'):
-            args.mask_point_sample_ratio = 16
 
-    # Build reference matcher from model args
+def build_matcher_pair(args):
     torch_matcher = build_torch_matcher(args)
-    
-    # Build tested matcher using extracted config
     config = extract_matcher_config(args)
     keras_matcher = build_keras_matcher_from_config(config)
-    
-    print(f"  Config detected: Class={keras_matcher.cost_class}, Box={keras_matcher.cost_bbox}, "
-          f"GIoU={keras_matcher.cost_giou}, Alpha={keras_matcher.focal_alpha}")
+    class_str = f"Class={config['cost_class']}, Box={config['cost_bbox']}, "
+    giou_str = f"GIoU={config['cost_giou']}, Alpha={config['focal_alpha']}"
+    print(f"  Config detected: {class_str}{giou_str}")
+    return torch_matcher, keras_matcher, config
 
-    # Generate dummy data matching the model's dimensions
+
+def add_probe_masks(outputs_torch, targets_torch, batch_size, num_queries):
+    mask_h, mask_w = 32, 32
+    mask_shape = (batch_size, num_queries, mask_h, mask_w)
+    outputs_torch["pred_masks"] = torch.randn(*mask_shape)
+    for index in range(batch_size):
+        n_boxes = targets_torch[index]["boxes"].shape[0]
+        if n_boxes > 0:
+            mask_size = (n_boxes, mask_h, mask_w)
+            masks = torch.randint(0, 2, mask_size).float()
+        else:
+            masks = torch.zeros((0, mask_h, mask_w)).float()
+        targets_torch[index]["masks"] = masks
+
+
+def build_matcher_probe(args, empty_targets):
     batch_size = 2
     num_queries = args.num_queries * args.group_detr
-    num_classes = args.num_classes 
-    
-    # Prediction tensors: logits are unconstrained, boxes are in [0, 1]
-    outputs_torch = {
-        "pred_logits": torch.randn(batch_size, num_queries, num_classes),
-        "pred_boxes": torch.sigmoid(torch.randn(batch_size, num_queries, 4)), 
-    }
-    
-    # Per-image targets with variable number of ground-truth objects
+    num_classes = args.num_classes
+    logits = torch.randn(batch_size, num_queries, num_classes)
+    boxes = torch.sigmoid(torch.randn(batch_size, num_queries, 4))
+    outputs_torch = {"pred_logits": logits, "pred_boxes": boxes}
     targets_torch = []
-    for i in range(batch_size):
-        if empty_targets and i == 0:
-            n_boxes = 0
-        else:
-            n_boxes = np.random.randint(1, 10)
-            
-        targets_torch.append({
-            "labels": torch.randint(0, num_classes, (n_boxes,)).long(),
-            "boxes": torch.rand(n_boxes, 4), 
-        })
+    for index in range(batch_size):
+        n_boxes = 0 if (empty_targets and index == 0) else np.random.randint(1, 10)  # fmt: skip
+        labels = torch.randint(0, num_classes, (n_boxes,)).long()
+        targets_torch.append({"labels": labels, "boxes": torch.rand(n_boxes, 4)})  # fmt: skip
+    if getattr(args, "segmentation_head", False):
+        add_probe_masks(outputs_torch, targets_torch, batch_size, num_queries)
+    return outputs_torch, targets_torch, batch_size, num_queries
 
-    # Add mask data for segmentation models
-    if getattr(args, 'segmentation_head', False):
-        mask_h, mask_w = 32, 32
-        outputs_torch["pred_masks"] = torch.randn(batch_size, num_queries, mask_h, mask_w)
-        
-        for i in range(batch_size):
-            n_boxes = targets_torch[i]["boxes"].shape[0]
-            if n_boxes > 0:
-                targets_torch[i]["masks"] = torch.randint(0, 2, (n_boxes, mask_h, mask_w)).float()
-            else:
-                 targets_torch[i]["masks"] = torch.zeros((0, mask_h, mask_w)).float()
 
-    # Run reference matcher
-    with torch.no_grad():
-        indices_torch = torch_matcher(outputs_torch, targets_torch, group_detr=args.group_detr)
-        
-        # Optionally verify cost matrix numerical equivalence
-        # (skipped for segmentation models due to random mask point sampling)
-        if check_cost_matrix and not getattr(args, 'segmentation_head', False): 
-            batch_C_torch = compute_pytorch_cost_matrix(outputs_torch, targets_torch, torch_matcher)
+def assert_cost_matrix_parity(probe, keras_pair, batch_C_torch, config):
+    outputs_keras, targets_keras = keras_pair
+    batch_size, num_queries = probe[2], probe[3]
+    batch_C_keras = compute_cost_matrix(outputs_keras, targets_keras, **config)
+    keras_np = to_numpy(batch_C_keras)
+    batch_C_keras_np = keras_np.reshape(batch_size, num_queries, -1)
+    print("  Verifying Cost Matrix values...")
+    allclose_args = (batch_C_keras_np, to_numpy(batch_C_torch))
+    kwargs = dict(rtol=0, atol=1e-4, err_msg="Cost Matrix mismatch")
+    np.testing.assert_allclose(*allclose_args, **kwargs)
+    print("  Cost Matrix Parity Confirmed (1e-4 tolerance).")
 
-    # Run tested matcher
-    outputs_keras, targets_keras = convert_to_keras(outputs_torch, targets_torch)
-    
-    # Verify cost matrix equivalence when applicable
-    if check_cost_matrix and not getattr(args, 'segmentation_head', False):
-        batch_C_keras = keras_matcher.compute_cost_matrix(outputs_keras, targets_keras)
-        # Reshape from flat (B*Q, total_targets) to (B, Q, total_targets)
-        # to match the reference cost matrix layout
-        batch_C_keras_np = to_numpy(batch_C_keras).reshape(batch_size, num_queries, -1)
-        batch_C_torch_np = to_numpy(batch_C_torch)
-        
-        # Assert numerical closeness within tolerance
-        print("  Verifying Cost Matrix values...")
-        np.testing.assert_allclose(batch_C_keras_np, batch_C_torch_np, rtol=0, atol=1e-4, err_msg="Cost Matrix mismatch")
-        print("  Cost Matrix Parity Confirmed (1e-4 tolerance).")
 
-    indices_keras = keras_matcher(outputs_keras, targets_keras, group_detr=args.group_detr)
+def assert_assignment_cost_parity(indices_torch, indices_keras, batch_C_torch):
+    # Differences may arise from tie-breaking in the linear assignment
+    # solver when several optimal solutions exist, so compare total cost.
+    batch_C_torch_np = to_numpy(batch_C_torch)
+    for index in range(len(indices_torch)):
+        rows_torch = to_numpy(indices_torch[index][0])
+        columns_torch = to_numpy(indices_torch[index][1])
+        rows_keras = to_numpy(indices_keras[index][0])
+        columns_keras = to_numpy(indices_keras[index][1])
+        cost_torch = batch_C_torch_np[index][rows_torch, columns_torch].sum()
+        cost_keras = batch_C_torch_np[index][rows_keras, columns_keras].sum()
+        diff = abs(cost_torch - cost_keras)
+        if diff > 1e-4:
+            message = f"Cost mismatch at zero-tolerance! Batch {index}: "
+            message += f"Torch={cost_torch}, Keras={cost_keras}, "
+            raise AssertionError(message + f"Diff={diff}")
+    message = "  Assignment Cost Parity Confirmed (1e-4). "
+    print(message + "Mismatch purely due to tie-breaking.")
 
-    # Compare matched indices
-    # For segmentation models, skip exact check due to random mask sampling
-    check_exact = not getattr(args, 'segmentation_head', False)
-    
+
+def report_index_parity(model_class, check_exact):
+    name = model_class.__name__
+    if not check_exact:
+        message = f"  Segmentation model {name}: Skipped exact "
+        print(message + "check due to random mask sampling. Structure valid.")
+    else:
+        print(f"  Model {name}: Exact parity confirmed for all batches.")
+
+
+def assert_index_parity(model_class, indices_torch, indices_keras, check_exact, batch_C_torch):  # fmt: skip
     try:
-        assert_matcher_parity(indices_torch, indices_keras, check_exact=check_exact)
-        if not check_exact:
-             print(f"  Segmentation model {model_class.__name__}: Skipped exact check due to random mask sampling. Structure valid.")
-        else:
-             print(f"  Model {model_class.__name__}: Exact parity confirmed for all batches.")
-    except AssertionError as e:
-        # If exact parity fails, check if the total assignment costs are
-        # equivalent (differences may arise from tie-breaking in the
-        # linear assignment solver when multiple optimal solutions exist)
-        if check_cost_matrix and 'batch_C_torch' in locals():
-            print(f"  Exact parity failed ({e}). Checking assignment cost parity (tolerance 1e-4)...")
-            batch_C_torch_np = to_numpy(batch_C_torch)
-            
-            for i in range(len(indices_torch)):
-                r_t, c_t = to_numpy(indices_torch[i][0]), to_numpy(indices_torch[i][1])
-                r_k, c_k = to_numpy(indices_keras[i][0]), to_numpy(indices_keras[i][1])
-                
-                # Evaluate both assignments on the reference cost matrix
-                # to determine if the total cost is equivalent
-                cost_torch = batch_C_torch_np[i][r_t, c_t].sum()
-                cost_keras = batch_C_torch_np[i][r_k, c_k].sum()
-                
-                diff = abs(cost_torch - cost_keras)
-                if diff > 1e-4:
-                    raise AssertionError(f"Cost mismatch at zero-tolerance! Batch {i}: Torch={cost_torch}, Keras={cost_keras}, Diff={diff}")
-            
-            print("  Assignment Cost Parity Confirmed (1e-4). Mismatch purely due to tie-breaking.")
-        else:
+        parity_kwargs = dict(check_exact=check_exact)
+        assert_matcher_parity(indices_torch, indices_keras, **parity_kwargs)
+        report_index_parity(model_class, check_exact)
+    except AssertionError as error:
+        if batch_C_torch is None:
             raise
+        message = f"  Exact parity failed ({error}). Checking "
+        print(message + "assignment cost parity (tolerance 1e-4)...")
+        args = (indices_torch, indices_keras, batch_C_torch)
+        assert_assignment_cost_parity(*args)
+
+
+def _run_matcher_check(model_class, config_overrides=None, empty_targets=False, check_cost_matrix=False):  # fmt: skip
+    config_overrides = config_overrides or {}
+    print(f"\nTesting Matcher Parity for model: {model_class.__name__}")
+    print(f"  Overrides: {config_overrides}")
+    args = build_matcher_args(model_class, config_overrides)
+    torch_matcher, keras_matcher, config = build_matcher_pair(args)
+    probe = build_matcher_probe(args, empty_targets)
+    outputs_torch, targets_torch = probe[0], probe[1]
+    # The cost matrix is skipped for segmentation models because their mask
+    # point sampling is random and would not be reproducible across backends.
+    compare_costs = check_cost_matrix and not getattr(args, "segmentation_head", False)  # fmt: skip
+    batch_C_torch = None
+    with torch.no_grad():
+        kwargs = dict(group_detr=args.group_detr)
+        indices_torch = torch_matcher(outputs_torch, targets_torch, **kwargs)
+        if compare_costs:
+            cost_args = (outputs_torch, targets_torch, torch_matcher)
+            batch_C_torch = compute_pytorch_cost_matrix(*cost_args)
+    keras_pair = convert_to_keras(outputs_torch, targets_torch)
+    if compare_costs:
+        assert_cost_matrix_parity(probe, keras_pair, batch_C_torch, config)
+    keras_kwargs = dict(group_detr=args.group_detr)
+    indices_keras = keras_matcher(*keras_pair, **keras_kwargs)
+    check_exact = not getattr(args, "segmentation_head", False)
+    args_parity = (model_class, indices_torch, indices_keras, check_exact)
+    assert_index_parity(*args_parity, batch_C_torch)
+
 
 if __name__ == "__main__":
     pytest.main([__file__])

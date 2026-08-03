@@ -2,16 +2,14 @@ import os
 import sys
 import importlib.util
 
-# Add parent directory to path to allow importing utils - keeping this for potential other deps
+# Add parent directory to path to allow importing utils - keeping this for potential other deps  # fmt: skip
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import pytest
 import numpy as np
 import keras
-import keras.ops as k
 
-# Load utils.py explicitly by path to avoid conflict with standard 'utils' modules
-utils_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'utils.py')
+# Load utils.py explicitly by path to avoid conflict with standard 'utils' modules  # fmt: skip
+utils_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'utils.py')  # fmt: skip
 spec = importlib.util.spec_from_file_location("keras_utils", utils_path)
 keras_utils = importlib.util.module_from_spec(spec)
 sys.modules["keras_utils"] = keras_utils
@@ -36,7 +34,7 @@ def test_best_metric_single():
     assert bm_small.best_res == 5.0
 
 def test_best_metric_holder():
-    bmh = keras_utils.BestMetricHolder(init_res=0.0, better='large', use_ema=True)
+    bmh = keras_utils.BestMetricHolder(init_res=0.0, better='large', use_ema=True)  # fmt: skip
     
     # Update regular
     updated = bmh.update(0.5, 1, is_ema=False)
@@ -57,7 +55,7 @@ def test_best_metric_holder():
 def test_model_ema():
     # Simple model
     inputs = keras.Input(shape=(10,))
-    outputs = keras.layers.Dense(1, kernel_initializer='ones', bias_initializer='zeros')(inputs)
+    outputs = keras.layers.Dense(1, kernel_initializer='ones', bias_initializer='zeros')(inputs)  # fmt: skip
     model = keras.Model(inputs, outputs)
     
     ema = keras_utils.ModelEma(model, decay=0.5)
@@ -67,7 +65,7 @@ def test_model_ema():
     assert np.all(w_initial[0] == 1.0)
     
     # Update model weights
-    new_w = [np.full((10, 1), 2.0, dtype=np.float32), np.zeros((1,), dtype=np.float32)]
+    new_w = [np.full((10, 1), 2.0, dtype=np.float32), np.zeros((1,), dtype=np.float32)]  # fmt: skip
     model.set_weights(new_w)
     
     # Update EMA: 0.5 * 1.0 + 0.5 * 2.0 = 1.5

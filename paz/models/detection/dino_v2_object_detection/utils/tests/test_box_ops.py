@@ -3,11 +3,9 @@ import sys
 # Add parent directory to path to allow importing box_ops
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import pytest
 import numpy as np
 import torch
 import keras
-import keras.ops as k
 import box_ops as keras_box_ops
 
 # Original PyTorch implementations for reference
@@ -75,7 +73,7 @@ def pt_masks_to_boxes(masks):
 def verify_output(keras_out, torch_out, atol=1e-5):
     k_out = keras.ops.convert_to_numpy(keras_out)
     t_out = torch_out.detach().cpu().numpy()
-    np.testing.assert_allclose(k_out, t_out, atol=atol, err_msg="Outputs do not match")
+    np.testing.assert_allclose(k_out, t_out, atol=atol, err_msg="Outputs do not match")  # fmt: skip
 
 def test_box_cxcywh_to_xyxy():
     # Random inputs
@@ -161,7 +159,7 @@ def test_masks_to_boxes():
     # Masks (N, H, W)
     masks = np.random.randint(0, 2, size=(3, 10, 10)).astype(np.float32)
     
-    # Ensure at least one pixel is 1 in each mask to avoid infs in naive implementation
+    # Ensure at least one pixel is 1 in each mask to avoid infs in naive implementation  # fmt: skip
     masks[:, 5, 5] = 1.0 
     
     # Run Keras

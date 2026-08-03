@@ -20,14 +20,12 @@ os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 # ---------------------------------------------------------------------------
 
 def _write_dummy_image(path, w, h):
-    """Write a tiny random JPEG to *path*."""
     from PIL import Image as PILImage
     arr = np.random.randint(0, 255, (h, w, 3), dtype=np.uint8)
     PILImage.fromarray(arr).save(path, "JPEG")
 
 
 def _make_dummy_coco_dataset(split_dir, num_images=4, num_classes=3):
-    """Create a minimal COCO-format annotation file + dummy images."""
     os.makedirs(split_dir, exist_ok=True)
     categories = [
         {"id": i + 1, "name": f"class_{i}", "supercategory": "object"}
@@ -65,10 +63,6 @@ def _make_dummy_coco_dataset(split_dir, num_images=4, num_classes=3):
 
 
 def make_dummy_dataset(num_classes=3, num_train=6, num_val=4):
-    """Create a temporary COCO-format dataset with train/valid splits.
-
-    Returns the path to the temporary dataset directory.
-    """
     tmpdir = tempfile.mkdtemp(prefix="rfdetr_dummy_train_")
     _make_dummy_coco_dataset(
         os.path.join(tmpdir, "train"),
@@ -87,12 +81,14 @@ def make_dummy_dataset(num_classes=3, num_train=6, num_val=4):
 # Main smoke test
 # ---------------------------------------------------------------------------
 
-def main():
-    print("=" * 70)
-    print("RF-DETR Small — Dummy Training Smoke Test")
-    print("=" * 70)
+# Very small settings: the point is to validate the code path, not to really
+# train (the user's snippet uses epochs=15, batch_size=16).
+EPOCHS = 2
+BATCH_SIZE = 2
+LEARNING_RATE = 1e-4
 
-    # ---- Step 0: Environment info ----------------------------------------
+
+def report_environment():
     import keras
     print(f"Python     : {sys.version}")
     print(f"Keras      : {keras.__version__}")
@@ -105,114 +101,128 @@ def main():
         print("JAX        : not installed")
     print()
 
-    # ---- Step 1: Create dummy dataset ------------------------------------
-    print("[Step 1] Creating dummy COCO dataset ...")
-    dataset_dir = make_dummy_dataset(num_classes=3, num_train=6, num_val=4)
+
+def report_dataset(dataset_dir):
     print(f"  Dataset dir: {dataset_dir}")
-    print(f"  Train annotations: {os.path.join(dataset_dir, 'train', '_annotations.coco.json')}")
-    print(f"  Valid annotations: {os.path.join(dataset_dir, 'valid', '_annotations.coco.json')}")
+    print(f"  Train annotations: {os.path.join(dataset_dir, 'train', '_annotations.coco.json')}")  # fmt: skip
+    print(f"  Valid annotations: {os.path.join(dataset_dir, 'valid', '_annotations.coco.json')}")  # fmt: skip
     print()
 
+
+def build_smoke_model():
+    t0 = time.time()
+    from paz.models.detection.dino_v2_object_detection.detr import RFDETRSmall  # fmt: skip
+    # NOTE: group_detr=1 works around a pre-existing bug in the Keras
+    # matcher port where ops.split(queries, group_detr) fails because
+    # num_queries=300 is not divisible by group_detr=13.
+    # group_detr=1 disables the GROUP-DETR query splitting, which is
+    # fine for smoke-testing the training pipeline.
+    model = RFDETRSmall(group_detr=1)
+    print(f"  Model created in {time.time() - t0:.1f}s")
+    print(f"  Model config: resolution={model.model_config.resolution}, "
+          f"hidden_dim={model.model_config.hidden_dim}, "
+          f"dec_layers={model.model_config.dec_layers}")
+    print()
+    return model
+
+
+def register_epoch_callback(model):
+    history = []
+
+    def callback2(data):
+        history.append(data)
+
+    model.callbacks["on_fit_epoch_end"].append(callback2)
+    print(f"  Callbacks registered: {list(model.callbacks.keys())}")
+    print()
+    return history
+
+
+def run_training(model, dataset_dir):
+    print(f"[Step 4] Starting training: epochs={EPOCHS}, "
+          f"batch_size={BATCH_SIZE}, lr={LEARNING_RATE}")
+    print(f"  dataset_dir={dataset_dir}")
+    t0 = time.time()
+    # use_ema=False keeps things simple for a smoke test.
+    keys = ("dataset_dir", "epochs", "batch_size", "lr", "use_ema", "tensorboard", "wandb", "output_dir")  # fmt: skip
+    values = (dataset_dir, EPOCHS, BATCH_SIZE, LEARNING_RATE, False, False, False, os.path.join(dataset_dir, "output"))  # fmt: skip
+    model.train(**dict(zip(keys, values)))
+    print(f"\n  Training completed in {time.time() - t0:.1f}s")
+    print()
+
+
+def report_callback_results(history):
+    print(f"  history length: {len(history)}")
+    if len(history) >= EPOCHS:
+        print(f"  PASS: Callback fired {len(history)} times "
+              f"(expected >= {EPOCHS})")
+    else:
+        print(f"  FAIL: Callback fired only {len(history)} times "
+              f"(expected >= {EPOCHS})")
+
+    if history:
+        print(f"  First epoch data keys: {sorted(history[0].keys())}")
+        print(f"  Last epoch data: { {k: v for k, v in history[-1].items() if not k.startswith('best_')} }")  # fmt: skip
+    print()
+
+
+def report_output_artifacts(dataset_dir):
+    output_dir = os.path.join(dataset_dir, "output")
+    log_path = os.path.join(output_dir, "log.txt")
+    ckpt_path = os.path.join(output_dir, "checkpoint.weights.h5")
+    print(f"  log.txt exists:        {os.path.isfile(log_path)}")
+    print(f"  checkpoint exists:     {os.path.isfile(ckpt_path)}")
+    if os.path.isfile(log_path):
+        with open(log_path) as f:
+            lines = f.readlines()
+        print(f"  log.txt lines:         {len(lines)}")
+    print()
+
+
+def report_failure(error):
+    print()
+    print("!" * 70)
+    print(f"SMOKE TEST FAILED: {type(error).__name__}: {error}")
+    print("!" * 70)
+    traceback.print_exc()
+    sys.exit(1)
+
+
+def cleanup_dataset(dataset_dir):
+    print(f"\nCleaning up {dataset_dir} ...")
+    shutil.rmtree(dataset_dir, ignore_errors=True)
+    print("Done.")
+
+
+def run_smoke_steps(dataset_dir):
+    print("[Step 2] Instantiating RFDETRSmall() ...")
+    model = build_smoke_model()
+    print("[Step 3] Registering on_fit_epoch_end callback ...")
+    history = register_epoch_callback(model)
+    run_training(model, dataset_dir)
+    print("[Step 5] Validating callback results ...")
+    report_callback_results(history)
+    print("[Step 6] Checking output artifacts ...")
+    report_output_artifacts(dataset_dir)
+    print("=" * 70)
+    print("SMOKE TEST PASSED")
+    print("=" * 70)
+
+
+def main():
+    print("=" * 70)
+    print("RF-DETR Small — Dummy Training Smoke Test")
+    print("=" * 70)
+    report_environment()
+    print("[Step 1] Creating dummy COCO dataset ...")
+    dataset_dir = make_dummy_dataset(num_classes=3, num_train=6, num_val=4)
+    report_dataset(dataset_dir)
     try:
-        # ---- Step 2: Instantiate model -----------------------------------
-        print("[Step 2] Instantiating RFDETRSmall() ...")
-        t0 = time.time()
-        from paz.models.detection.dino_v2_object_detection.detr import RFDETRSmall
-        # NOTE: group_detr=1 works around a pre-existing bug in the Keras
-        # matcher port where ops.split(queries, group_detr) fails because
-        # num_queries=300 is not divisible by group_detr=13.
-        # group_detr=1 disables the GROUP-DETR query splitting, which is
-        # fine for smoke-testing the training pipeline.
-        model = RFDETRSmall(group_detr=1)
-        print(f"  Model created in {time.time() - t0:.1f}s")
-        print(f"  Model config: resolution={model.model_config.resolution}, "
-              f"hidden_dim={model.model_config.hidden_dim}, "
-              f"dec_layers={model.model_config.dec_layers}")
-        print()
-
-        # ---- Step 3: Register callback -----------------------------------
-        print("[Step 3] Registering on_fit_epoch_end callback ...")
-        history = []
-
-        def callback2(data):
-            history.append(data)
-
-        model.callbacks["on_fit_epoch_end"].append(callback2)
-        print(f"  Callbacks registered: {list(model.callbacks.keys())}")
-        print()
-
-        # ---- Step 4: Train -----------------------------------------------
-        # Use very small settings: 2 epochs, batch_size=2
-        # (the user's snippet uses epochs=15, batch_size=16, but we keep it
-        # tiny to validate the code path, not to really train)
-        epochs = 2
-        batch_size = 2
-        lr = 1e-4
-        print(f"[Step 4] Starting training: epochs={epochs}, "
-              f"batch_size={batch_size}, lr={lr}")
-        print(f"  dataset_dir={dataset_dir}")
-        t0 = time.time()
-
-        model.train(
-            dataset_dir=dataset_dir,
-            epochs=epochs,
-            batch_size=batch_size,
-            lr=lr,
-            use_ema=False,        # Disable EMA to keep things simple
-            tensorboard=False,
-            wandb=False,
-            output_dir=os.path.join(dataset_dir, "output"),
-        )
-        train_time = time.time() - t0
-        print(f"\n  Training completed in {train_time:.1f}s")
-        print()
-
-        # ---- Step 5: Validate callback -----------------------------------
-        print("[Step 5] Validating callback results ...")
-        print(f"  history length: {len(history)}")
-        if len(history) >= epochs:
-            print(f"  PASS: Callback fired {len(history)} times "
-                  f"(expected >= {epochs})")
-        else:
-            print(f"  FAIL: Callback fired only {len(history)} times "
-                  f"(expected >= {epochs})")
-
-        if history:
-            print(f"  First epoch data keys: {sorted(history[0].keys())}")
-            print(f"  Last epoch data: { {k: v for k, v in history[-1].items() if not k.startswith('best_')} }")
-        print()
-
-        # ---- Step 6: Quick checkpoint check ------------------------------
-        output_dir = os.path.join(dataset_dir, "output")
-        log_path = os.path.join(output_dir, "log.txt")
-        ckpt_path = os.path.join(output_dir, "checkpoint.weights.h5")
-        print("[Step 6] Checking output artifacts ...")
-        print(f"  log.txt exists:        {os.path.isfile(log_path)}")
-        print(f"  checkpoint exists:     {os.path.isfile(ckpt_path)}")
-        if os.path.isfile(log_path):
-            with open(log_path) as f:
-                lines = f.readlines()
-            print(f"  log.txt lines:         {len(lines)}")
-        print()
-
-        # ---- Summary -----------------------------------------------------
-        print("=" * 70)
-        print("SMOKE TEST PASSED")
-        print("=" * 70)
-
-    except Exception as e:
-        print()
-        print("!" * 70)
-        print(f"SMOKE TEST FAILED: {type(e).__name__}: {e}")
-        print("!" * 70)
-        traceback.print_exc()
-        sys.exit(1)
-
+        run_smoke_steps(dataset_dir)
+    except Exception as error:
+        report_failure(error)
     finally:
-        # ---- Cleanup -----------------------------------------------------
-        print(f"\nCleaning up {dataset_dir} ...")
-        shutil.rmtree(dataset_dir, ignore_errors=True)
-        print("Done.")
+        cleanup_dataset(dataset_dir)
 
 
 if __name__ == "__main__":

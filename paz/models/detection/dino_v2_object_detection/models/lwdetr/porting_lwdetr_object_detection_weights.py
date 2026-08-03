@@ -3,7 +3,6 @@ import io
 import math
 import os
 import sys
-import warnings
 
 import numpy as np
 import pytest
@@ -38,7 +37,9 @@ if HAS_TORCH:
     except ImportError:
         rfdetr_path = os.path.abspath(
             os.path.join(
-                current_dir, "../../../../../../examples/rf-detr_original_pytorch_implementation"
+                current_dir,
+                "../../../../../../examples/"
+                "rf-detr_original_pytorch_implementation",
             )
         )
         if rfdetr_path not in sys.path:
@@ -74,36 +75,41 @@ if HAS_TORCH:
     )
 
 # Keras imports
-import keras
 from keras import ops
-import tensorflow as tf
+import functools
 
 # LWDETR model imports
 from paz.models.detection.dino_v2_object_detection.models.lwdetr.lwdetr import (
     LWDETR,
-    PostProcess,
+    post_process,
+    apply_lwdetr,
+)
+from paz.models.detection.dino_v2_object_detection.main import (
+    load_lwdetr_checkpoint,
 )
 from paz.models.detection.dino_v2_object_detection.models.backbone import (
     build_backbone as build_keras_backbone,
 )
-from paz.models.detection.dino_v2_object_detection.models.transformer_decoder_head.transformer import (
+from paz.models.detection.dino_v2_object_detection.models.transformer_decoder_head.transformer import (  # fmt: skip
     Transformer as KerasTransformer,
 )
 
 # Weight transfer utilities
-from paz.models.detection.dino_v2_object_detection.models.backbone.backbone_weights_porting_utils import (
+from paz.models.detection.dino_v2_object_detection.models.backbone.backbone_weights_porting_utils import (  # fmt: skip
     transfer_encoder as transfer_backbone_encoder,
     port_weights_multiscale_projector,
     transfer_layernorm,
-    _optional_table,
+    optional_embedding_table,
     assign_table,
 )
-from paz.models.detection.dino_v2_object_detection.models.transformer_decoder_head.transformer_weights_porting_utils import (
+from paz.models.detection.dino_v2_object_detection.models.transformer_decoder_head.transformer_weights_porting_utils import (  # fmt: skip
     transfer_transformer_weights,
 )
 
 # COCO class labels
-from paz.models.detection.dino_v2_object_detection.utils.coco_classes import COCO_CLASSES
+from paz.models.detection.dino_v2_object_detection.utils.coco_classes import (
+    COCO_CLASSES,
+)
 
 # Constants
 
@@ -273,392 +279,273 @@ MODEL_CONFIGS = {
 }
 
 # Filter to variants whose PT class is available
-AVAILABLE_VARIANTS = [
-    name for name, cfg in MODEL_CONFIGS.items() if cfg.get("pt_class") is not None
-]
+AVAILABLE_VARIANTS = [name for name, config in MODEL_CONFIGS.items() if config.get("pt_class") is not None]  # fmt: skip
 
 
 # Weight transfer helpers
 
 
-def resize_and_assign_pos_embed(pt_embeddings_layer, keras_pos):
-    """Interpolates position embeddings to match the target spatial grid.
+def read_torch_pos_embed(pt_embeddings_layer):
+    pos_embed = pt_embeddings_layer.position_embeddings
+    source = pos_embed.weight if hasattr(pos_embed, "weight") else pos_embed
+    values = source.detach().cpu().numpy()
+    if values.ndim == 2:
+        values = np.expand_dims(values, axis=0)
+    return values
 
-    If the source and target position embedding shapes differ, performs
-    bicubic interpolation on the spatial grid tokens (excluding the CLS
-    token) to resize them.
 
-    Args:
-        pt_embeddings_layer: Source embeddings layer with
-            ``position_embeddings`` attribute.
-        keras_pos: Target Keras position-embedding variable that will be
-            overwritten.
-    """
-    if hasattr(pt_embeddings_layer.position_embeddings, "weight"):
-        pt_pos_embed = (
-            pt_embeddings_layer.position_embeddings.weight.detach().cpu().numpy()
-        )
+def interpolate_grid_tokens(grid_tokens, grid_size, target_size):
+    reshaped = grid_tokens.reshape(1, grid_size, grid_size, -1)
+    # Bicubic interpolation matches the DINOv2 runtime code in
+    # dinov2_with_windowed_attn.py::interpolate_pos_encoding
+    tensor = torch.tensor(reshaped).permute(0, 3, 1, 2)
+    tensor = tensor.to(dtype=torch.float32)
+    keys = ("size", "mode", "align_corners", "antialias")
+    values = ((target_size, target_size), "bicubic", False, True)
+    kwargs = dict(zip(keys, values))
+    resized = torch.nn.functional.interpolate(tensor, **kwargs)
+    return resized.permute(0, 2, 3, 1).numpy()
+
+
+def resize_pos_embed(pt_pos_embed, keras_shape):
+    grid_tokens = pt_pos_embed[:, 1:, :]
+    num_tokens = grid_tokens.shape[1]
+    resized = None
+    if num_tokens == 0:
+        print("  WARNING: PyTorch grid tokens are empty - skipping resize.")
     else:
-        pt_pos_embed = pt_embeddings_layer.position_embeddings.detach().cpu().numpy()
+        args = (grid_tokens, int(np.sqrt(num_tokens)))
+        target = int(np.sqrt(keras_shape[0] - 1))
+        interpolated = interpolate_grid_tokens(*args, target)
+        last_dim = pt_pos_embed.shape[-1]
+        interpolated = interpolated.reshape(1, -1, last_dim)
+        parts = [pt_pos_embed[:, 0:1, :], interpolated]
+        resized = np.concatenate(parts, axis=1)
+    return resized
 
-    if pt_pos_embed.ndim == 2:
-        pt_pos_embed = np.expand_dims(pt_pos_embed, axis=0)
 
+def resize_and_assign_pos_embed(pt_embeddings_layer, keras_pos):
+    pt_pos_embed = read_torch_pos_embed(pt_embeddings_layer)
     keras_shape = keras_pos.shape
-
     if pt_pos_embed.shape[1] == keras_shape[0]:
         keras_pos.assign(np.reshape(pt_pos_embed, keras_shape))
         return
-
-    print(f"  Resizing PosEmbed: PT {pt_pos_embed.shape} -> Keras {keras_shape}")
-
-    cls_token = pt_pos_embed[:, 0:1, :]
-    grid_tokens = pt_pos_embed[:, 1:, :]
-
-    n_tokens = grid_tokens.shape[1]
-    if n_tokens == 0:
-        print("  WARNING: PyTorch grid tokens are empty — skipping resize.")
-        return
-
-    gs_pt = int(np.sqrt(n_tokens))
-    n_tokens_keras = keras_shape[0] - 1
-    gs_keras = int(np.sqrt(n_tokens_keras))
-
-    grid_tokens = grid_tokens.reshape(1, gs_pt, gs_pt, -1)
-
-    # Bicubic interpolation to match the DINOv2 runtime code in
-    # dinov2_with_windowed_attn.py::interpolate_pos_encoding
-    pt_tensor = (
-        torch.tensor(grid_tokens).permute(0, 3, 1, 2).to(dtype=torch.float32)
-    )
-    grid_tokens_resized = torch.nn.functional.interpolate(
-        pt_tensor,
-        size=(gs_keras, gs_keras),
-        mode="bicubic",
-        align_corners=False,
-        antialias=True,
-    )
-    grid_tokens_resized = grid_tokens_resized.permute(
-        0, 2, 3, 1
-    ).numpy()
-
-    grid_tokens_resized = grid_tokens_resized.reshape(1, -1, pt_pos_embed.shape[-1])
-
-    new_pos_embed = np.concatenate([cls_token, grid_tokens_resized], axis=1)
-    keras_pos.assign(np.reshape(new_pos_embed, keras_shape))
+    shapes = f"PT {pt_pos_embed.shape} -> Keras {keras_shape}"
+    print(f"  Resizing PosEmbed: {shapes}")
+    resized = resize_pos_embed(pt_pos_embed, keras_shape)
+    if resized is not None:
+        keras_pos.assign(np.reshape(resized, keras_shape))
 
 
-def transfer_lwdetr_head_weights(pt_model, keras_model, config):
-    """Transfers LWDETR detection head weights to the Keras model.
-
-    Copies classification head, bbox regression MLP, query embeddings,
-    and (when two-stage is enabled) encoder output head weights.
-
-    Args:
-        pt_model: Source reference model containing the detection heads.
-        keras_model: Target Keras LWDETR model.
-        config (dict): Model configuration with ``two_stage`` and
-            ``group_detr`` keys.
-    """
-    # 1. Class embed
-    keras_model.class_embed.set_weights(
+def set_dense_from_torch(keras_dense, torch_linear):
+    keras_dense.set_weights(
         [
-            pt_model.class_embed.weight.detach().cpu().numpy().T,
-            pt_model.class_embed.bias.detach().cpu().numpy(),
+            torch_linear.weight.detach().cpu().numpy().T,
+            torch_linear.bias.detach().cpu().numpy(),
         ]
     )
 
-    # 2. BBox embed MLP
-    for pt_l, k_l in zip(
-        pt_model.bbox_embed.layers, keras_model.bbox_embed.layers_list
-    ):
-        k_l.set_weights(
-            [pt_l.weight.detach().cpu().numpy().T, pt_l.bias.detach().cpu().numpy()]
-        )
 
-    # 3. Query embeddings
-    if hasattr(pt_model.refpoint_embed, "weight"):
-        keras_model.refpoint_embed.assign(
-            pt_model.refpoint_embed.weight.detach().cpu().numpy()
-        )
-    else:
-        keras_model.refpoint_embed.assign(
-            pt_model.refpoint_embed.detach().cpu().numpy()
-        )
+def torch_array(param):
+    source = param.weight if hasattr(param, "weight") else param
+    return source.detach().cpu().numpy()
 
-    if hasattr(pt_model.query_feat, "weight"):
-        keras_model.query_feat.assign(pt_model.query_feat.weight.detach().cpu().numpy())
-    else:
-        keras_model.query_feat.assign(pt_model.query_feat.detach().cpu().numpy())
 
-    # 4. Two-stage encoder output heads
+def transfer_encoder_output_heads(pt_model, keras_model, group_detr):
+    for group in range(group_detr):
+        layer = keras_model.get_layer(f"enc_out_class_embed_{group}")
+        torch_head = pt_model.transformer.enc_out_class_embed[group]
+        set_dense_from_torch(layer, torch_head)
+        torch_bbox = pt_model.transformer.enc_out_bbox_embed[group]
+        for index, torch_layer in enumerate(torch_bbox.layers):
+            name = f"enc_out_bbox_embed_{group}_dense_{index}"
+            set_dense_from_torch(keras_model.get_layer(name), torch_layer)
+
+
+def transfer_query_embeddings(pt_model, keras_model):
+    refpoints = keras_model.get_layer("refpoint_embed").embeddings
+    refpoints.assign(torch_array(pt_model.refpoint_embed))
+    queries = keras_model.get_layer("query_feat").embeddings
+    queries.assign(torch_array(pt_model.query_feat))
+
+
+def transfer_lwdetr_head_weights(pt_model, keras_model, config):
+    class_embed = keras_model.get_layer("class_embed")
+    set_dense_from_torch(class_embed, pt_model.class_embed)
+    for index, torch_layer in enumerate(pt_model.bbox_embed.layers):
+        layer = keras_model.get_layer(f"bbox_embed_dense_{index}")
+        set_dense_from_torch(layer, torch_layer)
+    transfer_query_embeddings(pt_model, keras_model)
     if config.get("two_stage", True):
         group_detr = config.get("group_detr", 13)
-        for g in range(group_detr):
-            pt_cls = pt_model.transformer.enc_out_class_embed[g]
-            k_cls = keras_model.enc_out_class_embed[g]
-            k_cls.set_weights(
-                [
-                    pt_cls.weight.detach().cpu().numpy().T,
-                    pt_cls.bias.detach().cpu().numpy(),
-                ]
-            )
+        transfer_encoder_output_heads(pt_model, keras_model, group_detr)
 
-            pt_bbox = pt_model.transformer.enc_out_bbox_embed[g]
-            k_bbox = keras_model.enc_out_bbox_embed[g]
-            for pt_l, k_l in zip(pt_bbox.layers, k_bbox.layers_list):
-                k_l.set_weights(
-                    [
-                        pt_l.weight.detach().cpu().numpy().T,
-                        pt_l.bias.detach().cpu().numpy(),
-                    ]
-                )
+
+def precompute_pos_embed_interpolation(pt_backbone, config):
+    embeddings = pt_backbone.encoder.encoder.embeddings
+    stored_grid = int(math.sqrt(embeddings.position_embeddings.shape[1] - 1))
+    target_grid = config["resolution"] // config["patch_size"]
+    # export() bakes the interpolation in when the pretrained grid differs
+    # from the target grid (e.g. 37x37 vs 40x40); the Keras model is already
+    # built at the target size, so afterwards this is a direct copy.
+    if stored_grid != target_grid:
+        sizes = f"{stored_grid}x{stored_grid} -> {target_grid}x{target_grid}"
+        print(f"  Pre-computing pos embed interpolation: {sizes}")
+        pt_backbone.encoder.export()
+
+
+def read_patch_projection(pt_patch_embed):
+    if hasattr(pt_patch_embed, "projection"):
+        projection = pt_patch_embed.projection
+    elif hasattr(pt_patch_embed, "proj"):
+        projection = pt_patch_embed.proj
+    else:
+        raise AttributeError(f"Could not find projection weights in {pt_patch_embed}")  # fmt: skip
+    return projection
+
+
+def transfer_patch_embeddings(pt_embeddings, k_model):
+    patch_embed = pt_embeddings
+    if hasattr(pt_embeddings, "patch_embeddings"):
+        patch_embed = pt_embeddings.patch_embeddings
+    projection = read_patch_projection(patch_embed)
+    keras_projection = k_model.get_layer("embeddings_patch_embeddings_projection")  # fmt: skip
+    kernel = projection.weight.detach().cpu().numpy().transpose(2, 3, 1, 0)
+    keras_projection.kernel.assign(kernel)
+    keras_projection.bias.assign(projection.bias.detach().cpu().numpy())
+
+
+def transfer_special_tokens(pt_embeddings, k_model):
+    if hasattr(pt_embeddings, "cls_token"):
+        cls_table = k_model.get_layer("embeddings_cls_token").embeddings
+        assign_table(cls_table, pt_embeddings.cls_token.detach().cpu().numpy())
+    mask_token = optional_embedding_table(k_model, "embeddings_mask_token")
+    if mask_token is not None and hasattr(pt_embeddings, "mask_token"):
+        assign_table(mask_token, pt_embeddings.mask_token.detach().cpu().numpy())  # fmt: skip
+
+
+def transfer_backbone_weights(pt_backbone, keras_backbone, config):
+    k_model = keras_backbone.get_layer("encoder")
+    precompute_pos_embed_interpolation(pt_backbone, config)
+    embeddings = pt_backbone.encoder.encoder.embeddings
+    layer = k_model.get_layer("embeddings_position_embeddings")
+    resize_and_assign_pos_embed(embeddings, layer.embeddings)
+    transfer_patch_embeddings(embeddings, k_model)
+    transfer_special_tokens(embeddings, k_model)
+    encoder = pt_backbone.encoder.encoder
+    transfer_backbone_encoder(encoder.encoder, k_model, "encoder")
+    transfer_layernorm(encoder.layernorm, k_model.get_layer("layernorm"))
+    projector = keras_backbone.get_layer("projector")
+    port_weights_multiscale_projector(pt_backbone.projector, projector)
 
 
 def transfer_full_model_weights(pt_model, keras_model, config):
-    """Orchestrates full weight transfer from reference to Keras model.
-
-    Transfers all weights in sequence: backbone (position embeddings,
-    patch embeddings, CLS/mask tokens, encoder blocks, layer norm,
-    multi-scale projector), transformer decoder, and detection heads.
-
-    Args:
-        pt_model: Source reference wrapper model.
-        keras_model: Target Keras LWDETR model.
-        config (dict): Model configuration with architecture parameters.
-    """
     inner_pt = pt_model.model.model
-    pt_backbone = inner_pt.backbone[0]
-    keras_backbone = keras_model.backbone.backbone
-    k_model = keras_backbone.encoder.feature_model
-
-    # 1. Backbone
-    # a. Position embeddings
-    # When the pretrained grid size differs from the target grid (e.g.
-    # 37x37 vs 40x40), call export() to pre-compute the interpolation.
-    # The Keras model is built with the target positional_encoding_size
-    # so its pos-embed already has the correct shape — direct copy.
-    pt_pos_embed = pt_backbone.encoder.encoder.embeddings.position_embeddings
-    stored_grid = int(math.sqrt(pt_pos_embed.shape[1] - 1))
-    target_grid = config["resolution"] // config["patch_size"]
-    if stored_grid != target_grid:
-        print(
-            f"  Pre-computing pos embed interpolation: "
-            f"{stored_grid}x{stored_grid} -> {target_grid}x{target_grid}"
-        )
-        pt_backbone.encoder.export()
-
-    keras_pos = k_model.get_layer("embeddings_position_embeddings").embeddings
-    resize_and_assign_pos_embed(
-        pt_backbone.encoder.encoder.embeddings, keras_pos
-    )
-
-    # b. Patch embeddings (projection + CLS token)
-    pt_embeddings = pt_backbone.encoder.encoder.embeddings
-
-    if hasattr(pt_embeddings, "patch_embeddings"):
-        pt_patch_embed = pt_embeddings.patch_embeddings
-    else:
-        pt_patch_embed = pt_embeddings
-
-    keras_proj = k_model.get_layer("embeddings_patch_embeddings_projection")
-
-    if hasattr(pt_patch_embed, "projection"):
-        pt_proj_weight = pt_patch_embed.projection.weight
-        pt_proj_bias = pt_patch_embed.projection.bias
-    elif hasattr(pt_patch_embed, "proj"):
-        pt_proj_weight = pt_patch_embed.proj.weight
-        pt_proj_bias = pt_patch_embed.proj.bias
-    else:
-        raise AttributeError(f"Could not find projection weights in {pt_patch_embed}")
-
-    keras_proj.kernel.assign(
-        pt_proj_weight.detach().cpu().numpy().transpose(2, 3, 1, 0)
-    )
-    keras_proj.bias.assign(pt_proj_bias.detach().cpu().numpy())
-
-    if hasattr(pt_embeddings, "cls_token"):
-        cls = k_model.get_layer("embeddings_cls_token").embeddings
-        assign_table(cls, pt_embeddings.cls_token.detach().cpu().numpy())
-
-    mask_token = _optional_table(k_model, "embeddings_mask_token")
-    if mask_token is not None and hasattr(pt_embeddings, "mask_token"):
-        assign_table(mask_token, pt_embeddings.mask_token.detach().cpu().numpy())
-
-    # c. Encoder blocks
-    transfer_backbone_encoder(
-        pt_backbone.encoder.encoder.encoder, k_model, "encoder"
-    )
-
-    # d. Final LayerNorm
-    transfer_layernorm(
-        pt_backbone.encoder.encoder.layernorm, k_model.get_layer("layernorm")
-    )
-
-    # e. Multi-scale projector
-    port_weights_multiscale_projector(pt_backbone.projector, keras_backbone.projector)
-
-    # 2. Transformer decoder
-    transfer_transformer_weights(
-        inner_pt.transformer,
-        keras_model.transformer,
-        config["hidden_dim"],
-        config["sa_nheads"],
-    )
-
-    # 3. LWDETR heads
+    keras_backbone = keras_model.backbone.get_layer("backbone")
+    args = (inner_pt.backbone[0], keras_backbone, config)
+    transfer_backbone_weights(*args)
+    args = (inner_pt.transformer, keras_model.transformer)
+    transfer_transformer_weights(*args, config["hidden_dim"], config["sa_nheads"])  # fmt: skip
     transfer_lwdetr_head_weights(inner_pt, keras_model, config)
-
-    print(f"  Weight transfer complete.")
+    print("  Weight transfer complete.")
 
 
 # Keras model builder
 
 
+def build_porting_backbone(config):
+    keys = ("encoder", "hidden_dim", "out_channels", "patch_size", "num_windows", "out_feature_indexes", "projector_scale", "layer_norm", "target_shape", "positional_encoding_size")  # fmt: skip
+    resolution = config["resolution"]
+    values = (config["encoder"], config["hidden_dim"], config["hidden_dim"], config["patch_size"], config["num_windows"], config["out_feature_indexes"], config["projector_scale"], True, (resolution, resolution), config.get("positional_encoding_size", 37))  # fmt: skip
+    return build_keras_backbone(**dict(zip(keys, values)))
+
+
+def build_porting_transformer(config):
+    keys = ("d_model", "sa_nhead", "ca_nhead", "num_queries", "num_decoder_layers", "num_feature_levels", "dec_n_points", "two_stage", "bbox_reparam", "return_intermediate_dec", "lite_refpoint_refine", "group_detr")  # fmt: skip
+    values = (config["hidden_dim"], config["sa_nheads"], config["ca_nheads"], config["num_queries"], config["dec_layers"], len(config["projector_scale"]), config["dec_n_points"], True, True, True, config.get("lite_refpoint_refine", True), config.get("group_detr", 13))  # fmt: skip
+    return KerasTransformer(**dict(zip(keys, values)))
+
+
 def build_keras_lwdetr(config):
-    """Builds a Keras LWDETR model from a configuration dictionary.
-
-    Constructs the backbone, transformer decoder, and LWDETR wrapper,
-    then executes a dummy forward pass to trigger lazy weight building.
-
-    Args:
-        config (dict): Model configuration containing architecture
-            parameters (encoder, hidden_dim, resolution, etc.).
-
-    Returns:
-        LWDETR: Built Keras model ready for weight loading or inference.
-    """
-    num_classes = config.get("num_classes", 91)
-
-    backbone = build_keras_backbone(
-        encoder=config["encoder"],
-        hidden_dim=config["hidden_dim"],
-        out_channels=config["hidden_dim"],
-        patch_size=config["patch_size"],
-        num_windows=config["num_windows"],
-        out_feature_indexes=config["out_feature_indexes"],
-        projector_scale=config["projector_scale"],
-        layer_norm=True,
-        target_shape=(config["resolution"], config["resolution"]),
-        positional_encoding_size=config.get("positional_encoding_size", 37),
-    )
-
-    transformer = KerasTransformer(
-        d_model=config["hidden_dim"],
-        sa_nhead=config["sa_nheads"],
-        ca_nhead=config["ca_nheads"],
-        num_queries=config["num_queries"],
-        num_decoder_layers=config["dec_layers"],
-        num_feature_levels=len(config["projector_scale"]),
-        dec_n_points=config["dec_n_points"],
-        two_stage=True,
-        bbox_reparam=True,
-        return_intermediate_dec=True,
-        lite_refpoint_refine=config.get("lite_refpoint_refine", True),
-        group_detr=config.get("group_detr", 13),
-    )
-
-    model = LWDETR(
-        backbone=backbone,
-        transformer=transformer,
-        segmentation_head=None,
-        num_classes=num_classes,
-        num_queries=config["num_queries"],
-        group_detr=config.get("group_detr", 13),
-        two_stage=True,
-        bbox_reparam=True,
-        lite_refpoint_refine=config.get("lite_refpoint_refine", True),
-    )
-
-    # Trigger lazy weight building with a dummy forward pass
-    # (training=True ensures all group_detr heads are built)
-    res = config["resolution"]
-    dummy = np.ones((1, res, res, 3), dtype=np.float32) * 0.5
-    model(dummy, training=True)
-
+    keys = ("backbone", "transformer", "segmentation_head", "num_classes", "num_queries", "group_detr", "two_stage", "bbox_reparam", "lite_refpoint_refine")  # fmt: skip
+    values = (build_porting_backbone(config), build_porting_transformer(config), None, config.get("num_classes", 91), config["num_queries"], config.get("group_detr", 13), True, True, config.get("lite_refpoint_refine", True))  # fmt: skip
+    model = LWDETR(**dict(zip(keys, values)))
+    # Exercise the functional model once: every group_detr head is
+    # materialised at build time and training=True runs all of them.
+    resolution = config["resolution"]
+    dummy = np.ones((1, resolution, resolution, 3), dtype=np.float32) * 0.5
+    apply_lwdetr(model, dummy, training=True)
     return model
 
 
 # Helpers
 
 
-def _ensure_cache_dir():
+def ensure_cache_dir():
     os.makedirs(CACHE_DIR, exist_ok=True)
 
 
-def _download_coco_image(image_id, url):
-    """Download or load cached COCO image. Returns (H, W, 3) uint8 RGB."""
-    _ensure_cache_dir()
+def download_coco_image(image_id, url):
+    ensure_cache_dir()
     cached = os.path.join(CACHE_DIR, f"coco_val_{image_id}.npy")
     if os.path.exists(cached):
-        return np.load(cached)
-    print(f"  Downloading COCO image {image_id} ...")
-    data = urlopen(url).read()
-    img = Image.open(io.BytesIO(data)).convert("RGB")
-    arr = np.array(img, dtype=np.uint8)
-    np.save(cached, arr)
-    return arr
+        image = np.load(cached)
+    else:
+        print(f"  Downloading COCO image {image_id} ...")
+        data = urlopen(url).read()
+        decoded = Image.open(io.BytesIO(data)).convert("RGB")
+        image = np.array(decoded, dtype=np.uint8)
+        np.save(cached, image)
+    return image
 
 
-def _preprocess(image_float, resolution):
-    """Preprocesses an image for LWDETR inference.
+def run_reference_forward(pt_model, preprocessed, resolution):
+    pt_input = torch.from_numpy(preprocessed).permute(0, 3, 1, 2)
+    mask = torch.zeros((1, resolution, resolution), dtype=torch.bool)
+    with torch.no_grad():
+        outputs = pt_model.model.model(NestedTensor(pt_input, mask))
+    return outputs
 
-    Pipeline:
-      1. Convert (H, W, 3) float [0, 1] to (3, H, W) tensor.
-      2. Normalize with ImageNet mean / std.
-      3. Bilinear resize to ``(resolution, resolution)``.
 
-    Uses ``antialias=False`` so that the bilinear resize matches
-    ``tf.image.resize`` semantics, ensuring identical pixel-level
-    input across implementations.
+def compare_parity_field(pt_out, k_out, key, tag, label, tolerance):
+    reference = pt_out[key].cpu().numpy()
+    difference = np.abs(reference - ops.convert_to_numpy(k_out[key]))
+    summary = f"max: {difference.max():.6e}, mean: {difference.mean():.6e}"
+    print(f"\n  [{tag}] {label} - {summary} (tol: {tolerance:.0e})")
+    message = f"[{tag}] {label} mean diff {difference.mean():.6e} > {tolerance:.0e}"  # fmt: skip
+    assert difference.mean() < tolerance, message
 
-    Args:
-        image_float: (H, W, 3) float32 array in [0, 1].
-        resolution (int): Target spatial resolution.
 
-    Returns:
-        numpy.ndarray: (1, H, W, 3) float32 preprocessed image.
-    """
+def preprocess_image(image_float, resolution):
+    # antialias=False keeps the resize matching tf.image.resize semantics
     t = F_tv.to_tensor(image_float)  # (3,H,W)
-    t = F_tv.normalize(t, IMAGENET_MEANS.tolist(), IMAGENET_STDS.tolist())  # normalise
+    means = IMAGENET_MEANS.tolist()
+    stds = IMAGENET_STDS.tolist()
+    t = F_tv.normalize(t, means, stds)  # normalise
     t = F_tv.resize(t, [resolution, resolution], antialias=False)  # resize
     return t.unsqueeze(0).permute(0, 2, 3, 1).numpy()  # (1,H,W,3)
 
 
-def _print_detections(scores, labels, header="", threshold=0.3):
-    """Print detections above *threshold*."""
+def print_detections(scores, labels, header="", threshold=0.3):
     keep = scores > threshold
-    s = scores[keep]
-    l = labels[keep]
-    order = np.argsort(-s)
+    kept_scores, kept_labels = scores[keep], labels[keep]
+    order = np.argsort(-kept_scores)
     prefix = f"  [{header}]" if header else "  "
     print(f"{prefix} Detections (threshold={threshold:.2f}):")
     if len(order) == 0:
         print("    (none)")
-        return
-    for idx in order:
-        cls_id = int(l[idx])
-        cls_name = COCO_CLASSES.get(cls_id, f"class_{cls_id}")
-        conf = float(s[idx]) * 100
-        print(f"    {cls_name:20s}  {conf:5.1f}%  (class {cls_id})")
+    for index in order:
+        class_id = int(kept_labels[index])
+        class_name = COCO_CLASSES.get(class_id, f"class_{class_id}")
+        confidence = float(kept_scores[index]) * 100
+        print(f"    {class_name:20s}  {confidence:5.1f}%  (class {class_id})")
 
 
-def _run_keras_detection(keras_lwdetr, image_float, resolution, num_select=300):
-    """Runs LWDETR inference and post-processing on a single image.
-
-    Args:
-        keras_lwdetr: Built Keras LWDETR model.
-        image_float: (H, W, 3) float32 image in [0, 1].
-        resolution (int): Model input resolution.
-        num_select (int): Number of top detections to return.
-
-    Returns:
-        tuple: (scores, labels, boxes) numpy arrays for the first image.
-    """
-    preprocessed = _preprocess(image_float, resolution)
-    raw = keras_lwdetr(preprocessed, training=False)
+def run_keras_detection(keras_lwdetr, image_float, resolution, num_select=300):
+    preprocessed = preprocess_image(image_float, resolution)
+    raw = apply_lwdetr(keras_lwdetr, preprocessed, training=False)
     H, W = image_float.shape[:2]
-    pp = PostProcess(num_select=num_select)
+    pp = functools.partial(post_process, num_select=num_select)
     scores, labels, boxes = pp(
         raw,
         ops.convert_to_tensor(np.array([[H, W]], dtype="float32")),
@@ -675,10 +562,9 @@ def _run_keras_detection(keras_lwdetr, image_float, resolution, num_select=300):
 
 @pytest.fixture(scope="session")
 def coco_images():
-    """Session-scoped: download all test COCO images as float32 [0,1]."""
     images = {}
     for name, info in COCO_IMAGES.items():
-        arr = _download_coco_image(info["id"], info["url"])
+        arr = download_coco_image(info["id"], info["url"])
         images[name] = arr.astype("float32") / 255.0
     return images
 
@@ -686,15 +572,9 @@ def coco_images():
 # Phase 1: Build Keras LWDETR, port weights, verify output parity
 
 
-def _force_eager_attention(pt_model):
-    """Replaces SDPA attention with eager (manual) attention.
-
-    SDPA may use kernel-level optimizations (Flash-Attention,
-    memory-efficient) that produce slightly different floating-point
-    results than the manual ``matmul -> softmax -> matmul`` path used
-    in the Keras implementation. Switching to the eager path aligns
-    both forward passes and keeps the parity diff below 1e-4.
-    """
+def force_eager_attention(pt_model):
+    # Eager attention matches the Keras matmul -> softmax -> matmul path;
+    # SDPA kernels diverge in FP and break the sub-1e-4 parity check.
     backbone = pt_model.model.model.backbone[0]
     encoder_layers = backbone.encoder.encoder.encoder.layer
     config = backbone.encoder.encoder.config
@@ -714,16 +594,7 @@ def _force_eager_attention(pt_model):
     print(f"  Forced eager attention on {patched} encoder layers")
 
 
-def _build_and_port_variant(variant_name):
-    """Builds both reference and Keras models and transfers weights.
-
-    Args:
-        variant_name (str): Key in ``MODEL_CONFIGS``.
-
-    Returns:
-        tuple: (reference_model, keras_model, config) ready for parity
-            testing.
-    """
+def build_and_port_variant(variant_name):
     config = MODEL_CONFIGS[variant_name]
 
     # 1. Instantiate reference model (auto-downloads weights)
@@ -737,7 +608,7 @@ def _build_and_port_variant(variant_name):
 
     # Force eager attention to match the Keras matmul -> softmax ->
     # matmul sequence, eliminating attention-kernel FP divergence.
-    _force_eager_attention(pt_model)
+    force_eager_attention(pt_model)
 
     # 2. Build Keras LWDETR
     print(f"  Building Keras LWDETR for {variant_name}...")
@@ -750,27 +621,23 @@ def _build_and_port_variant(variant_name):
     return pt_model, keras_model, config
 
 
-@pytest.mark.skipif(not HAS_TORCH, reason="Reference implementation not installed")
-class TestPortingParity:
-    """Verifies weight transfer parity for each LWDETR detection variant.
+_NO_TORCH_REASON = "Reference implementation not installed"
 
-    For each variant: transfers weights to a Keras LWDETR model, verifies
-    that forward-pass outputs match within tolerance on COCO images, then
-    saves the validated weights.
-    """
+
+@pytest.mark.skipif(not HAS_TORCH, reason=_NO_TORCH_REASON)
+class TestPortingParity:
 
     @pytest.fixture(
         scope="class",
         params=[v for v in AVAILABLE_VARIANTS],
     )
     def variant(self, request, coco_images):
-        """Builds one model variant per class and tears down after tests."""
         name = request.param
         print(f"\n{'=' * 60}")
         print(f"  Building variant: {name}")
         print(f"{'=' * 60}")
 
-        pt_model, keras_model, config = _build_and_port_variant(name)
+        pt_model, keras_model, config = build_and_port_variant(name)
 
         yield {
             "name": name,
@@ -788,74 +655,38 @@ class TestPortingParity:
 
     @pytest.mark.parametrize("image_name", list(COCO_IMAGES.keys()))
     def test_forward_parity(self, variant, image_name):
-        """Verifies raw logits and boxes match within mean-diff tolerance."""
-        name = variant["name"]
-        pt_model = variant["pt_model"]
-        keras_model = variant["keras_model"]
         config = variant["config"]
-        img = variant["images"][image_name]
-        res = config["resolution"]
-
-        preprocessed = _preprocess(img, res)
-
-        # Reference forward pass
-        pt_input = torch.from_numpy(preprocessed).permute(0, 3, 1, 2)
-        mask = torch.zeros((1, res, res), dtype=torch.bool)
-        samples = NestedTensor(pt_input, mask)
-        with torch.no_grad():
-            pt_out = pt_model.model.model(samples)
-
-        # Keras forward
-        k_out = keras_model(preprocessed, training=False)
-
-        pt_logits = pt_out["pred_logits"].cpu().numpy()
-        k_logits = ops.convert_to_numpy(k_out["pred_logits"])
-        diff_logits = np.abs(pt_logits - k_logits)
-
-        pt_boxes = pt_out["pred_boxes"].cpu().numpy()
-        k_boxes = ops.convert_to_numpy(k_out["pred_boxes"])
-        diff_boxes = np.abs(pt_boxes - k_boxes)
-
-        # Per-variant tolerance (some configs have inherently higher
-        # FP diff due to non-standard patch sizes)
-        logits_tol = config.get("logits_mean_tol", 1e-4)
-        boxes_tol = config.get("boxes_mean_tol", 1e-4)
-
-        print(
-            f"\n  [{name}/{image_name}] Logits — "
-            f"max: {diff_logits.max():.6e}, mean: {diff_logits.mean():.6e}"
-            f" (tol: {logits_tol:.0e})"
-        )
-        print(
-            f"  [{name}/{image_name}] Boxes  — "
-            f"max: {diff_boxes.max():.6e}, mean: {diff_boxes.mean():.6e}"
-            f" (tol: {boxes_tol:.0e})"
-        )
-
-        assert diff_logits.mean() < logits_tol, (
-            f"[{name}/{image_name}] Logits mean diff "
-            f"{diff_logits.mean():.6e} > {logits_tol:.0e}"
-        )
-        assert diff_boxes.mean() < boxes_tol, (
-            f"[{name}/{image_name}] Boxes mean diff "
-            f"{diff_boxes.mean():.6e} > {boxes_tol:.0e}"
-        )
+        resolution = config["resolution"]
+        image = variant["images"][image_name]
+        preprocessed = preprocess_image(image, resolution)
+        args = (variant["pt_model"], preprocessed, resolution)
+        pt_out = run_reference_forward(*args)
+        keras_model = variant["keras_model"]
+        k_out = apply_lwdetr(keras_model, preprocessed, training=False)
+        tag = f"{variant['name']}/{image_name}"
+        # Some configs carry inherently higher FP diff because of their
+        # non-standard patch sizes, so tolerances are per variant.
+        tolerance = config.get("logits_mean_tol", 1e-4)
+        args = (pt_out, k_out, "pred_logits", tag, "Logits")
+        compare_parity_field(*args, tolerance)
+        tolerance = config.get("boxes_mean_tol", 1e-4)
+        args = (pt_out, k_out, "pred_boxes", tag, "Boxes")
+        compare_parity_field(*args, tolerance)
 
     @pytest.mark.parametrize("image_name", list(COCO_IMAGES.keys()))
     def test_detects_expected_objects(self, variant, image_name):
-        """Verifies Keras model detects every expected COCO class."""
         name = variant["name"]
         keras_model = variant["keras_model"]
         config = variant["config"]
-        img = variant["images"][image_name]
+        image = variant["images"][image_name]
         res = config["resolution"]
         expected = COCO_IMAGES[image_name]["expected_classes"]
 
-        scores, labels, _ = _run_keras_detection(
-            keras_model, img, res, config["num_queries"]
+        scores, labels, _ = run_keras_detection(
+            keras_model, image, res, config["num_queries"]
         )
 
-        _print_detections(scores, labels, f"{name}/{image_name}", threshold=0.3)
+        print_detections(scores, labels, f"{name}/{image_name}", threshold=0.3)
 
         detected = set(labels[scores > 0.3].tolist())
         for cls_id in expected:
@@ -866,7 +697,6 @@ class TestPortingParity:
             )
 
     def test_save_weights(self, variant):
-        """Saves .keras and .weights.h5 for a variant that passed parity."""
         if not HAS_TORCH:
             pytest.skip("PyTorch not available")
 
@@ -886,7 +716,8 @@ class TestPortingParity:
         print(f"    .h5    -> {h5_path}")
         keras_model.save_weights(h5_path)
 
-        assert os.path.exists(keras_path), f".keras file not found: {keras_path}"
+        keras_msg = f".keras file not found: {keras_path}"
+        assert os.path.exists(keras_path), keras_msg
         assert os.path.exists(h5_path), f".h5 file not found: {h5_path}"
 
         kb = os.path.getsize(keras_path) / 1024
@@ -900,19 +731,12 @@ class TestPortingParity:
 
 
 class TestReloadH5Weights:
-    """Validates detection after reloading saved .h5 weights.
-
-    Builds a fresh Keras LWDETR model, loads ``.weights.h5`` (no
-    reference implementation needed), and verifies detection on COCO
-    images.
-    """
 
     @pytest.fixture(
         scope="class",
         params=list(MODEL_CONFIGS.keys()),
     )
     def reloaded_model(self, request, coco_images):
-        """Builds a fresh Keras LWDETR and loads saved .h5 weights."""
         name = request.param
         config = MODEL_CONFIGS[name]
         save_key = config["save_key"]
@@ -920,7 +744,8 @@ class TestReloadH5Weights:
 
         if not os.path.exists(h5_path):
             pytest.skip(
-                f"{h5_path} not found — Phase 2 may have been skipped or failed"
+                f"{h5_path} not found — Phase 2 may have "
+                "been skipped or failed"
             )
 
         print(f"\n{'=' * 60}")
@@ -929,8 +754,8 @@ class TestReloadH5Weights:
 
         keras_model = build_keras_lwdetr(config)
 
-        # Load verified .h5 weights
-        keras_model.load_weights(h5_path)
+        # Load verified .h5 weights (legacy or functional format)
+        load_lwdetr_checkpoint(keras_model, h5_path)
         print(f"  Loaded weights from {h5_path}")
 
         yield {
@@ -945,19 +770,18 @@ class TestReloadH5Weights:
 
     @pytest.mark.parametrize("image_name", list(COCO_IMAGES.keys()))
     def test_h5_detects_expected_objects(self, reloaded_model, image_name):
-        """Verifies expected objects are detected after .h5 reload."""
         name = reloaded_model["name"]
         keras_model = reloaded_model["keras_model"]
         config = reloaded_model["config"]
-        img = reloaded_model["images"][image_name]
+        image = reloaded_model["images"][image_name]
         res = config["resolution"]
         expected = COCO_IMAGES[image_name]["expected_classes"]
 
-        scores, labels, _ = _run_keras_detection(
-            keras_model, img, res, config["num_queries"]
+        scores, labels, _ = run_keras_detection(
+            keras_model, image, res, config["num_queries"]
         )
 
-        _print_detections(
+        print_detections(
             scores, labels, f"h5-reload/{name}/{image_name}", threshold=0.3
         )
 
@@ -975,20 +799,20 @@ class TestReloadH5Weights:
 
     @pytest.mark.parametrize("image_name", list(COCO_IMAGES.keys()))
     def test_h5_has_confident_detections(self, reloaded_model, image_name):
-        """Verifies at least one detection above 0.3 after .h5 reload."""
         name = reloaded_model["name"]
         keras_model = reloaded_model["keras_model"]
         config = reloaded_model["config"]
-        img = reloaded_model["images"][image_name]
+        image = reloaded_model["images"][image_name]
         res = config["resolution"]
 
-        scores, labels, _ = _run_keras_detection(
-            keras_model, img, res, config["num_queries"]
+        scores, labels, _ = run_keras_detection(
+            keras_model, image, res, config["num_queries"]
         )
 
         n = int((scores > 0.3).sum())
         assert n > 0, (
-            f"[h5-reload/{name}/{image_name}] No detections > 0.3 " f"after .h5 reload"
+            f"[h5-reload/{name}/{image_name}] No detections > 0.3 "
+            f"after .h5 reload"
         )
 
 

@@ -1,4 +1,7 @@
-from typing import Any, Dict, List, Optional, Sequence, TypeVar
+import functools
+import os
+import time
+from types import SimpleNamespace
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -8,9 +11,9 @@ try:
     from tensorboard.summary.writer.event_file_writer import EventFileWriter
     from tensorboard.compat.proto.summary_pb2 import Summary
     from tensorboard.compat.proto.event_pb2 import Event
-    _HAS_TENSORBOARD = True
+    HAS_TENSORBOARD = True
 except ImportError:
-    _HAS_TENSORBOARD = False
+    HAS_TENSORBOARD = False
 
 try:
     import wandb
@@ -20,222 +23,170 @@ except ImportError:
 plt.ioff()
 
 PLOT_FILE_NAME = "metrics_plot.png"
-
-_T = TypeVar("_T")
-
-
-def safe_index(arr, idx):
-    """Return ``arr[idx]`` if *idx* is in bounds, else ``None``.
-
-    Args:
-        arr: Sequence to index into.
-        idx (int): Index.
-
-    Returns:
-        Element at *idx* or ``None``.
-    """
-    return arr[idx] if 0 <= idx < len(arr) else None
+TENSORBOARD_LOSS_TAGS = {"train_loss": "Loss/Train", "test_loss": "Loss/Test"}  # fmt: skip
+SERIES_KEYS = ("AP50", "AP", "AR")
+SERIES_VALUES = ("Average Precision @0.50", "Average Precision @0.50:0.95", "Average Recall @0.50:0.95")  # fmt: skip
+SERIES_TITLES = dict(zip(SERIES_KEYS, SERIES_VALUES))
 
 
-class MetricsPlotSink:
-    """Record training metrics and save them as a multi-panel plot.
+def read_index(values, index):
+    return values[index] if 0 <= index < len(values) else None
 
-    Produces a 2x2 figure with training/validation loss, AP@0.50,
-    AP@0.50:0.95, and AR@0.50:0.95 (base and EMA models).
 
-    Attributes:
-        output_dir (str): Directory where the plot image is saved.
-        history (list): Accumulated per-epoch metric dictionaries.
-    """
+def MetricsPlotSink(output_dir):
+    ns = SimpleNamespace()
+    ns.output_dir = output_dir
+    ns.history = []
+    ns.update = functools.partial(update_plot_history, ns)
+    ns.save = functools.partial(save_metrics_plot, ns)
+    return ns
 
-    def __init__(self, output_dir):
-        self.output_dir = output_dir
-        self.history = []
 
-    def update(self, values):
-        """Append a single epoch's metrics dictionary."""
-        self.history.append(values)
+def update_plot_history(ns, values):
+    ns.history.append(values)
 
-    def save(self):
-        """Generate and save the metrics plot to *output_dir*."""
-        if not self.history:
-            print("No data to plot.")
-            return
 
-        def get_array(key):
-            return np.array([h[key] for h in self.history if key in h])
+def read_history_array(ns, key):
+    return np.array([h[key] for h in ns.history if key in h])
 
-        # Extract arrays for each metric type
-        epochs = get_array('epoch')
-        train_loss = get_array('train_loss')
-        test_loss = get_array('test_loss')
-        
-        # Safely unpack COCO evaluation vectors (may be absent or varying length)
-        test_coco_eval = [h['test_coco_eval_bbox'] for h in self.history if 'test_coco_eval_bbox' in h]
-        ap50_90 = np.array([safe_index(x, 0) for x in test_coco_eval if x is not None], dtype=np.float32)
-        ap50 = np.array([safe_index(x, 1) for x in test_coco_eval if x is not None], dtype=np.float32)
-        ar50_90 = np.array([safe_index(x, 8) for x in test_coco_eval if x is not None], dtype=np.float32)
 
-        ema_coco_eval = [h['ema_test_coco_eval_bbox'] for h in self.history if 'ema_test_coco_eval_bbox' in h]
-        ema_ap50_90 = np.array([safe_index(x, 0) for x in ema_coco_eval if x is not None], dtype=np.float32)
-        ema_ap50 = np.array([safe_index(x, 1) for x in ema_coco_eval if x is not None], dtype=np.float32)
-        ema_ar50_90 = np.array([safe_index(x, 8) for x in ema_coco_eval if x is not None], dtype=np.float32)
+def read_history_list(ns, key):
+    return [h[key] for h in ns.history if key in h]
 
-        fig, axes = plt.subplots(2, 2, figsize=(18, 12))
 
-        # Subplot (0,0): Training and Validation Loss
-        if len(epochs) > 0:
-            if len(train_loss):
-                axes[0][0].plot(epochs, train_loss, label='Training Loss', marker='o', linestyle='-')
-            if len(test_loss):
-                axes[0][0].plot(epochs, test_loss, label='Validation Loss', marker='o', linestyle='--')
-            axes[0][0].set_title('Training and Validation Loss')
-            axes[0][0].set_xlabel('Epoch Number')
-            axes[0][0].set_ylabel('Loss Value')
-            axes[0][0].legend()
-            axes[0][0].grid(True)
+def read_coco_metric(coco_eval, index):
+    values = [read_index(x, index) for x in coco_eval if x is not None]
+    return np.array(values, dtype=np.float32)
 
-        # Subplot (0,1): Average Precision @0.50
-        if ap50.size > 0 or ema_ap50.size > 0:
-            if ap50.size > 0:
-                axes[0][1].plot(epochs[:len(ap50)], ap50, marker='o', linestyle='-', label='Base Model')
-            if ema_ap50.size > 0:
-                axes[0][1].plot(epochs[:len(ema_ap50)], ema_ap50, marker='o', linestyle='--', label='EMA Model')
-            axes[0][1].set_title('Average Precision @0.50')
-            axes[0][1].set_xlabel('Epoch Number')
-            axes[0][1].set_ylabel('AP50')
-            axes[0][1].legend()
-            axes[0][1].grid(True)
 
-        # Subplot (1,0): Average Precision @0.50:0.95
-        if ap50_90.size > 0 or ema_ap50_90.size > 0:
-            if ap50_90.size > 0:
-                axes[1][0].plot(epochs[:len(ap50_90)], ap50_90, marker='o', linestyle='-', label='Base Model')
-            if ema_ap50_90.size > 0:
-                axes[1][0].plot(epochs[:len(ema_ap50_90)], ema_ap50_90, marker='o', linestyle='--', label='EMA Model')
-            axes[1][0].set_title('Average Precision @0.50:0.95')
-            axes[1][0].set_xlabel('Epoch Number')
-            axes[1][0].set_ylabel('AP')
-            axes[1][0].legend()
-            axes[1][0].grid(True)
+def read_coco_series(ns, key):
+    coco_eval = read_history_list(ns, key)
+    indexes = (0, 1, 8)
+    return [read_coco_metric(coco_eval, index) for index in indexes]
 
-        # Subplot (1,1): Average Recall @0.50:0.95
-        if ar50_90.size > 0 or ema_ar50_90.size > 0:
-            if ar50_90.size > 0:
-                axes[1][1].plot(epochs[:len(ar50_90)], ar50_90, marker='o', linestyle='-', label='Base Model')
-            if ema_ar50_90.size > 0:
-                axes[1][1].plot(epochs[:len(ema_ar50_90)], ema_ar50_90, marker='o', linestyle='--', label='EMA Model')
-            axes[1][1].set_title('Average Recall @0.50:0.95')
-            axes[1][1].set_xlabel('Epoch Number')
-            axes[1][1].set_ylabel('AR')
-            axes[1][1].legend()
-            axes[1][1].grid(True)
 
+def draw_metrics_figure(ns, epochs, base, ema):
+    figure, axes = plt.subplots(2, 2, figsize=(18, 12))
+    train_loss = read_history_array(ns, 'train_loss')
+    test_loss = read_history_array(ns, 'test_loss')
+    plot_loss_axes(axes[0][0], epochs, train_loss, test_loss)
+    plot_metric_series(axes[0][1], epochs, base[1], ema[1], 'AP50')
+    plot_metric_series(axes[1][0], epochs, base[0], ema[0], 'AP')
+    plot_metric_series(axes[1][1], epochs, base[2], ema[2], 'AR')
+    return figure
+
+
+def save_metrics_plot(ns):
+    if not ns.history:
+        print("No data to plot.")
+    else:
+        epochs = read_history_array(ns, 'epoch')
+        base = read_coco_series(ns, 'test_coco_eval_bbox')
+        ema = read_coco_series(ns, 'ema_test_coco_eval_bbox')
+        figure = draw_metrics_figure(ns, epochs, base, ema)
         plt.tight_layout()
-        plt.savefig(f"{self.output_dir}/{PLOT_FILE_NAME}")
-        plt.close(fig)
-        print(f"Results saved to {self.output_dir}/{PLOT_FILE_NAME}")
+        plt.savefig(f"{ns.output_dir}/{PLOT_FILE_NAME}")
+        plt.close(figure)
+        print(f"Results saved to {ns.output_dir}/{PLOT_FILE_NAME}")
 
 
-class MetricsTensorBoardSink:
-    """Log training metrics to TensorBoard.
+def plot_loss_axes(ax, epochs, train_loss, test_loss):
+    if len(epochs) > 0:
+        if len(train_loss):
+            style = dict(label='Training Loss', marker='o', linestyle='-')
+            ax.plot(epochs, train_loss, **style)
+        if len(test_loss):
+            style = dict(label='Validation Loss', marker='o', linestyle='--')
+            ax.plot(epochs, test_loss, **style)
+        ax.set_title('Training and Validation Loss')
+        ax.set_xlabel('Epoch Number')
+        ax.set_ylabel('Loss Value')
+        ax.legend()
+        ax.grid(True)
 
-    Uses the standalone ``tensorboard`` package (no deep-learning
-    framework dependency). Falls back silently when TensorBoard is
-    not installed.
 
-    Attributes:
-        _output_dir (str): Event-log directory.
-        _writer: ``EventFileWriter`` instance, or ``None``.
-    """
+def plot_metric_series(ax, epochs, base, ema, ylabel):
+    if base.size > 0 or ema.size > 0:
+        if base.size > 0:
+            style = dict(marker='o', linestyle='-', label='Base Model')
+            ax.plot(epochs[:len(base)], base, **style)
+        if ema.size > 0:
+            style = dict(marker='o', linestyle='--', label='EMA Model')
+            ax.plot(epochs[:len(ema)], ema, **style)
+        ax.set_title(SERIES_TITLES[ylabel])
+        ax.set_xlabel('Epoch Number')
+        ax.set_ylabel(ylabel)
+        ax.legend()
+        ax.grid(True)
 
-    def __init__(self, output_dir):
-        self._output_dir = output_dir
-        self._writer = None
-        if _HAS_TENSORBOARD:
-            try:
-                import os
-                os.makedirs(output_dir, exist_ok=True)
-                self._writer = EventFileWriter(output_dir)
-                print("TensorBoard logging initialized.")
-            except Exception:
-                self._writer = None
-                print("Unable to initialize TensorBoard. Logging is turned off.")
-        else:
-            print("TensorBoard package not installed. Logging is turned off.")
 
-    # -- helpers -----------------------------------------------------------
+def MetricsTensorBoardSink(output_dir):
+    ns = SimpleNamespace()
+    ns.output_dir = output_dir
+    ns.writer = None
+    if HAS_TENSORBOARD:
+        try:
+            os.makedirs(output_dir, exist_ok=True)
+            ns.writer = EventFileWriter(output_dir)
+            print("TensorBoard logging initialized.")
+        except Exception:
+            ns.writer = None
+            msg = "Unable to initialize TensorBoard. Logging is turned off."
+            print(msg)
+    else:
+        print("TensorBoard package not installed. Logging is turned off.")
+    ns.add_scalar = functools.partial(add_tensorboard_scalar, ns)
+    ns.update = functools.partial(update_tensorboard_sink, ns)
+    ns.close = functools.partial(close_tensorboard_sink, ns)
+    return ns
 
-    def _add_scalar(self, tag, value, step):
-        """Write a single scalar summary event."""
-        if self._writer is None:
-            return
-        import time as _time
+
+def add_tensorboard_scalar(ns, tag, value, step):
+    if ns.writer is not None:
         summary = Summary(value=[Summary.Value(tag=tag, simple_value=value)])
-        event = Event(summary=summary, wall_time=_time.time(), step=step)
-        self._writer.add_event(event)
+        event = Event(summary=summary, wall_time=time.time(), step=step)
+        ns.writer.add_event(event)
 
-    # -- public API --------------------------------------------------------
 
-    def update(self, values):
-        """Log one epoch's metrics to TensorBoard."""
-        if self._writer is None:
-            return
-
+def update_tensorboard_sink(ns, values):
+    if ns.writer is not None:
         epoch = values.get('epoch', 0)
+        for key, tag in TENSORBOARD_LOSS_TAGS.items():
+            if key in values:
+                ns.add_scalar(tag, values[key], epoch)
+        coco_eval = values.get('test_coco_eval_bbox')
+        if coco_eval is not None and read_index(coco_eval, 0) is not None:
+            ns.add_scalar("Metrics/Base/AP50_90", coco_eval[0], epoch)
+        ns.writer.flush()
 
-        if 'train_loss' in values:
-            self._add_scalar("Loss/Train", values['train_loss'], epoch)
-        if 'test_loss' in values:
-            self._add_scalar("Loss/Test", values['test_loss'], epoch)
 
-        if 'test_coco_eval_bbox' in values:
-            coco_eval = values['test_coco_eval_bbox']
-            if safe_index(coco_eval, 0) is not None:
-                self._add_scalar("Metrics/Base/AP50_90", coco_eval[0], epoch)
+def close_tensorboard_sink(ns):
+    if ns.writer is not None:
+        ns.writer.close()
+        ns.writer = None
 
-        self._writer.flush()
 
-    def close(self):
-        """Flush and close the TensorBoard writer."""
-        if self._writer is not None:
-            self._writer.close()
-            self._writer = None
+def MetricsWandBSink(output_dir, project=None, run=None, config=None):
+    ns = SimpleNamespace()
+    ns.output_dir = output_dir
+    if wandb:
+        keys = ("project", "name", "config", "dir")
+        values = (project, run, config, output_dir)
+        ns.run = wandb.init(**dict(zip(keys, values)))
+        print("W&B logging initialized.")
+    else:
+        ns.run = None
+        print("Unable to initialize W&B. Logging is turned off.")
+    ns.update = functools.partial(update_wandb_sink, ns)
+    ns.close = functools.partial(close_wandb_sink, ns)
+    return ns
 
-class MetricsWandBSink:
-    """Log training metrics to Weights & Biases.
 
-    Initializes a W&B run on construction and logs metrics via
-    ``wandb.log``. Falls back silently when the ``wandb`` package is
-    not installed.
-
-    Attributes:
-        output_dir (str): Local artifact directory.
-        run: Active ``wandb.Run`` instance, or ``None``.
-    """
-
-    def __init__(self, output_dir, project=None, run=None, config=None):
-        self.output_dir = output_dir
-        if wandb:
-            self.run = wandb.init(
-                project=project,
-                name=run,
-                config=config,
-                dir=output_dir
-            )
-            print(f"W&B logging initialized.")
-        else:
-            self.run = None
-            print("Unable to initialize W&B. Logging is turned off.")
-
-    def update(self, values):
-        """Log one epoch's metrics to W&B."""
-        if not wandb or not self.run:
-            return
-        
+def update_wandb_sink(ns, values):
+    if wandb and ns.run:
         wandb.log(values)
 
-    def close(self):
-        """Finish the W&B run."""
-        if wandb and self.run:
-            self.run.finish()
+
+def close_wandb_sink(ns):
+    if wandb and ns.run:
+        ns.run.finish()

@@ -34,7 +34,7 @@ from paz.models.foundation.dinov2.models.windowed_vision_transformer import (
     interpolate_pos_encoding,
     EmbedArgs,
 )
-from paz.models.detection.dino_v2_object_detection.models.backbone.dinov2 import (
+from paz.models.detection.dino_v2_object_detection.models.backbone.dinov2 import (  # fmt: skip
     DinoV2,
 )
 
@@ -45,7 +45,7 @@ from rfdetr.models.backbone.dinov2_with_windowed_attn import (
     WindowedDinov2WithRegistersEncoder as PtEncoder,
 )
 
-from paz.models.detection.dino_v2_object_detection.models.backbone.backbone_weights_porting_utils import (  # noqa: E402
+from paz.models.detection.dino_v2_object_detection.models.backbone.backbone_weights_porting_utils import (  # noqa: E402  # fmt: skip
     assert_close,
     hwc_to_chw,
     transfer_patch_embeddings,
@@ -53,8 +53,6 @@ from paz.models.detection.dino_v2_object_detection.models.backbone.backbone_weig
     transfer_encoder,
 )
 
-
-# ─── Functional unit builders ────────────────────────────────
 
 def build_patch_model(image_size=56, patch_size=14, hidden_size=64, num_register_tokens=0, num_windows=1):  # fmt: skip
     pixels = Input((image_size, image_size, 3), name="pixels")
@@ -93,7 +91,8 @@ def make_pt_config(hidden_size=64, num_hidden_layers=2, num_attention_heads=4, m
         num_attention_heads=num_attention_heads, mlp_ratio=mlp_ratio,
         image_size=image_size, patch_size=patch_size,
         num_register_tokens=num_register_tokens, num_windows=num_windows,
-        window_block_indexes=window_block_indexes, use_swiglu_ffn=use_swiglu_ffn,
+        window_block_indexes=window_block_indexes,
+        use_swiglu_ffn=use_swiglu_ffn,
         layerscale_value=layerscale_value, drop_path_rate=drop_path_rate,
         hidden_act="gelu", out_features=[f"stage{num_hidden_layers}"],
         out_indices=[num_hidden_layers],
@@ -101,8 +100,6 @@ def make_pt_config(hidden_size=64, num_hidden_layers=2, num_attention_heads=4, m
     cfg._attn_implementation = "eager"
     return cfg
 
-
-# ─── Patch embeddings ────────────────────────────────────────
 
 def test_patch_embeddings_output_shape():
     model = build_patch_model(hidden_size=64, num_windows=1)
@@ -125,14 +122,16 @@ def test_patch_embeddings_parity():
 
 
 def test_register_tokens_insertion():
-    model = build_patch_model(hidden_size=64, num_register_tokens=4, num_windows=1)
+    kwargs = dict(hidden_size=64, num_register_tokens=4, num_windows=1)
+    model = build_patch_model(**kwargs)
     x = np.random.randn(1, 56, 56, 3).astype(np.float32)
     out = model(x, training=False)
     assert ops.shape(out)[1] == 21
 
 
 def test_no_register_tokens():
-    model = build_patch_model(hidden_size=64, num_register_tokens=0, num_windows=1)
+    kwargs = dict(hidden_size=64, num_register_tokens=0, num_windows=1)
+    model = build_patch_model(**kwargs)
     x = np.random.randn(1, 56, 56, 3).astype(np.float32)
     out = model(x, training=False)
     assert ops.shape(out)[1] == 17
@@ -143,7 +142,8 @@ def test_register_tokens_parity():
         hidden_size=64, image_size=56, patch_size=14, num_register_tokens=4
     )
     pt = PtEmbeddings(cfg).eval()
-    model = build_patch_model(hidden_size=64, num_register_tokens=4, num_windows=1)
+    kwargs = dict(hidden_size=64, num_register_tokens=4, num_windows=1)
+    model = build_patch_model(**kwargs)
     transfer_patch_embeddings(pt, model, "embeddings")
 
     x_np = np.random.randn(1, 56, 56, 3).astype(np.float32)
@@ -169,10 +169,9 @@ def test_interpolate_pos_encoding_different_size():
     assert tuple(result.shape) == (None, 65, 64)
 
 
-# ─── Windowed embeddings ─────────────────────────────────────
-
 def test_windowed_embeddings_shape():
-    model = build_patch_model(hidden_size=64, num_windows=2, num_register_tokens=0)
+    kwargs = dict(hidden_size=64, num_windows=2, num_register_tokens=0)
+    model = build_patch_model(**kwargs)
     x = np.random.randn(1, 56, 56, 3).astype(np.float32)
     out = model(x, training=False)
     assert ops.shape(out) == (4, 5, 64)
@@ -184,7 +183,8 @@ def test_windowed_embeddings_parity():
         num_windows=2, num_register_tokens=0,
     )
     pt = PtEmbeddings(cfg).eval()
-    model = build_patch_model(hidden_size=64, num_windows=2, num_register_tokens=0)
+    kwargs = dict(hidden_size=64, num_windows=2, num_register_tokens=0)
+    model = build_patch_model(**kwargs)
     transfer_patch_embeddings(pt, model, "embeddings")
 
     x_np = np.random.randn(1, 56, 56, 3).astype(np.float32)
@@ -200,7 +200,8 @@ def test_windowed_with_registers_parity():
         num_windows=2, num_register_tokens=4,
     )
     pt = PtEmbeddings(cfg).eval()
-    model = build_patch_model(hidden_size=64, num_windows=2, num_register_tokens=4)
+    kwargs = dict(hidden_size=64, num_windows=2, num_register_tokens=4)
+    model = build_patch_model(**kwargs)
     transfer_patch_embeddings(pt, model, "embeddings")
 
     x_np = np.random.randn(1, 56, 56, 3).astype(np.float32)
@@ -209,8 +210,6 @@ def test_windowed_with_registers_parity():
         pt_out = pt(x_pt)
     assert_close(pt_out, model(x_np, training=False))
 
-
-# ─── Single layer ────────────────────────────────────────────
 
 def test_layer_no_windowing_parity():
     cfg = make_pt_config(hidden_size=64, num_attention_heads=4, num_windows=1)
@@ -247,8 +246,6 @@ def test_layer_windowed_attention_parity():
         pt_out = pt_l(torch.from_numpy(x_np), run_full_attention=False)[0]
     assert_close(pt_out, model(x_np, training=False))
 
-
-# ─── Encoder ─────────────────────────────────────────────────
 
 def test_encoder_parity():
     cfg = make_pt_config(
@@ -292,8 +289,6 @@ def test_encoder_mixed_windowing_parity():
     assert_close(pt_out.last_hidden_state, model(x_np, training=False)[-1])
 
 
-# ─── Full model ──────────────────────────────────────────────
-
 def test_model_output_shape():
     model = WindowedDinov2Model(
         image_size=56, patch_size=14, hidden_size=64,
@@ -328,29 +323,29 @@ def test_model_windowed_shape():
     assert ops.shape(seq_out) == (4, 5, 64)
 
 
-# ─── Builder functions ───────────────────────────────────────
-
 def test_builder_dinov2_windowed_small():
     model = dinov2_windowed_small(img_size=56, num_windows=1)
-    assert model.get_layer("encoder_layer_0_attention_qkv").kernel.shape[0] == 384
+    layer = model.get_layer("encoder_layer_0_attention_qkv")
+    assert layer.kernel.shape[0] == 384
 
 
 def test_builder_dinov2_windowed_base():
     model = dinov2_windowed_base(img_size=56, num_windows=1)
-    assert model.get_layer("encoder_layer_0_attention_qkv").kernel.shape[0] == 768
+    layer = model.get_layer("encoder_layer_0_attention_qkv")
+    assert layer.kernel.shape[0] == 768
 
 
 def test_builder_dinov2_windowed_large():
     model = dinov2_windowed_large(img_size=56, num_windows=1)
-    assert model.get_layer("encoder_layer_0_attention_qkv").kernel.shape[0] == 1024
+    layer = model.get_layer("encoder_layer_0_attention_qkv")
+    assert layer.kernel.shape[0] == 1024
 
 
 def test_builder_dinov2_windowed_giant():
     model = dinov2_windowed_giant(img_size=56, num_windows=1)
-    assert model.get_layer("encoder_layer_0_attention_qkv").kernel.shape[0] == 1536
+    layer = model.get_layer("encoder_layer_0_attention_qkv")
+    assert layer.kernel.shape[0] == 1536
 
-
-# ─── DinoV2 wrapper ──────────────────────────────────────────
 
 def test_dinov2_wrapper_output_shapes():
     wrapper = DinoV2(
@@ -391,8 +386,6 @@ def test_dinov2_wrapper_windowed_shapes():
         assert ops.shape(out) == (1, 4, 4, 384)
 
 
-# ─── Different batch sizes ───────────────────────────────────
-
 @pytest.mark.parametrize("batch_size", [1, 2, 4])
 def test_different_batch_sizes(batch_size):
     model = build_patch_model(hidden_size=64, num_windows=1)
@@ -408,8 +401,6 @@ def test_different_batch_sizes_windowed(batch_size):
     out = model(x, training=False)
     assert ops.shape(out)[0] == batch_size * 4
 
-
-# ─── Config loading ──────────────────────────────────────────
 
 def test_dinov2_small_config():
     wrapper = DinoV2(

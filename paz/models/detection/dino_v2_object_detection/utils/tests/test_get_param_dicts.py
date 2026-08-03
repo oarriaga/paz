@@ -1,16 +1,13 @@
 import os
 import sys
 import pytest
-import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from get_param_dicts import (
     get_vit_lr_decay_rate,
     get_vit_weight_decay_rate,
     classify_variable,
-    compute_backbone_lr,
     build_lr_scale_map,
-    scale_gradients_by_lr,
 )
 
 
@@ -35,14 +32,13 @@ def test_classify_backbone():
     assert classify_variable("backbone/encoder/layer/0/kernel:0") == "backbone"
 
 def test_classify_decoder():
-    assert classify_variable("transformer/decoder/layers/0/kernel:0") == "decoder"
+    assert classify_variable("transformer/decoder/layers/0/kernel:0") == "decoder"  # fmt: skip
 
 def test_classify_head():
     assert classify_variable("class_embed/layers/0/kernel:0") == "other"
 
 
 def test_build_lr_scale_map_three_groups():
-    """build_lr_scale_map assigns different scales per component group."""
     vars_ = [
         _FakeVar("backbone.0.encoder.layer.5.attention.weight"),
         _FakeVar("transformer.decoder.layers.0.self_attn.weight"),
@@ -68,7 +64,6 @@ def test_build_lr_scale_map_three_groups():
 
 
 def test_vit_lr_decay_embeddings_is_strongest():
-    """Embedding layer (layer 0) should get the smallest LR multiplier."""
     embed = get_vit_lr_decay_rate(
         "backbone.0.encoder.embeddings.weight", 0.8, 12)
     last = get_vit_lr_decay_rate(
@@ -84,7 +79,6 @@ def test_vit_weight_decay_kernel_is_nonzero():
 
 
 def test_vit_decay_rates():
-    """Layer-wise LR decay for a HuggingFace-style block name."""
     rate = get_vit_lr_decay_rate(
         "backbone.0.encoder.layer.5.mlp.weight", lr_decay_rate=0.9,
         num_layers=12)

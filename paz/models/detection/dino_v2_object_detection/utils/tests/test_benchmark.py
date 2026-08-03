@@ -1,8 +1,6 @@
 import os
 import sys
-import shutil
 import tempfile
-import pytest
 import numpy as np
 
 # Dynamic import
@@ -27,7 +25,7 @@ def test_benchmark_run():
         
         # Dataset: list of images
         # 10 images of shape (10, 10, 3)
-        dataset = [np.random.rand(10, 10, 3).astype(np.float32) for _ in range(10)]
+        dataset = [np.random.rand(10, 10, 3).astype(np.float32) for _ in range(10)]  # fmt: skip
         
         # Run benchmark
         res = benchmark.benchmark(model, dataset, tmpdir)

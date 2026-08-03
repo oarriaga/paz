@@ -10,7 +10,7 @@ import early_stopping
 class TestEarlyStopping(unittest.TestCase):
     def test_improvement(self):
         model = MagicMock()
-        es = early_stopping.EarlyStoppingCallback(model, patience=2, min_delta=0.1)
+        es = early_stopping.EarlyStoppingCallback(model, patience=2, min_delta=0.1)  # fmt: skip
         
         # Initial call
         es.update({'test_coco_eval_bbox': [0.5]}) 
@@ -24,7 +24,7 @@ class TestEarlyStopping(unittest.TestCase):
         
     def test_no_improvement(self):
         model = MagicMock()
-        es = early_stopping.EarlyStoppingCallback(model, patience=2, min_delta=0.1)
+        es = early_stopping.EarlyStoppingCallback(model, patience=2, min_delta=0.1)  # fmt: skip
         
         es.update({'test_coco_eval_bbox': [0.5]})
         
@@ -45,21 +45,21 @@ class TestEarlyStopping(unittest.TestCase):
     def test_stop_trigger(self):
         model = MagicMock()
         model.stop_training = False
-        es = early_stopping.EarlyStoppingCallback(model, patience=1, min_delta=0.1)
+        es = early_stopping.EarlyStoppingCallback(model, patience=1, min_delta=0.1)  # fmt: skip
         
         es.update({'test_coco_eval_bbox': [0.5]})
-        es.update({'test_coco_eval_bbox': [0.5]}) # Counter = 1, >= patience 1 -> Trigger
+        es.update({'test_coco_eval_bbox': [0.5]}) # Counter = 1, >= patience 1 -> Trigger  # fmt: skip
         
-        # Since MagicMock accepts any attribute set, we check if stop_training was set to True
+        # Since MagicMock accepts any attribute set, we check if stop_training was set to True  # fmt: skip
         # Or if request_early_stop was called
         
-        # Our implementation verifies 'stop_training' attr existence first? No, checks `hasattr(model, 'stop_training')`
-        # Mocking hasattr on a Mock object is tricky. By default Mock objects return another Mock for attributes.
-        # So hasattr(model, 'stop_training') is likely False unless we configure it? 
-        # Actually hasattr checks if getattr succeeds. getattr(model, 'stop_training') returns a Mock, so it is "True".
+        # Our implementation verifies 'stop_training' attr existence first? No, checks `hasattr(model, 'stop_training')`  # fmt: skip
+        # Mocking hasattr on a Mock object is tricky. By default Mock objects return another Mock for attributes.  # fmt: skip
+        # So hasattr(model, 'stop_training') is likely False unless we configure it?   # fmt: skip
+        # Actually hasattr checks if getattr succeeds. getattr(model, 'stop_training') returns a Mock, so it is "True".  # fmt: skip
         
         # Let's configure model to have stop_training
-        pass # The logic in code: if hasattr(self.model, 'stop_training'): self.model.stop_training = True
+        pass # The logic in code: if hasattr(self.model, 'stop_training'): self.model.stop_training = True  # fmt: skip
         
         # Since we use unittest.mock, we can just assert logic.
         
@@ -69,7 +69,7 @@ class TestEarlyStopping(unittest.TestCase):
                 self.stop_training = False
                 
         model = SimpleModel()
-        es = early_stopping.EarlyStoppingCallback(model, patience=1, min_delta=0.1)
+        es = early_stopping.EarlyStoppingCallback(model, patience=1, min_delta=0.1)  # fmt: skip
         es.update({'test_coco_eval_bbox': [0.5]})
         es.update({'test_coco_eval_bbox': [0.5]})
         

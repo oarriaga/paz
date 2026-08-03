@@ -3,142 +3,85 @@ import torch
 
 
 def to_numpy(t):
-    """Convert a tensor from any framework to a NumPy array.
-
-    Args:
-        t: A PyTorch tensor, Keras/JAX tensor, or array-like.
-
-    Returns:
-        numpy.ndarray: The data as a NumPy array.
-    """
     if isinstance(t, torch.Tensor):
-        return t.detach().cpu().numpy()
+        result = t.detach().cpu().numpy()
     elif hasattr(t, "numpy"):
-        return t.numpy()
-    return np.array(t)
+        result = t.numpy()
+    else:
+        result = np.array(t)
+    return result
 
 
 def assert_allclose(a, b, atol=1e-5, rtol=1e-5):
-    """Assert element-wise near-equality between two tensors.
-
-    Args:
-        a: First tensor (any framework).
-        b: Second tensor (any framework).
-        atol (float): Absolute tolerance.
-        rtol (float): Relative tolerance.
-    """
-    a_np = to_numpy(a)
-    b_np = to_numpy(b)
-    np.testing.assert_allclose(a_np, b_np, atol=atol, rtol=rtol)
+    np.testing.assert_allclose(to_numpy(a), to_numpy(b), atol=atol, rtol=rtol)
 
 
-def copy_depthwise_conv_block(pt_block, keras_block):
-    """Transfer weights for a single DepthwiseConvBlock.
+def dense_weights(module):
+    kernel = module.weight.data.cpu().numpy().T
+    return [kernel, module.bias.data.cpu().numpy()]
 
-    Copies the depthwise convolution kernel and bias (transposing from
-    OIHW to HWIO layout), layer-norm parameters, pointwise dense
-    weights + bias, and the optional gamma scaling factor.
 
-    Args:
-        pt_block: Reference DepthwiseConvBlock with trained weights.
-        keras_block: Keras DepthwiseConvBlock to receive the weights.
-    """
+def norm_weights(module):
+    gamma = module.weight.data.cpu().numpy()
+    return [gamma, module.bias.data.cpu().numpy()]
+
+
+def copy_depthwise_conv_block(pt_block, keras_model, name):
     # Depthwise convolution: transpose (C,1,kH,kW) -> (kH,kW,C,1)
-    pt_w = pt_block.dwconv.weight.data.cpu().numpy()
-    pt_b = pt_block.dwconv.bias.data.cpu().numpy()
-    keras_w = np.transpose(pt_w, (2, 3, 0, 1))
-    keras_block.dwconv.set_weights([keras_w, pt_b])
-
-    # Layer normalisation
-    keras_block.norm.set_weights(
-        [pt_block.norm.weight.data.cpu().numpy(), pt_block.norm.bias.data.cpu().numpy()]
-    )
-
-    # Pointwise dense: transpose weight matrix for Dense convention
-    keras_block.pwconv1.set_weights(
-        [
-            pt_block.pwconv1.weight.data.cpu().numpy().T,
-            pt_block.pwconv1.bias.data.cpu().numpy(),
-        ]
-    )
-
-    # Optional per-channel gamma
-    if keras_block.gamma is not None and pt_block.gamma is not None:
-        keras_block.gamma.assign(pt_block.gamma.data.cpu().numpy())
+    kernel = pt_block.dwconv.weight.data.cpu().numpy()
+    bias = pt_block.dwconv.bias.data.cpu().numpy()
+    transposed = np.transpose(kernel, (2, 3, 0, 1))
+    keras_model.get_layer(f"{name}_dwconv").set_weights([transposed, bias])
+    norm = norm_weights(pt_block.norm)
+    keras_model.get_layer(f"{name}_norm").set_weights(norm)
+    pointwise = dense_weights(pt_block.pwconv1)
+    keras_model.get_layer(f"{name}_pwconv1").set_weights(pointwise)
+    copy_gamma(pt_block, keras_model, f"{name}_gamma")
 
 
-def copy_mlp_block(pt_block, keras_block):
-    """Transfer weights for a single MLPBlock.
-
-    Copies layer-norm parameters, two dense layers (with transposed
-    weight matrices), and the optional gamma scaling factor.
-
-    Args:
-        pt_block: Reference MLPBlock with trained weights.
-        keras_block: Keras MLPBlock to receive the weights.
-    """
-    # Layer normalisation
-    keras_block.norm_in.set_weights(
-        [
-            pt_block.norm_in.weight.data.cpu().numpy(),
-            pt_block.norm_in.bias.data.cpu().numpy(),
-        ]
-    )
-
-    # First dense layer (reference layers[0] -> Keras linear1)
-    keras_block.linear1.set_weights(
-        [
-            pt_block.layers[0].weight.data.cpu().numpy().T,
-            pt_block.layers[0].bias.data.cpu().numpy(),
-        ]
-    )
-
-    # Second dense layer (reference layers[2] -> Keras linear2)
-    keras_block.linear2.set_weights(
-        [
-            pt_block.layers[2].weight.data.cpu().numpy().T,
-            pt_block.layers[2].bias.data.cpu().numpy(),
-        ]
-    )
-
-    # Optional per-channel gamma
-    if keras_block.gamma is not None and pt_block.gamma is not None:
-        keras_block.gamma.assign(pt_block.gamma.data.cpu().numpy())
+def copy_mlp_block(pt_block, keras_model, name):
+    norm = norm_weights(pt_block.norm_in)
+    keras_model.get_layer(f"{name}_norm_in").set_weights(norm)
+    # Reference layers[0] -> linear1 and layers[2] -> linear2.
+    first = dense_weights(pt_block.layers[0])
+    keras_model.get_layer(f"{name}_linear1").set_weights(first)
+    second = dense_weights(pt_block.layers[2])
+    keras_model.get_layer(f"{name}_linear2").set_weights(second)
+    copy_gamma(pt_block, keras_model, f"{name}_gamma")
 
 
-def copy_segmentation_head(pt_head, keras_head):
-    """Transfer all weights from a reference SegmentationHead to Keras.
+def copy_gamma(pt_block, keras_model, name):
+    # gamma lives in an EinsumDense (its .kernel) when layer scaling is on,
+    # else an Identity with no kernel; assign un-transposed when both exist.
+    gamma_layer = keras_model.get_layer(name)
+    if pt_block.gamma is not None and hasattr(gamma_layer, "kernel"):
+        gamma_layer.kernel.assign(pt_block.gamma.data.cpu().numpy())
 
-    Copies depthwise conv blocks, the spatial-features 1x1 projection,
-    the query-features MLP block + projection, and the scalar bias.
 
-    Args:
-        pt_head: Reference SegmentationHead with trained weights.
-        keras_head: Keras SegmentationHead to receive the weights.
-    """
-    # Copy each depthwise convolution block
-    for pt_b, keras_b in zip(pt_head.blocks, keras_head.blocks):
-        copy_depthwise_conv_block(pt_b, keras_b)
-
-    # Spatial features 1x1 conv projection (skip if Identity)
+def copy_spatial_projection(pt_head, keras_model):
+    # Skipped when the reference head uses an Identity projection.
     if isinstance(pt_head.spatial_features_proj, torch.nn.Conv2d):
-        pt_w = pt_head.spatial_features_proj.weight.data.cpu().numpy()
-        pt_b = pt_head.spatial_features_proj.bias.data.cpu().numpy()
+        projection = pt_head.spatial_features_proj
+        kernel = projection.weight.data.cpu().numpy()
+        bias = projection.bias.data.cpu().numpy()
         # Transpose (out,in,kH,kW) -> (kH,kW,in,out)
-        keras_w = np.transpose(pt_w, (2, 3, 1, 0))
-        keras_head.spatial_features_proj.set_weights([keras_w, pt_b])
+        transposed = np.transpose(kernel, (2, 3, 1, 0))
+        layer = keras_model.get_layer("spatial_features_proj")
+        layer.set_weights([transposed, bias])
 
-    # Query features MLP block
-    copy_mlp_block(pt_head.query_features_block, keras_head.query_features_block)
 
-    # Query features dense projection (skip if Identity)
+def copy_query_projection(pt_head, keras_model):
     if isinstance(pt_head.query_features_proj, torch.nn.Linear):
-        keras_head.query_features_proj.set_weights(
-            [
-                pt_head.query_features_proj.weight.data.cpu().numpy().T,
-                pt_head.query_features_proj.bias.data.cpu().numpy(),
-            ]
-        )
+        weights = dense_weights(pt_head.query_features_proj)
+        keras_model.get_layer("query_features_proj").set_weights(weights)
 
-    # Scalar bias
-    keras_head.bias.assign(pt_head.bias.data.cpu().numpy())
+
+def copy_segmentation_head(pt_head, keras_model):
+    for index, pt_block in enumerate(pt_head.blocks):
+        copy_depthwise_conv_block(pt_block, keras_model, f"block_{index}")
+    copy_spatial_projection(pt_head, keras_model)
+    query_block = pt_head.query_features_block
+    copy_mlp_block(query_block, keras_model, "query_features_block")
+    copy_query_projection(pt_head, keras_model)
+    # Scalar bias lives in the EinsumDense (1,) kernel; assign un-transposed
+    keras_model.get_layer("bias").kernel.assign(pt_head.bias.data.cpu().numpy())

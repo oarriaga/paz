@@ -18,7 +18,6 @@ from get_param_dicts import (
     get_vit_weight_decay_rate,
     classify_variable,
     compute_backbone_lr,
-    build_lr_scale_map,
     scale_gradients_by_lr,
 )
 
@@ -33,7 +32,7 @@ ModelEma = _keras_utils.ModelEma
 # Import engine helpers
 _ENGINE_DIR = os.path.dirname(_UTILS_DIR)
 sys.path.insert(0, _ENGINE_DIR)
-from engine import build_lr_lambda, _clip_grad_norm
+from engine import build_lr_lambda, clip_grad_norm
 
 
 # ---------------------------------------------------------------------------
@@ -42,7 +41,6 @@ from engine import build_lr_lambda, _clip_grad_norm
 
 
 def _pytorch_dinov2_lr_decay_rate(name, lr_decay_rate=1.0, num_layers=12):
-    """Reproduce ``get_dinov2_lr_decay_rate`` from PyTorch backbone.py."""
     layer_id = num_layers + 1
     if name.startswith("backbone"):
         if "embeddings" in name:
@@ -54,7 +52,6 @@ def _pytorch_dinov2_lr_decay_rate(name, lr_decay_rate=1.0, num_layers=12):
 
 
 def _pytorch_dinov2_weight_decay_rate(name, weight_decay_rate=1.0):
-    """Reproduce ``get_dinov2_weight_decay_rate`` from PyTorch backbone.py."""
     keywords = ("gamma", "pos_embed", "rel_pos", "bias", "norm", "embeddings")
     if any(kw in name for kw in keywords):
         return 0.0
@@ -62,7 +59,6 @@ def _pytorch_dinov2_weight_decay_rate(name, weight_decay_rate=1.0):
 
 
 def _pytorch_ema_get_decay(decay, tau, updates):
-    """Reproduce ``ModelEma._get_decay`` from PyTorch utils.py."""
     if tau == 0:
         return decay
     return decay * (1 - math.exp(-updates / tau))
@@ -70,10 +66,6 @@ def _pytorch_ema_get_decay(decay, tau, updates):
 
 def _pytorch_backbone_lr(name, *, lr_encoder, lr_vit_layer_decay,
                           lr_component_decay, num_layers):
-    """Reproduce LR formula from PyTorch ``Backbone.get_named_param_lr_pairs``.
-
-    ``lr = lr_encoder × layer_decay(name) × lr_component_decay²``
-    """
     layer_decay = _pytorch_dinov2_lr_decay_rate(
         name, lr_decay_rate=lr_vit_layer_decay, num_layers=num_layers)
     return lr_encoder * layer_decay * (lr_component_decay ** 2)
@@ -219,7 +211,6 @@ def test_ema_decay_matches_pytorch(decay, tau, updates, desc):
 
 
 def _pytorch_lr_lambda_cosine(step, warmup_steps, total_steps):
-    """Reproduce the cosine LR lambda from PyTorch main.py."""
     if step < warmup_steps:
         return float(step) / float(max(1, warmup_steps))
     progress = float(step - warmup_steps) / float(
@@ -249,7 +240,7 @@ def test_lr_schedule_matches_pytorch(steps_per_epoch, epochs, warmup_epochs):
         keras_val = lr_lambda(step)
         pytorch_val = _pytorch_lr_lambda_cosine(step, warmup_steps, total_steps)
         assert keras_val == pytest.approx(pytorch_val, abs=1e-10), (
-            f"Mismatch at step {step}: keras={keras_val}, pytorch={pytorch_val}")
+            f"Mismatch at step {step}: keras={keras_val}, pytorch={pytorch_val}")  # fmt: skip
 
 
 # ---------------------------------------------------------------------------
@@ -258,7 +249,6 @@ def test_lr_schedule_matches_pytorch(steps_per_epoch, epochs, warmup_epochs):
 
 
 def _pytorch_weight_dict_keys(dec_layers, two_stage):
-    """Build the expected set of weight-dict keys per PyTorch lwdetr.py."""
     base = {"loss_ce", "loss_bbox", "loss_giou"}
     result = set(base)
     for i in range(dec_layers - 1):
@@ -269,10 +259,6 @@ def _pytorch_weight_dict_keys(dec_layers, two_stage):
 
 
 def test_weight_dict_no_cascading():
-    """Weight dict should have exactly (base × dec_layers) + encoder keys.
-
-    This reproduces the weight_dict construction logic from main.py
-    """
     # --- Reproduce the Keras weight_dict construction (from main.py) ---
     dec_layers = 3
     two_stage = True
@@ -307,8 +293,6 @@ def test_weight_dict_no_cascading():
 
 
 def test_gradient_clipping_global_norm():
-    """``_clip_grad_norm`` should reproduce PyTorch clip_grad_norm_ behaviour."""
-    import keras
     from keras import ops
 
     # Create fake gradients with known norm
@@ -319,7 +303,7 @@ def test_gradient_clipping_global_norm():
     total_norm = 5.0  # sqrt(9 + 16 + 0 + 0)
 
     # Clip to max_norm=2.5 → scale = 2.5 / 5.0 = 0.5
-    clipped = _clip_grad_norm([g1, g2], max_norm=2.5)
+    clipped = clip_grad_norm([g1, g2], max_norm=2.5)
     c1 = ops.convert_to_numpy(clipped[0])
     c2 = ops.convert_to_numpy(clipped[1])
 
@@ -328,13 +312,11 @@ def test_gradient_clipping_global_norm():
 
 
 def test_gradient_clipping_no_clip_when_small():
-    """Gradients below max_norm should not be modified."""
-    import keras
     from keras import ops
 
     g1 = ops.convert_to_tensor(
         np.array([0.01, 0.02], dtype="float32"))
-    clipped = _clip_grad_norm([g1], max_norm=1.0)
+    clipped = clip_grad_norm([g1], max_norm=1.0)
     c1 = ops.convert_to_numpy(clipped[0])
     np.testing.assert_allclose(c1, [0.01, 0.02], atol=1e-6)
 
@@ -345,8 +327,7 @@ def test_gradient_clipping_no_clip_when_small():
 
 
 def test_scale_gradients_by_lr():
-    """Gradient scaling should multiply each grad by its lr_scale."""
-    import keras
+    from keras import ops as _ops
 
     class FakeVar:
         def __init__(self, name):
@@ -362,7 +343,6 @@ def test_scale_gradients_by_lr():
         "class_embed/layers/0/kernel:0": {"lr_scale": 1.0, "wd": 1e-4},
     }
 
-    from keras import ops as _ops
     grads = [
         _ops.convert_to_tensor(np.ones(3, dtype="float32")),
         _ops.convert_to_tensor(np.ones(3, dtype="float32")),
@@ -380,7 +360,6 @@ def test_scale_gradients_by_lr():
 
 
 def test_scale_gradients_handles_none():
-    """None gradients (frozen params) should pass through unchanged."""
 
     class FakeVar:
         def __init__(self, name):

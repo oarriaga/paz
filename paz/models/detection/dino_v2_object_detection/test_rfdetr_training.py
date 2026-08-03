@@ -4,9 +4,6 @@ import os
 import shutil
 import tempfile
 from collections import defaultdict
-from dataclasses import asdict, fields
-from types import SimpleNamespace
-from unittest.mock import MagicMock, patch, PropertyMock
 
 import numpy as np
 import pytest
@@ -23,8 +20,6 @@ from paz.models.detection.dino_v2_object_detection.config import (
     RFDETRSmallConfig as KerasSmallConfig,
     RFDETRMediumConfig as KerasMediumConfig,
     RFDETRLargeConfig as KerasLargeConfig,
-    RFDETRXLargeConfig as KerasXLargeConfig,
-    RFDETR2XLargeConfig as Keras2XLargeConfig,
     RFDETRSegPreviewConfig as KerasSegPreviewConfig,
     RFDETRSegNanoConfig as KerasSegNanoConfig,
     RFDETRSegSmallConfig as KerasSegSmallConfig,
@@ -34,7 +29,6 @@ from paz.models.detection.dino_v2_object_detection.config import (
     RFDETRSeg2XLargeConfig as KerasSeg2XLargeConfig,
 )
 from paz.models.detection.dino_v2_object_detection.detr import (
-    RFDETR as KerasRFDETR,
     RFDETRBase as KerasRFDETRBase,
     RFDETRNano as KerasRFDETRNano,
     RFDETRSmall as KerasRFDETRSmall,
@@ -111,7 +105,6 @@ from rfdetr.config import (
     RFDETRSeg2XLargeConfig as PTSeg2XLargeConfig,
 )
 from rfdetr.detr import (
-    RFDETR as PTRFDETR,
     RFDETRBase as PTRFDETRBase,
     RFDETRNano as PTRFDETRNano,
     RFDETRSmall as PTRFDETRSmall,
@@ -126,6 +119,7 @@ from rfdetr.detr import (
     RFDETRSeg2XLarge as PTRFDETRSeg2XLarge,
 )
 from rfdetr.util.coco_classes import COCO_CLASSES as PTCOCO
+from unittest.mock import MagicMock, patch
 
 
 # ===================================================================
@@ -133,22 +127,18 @@ from rfdetr.util.coco_classes import COCO_CLASSES as PTCOCO
 # ===================================================================
 
 def _keras_config_to_dict(cfg):
-    """Convert a Keras dataclass config to a flat dict."""
-    return asdict(cfg)
+    return cfg._asdict()
 
 
 def _pt_config_to_dict(cfg):
-    """Convert a reference Pydantic config to a flat dict."""
     return cfg.dict()
 
 
 def _shared_config_keys(keras_dict, pt_dict):
-    """Return set of keys present in both dicts."""
     return set(keras_dict.keys()) & set(pt_dict.keys())
 
 
 def _make_dummy_coco_dataset(tmpdir, num_images=3, num_classes=2):
-    """Create a minimal COCO-format dataset in *tmpdir*."""
     categories = [
         {"id": i + 1, "name": f"class_{i}", "supercategory": "object"}
         for i in range(num_classes)
@@ -158,7 +148,7 @@ def _make_dummy_coco_dataset(tmpdir, num_images=3, num_classes=2):
     ann_id = 1
     for img_id in range(1, num_images + 1):
         fname = f"img_{img_id:04d}.jpg"
-        images.append({"id": img_id, "file_name": fname, "width": 64, "height": 64})
+        images.append({"id": img_id, "file_name": fname, "width": 64, "height": 64})  # fmt: skip
         # Write a tiny JPEG
         _write_dummy_image(os.path.join(tmpdir, fname), 64, 64)
         # One annotation per image
@@ -172,14 +162,13 @@ def _make_dummy_coco_dataset(tmpdir, num_images=3, num_classes=2):
         })
         ann_id += 1
 
-    coco = {"images": images, "annotations": annotations, "categories": categories}
+    coco = {"images": images, "annotations": annotations, "categories": categories}  # fmt: skip
     with open(os.path.join(tmpdir, "_annotations.coco.json"), "w") as f:
         json.dump(coco, f)
     return coco
 
 
 def _write_dummy_image(path, w, h):
-    """Write a tiny random JPEG to *path*."""
     from PIL import Image as PILImage
 
     arr = np.random.randint(0, 255, (h, w, 3), dtype=np.uint8)
@@ -187,19 +176,17 @@ def _write_dummy_image(path, w, h):
 
 
 def _make_dataset_dir(num_classes=2):
-    """Create a temp dataset dir with train/valid splits."""
     tmpdir = tempfile.mkdtemp(prefix="rfdetr_test_")
     for split in ("train", "valid"):
         split_dir = os.path.join(tmpdir, split)
         os.makedirs(split_dir, exist_ok=True)
-        _make_dummy_coco_dataset(split_dir, num_images=4, num_classes=num_classes)
+        _make_dummy_coco_dataset(split_dir, num_images=4, num_classes=num_classes)  # fmt: skip
     return tmpdir
 
 
 # Fixture to mock Model so no actual heavy model is built
 @pytest.fixture
 def mock_keras_model():
-    """Patch the Keras Model class to avoid building a real network."""
     mock_model_instance = MagicMock()
     mock_model_instance.class_names = None
     mock_model_instance.resolution = 560
@@ -218,7 +205,6 @@ def mock_keras_model():
 
 @pytest.fixture(autouse=True)
 def mock_evaluate():
-    """Skip real COCO evaluation when training loops run with mocks."""
     with patch(
         "paz.models.detection.dino_v2_object_detection.engine.evaluate",
         return_value=({}, MagicMock()),
@@ -228,7 +214,6 @@ def mock_evaluate():
 
 @pytest.fixture
 def mock_pt_model():
-    """Patch the reference Model class to avoid building a real network."""
     mock = MagicMock()
     mock.class_names = None
     mock.resolution = 560
@@ -620,13 +605,13 @@ def test_api_method_parity(mock_keras_model, mock_pt_model):
 def test_get_model_config_returns_correct_type(mock_keras_model):
     model = KerasRFDETRBase()
     cfg = model.get_model_config()
-    assert isinstance(cfg, KerasBaseConfig)
+    assert cfg == KerasBaseConfig()
 
 
 def test_get_model_config_nano(mock_keras_model):
     model = KerasRFDETRNano()
     cfg = model.get_model_config()
-    assert isinstance(cfg, KerasNanoConfig)
+    assert cfg == KerasNanoConfig()
 
 
 def test_get_model_config_kwargs_forwarded(mock_keras_model):
@@ -679,14 +664,14 @@ def test_class_names_default_coco(mock_keras_model):
     _, mock_model = mock_keras_model
     mock_model.class_names = None
     model = KerasRFDETRBase()
-    assert model.class_names == KerasCOCO
+    assert model.class_names() == KerasCOCO
 
 
 def test_class_names_custom(mock_keras_model):
     _, mock_model = mock_keras_model
     mock_model.class_names = ["cat", "dog"]
     model = KerasRFDETRBase()
-    assert model.class_names == {1: "cat", 2: "dog"}
+    assert model.class_names() == {1: "cat", 2: "dog"}
 
 
 def test_pt_class_names_default_coco(mock_pt_model):
@@ -734,7 +719,6 @@ def test_callback_append(mock_keras_model):
 
 
 def test_callback_fires_on_epoch_end(mock_keras_model):
-    """Verify that user-registered callbacks are invoked during training."""
     model = KerasRFDETRBase()
     history = []
     model.callbacks["on_fit_epoch_end"].append(lambda d: history.append(d))
@@ -744,10 +728,10 @@ def test_callback_fires_on_epoch_end(mock_keras_model):
     try:
         # Patch train_one_epoch to short-circuit
         with patch(
-            "paz.models.detection.dino_v2_object_detection.engine.train_one_epoch",
+            "paz.models.detection.dino_v2_object_detection.engine.train_one_epoch",  # fmt: skip
             return_value={"loss": 0.5},
         ), patch(
-            "paz.models.detection.dino_v2_object_detection.detr.build_criterion_from_config",
+            "paz.models.detection.dino_v2_object_detection.detr.build_criterion_from_config",  # fmt: skip
             return_value=(MagicMock(), MagicMock()),
         ):
             model.train(dataset_dir=tmpdir, epochs=2, batch_size=1)
@@ -767,10 +751,10 @@ def test_on_train_end_callback(mock_keras_model):
     tmpdir = _make_dataset_dir(num_classes=2)
     try:
         with patch(
-            "paz.models.detection.dino_v2_object_detection.engine.train_one_epoch",
+            "paz.models.detection.dino_v2_object_detection.engine.train_one_epoch",  # fmt: skip
             return_value={"loss": 0.1},
         ), patch(
-            "paz.models.detection.dino_v2_object_detection.detr.build_criterion_from_config",
+            "paz.models.detection.dino_v2_object_detection.detr.build_criterion_from_config",  # fmt: skip
             return_value=(MagicMock(), MagicMock()),
         ):
             model.train(dataset_dir=tmpdir, epochs=1, batch_size=1)
@@ -785,15 +769,14 @@ def test_on_train_end_callback(mock_keras_model):
 # ===================================================================
 
 def test_train_reads_coco_annotations(mock_keras_model):
-    """train_from_config should parse annotations to get num_classes."""
     model = KerasRFDETRBase()
     tmpdir = _make_dataset_dir(num_classes=3)
     try:
         with patch(
-            "paz.models.detection.dino_v2_object_detection.engine.train_one_epoch",
+            "paz.models.detection.dino_v2_object_detection.engine.train_one_epoch",  # fmt: skip
             return_value={"loss": 0.1},
         ), patch(
-            "paz.models.detection.dino_v2_object_detection.detr.build_criterion_from_config",
+            "paz.models.detection.dino_v2_object_detection.detr.build_criterion_from_config",  # fmt: skip
             return_value=(MagicMock(), MagicMock()),
         ):
             model.train(dataset_dir=tmpdir, epochs=1, batch_size=1)
@@ -867,7 +850,7 @@ def test_best_metric_holder_summary_keys():
 
 def test_early_stopping_no_improvement():
     mock_model = MagicMock()
-    es = KerasEarlyStoppingCallback(model=mock_model, patience=2, min_delta=0.01)
+    es = KerasEarlyStoppingCallback(model=mock_model, patience=2, min_delta=0.01)  # fmt: skip
     es.update({"test_coco_eval_bbox": [0.5]})
     es.update({"test_coco_eval_bbox": [0.5]})
     es.update({"test_coco_eval_bbox": [0.5]})
@@ -877,7 +860,7 @@ def test_early_stopping_no_improvement():
 
 def test_early_stopping_with_improvement():
     mock_model = MagicMock()
-    es = KerasEarlyStoppingCallback(model=mock_model, patience=3, min_delta=0.01)
+    es = KerasEarlyStoppingCallback(model=mock_model, patience=3, min_delta=0.01)  # fmt: skip
     es.update({"test_coco_eval_bbox": [0.5]})
     es.update({"test_coco_eval_bbox": [0.6]})
     assert es.counter == 0
@@ -888,7 +871,7 @@ def test_early_stopping_calls_request_early_stop():
     # so the callback falls through to request_early_stop().
     mock_model = MagicMock(spec=['request_early_stop'])
     mock_model.request_early_stop = MagicMock()
-    es = KerasEarlyStoppingCallback(model=mock_model, patience=1, min_delta=0.01)
+    es = KerasEarlyStoppingCallback(model=mock_model, patience=1, min_delta=0.01)  # fmt: skip
     es.update({"test_coco_eval_bbox": [0.5]})
     es.update({"test_coco_eval_bbox": [0.5]})
     mock_model.request_early_stop.assert_called()
@@ -967,7 +950,7 @@ def test_lr_lambda_cosine():
 # 19. _COCODataLoader tests
 # ===================================================================
 
-@pytest.mark.skipif(not _HAS_COCO_LOADER, reason="_COCODataLoader not implemented")
+@pytest.mark.skipif(not _HAS_COCO_LOADER, reason="_COCODataLoader not implemented")  # fmt: skip
 def test_coco_data_loader_creates():
     tmpdir = _make_dataset_dir(num_classes=2)
     try:
@@ -982,7 +965,7 @@ def test_coco_data_loader_creates():
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-@pytest.mark.skipif(not _HAS_COCO_LOADER, reason="_COCODataLoader not implemented")
+@pytest.mark.skipif(not _HAS_COCO_LOADER, reason="_COCODataLoader not implemented")  # fmt: skip
 def test_coco_data_loader_yields_batches():
     tmpdir = _make_dataset_dir(num_classes=2)
     try:
@@ -1004,7 +987,7 @@ def test_coco_data_loader_yields_batches():
         shutil.rmtree(tmpdir, ignore_errors=True)
 
 
-@pytest.mark.skipif(not _HAS_COCO_LOADER, reason="_COCODataLoader not implemented")
+@pytest.mark.skipif(not _HAS_COCO_LOADER, reason="_COCODataLoader not implemented")  # fmt: skip
 def test_coco_data_loader_target_boxes_normalised():
     tmpdir = _make_dataset_dir(num_classes=2)
     try:
@@ -1029,7 +1012,6 @@ def test_coco_data_loader_target_boxes_normalised():
 # ===================================================================
 
 def test_full_training_loop_mocked(mock_keras_model):
-    """Integration: Run a full mock training loop with callbacks."""
     model = KerasRFDETRBase()
     history = []
     model.callbacks["on_fit_epoch_end"].append(lambda d: history.append(d))
@@ -1037,10 +1019,10 @@ def test_full_training_loop_mocked(mock_keras_model):
     tmpdir = _make_dataset_dir(num_classes=2)
     try:
         with patch(
-            "paz.models.detection.dino_v2_object_detection.engine.train_one_epoch",
+            "paz.models.detection.dino_v2_object_detection.engine.train_one_epoch",  # fmt: skip
             return_value={"loss": 0.42, "loss_ce": 0.1, "loss_bbox": 0.2},
         ), patch(
-            "paz.models.detection.dino_v2_object_detection.detr.build_criterion_from_config",
+            "paz.models.detection.dino_v2_object_detection.detr.build_criterion_from_config",  # fmt: skip
             return_value=(MagicMock(), MagicMock()),
         ):
             model.train(
@@ -1065,10 +1047,10 @@ def test_training_creates_checkpoint(mock_keras_model):
     out_dir = tempfile.mkdtemp(prefix="rfdetr_out_")
     try:
         with patch(
-            "paz.models.detection.dino_v2_object_detection.engine.train_one_epoch",
+            "paz.models.detection.dino_v2_object_detection.engine.train_one_epoch",  # fmt: skip
             return_value={"loss": 0.1},
         ), patch(
-            "paz.models.detection.dino_v2_object_detection.detr.build_criterion_from_config",
+            "paz.models.detection.dino_v2_object_detection.detr.build_criterion_from_config",  # fmt: skip
             return_value=(MagicMock(), MagicMock()),
         ):
             model.train(
@@ -1087,7 +1069,6 @@ def test_training_creates_checkpoint(mock_keras_model):
 
 
 def test_early_stop_terminates_loop(mock_keras_model):
-    """If stop_early is set, the training loop should exit."""
     model = KerasRFDETRBase()
     history = []
     model.callbacks["on_fit_epoch_end"].append(lambda d: history.append(d))
@@ -1102,10 +1083,10 @@ def test_early_stop_terminates_loop(mock_keras_model):
     tmpdir = _make_dataset_dir(num_classes=2)
     try:
         with patch(
-            "paz.models.detection.dino_v2_object_detection.engine.train_one_epoch",
+            "paz.models.detection.dino_v2_object_detection.engine.train_one_epoch",  # fmt: skip
             return_value={"loss": 0.1},
         ), patch(
-            "paz.models.detection.dino_v2_object_detection.detr.build_criterion_from_config",
+            "paz.models.detection.dino_v2_object_detection.detr.build_criterion_from_config",  # fmt: skip
             return_value=(MagicMock(), MagicMock()),
         ):
             model.train(
@@ -1124,15 +1105,14 @@ def test_early_stop_terminates_loop(mock_keras_model):
 # ===================================================================
 
 def test_train_accepts_dataset_dir_kwarg(mock_keras_model):
-    """Both implementations accept dataset_dir as kwarg."""
     model = KerasRFDETRBase()
     tmpdir = _make_dataset_dir()
     try:
         with patch(
-            "paz.models.detection.dino_v2_object_detection.engine.train_one_epoch",
+            "paz.models.detection.dino_v2_object_detection.engine.train_one_epoch",  # fmt: skip
             return_value={"loss": 0.1},
         ), patch(
-            "paz.models.detection.dino_v2_object_detection.detr.build_criterion_from_config",
+            "paz.models.detection.dino_v2_object_detection.detr.build_criterion_from_config",  # fmt: skip
             return_value=(MagicMock(), MagicMock()),
         ):
             model.train(dataset_dir=tmpdir, epochs=1, batch_size=1,
@@ -1146,10 +1126,10 @@ def test_train_accepts_lr_kwarg(mock_keras_model):
     tmpdir = _make_dataset_dir()
     try:
         with patch(
-            "paz.models.detection.dino_v2_object_detection.engine.train_one_epoch",
+            "paz.models.detection.dino_v2_object_detection.engine.train_one_epoch",  # fmt: skip
             return_value={"loss": 0.1},
         ), patch(
-            "paz.models.detection.dino_v2_object_detection.detr.build_criterion_from_config",
+            "paz.models.detection.dino_v2_object_detection.detr.build_criterion_from_config",  # fmt: skip
             return_value=(MagicMock(), MagicMock()),
         ):
             model.train(dataset_dir=tmpdir, epochs=1, batch_size=1, lr=0.001,
@@ -1165,7 +1145,7 @@ def test_train_accepts_lr_kwarg(mock_keras_model):
 def test_predict_accepts_list(mock_keras_model):
     model = KerasRFDETRBase()
     _, mock_model = mock_keras_model
-    mock_model.predict = MagicMock(return_value=[{"boxes": [], "scores": [], "labels": []}])
+    mock_model.predict = MagicMock(return_value=[{"boxes": [], "scores": [], "labels": []}])  # fmt: skip
     imgs = [np.random.rand(64, 64, 3).astype("float32")]
     result = model.predict(imgs, threshold=0.5)
     mock_model.predict.assert_called_once()
@@ -1174,7 +1154,7 @@ def test_predict_accepts_list(mock_keras_model):
 def test_predict_accepts_uint8(mock_keras_model):
     model = KerasRFDETRBase()
     _, mock_model = mock_keras_model
-    mock_model.predict = MagicMock(return_value=[{"boxes": [], "scores": [], "labels": []}])
+    mock_model.predict = MagicMock(return_value=[{"boxes": [], "scores": [], "labels": []}])  # fmt: skip
     imgs = np.random.randint(0, 255, (1, 64, 64, 3), dtype=np.uint8)
     result = model.predict(imgs, threshold=0.5)
     # Should have been converted to float internally
@@ -1185,7 +1165,7 @@ def test_predict_accepts_uint8(mock_keras_model):
 def test_predict_accepts_3d_array(mock_keras_model):
     model = KerasRFDETRBase()
     _, mock_model = mock_keras_model
-    mock_model.predict = MagicMock(return_value=[{"boxes": [], "scores": [], "labels": []}])
+    mock_model.predict = MagicMock(return_value=[{"boxes": [], "scores": [], "labels": []}])  # fmt: skip
     img = np.random.rand(64, 64, 3).astype("float32")
     model.predict(img, threshold=0.5)
     call_args = mock_model.predict.call_args
@@ -1197,13 +1177,12 @@ def test_predict_accepts_3d_array(mock_keras_model):
 # ===================================================================
 
 def test_train_config_has_all_pt_fields():
-    """Ensure Keras TrainConfig has at least all fields that the reference has."""
     pt_fields = set(PTTrainConfig.model_fields.keys())
-    keras_fields = {f.name for f in fields(KerasTrainConfig)}
+    keras_fields = set(KerasTrainConfig._fields)
     # Allow Keras to have extra fields but must have all PT fields
     missing = pt_fields - keras_fields
     # Filter out fields that may differ by design:
-    # - square_resize_div_64 / do_random_resize_via_padding: Keras-specific padding
+    # - square_resize_div_64 / do_random_resize_via_padding: Keras-specific padding  # fmt: skip
     # - num_select: belongs in ModelConfig, not TrainConfig
     # - resume: reference-specific checkpoint resume path
     allowed_missing = {
@@ -1211,20 +1190,19 @@ def test_train_config_has_all_pt_fields():
         "num_select", "resume",
     }
     actual_missing = missing - allowed_missing
-    assert actual_missing == set(), f"Keras TrainConfig missing: {actual_missing}"
+    assert actual_missing == set(), f"Keras TrainConfig missing: {actual_missing}"  # fmt: skip
 
 
 def test_model_config_shared_fields():
-    """Core fields should exist in both Keras and reference ModelConfig."""
     core_fields = [
         "encoder", "hidden_dim", "dec_layers", "num_classes", "resolution",
         "patch_size", "num_windows", "sa_nheads", "ca_nheads", "dec_n_points",
         "group_detr", "segmentation_head",
     ]
-    keras_fields = {f.name for f in fields(KerasModelConfig)}
+    keras_fields = set(KerasModelConfig._fields)
     pt_fields = set(PTModelConfig.model_fields.keys())
     for field_name in core_fields:
-        assert field_name in keras_fields, f"Keras ModelConfig missing: {field_name}"
+        assert field_name in keras_fields, f"Keras ModelConfig missing: {field_name}"  # fmt: skip
         assert field_name in pt_fields, f"PT ModelConfig missing: {field_name}"
 
 
@@ -1265,7 +1243,7 @@ def test_pt_seg_variant_returns_seg_train_config(cls, mock_pt_model):
 # ===================================================================
 
 def test_drop_scheduler_standard():
-    from paz.models.detection.dino_v2_object_detection.utils.drop_scheduler import (
+    from paz.models.detection.dino_v2_object_detection.utils.drop_scheduler import (  # fmt: skip
         drop_scheduler as keras_drop,
     )
     from rfdetr.util.drop_scheduler import drop_scheduler as pt_drop
@@ -1276,18 +1254,18 @@ def test_drop_scheduler_standard():
 
 
 def test_drop_scheduler_early_constant():
-    from paz.models.detection.dino_v2_object_detection.utils.drop_scheduler import (
+    from paz.models.detection.dino_v2_object_detection.utils.drop_scheduler import (  # fmt: skip
         drop_scheduler as keras_drop,
     )
     from rfdetr.util.drop_scheduler import drop_scheduler as pt_drop
 
-    k = keras_drop(0.2, 10, 5, cutoff_epoch=5, mode='early', schedule='constant')
+    k = keras_drop(0.2, 10, 5, cutoff_epoch=5, mode='early', schedule='constant')  # fmt: skip
     p = pt_drop(0.2, 10, 5, cutoff_epoch=5, mode='early', schedule='constant')
     np.testing.assert_array_almost_equal(k, p)
 
 
 def test_drop_scheduler_early_linear():
-    from paz.models.detection.dino_v2_object_detection.utils.drop_scheduler import (
+    from paz.models.detection.dino_v2_object_detection.utils.drop_scheduler import (  # fmt: skip
         drop_scheduler as keras_drop,
     )
     from rfdetr.util.drop_scheduler import drop_scheduler as pt_drop
@@ -1318,7 +1296,6 @@ def test_stds_parity(mock_keras_model, mock_pt_model):
 # ===================================================================
 
 def test_tb_sink_no_crash_without_tensorboard():
-    """Should gracefully handle missing tensorboard."""
     sink = KerasTBSink(output_dir="/tmp")
     sink.update({"epoch": 0, "train_loss": 1.0})
     sink.close()
@@ -1329,7 +1306,6 @@ def test_tb_sink_no_crash_without_tensorboard():
 # ===================================================================
 
 def test_wandb_sink_no_crash_without_wandb():
-    """Should gracefully handle missing wandb."""
     sink = KerasWBSink(output_dir="/tmp", project="test", run="test")
     sink.update({"epoch": 0})
     sink.close()
@@ -1340,8 +1316,8 @@ def test_wandb_sink_no_crash_without_wandb():
 # ===================================================================
 
 def test_train_config_round_trip():
-    cfg = KerasTrainConfig(lr=0.005, epochs=20, batch_size=8, dataset_dir="/data")
-    d = asdict(cfg)
+    cfg = KerasTrainConfig(lr=0.005, epochs=20, batch_size=8, dataset_dir="/data")  # fmt: skip
+    d = cfg._asdict()
     cfg2 = KerasTrainConfig(**d)
     assert cfg2.lr == 0.005
     assert cfg2.epochs == 20
@@ -1349,7 +1325,7 @@ def test_train_config_round_trip():
 
 def test_model_config_round_trip():
     cfg = KerasBaseConfig(resolution=800)
-    d = asdict(cfg)
+    d = cfg._asdict()
     cfg2 = KerasBaseConfig(**d)
     assert cfg2.resolution == 800
 

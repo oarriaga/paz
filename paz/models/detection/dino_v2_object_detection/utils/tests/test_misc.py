@@ -3,12 +3,10 @@ import sys
 # Add parent directory to path to allow importing misc
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import pytest
 import numpy as np
 import torch
 import torch.nn.functional as F
 import keras
-import keras.ops as k
 import misc as keras_misc
 
 def verify_output(keras_out, torch_out, atol=1e-5):
@@ -17,7 +15,7 @@ def verify_output(keras_out, torch_out, atol=1e-5):
         t_out = torch_out.detach().cpu().numpy()
     else:
         t_out = np.array(torch_out)
-    np.testing.assert_allclose(k_out, t_out, atol=atol, err_msg="Outputs do not match")
+    np.testing.assert_allclose(k_out, t_out, atol=atol, err_msg="Outputs do not match")  # fmt: skip
 
 def test_smoothed_value():
     sv = keras_misc.SmoothedValue(window_size=5)
@@ -27,11 +25,11 @@ def test_smoothed_value():
     # Last 5: 5, 6, 7, 8, 9
     assert sv.count == 10
     assert sv.total == 45.0
-    assert sv.value == 9.0
-    assert sv.median == 7.0
-    assert sv.avg == 7.0
-    assert sv.global_avg == 4.5
-    assert sv.max == 9.0
+    assert sv.value() == 9.0
+    assert sv.median() == 7.0
+    assert sv.avg() == 7.0
+    assert sv.global_avg() == 4.5
+    assert sv.max() == 9.0
 
 def test_nested_tensor_from_tensor_list():
     # Create 3 images of different sizes
@@ -74,7 +72,7 @@ def test_interpolate():
     
     # Test nearest equivalent
     size = (64, 64)
-    # Note: Keras resize might have slight diffs due to align_corners behavior or implementation details
+    # Note: Keras resize might have slight diffs due to align_corners behavior or implementation details  # fmt: skip
     # But standard nearest neighbor should be exact ideally, or very close.
     
     k_out = keras_misc.interpolate(k_img, size=size, mode='nearest')
@@ -84,9 +82,9 @@ def test_interpolate():
     
     # Test bilinear
     k_out_bi = keras_misc.interpolate(k_img, size=size, mode='bilinear')
-    t_out_bi = F.interpolate(img, size=size, mode='bilinear', align_corners=False) # Keras usually False?
+    t_out_bi = F.interpolate(img, size=size, mode='bilinear', align_corners=False) # Keras usually False?  # fmt: skip
     
-    # Bilinear match is harder to guarantee exactly between frameworks due to coordinate logic
+    # Bilinear match is harder to guarantee exactly between frameworks due to coordinate logic  # fmt: skip
     # Keras image.resize usually aligns corners=False? 
     # Let's check with reasonable tolerance
     # Keras defaults: https://keras.io/api/ops/image/#resize
@@ -102,12 +100,6 @@ def test_inverse_sigmoid():
     k_in = keras.ops.convert_to_tensor(x.numpy())
     k_out = keras_misc.inverse_sigmoid(k_in)
     
-    # torch implementation
-    # def inverse_sigmoid(x, eps=1e-5):
-    #     x = x.clamp(min=0, max=1)
-    #     x1 = x.clamp(min=eps)
-    #     x2 = (1 - x).clamp(min=eps)
-    #     return torch.log(x1/x2)
     
     t_x = x.clamp(min=0, max=1)
     t_x1 = t_x.clamp(min=1e-5)

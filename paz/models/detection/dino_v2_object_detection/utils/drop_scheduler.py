@@ -1,52 +1,36 @@
 import numpy as np
-from typing import Literal
+
+DROP_MODES = ("standard", "early", "late")
 
 
-def drop_scheduler(
-    drop_rate: float,
-    epochs: int,
-    niter_per_ep: int,
-    cutoff_epoch: int = 0,
-    mode: Literal['standard', 'early', 'late'] = 'standard',
-    schedule: Literal['constant', 'linear'] = 'constant',
-) -> np.ndarray:
-    """Build a per-iteration drop-path rate schedule.
+def build_constant_schedule(drop_rate, early_steps, late_steps, mode):
+    if mode == "early":
+        head, tail = np.full(early_steps, drop_rate), np.full(late_steps, 0)
+    else:
+        head, tail = np.full(early_steps, 0), np.full(late_steps, drop_rate)
+    return np.concatenate((head, tail))
 
-    Args:
-        drop_rate (float): Maximum drop-path rate.
-        epochs (int): Total number of training epochs.
-        niter_per_ep (int): Iterations per epoch.
-        cutoff_epoch (int): Epoch boundary between the *early* and *late*
-            phases. Only used when *mode* is ``'early'`` or ``'late'``.
-        mode: ``'standard'`` applies *drop_rate* for the entire training.
-            ``'early'`` applies it only before *cutoff_epoch* (zero after).
-            ``'late'`` applies it only after *cutoff_epoch* (zero before).
-        schedule: ``'constant'`` keeps *drop_rate* fixed;
-            ``'linear'`` linearly ramps it to zero (only for ``'early'``
-            mode).
 
-    Returns:
-        np.ndarray: 1-D array of length ``epochs * niter_per_ep`` with the
-            drop-path rate for each training iteration.
-    """
-    assert mode in ['standard', 'early', 'late']
-    if mode == 'standard':
-        return np.full(epochs * niter_per_ep, drop_rate)
+def build_linear_schedule(drop_rate, early_steps, late_steps):
+    head = np.linspace(drop_rate, 0, early_steps)
+    return np.concatenate((head, np.full(late_steps, 0)))
 
-    early_iters = cutoff_epoch * niter_per_ep
-    late_iters = (epochs - cutoff_epoch) * niter_per_ep
 
-    if mode == 'early':
-        assert schedule in ['constant', 'linear']
-        if schedule == 'constant':
-            early_schedule = np.full(early_iters, drop_rate)
-        elif schedule == 'linear':
-            early_schedule = np.linspace(drop_rate, 0, early_iters)
-        final_schedule = np.concatenate((early_schedule, np.full(late_iters, 0)))
-    elif mode == 'late':
-        assert schedule in ['constant']
-        early_schedule = np.full(early_iters, 0)
-        final_schedule = np.concatenate((early_schedule, np.full(late_iters, drop_rate)))
-
-    assert len(final_schedule) == epochs * niter_per_ep
+def drop_scheduler(drop_rate, epochs, num_steps_per_epoch, cutoff_epoch=0, mode='standard', schedule='constant'):  # fmt: skip
+    assert mode in DROP_MODES
+    total_steps = epochs * num_steps_per_epoch
+    early_steps = cutoff_epoch * num_steps_per_epoch
+    late_steps = (epochs - cutoff_epoch) * num_steps_per_epoch
+    if mode == "standard":
+        final_schedule = np.full(total_steps, drop_rate)
+    elif schedule == "linear":
+        assert mode == "early"
+        args = (drop_rate, early_steps, late_steps)
+        final_schedule = build_linear_schedule(*args)
+        assert len(final_schedule) == total_steps
+    else:
+        assert schedule == "constant"
+        args = (drop_rate, early_steps, late_steps, mode)
+        final_schedule = build_constant_schedule(*args)
+        assert len(final_schedule) == total_steps
     return final_schedule
