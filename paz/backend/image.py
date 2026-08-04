@@ -81,6 +81,39 @@ def resize(image, size, method="linear", antialias=False):
     return jax.image.resize(image, (*size, image.shape[-1]), method, antialias)
 
 
+def resize_bilinear_align_corners(image, size):
+    """Bilinear resize matching torch F.interpolate(align_corners=True).
+
+    Operates on channels-last ``(batch, height, width, channels)`` tensors and
+    uses ``keras.ops`` so it traces inside functional models and runs eagerly.
+    Separable: interpolate rows, then columns.
+    """
+    from keras import ops
+    rows = interpolate_bilinear_axis(image, 1, size[0], ops)
+    return interpolate_bilinear_axis(rows, 2, size[1], ops)
+
+
+def interpolate_bilinear_axis(image, axis, target, ops):
+    source = image.shape[axis]
+    lower, upper, weight = bilinear_sample_positions(source, target, ops)
+    low = ops.take(image, lower, axis=axis)
+    high = ops.take(image, upper, axis=axis)
+    shape = [1] * len(image.shape)
+    shape[axis] = target
+    weight = ops.reshape(weight, shape)
+    return low * (1.0 - weight) + high * weight
+
+
+def bilinear_sample_positions(source, target, ops):
+    if target == 1 or source == 1:
+        positions = ops.zeros((target,))
+    else:
+        positions = ops.arange(target) * ((source - 1) / (target - 1))
+    lower = ops.cast(ops.floor(positions), "int32")
+    upper = ops.minimum(lower + 1, source - 1)
+    return lower, upper, positions - lower
+
+
 def resize_opencv(image: jax.Array, size: tuple[int, int]) -> jax.Array:
     # TODO change to split size into H, W
     data = jax.ShapeDtypeStruct((size[0], size[1], image.shape[2]), image.dtype)
@@ -258,6 +291,23 @@ def crop(image, box):
     return image[y_min:y_max, x_min:x_max, :]
 
 
+def place_in_canvas(image, out_size, scale, translation, fill):
+    """Resamples `image` by `scale` and pastes it at pixel `translation`
+    onto a fixed `out_size` canvas; uncovered pixels take the `fill` color.
+    Fixed output shape makes it jit/vmap-friendly for detection augmentation.
+    """
+    dims = (0, 1)
+    image = paz.cast(image, jp.float32)
+    shape = (out_size[0], out_size[1], image.shape[-1])
+    args = shape, dims, scale, translation, "linear"
+    placed = jax.image.scale_and_translate(image, *args, antialias=False)
+    ones = jp.ones((image.shape[0], image.shape[1], 1), jp.float32)
+    mask_shape = (out_size[0], out_size[1], 1)
+    mask_args = mask_shape, dims, scale, translation, "linear"
+    covered = jax.image.scale_and_translate(ones, *mask_args, antialias=False)
+    return placed + fill * (1.0 - covered)
+
+
 def crop_center(image, H_crop, W_crop):
     H_now, W_now = get_size(image)
     center_x = W_now // 2
@@ -396,6 +446,18 @@ def random_color_transform(key, image):
     image = random_brightness(key_2, image)
     image = random_contrast(key_3, image)
     image = random_hue(key_4, image)
+    return image
+
+
+def random_photometric(key, image):
+    """Contrast, brightness, saturation and hue, each with probability 0.5."""
+    keys = jax.random.split(key, 4)
+    image = paz.maybe_apply(keys[0], random_contrast, image)
+    image = paz.maybe_apply(keys[1], random_brightness, image)
+    saturation = paz.partial(random_saturation, lower=0.7)
+    image = paz.maybe_apply(keys[2], saturation, image)
+    hue = paz.partial(random_hue, max_delta=0.05)
+    image = paz.maybe_apply(keys[3], hue, image)
     return image
 
 

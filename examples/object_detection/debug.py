@@ -10,9 +10,8 @@
 # )
 from jax import random
 import jax.numpy as jp
-import jax
 import paz
-from pipeline2 import preprocess_batch
+from generator import preprocess_batch
 
 
 key = random.PRNGKey(0)

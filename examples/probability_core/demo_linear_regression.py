@@ -4,8 +4,8 @@ import jax
 import jax.numpy as jp
 import optax
 
-from .bijectors import Chain, Scale, Shift, Sigmoid
-from .distributions import Normal, Uniform
+from paz.backend.bijectors import Chain, Scale, Shift, Sigmoid
+from paz.backend.distributions import Normal, Uniform
 from .utils import log_prob_inverse
 
 

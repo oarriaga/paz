@@ -1,4 +1,8 @@
 from paz.graphics.types import (
+    Hit,
+    Mesh,
+    Triangles,
+    CompiledScene,
     PointLight,
     AreaLight,
     Material,
@@ -34,6 +38,8 @@ from paz.graphics.constants import (
     EPSILON,
     FARAWAY,
 )
+from paz.graphics import albedo
+from paz.graphics import composite
 from paz.graphics import geometry
 from paz.graphics import shapes
 from paz.graphics import camera
@@ -45,5 +51,5 @@ from paz.graphics.renderer import render, render_masks
 from paz.graphics import patterns
 from paz.graphics import scene
 from paz.graphics.serialization import save, load
-from paz.graphics.viewer import viewer, shape_renderer, mesh_renderer
+from paz.graphics.viewer import viewer, scene_renderer
 from paz.graphics.orbit import orbit_pose, render_orbit

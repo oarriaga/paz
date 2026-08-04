@@ -36,7 +36,7 @@ class Conv2DNormalization(keras.layers.Layer):
 
     def call(self, x):
         norm = ops.norm(x, ord=2, axis=self.axis, keepdims=True)
-        return self.gamma * (x / norm)
+        return self.gamma * (x / (norm + 1e-12))
 
     def get_config(self):
         config = super().get_config()

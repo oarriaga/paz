@@ -1,50 +1,67 @@
+"""Download and build pretrained Gemma4 bundles.
+
+One canonical text artifact (`backbone.weights.h5`) holds all transformer
+weights; the vision encoder stays a separate artifact. GitHub release assets are
+capped at 2 GB, so larger files are uploaded as byte-identical parts and
+reassembled on download (see `shard_weights`).
+"""
 import hashlib
 import json
 import shutil
 from collections import namedtuple
 from pathlib import Path
 
+import jax.numpy as jp
 from keras.utils import get_file
 
 from paz.models.foundation.gemma4.configuration import load_config
-from paz.models.foundation.gemma4.inference import Gemma4MultimodalDecoderStep
-from paz.models.foundation.gemma4.inference import Gemma4PerLayerEmbeddingStep
+from paz.models.foundation.gemma4.causal_lm import Gemma4CausalLM
 from paz.models.foundation.gemma4.vision import VisionEncoderArgs
 from paz.models.foundation.gemma4.vision import build_vision_encoder
 
-GEMMA4_WEIGHTS_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.24/"  # fmt: skip
+GEMMA4_WEIGHTS_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.26/"  # fmt: skip
 GEMMA4_CACHE = "paz/models/gemma4"
-# GitHub release assets are capped at 2 GB, so larger files are uploaded as
-# byte-identical parts and reassembled on download (scripts/shard_gemma4.py).
 PART_BYTES = 1_900_000_000
 GEMMA4_WEIGHT_FILES = (
     "config.json", "tokenizer.json", "vision_config.json",
-    "vision_encoder.weights.h5", "decoder_step.weights.h5",
-    "embedding_step.weights.h5",
+    "vision_encoder.weights.h5", "backbone.weights.h5",
 )
-Gemma4Models = namedtuple(
-    "Gemma4", "config decoder_step per_layer_step vision_encoder")
+Gemma4Models = namedtuple("Gemma4", "config model vision_encoder")
 
 
-def Gemma4(model_name="gemma4_2b", weights="paz", models_path=None):
-    model_dir = resolve_gemma4_dir(model_name, models_path)
+def Gemma4(model_name="gemma4_2b", weights="pretrained", models_path=None):
+    model_dir = resolve_dir(model_name, models_path)
     config = load_config(model_dir / "config.json")
-    decoder_step = Gemma4MultimodalDecoderStep(config)
-    per_layer_step = build_per_layer_step(config)
+    model = build_causal_lm(config)
     vision_encoder = build_vision_encoder_from_dir(model_dir)
     if weights is not None:
-        decoder_step.load_weights(str(model_dir / "decoder_step.weights.h5"))
-        load_optional_weights(model_dir, per_layer_step, vision_encoder)
-    return Gemma4Models(config, decoder_step, per_layer_step, vision_encoder)
+        model.backbone.load_weights(str(model_dir / "backbone.weights.h5"))
+        load_vision_weights(model_dir, vision_encoder)
+    return Gemma4Models(config, model, vision_encoder)
 
 
-def resolve_gemma4_dir(model_name, models_path):
+def build_causal_lm(config):
+    model = Gemma4CausalLM(config)
+    materialize_weights(model, config)
+    return model
+
+
+def materialize_weights(model, config):
+    # Subclassed models create variables lazily; run one tiny forward so
+    # load_weights has variables to fill. A seq_len of 2 keeps attention's
+    # key axis above size 1, avoiding a degenerate all-ones softmax.
+    token_ids = jp.zeros((1, 2), dtype="int32")
+    padding_mask = jp.ones((1, 2), dtype="int32")
+    model({"token_ids": token_ids, "padding_mask": padding_mask})
+
+
+def resolve_dir(model_name, models_path):
     if models_path is not None:
         return Path(models_path)
-    return download_gemma4_weights(model_name)
+    return download_weights(model_name)
 
 
-def download_gemma4_weights(model_name):
+def download_weights(model_name):
     subdir = "{}/{}".format(GEMMA4_CACHE, model_name)
     asset = "{}.manifest.json".format(model_name)
     manifest_path = Path(get_file(
@@ -52,18 +69,18 @@ def download_gemma4_weights(model_name):
     model_dir = manifest_path.parent
     manifest = json.loads(manifest_path.read_text())
     for filename, entry in manifest.items():
-        assemble_weights_file(model_dir / filename, entry, subdir)
+        args = (model_dir / filename, entry, subdir, GEMMA4_WEIGHTS_URL)
+        assemble_weights_file(*args)
     return model_dir
 
 
-def assemble_weights_file(path, entry, subdir):
+def assemble_weights_file(path, entry, subdir, url):
     checksum = entry.get("sha256")
     if is_complete(path, checksum):
         return path
     parts = []
     for asset in entry["parts"]:
-        parts.append(get_file(
-            asset, GEMMA4_WEIGHTS_URL + asset, cache_subdir=subdir))
+        parts.append(get_file(asset, url + asset, cache_subdir=subdir))
     concatenate_parts(parts, path)
     if checksum is not None and compute_sha256(path) != checksum:
         raise ValueError("Checksum mismatch after assembling {}".format(path))
@@ -124,12 +141,6 @@ def split_file(source, output_dir, prefix, part_bytes=PART_BYTES):
     return parts
 
 
-def build_per_layer_step(config):
-    if not config.hidden_size_per_layer_input:
-        return None
-    return Gemma4PerLayerEmbeddingStep(config)
-
-
 def build_vision_encoder_from_dir(model_dir):
     path = Path(model_dir) / "vision_config.json"
     if not path.exists():
@@ -139,10 +150,21 @@ def build_vision_encoder_from_dir(model_dir):
     return build_vision_encoder(config)
 
 
-def load_optional_weights(model_dir, per_layer_step, vision_encoder):
-    if per_layer_step is not None:
-        per_layer_step.load_weights(
-            str(model_dir / "embedding_step.weights.h5"))
-    if vision_encoder is not None:
+def load_vision_encoder(model_dir, weights="pretrained"):
+    """Build and load just the vision encoder, on the current default device.
+
+    Use inside a `jax.default_device(...)` block to place it where you want,
+    then swap it into a bundle: `Gemma4(...)._replace(vision_encoder=vision)`.
+    """
+    model_dir = Path(model_dir)
+    vision_encoder = build_vision_encoder_from_dir(model_dir)
+    if weights is not None and vision_encoder is not None:
         vision_encoder.load_weights(
             str(model_dir / "vision_encoder.weights.h5"))
+    return vision_encoder
+
+
+def load_vision_weights(model_dir, vision_encoder):
+    if vision_encoder is not None:
+        vision_encoder.load_weights(
+            str(Path(model_dir) / "vision_encoder.weights.h5"))

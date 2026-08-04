@@ -6,6 +6,7 @@ import numpy as np
 import paz
 from paz.backend import video as video_utils
 from paz.utils import plot
+
 import trimesh
 
 DANDELION = (1.0, 0.84, 0.0)
@@ -80,14 +81,14 @@ def plot_losses(losses, directory, filename, step_arg=None):
     plot.save(figure, Path(directory) / filename)
 
 
-def plot_metrics(metrics, directory, filename, step_arg=None):
+def plot_metrics(metrics, directory, filename, step_arg=None, stride=1):
     figure, axis = plot.subplots()
     color_map = plot.plt.get_cmap("tab10")
     metric_names = list(metrics.keys())
     colors = [color_map(i % 10) for i in range(len(metric_names))]
     for color, metric_name in zip(colors, metric_names):
         metric_values = metrics[metric_name]
-        x_values = np.arange(len(metric_values))
+        x_values = np.arange(len(metric_values)) * stride
         y_values = np.array(metric_values)
         line_args = (x_values, y_values, axis)
         plot.line(*line_args, color=color, label=metric_name)
@@ -113,9 +114,9 @@ def export_mesh_orbit(root, round_path, video_name, fps, orbit, camera_origin):
     meshes, image_shape, y_FOV, lights, num_views, chunk_size = orbit
     H, W = image_shape
     directory = paz.directory.make(Path(root) / round_path)
-    mask = jp.ones(len(meshes.transform), dtype=bool)
-    render_args = (meshes, mask, H, W, y_FOV, lights, chunk_size)
-    render_frame = paz.graphics.mesh_renderer(*render_args)
+    scene = paz.graphics.Scene(list(meshes))
+    render_args = scene, H, W, y_FOV, lights, False, chunk_size
+    render_frame = paz.graphics.scene_renderer(*render_args)
     angles = jp.linspace(1.5 * jp.pi, 3.5 * jp.pi, num_views)
     frames = []
     for angle in angles:

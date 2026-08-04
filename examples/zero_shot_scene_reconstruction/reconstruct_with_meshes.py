@@ -32,6 +32,7 @@ def build_parser():
     add("--compute_image_callback", default=True, type=str_to_bool)
     add("--callback_frequency", default=10, type=int)
     add("--compute_metrics", default=True, type=str_to_bool)
+    add("--metrics_every", default=25, type=int)
     add("--render_final_scene", default=True, type=str_to_bool)
     add("--min_depth", default=0.15, type=float)
     add("--max_depth", default=2.0, type=float)
@@ -44,7 +45,8 @@ def build_parser():
     add("--cage_subdivisions", default=3, type=int)
     add("--floor_size", default=4.0, type=float)
     add("--tile_shape", type=int, nargs=2, default=[1, 1])
-    add("--chunk_size", default=128, type=int)
+    add("--chunk_size", default=12288, type=int)
+    add("--face_chunk_size", default=128, type=int)
     add("--color_weight", default=1.0, type=float)
     add("--depth_weight", default=100.0, type=float)
     add("--masks_weight", default=10.0, type=float)
@@ -96,7 +98,7 @@ from paz.optimization import MAX_STEPS_REACHED
 from paz.optimization import TraceParameters
 from backend.losses import build_mesh_loss, build_mesh_metrics
 from backend.mesh import (
-    append_floor,
+    build_scene_meshes,
     build_floor,
     build_object_meshes,
 )
@@ -185,6 +187,7 @@ obs_args = (true_image, true_depth, shot.masks.copy(), image_shape)
 true_image, true_depth, true_masks = preprocess_observations(*obs_args)
 camera = (image_shape, y_FOV, world_to_camera_opengl, min_depth, max_depth)
 camera = (*camera, args.tile_shape, args.chunk_size)
+camera = (*camera, args.face_chunk_size)
 model = build_mesh_model(camera, meshes, mesh_weights, floor, lights)
 jit_model = jit(model)
 
@@ -224,6 +227,8 @@ print("Running ADAMW to optimize cage vertices (Eq. 18)")
 start_time = time.perf_counter()
 opt_args = (cage_vertices, mesh_loss, optimizer, args.max_steps)
 opt_kwargs = dict(stop_fn=stop_fn, metrics=mesh_metrics)
+if mesh_metrics is not None:
+    opt_kwargs.update(metrics_every=args.metrics_every)
 opt_kwargs.update(callbacks=callbacks, verbose=True)
 status, cage_vertices, history = paz.minimize(*opt_args, **opt_kwargs)
 total_time = time.perf_counter() - start_time
@@ -259,7 +264,7 @@ mesh_states, scene_states = {}, {}
 for prefix, state in state_map.items():
     image, depth, masks, aux = jit_model(state)
     meshes_now = aux["meshes"]
-    scene_now = append_floor(meshes_now, floor)
+    scene_now = build_scene_meshes(meshes_now, floor)
     mesh_states[prefix] = (image, depth, masks, meshes_now)
     scene_states[prefix] = scene_now
     write_rgb_image(image, root, f"{prefix}_image.png")
@@ -289,7 +294,8 @@ paz.pytree.to_pickle(losses, Path(root) / "mesh_loss.pkl")
 paz.pytree.to_pickle(best_cage_vertices, Path(root) / "best_parameters.pkl")
 paz.pytree.to_pickle(lights, Path(root) / "best_lights.pkl")
 if args.compute_metrics:
-    plot_metrics(metrics_trace, root, "metrics.pdf", best_step_arg)
+    metrics_args = metrics_trace, root, "metrics.pdf", best_step_arg
+    plot_metrics(*metrics_args, args.metrics_every)
     paz.pytree.to_pickle(metrics_trace, Path(root) / "metrics.pkl")
 
 meta_data = {

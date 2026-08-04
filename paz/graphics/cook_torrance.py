@@ -5,7 +5,6 @@ import jax.numpy as jp
 import paz
 
 from paz.graphics.geometry import compute_hits_to_light
-from paz.graphics.phong import compute_base_color
 
 
 Cosines = namedtuple(
@@ -28,12 +27,17 @@ def compute_directional_cosines(eye, normals, light, points):
     view = paz.algebra.normalize(eye)
     halfway = compute_halfway_direction(view, light_direction)
     cosines = (
-        jp.maximum(paz.algebra.dot(normals, light_direction), 0.0),
-        jp.maximum(paz.algebra.dot(normals, view), 1e-4),
-        jp.maximum(paz.algebra.dot(normals, halfway), 0.0),
-        jp.maximum(paz.algebra.dot(view, halfway), 0.0),
+        compute_clipped_cosine(normals, light_direction, 0.0),
+        compute_clipped_cosine(normals, view, 1e-4),
+        compute_clipped_cosine(normals, halfway, 0.0),
+        compute_clipped_cosine(view, halfway, 0.0),
     )
     return Cosines(*cosines)
+
+
+def compute_clipped_cosine(vectors_A, vectors_B, lowest):
+    cosine = jp.maximum(paz.algebra.dot(vectors_A, vectors_B), lowest)
+    return jp.expand_dims(cosine, -1)
 
 
 def compute_microfacet_distribution(normal_dot_half, roughness):
@@ -74,7 +78,7 @@ def compute_specular_color(material, reflectance, cosines):
     )
     denominator = 4.0 * cosines.normal_dot_light * cosines.normal_dot_view
     factor = distribution * geometry / (denominator + 1e-7)
-    return reflectance * jp.expand_dims(factor, -1)
+    return reflectance * factor
 
 
 def compute_diffuse_color(material, base_color, reflectance):
@@ -85,33 +89,30 @@ def compute_diffuse_color(material, base_color, reflectance):
 
 def compute_direct_lighting(material, base_color, points, normals, eye, light):
     cosines = compute_directional_cosines(eye, normals, light, points)
-    view_dot_half = jp.expand_dims(cosines.view_dot_half, -1)
     base_reflectance = compute_base_reflectance(material)
-    reflectance = compute_fresnel_reflectance(view_dot_half, base_reflectance)
+    fresnel_args = cosines.view_dot_half, base_reflectance
+    reflectance = compute_fresnel_reflectance(*fresnel_args)
     diffuse = compute_diffuse_color(material, base_color, reflectance)
     specular = compute_specular_color(material, reflectance, cosines)
-    visible = jp.expand_dims(cosines.normal_dot_light, -1)
+    visible = cosines.normal_dot_light
     return (diffuse + specular) * visible * light.intensity
 
 
-def compute_ambient(shape, material, light, points):
-    base_color = compute_base_color(shape, material, light, points)
-    return base_color * material.ambient
+def compute_ambient(albedo, material, light):
+    return albedo * light.intensity * material.ambient
 
 
-def compute_colors(shape, material, points, normals, eye, light):
-    base_color = compute_base_color(shape, material, light, points)
+def compute_colors(albedo, material, points, normals, eye, light):
+    base_color = albedo * light.intensity
     ambient = base_color * material.ambient
-    direct = compute_direct_lighting(
-        material, base_color, points, normals, eye, light
-    )
-    return ambient + direct
+    args = material, base_color, points, normals, eye, light
+    return ambient + compute_direct_lighting(*args)
 
 
 def compute_colors_with_shadow(
-    shape, material, points, normals, eye, light, is_shadow
+    albedo, material, points, normals, eye, light, is_shadow
 ):
-    full = compute_colors(shape, material, points, normals, eye, light)
-    ambient = compute_ambient(shape, material, light, points)
+    full = compute_colors(albedo, material, points, normals, eye, light)
+    ambient = compute_ambient(albedo, material, light)
     is_shadow = jp.expand_dims(is_shadow, 1)
     return ambient * is_shadow + full * (1.0 - is_shadow)

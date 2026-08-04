@@ -15,7 +15,7 @@ if __name__ == "__main__":
     parser.add_argument("--weights", default=WEIGHTS)
     parser.add_argument("--mesh", default=None)
     parser.add_argument("--image_size", default=128, type=int)
-    parser.add_argument("--distance", default=0.9, type=float)
+    parser.add_argument("--distance", default=2.5, type=float)
     parser.add_argument("--camera", default=0, type=int)
     parser.add_argument("--H", default=480, type=int)
     parser.add_argument("--W", default=640, type=int)

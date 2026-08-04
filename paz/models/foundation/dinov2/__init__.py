@@ -1,11 +1,11 @@
-from paz.models.foundation.dinov2.models.vision_transformer import arange_indices
-from paz.models.foundation.dinov2.models.windowed_vision_transformer import (
-    WindowedDinov2PatchEmbeddings,
-    WindowedDinov2Layer,
-    WindowedDinov2Encoder,
-    WindowedDinov2Model,
-    dinov2_windowed_small,
-    dinov2_windowed_base,
-    dinov2_windowed_large,
-    dinov2_windowed_giant,
-)
+"""Canonical function-only DINOv2 built from reusable transformer primitives.
+
+Standard models return ``(class_token, patch_tokens)``. Feature models return
+a plain tuple of channels-last feature maps in the requested layer order.
+"""
+from paz.models.foundation.dinov2.models import DINOv2Small
+from paz.models.foundation.dinov2.models import DINOv2Base
+from paz.models.foundation.dinov2.models import DINOv2Large
+from paz.models.foundation.dinov2.models import DINOv2SmallFeatures
+from paz.models.foundation.dinov2.models import DINOv2BaseFeatures
+from paz.models.foundation.dinov2.models import DINOv2LargeFeatures

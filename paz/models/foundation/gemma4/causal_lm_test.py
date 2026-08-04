@@ -44,5 +44,7 @@ def test_causal_lm_save_and_load(tmp_path):
     output = model(inputs)
     path = tmp_path / "causal_lm.weights.h5"
     model.save_weights(str(path))
-    loaded = Gemma4CausalLM(config, weights_path=path)
+    loaded = Gemma4CausalLM(config)
+    loaded(inputs)
+    loaded.load_weights(str(path))
     assert_close(output, loaded(inputs))

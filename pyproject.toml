@@ -19,7 +19,20 @@ dependencies = [
     "tfp-nightly",
     "matplotlib",
     "optax",
-    "scipy"
+    "scipy",
+    "trimesh",
+    "fast_simplification"
+]
+
+[project.optional-dependencies]
+sonic = [
+    "mujoco>=3.3",
+    "onnx>=1.16",
+]
+gear_wbc = [
+    "mujoco>=3.3",
+    "onnx>=1.16",
+    "pygame>=2.6",
 ]
 
 [project.urls]

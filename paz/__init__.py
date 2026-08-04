@@ -22,9 +22,12 @@ from paz.backend.lie import SO3
 from paz.backend.lie import SE2
 from paz.backend.lie import quaternion
 from paz.backend import angles
+from paz.backend import distributions
+from paz.backend import bijectors
 
 from paz import graphics
 from paz.backend import points2D
+from paz.backend import features
 from paz.backend import gaussian_mixture
 from paz.backend import poses
 from paz.backend import algebra
@@ -35,6 +38,7 @@ from paz.backend import cage
 from paz.backend.standard import (
     lock,
     partial,
+    maybe_apply,
     merge_dicts,
     cast,
     to_jax,
@@ -42,11 +46,15 @@ from paz.backend.standard import (
     NamedTuple,
     snapshot_variables,
     call_stateless,
+    model_device,
+    place_on_model_device,
 )
 from paz import losses
 from paz.abstract import Model, Node, Input, Sequential, Tree
 from paz.models.decomposition import pca as PCA
 from paz.models import transformers
+from paz.models.foundation import dinov2
+from paz.models.foundation import depth_anything3
 from paz import applications
 from paz import utils
 from paz.utils import pytree
@@ -67,6 +75,7 @@ from paz.inference import metropolis_hastings
 from paz.inference.prior import Prior
 from paz.inference.observable import Observable
 from paz.inference.latent import Latent
+from paz.inference.gated import Gated
 from paz.inference.pgm import PGM
 from paz.inference.tuner import AdaptiveStepTuner, Tuner
 from paz.inference.pgm import marginalize, recover_discrete_posterior

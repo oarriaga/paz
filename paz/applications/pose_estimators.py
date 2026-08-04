@@ -7,6 +7,8 @@ import paz
 
 UPNP = cv2.SOLVEPNP_UPNP
 LEVENBERG_MARQUARDT = cv2.SOLVEPNP_ITERATIVE
+EPNP = cv2.SOLVEPNP_EPNP
+MIN_REQUIRED_POINTS = 4
 
 Pose6D = namedtuple("Pose6D", ["rotation_vector", "translation"])
 
@@ -70,6 +72,21 @@ def solve_PnP(points2D, points3D, camera, solver=LEVENBERG_MARQUARDT):
     args = (camera.intrinsics, camera.distortion, None, None, False, solver)
     (_, rotation_vector, translation) = cv2.solvePnP(points3D, points2D, *args)
     return Pose6D(rotation_vector, translation)
+
+
+def solve_PnP_RANSAC(points2D, points3D, camera, inlier_thresh=5.0,
+                     iterations=100):
+    if len(points3D) < MIN_REQUIRED_POINTS:
+        return None
+    points2D = np.array(points2D, np.float64).reshape((len(points3D), 1, 2))
+    points3D = np.array(points3D, np.float64)
+    args = (camera.intrinsics, camera.distortion, None, None, False,
+            iterations, inlier_thresh, 0.99, None, EPNP)
+    success, rotation, translation, inliers = cv2.solvePnPRansac(
+        points3D, points2D, *args)
+    if not success:
+        return None
+    return Pose6D(rotation, translation)
 
 
 def build_face_points3D():

@@ -241,3 +241,32 @@ def DetectMinimalHand(box_scale=1.5, right_hand=False, draw=None):
         return (boxes, all_keypoints2D), image
 
     return call_and_draw if callable(draw) else call
+
+
+def SSD512MinimalHandPose(box_scale=1.5, right_hand=False, draw=None):
+    detect = paz.applications.SSD512HandDetection(draw=False)
+    estimate = MinimalHandPoseEstimation(right_hand=right_hand, draw=False)
+    if draw is None:
+        draw = draw_hand_skeleton
+
+    def call(image):
+        boxes = detect(image)[0]
+        boxes = paz.boxes.square(boxes)
+        boxes = paz.boxes.scale(boxes, box_scale, box_scale)
+        boxes = paz.cast(boxes, "int32")
+        boxes = paz.boxes.remove_invalid(boxes)
+        all_keypoints2D, all_keypoints3D = [], []
+        for box in boxes:
+            hand = estimate(paz.image.crop(image, box))
+            keypoints2D = paz.points2D.shift_to_box_origin(hand.keypoints2D, box)  # fmt: skip
+            all_keypoints2D.append(keypoints2D)
+            all_keypoints3D.append(hand.keypoints3D)
+        return boxes, all_keypoints2D, all_keypoints3D
+
+    def call_and_draw(image):
+        boxes, all_keypoints2D, all_keypoints3D = call(image)
+        for keypoints2D in all_keypoints2D:
+            image = draw(image, keypoints2D)
+        return (boxes, all_keypoints2D, all_keypoints3D), image
+
+    return call_and_draw if callable(draw) else call

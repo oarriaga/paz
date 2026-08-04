@@ -1,6 +1,7 @@
 """Position-wise feedforward sub-layers (no norm, no residual).
 
-Flavors: ``gelu`` (vanilla Dense -> GELU -> Dense) and ``glu`` (gated GeGLU).
+Flavors: ``gelu`` (vanilla Dense -> GELU -> Dense), ``glu`` (gated GeGLU),
+and ``swiglu`` (SiLU-gated, Llama-style).
 Callers pass layer names so weight loading keeps working, and wrap their own
 normalization / residual around the returned tensor.
 """
@@ -16,7 +17,18 @@ def gelu(x, inner_dim, output_dim, intermediate_name, output_name):
 
 
 def glu(x, inner_dim, output_dim, gate_name, up_name, down_name):
-    gate = build_dense(inner_dim, gate_name, activations.gelu, False)
+    names = (gate_name, up_name, down_name)
+    return gated(x, activations.gelu, inner_dim, output_dim, names)
+
+
+def swiglu(x, inner_dim, output_dim, gate_name, up_name, down_name):
+    names = (gate_name, up_name, down_name)
+    return gated(x, activations.silu, inner_dim, output_dim, names)
+
+
+def gated(x, activation, inner_dim, output_dim, names):
+    gate_name, up_name, down_name = names
+    gate = build_dense(inner_dim, gate_name, activation, False)
     up = build_dense(inner_dim, up_name, None, False)
     down = build_dense(output_dim, down_name, None, False)
     return down(gate(x) * up(x))

@@ -1,9 +1,11 @@
+from pathlib import Path
+
 import pytest
 import jax
 import jax.numpy as jp
 import paz
 from paz import SE3
-from paz.graphics import renderer
+from paz.graphics import composite, renderer
 from paz.graphics.shapes.sphere import intersect_canonical_sphere
 from paz.graphics.types import (
     Shape,
@@ -92,7 +94,8 @@ def build_legacy_rays(image_shape, y_fov, world_to_camera):
     H_world, W_world = paz.graphics.camera.compute_image_sizes(
         y_fov, aspect_ratio
     )
-    directions = paz.graphics.camera.build_ray_directions(H, W, H_world, W_world)
+    args = H, W, H_world, W_world
+    directions = paz.graphics.camera.build_ray_directions(*args)
     origins = paz.graphics.camera.build_ray_origins(H, W)
     camera_to_world = jp.linalg.inv(world_to_camera)
     return paz.algebra.transform_rays(camera_to_world, origins, directions)
@@ -112,8 +115,9 @@ def assert_render_matches(actual, expected, atol=1e-4):
 def compute_selected_shadow_depths(camera_pose, image_shape=(120, 160)):
     scene, lights = build_shadow_scene()
     rays = paz.graphics.camera.build_rays(image_shape, jp.pi / 3.0, camera_pose)
-    shapes, mask, _, lights = paz.graphics.scene.compile(scene, lights, None)
-    intersections = renderer.intersect(shapes, rays, mask)
+    compiled = paz.graphics.scene.compile(scene, lights, None)
+    shapes, mask, lights = compiled.shapes, compiled.mask, compiled.lights
+    intersections = renderer.intersect(compiled, rays, None)
     closest = renderer.gather_closest(*intersections)
     vector = lights[0].position - closest.point
     distance = jp.squeeze(paz.algebra.compute_norms(vector, 1), axis=1)
@@ -134,11 +138,11 @@ def compute_selected_shadow_depths(camera_pose, image_shape=(120, 160)):
         shadow_masks,
         depths,
         shape_indices,
-        closest.shape_idx,
+        closest.primitive_index,
         closest.normal,
         light_directions,
     )
-    return shadow_masks, depths, shape_indices, closest.shape_idx
+    return shadow_masks, depths, shape_indices, closest.primitive_index
 
 
 def take_shape_depths(depths, shape_indices, receiver_indices, shape_index):
@@ -156,7 +160,7 @@ def test_take_closest():
     )
     indices = jp.array([0, 1, 0])
     expected = jp.array([[1, 1, 1], [5, 5, 5], [3, 3, 3]])
-    result = renderer.take_closest(array, indices)
+    result = composite.take_closest(array, indices)
     assert jp.array_equal(result, expected)
 
 
@@ -165,7 +169,8 @@ def test_compute_soft_occlusion():
     depths = jp.array(
         [[paz.graphics.FARAWAY, 5.0, 10.0, 15.0], [11.0, 11.0, 10.0, 11.0]]
     )
-    hit_masks = jp.array([[True, True, True, True], [False, False, True, False]])
+    rows = [[True, True, True, True], [False, False, True, False]]
+    hit_masks = jp.array(rows)
     result = renderer.compute_soft_occlusion(
         hit_masks, depths, light_lengths, slope=10.0
     )
@@ -266,7 +271,8 @@ def test_select_shadow_depths_keep_back_side_second_root():
         receiver_normals,
         light_directions,
     )
-    result = renderer.compute_soft_occlusion(hit_masks, depths, jp.array([0.01]))
+    args = hit_masks, depths, jp.array([0.01])
+    result = renderer.compute_soft_occlusion(*args)
     assert bool(hit_masks[0, 0])
     assert float(depths[0, 0]) == pytest.approx(0.2)
     assert bool(hit_masks[1, 0])
@@ -277,7 +283,7 @@ def test_select_shadow_depths_keep_back_side_second_root():
 def test_compute_scene_hit_mask():
     hit_masks = jp.array([[False, True, False], [False, False, True]])
     expected = jp.array([False, True, True])
-    result = renderer.compute_scene_hit_mask(hit_masks)
+    result = composite.compute_scene_hit_mask(hit_masks)
     assert jp.array_equal(result, expected)
 
 
@@ -293,7 +299,7 @@ def test_select_colors():
     depths = jp.array([[10.0, 2.0], [5.0, 8.0]])
     colors = jp.array([[[1, 0, 0], [0, 1, 0]], [[0, 0, 1], [1, 1, 0]]])
     expected = jp.array([[0, 0, 1], [0, 1, 0]])
-    result = renderer.select_colors(depths, colors)
+    result = composite.select_colors(depths, colors)
     assert jp.array_equal(result, expected)
 
 
@@ -314,7 +320,7 @@ def test_initialize_render_state():
 def test_find_closest_intersection_args():
     hit_masks = jp.array([[True, False], [False, True]])
     depths = jp.array([[1.0, 10.0], [10.0, 2.0]])
-    indices = renderer.find_closest_intersection_args(hit_masks, depths)
+    indices = composite.find_closest_intersection_args(hit_masks, depths)
     assert jp.array_equal(indices, jp.array([0, 1]))
 
 
@@ -323,10 +329,11 @@ def test_get_material_properties():
     mat2 = Material(transparency=0.8)
     shape1 = Sphere(material=mat1)
     shape2 = Sphere(material=mat2)
-    shapes = [shape1, shape2]
+    scene = Scene([shape1, shape2])
+    compiled = paz.graphics.scene.compile(scene, [], None)
     indices = jp.array([0, 1])
     reflectivities, transparencies, refractivities = (
-        renderer.get_material_properties(shapes, indices)
+        renderer.get_material_properties(compiled, indices)
     )
     assert reflectivities[0] == 0.5
     assert transparencies[1] == 0.8
@@ -408,7 +415,7 @@ def camera_pose():
 
 
 def snapshot_path(filename):
-    return f"paz/graphics/snapshots/{filename}"
+    return str(Path(__file__).parent / "snapshots" / filename)
 
 
 def assert_snapshot(array, filename, atol=1e-4):
@@ -728,7 +735,8 @@ def test_saved_pose_sphere_self_shadow_keeps_later_roots():
     _, depths, shape_indices, receiver_indices = compute_selected_shadow_depths(
         OLD_CAMERA_POSE
     )
-    sphere_depths = take_shape_depths(depths, shape_indices, receiver_indices, 0)
+    args = depths, shape_indices, receiver_indices, 0
+    sphere_depths = take_shape_depths(*args)
     assert int(jp.sum(sphere_depths < 1e-2)) > 0
     assert float(jp.min(sphere_depths)) > renderer.SHADOW_SELF_HIT_EPSILON
 
@@ -854,11 +862,11 @@ def test_max_bounces_effect(small_image_shape, camera_pose):
     assert not jp.all(img_1b == 1.0)
 
 
-def test_shape_renderer_returns_uint8_frame(small_image_shape, camera_pose):
+def test_scene_renderer_returns_uint8_frame(small_image_shape, camera_pose):
     material = Material(color=jp.array([1.0, 0.0, 0.0]))
     sphere = Sphere(jp.eye(4), material)
     scene = Scene([sphere])
-    render_frame = paz.graphics.shape_renderer(
+    render_frame = paz.graphics.scene_renderer(
         scene,
         small_image_shape[0],
         small_image_shape[1],

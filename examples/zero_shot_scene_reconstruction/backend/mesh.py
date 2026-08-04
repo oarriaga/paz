@@ -65,19 +65,12 @@ def build_floor(floor_material, size=4.0, divisions=2):
     return paz.graphics.mesh.Mesh(*fields)
 
 
-def append_mesh(batched, single):
-    def _append(batch, element):
-        return jp.concatenate([batch, element[None]], axis=0)
-
-    return jax.tree.map(_append, batched, single)
+def build_scene_meshes(batched, floor):
+    return unbatch_meshes(batched) + [floor]
 
 
-def append_floor(meshes, floor):
-    return append_mesh(meshes, _fill_floor(floor, meshes))
-
-
-def _fill_floor(floor, batched_meshes):
-    num_v = batched_meshes.vertices.shape[1]
-    num_f = batched_meshes.faces.shape[1]
-    num_e = batched_meshes.edges.shape[1]
-    return paz.graphics.mesh.fill_mesh(floor, num_v, num_f, num_e)
+def unbatch_meshes(batched):
+    meshes = []
+    for arg in range(len(batched.vertices)):
+        meshes.append(jax.tree.map(lambda field: field[arg], batched))
+    return meshes

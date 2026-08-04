@@ -173,3 +173,29 @@ def fixed_size(array, size, pad_value):
 
 def empty_difficulties(ground_truths):
     return [np.zeros(len(truth), "bool") for truth in ground_truths]
+
+
+def transform_mesh_points(points3D, rotation, translation):
+    return points3D @ rotation.T + translation
+
+
+def compute_ADD(points3D, pose_true, pose_pred):
+    true = transform_mesh_points(points3D, *pose_true)
+    pred = transform_mesh_points(points3D, *pose_pred)
+    return float(np.linalg.norm(pred - true, axis=1).mean())
+
+
+def compute_ADI(points3D, pose_true, pose_pred):
+    true = transform_mesh_points(points3D, *pose_true)
+    pred = transform_mesh_points(points3D, *pose_pred)
+    distances = np.linalg.norm(pred[:, None, :] - true[None, :, :], axis=-1)
+    return float(distances.min(axis=1).mean())
+
+
+def compute_object_diameter(points3D):
+    distances = np.linalg.norm(points3D[:, None, :] - points3D[None, :, :], axis=-1)  # fmt: skip
+    return float(distances.max())
+
+
+def is_correct_ADD(error, diameter, threshold=0.1):
+    return error <= diameter * threshold
