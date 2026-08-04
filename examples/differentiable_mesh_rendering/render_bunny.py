@@ -29,7 +29,8 @@ def make_bunny_mesh(path):
     vertices = normalize_vertices(vertices)
     edges = build_face_edges(faces)
     material = Material(jp.zeros(3), 0.15, 0.75, 0.25, 64.0)
-    shift = paz.SE3.translation(jp.array([0.0, -0.12, 0.0]))
+    # shift = paz.SE3.translation(jp.array([0.0, -0.12, 0.0]))
+    shift = paz.SE3.translation(jp.array([0.0, 0.48, 0.0]))
     # rotate = paz.SE3.rotation_y(jp.pi)
     # transform = shift @ rotate
     transform = shift
@@ -49,15 +50,15 @@ camera_up = jp.array([0.0, 1.0, 0.0])
 camera_pose = paz.SE3.view_transform(camera_origin, camera_target, camera_up)
 
 lights = [
-    PointLight(jp.ones(3) * 1.4, camera_origin),
-    PointLight(jp.array([0.6, 0.6, 0.7]), jp.array([-2.0, 3.0, 2.0])),
+    PointLight(jp.array([1.0, 1.0, 1.0]), jp.array([-2.0, 3.0, 2.0])),
 ]
 
 bunny = make_bunny_mesh(mesh_path)
-scene = Scene([bunny])
+plane = paz.graphics.Plane(material=paz.graphics.Material(paz.graphics.WHITE))
+scene = Scene([bunny, plane])
 
 TILES = (4, 4)
 tile_rays = (H * W) // (TILES[0] * TILES[1])
-render_args = scene, H, W, Y_FOV, lights, False, tile_rays, TILES
-render_fn = scene_renderer(*render_args)
+render_args = scene, H, W, Y_FOV, lights, True, tile_rays, TILES
+render_fn = scene_renderer(scene, H, W, Y_FOV, lights, True, 2**12, (1, 1))
 viewer(render_fn, camera_pose, H=H, W=W)
