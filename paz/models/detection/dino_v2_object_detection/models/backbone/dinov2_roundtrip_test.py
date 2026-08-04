@@ -1,7 +1,7 @@
 import numpy as np
 import keras
 
-from paz.models.foundation.dinov2.models.windowed_vision_transformer import (
+from paz.models.foundation.dinov2_legacy.models.windowed_vision_transformer import (
     WindowedDinov2Model,
 )
 

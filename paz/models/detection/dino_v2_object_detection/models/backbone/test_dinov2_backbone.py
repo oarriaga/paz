@@ -22,7 +22,7 @@ project_root = os.path.abspath(
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from paz.models.foundation.dinov2.models.windowed_vision_transformer import (
+from paz.models.foundation.dinov2_legacy.models.windowed_vision_transformer import (
     WindowedDinov2PatchEmbeddings,
     WindowedDinov2Layer,
     WindowedDinov2Encoder,

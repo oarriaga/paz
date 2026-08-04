@@ -3,7 +3,7 @@ from collections import namedtuple
 import numpy as np
 import torch
 
-from paz.models.foundation.dinov2.models.windowed_vision_transformer import (
+from paz.models.foundation.dinov2_legacy.models.windowed_vision_transformer import (
     EMBEDDINGS,
     ENCODER,
     ENCODER_LAYER,

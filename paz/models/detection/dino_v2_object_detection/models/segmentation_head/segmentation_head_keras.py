@@ -2,7 +2,7 @@ import keras
 from keras import Input, Model, ops, layers
 from keras.layers import EinsumDense
 
-from paz.models.foundation.dinov2.layers.layer_scale import apply_layer_scale
+from paz.models.foundation.dinov2_legacy.layers.layer_scale import apply_layer_scale
 
 
 def scale_sample_axis(coordinate, extent, align_corners):
