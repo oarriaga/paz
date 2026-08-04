@@ -4,6 +4,10 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
+import pytest
+
+pytest.importorskip("torch")
+
 import torch
 import torch.nn.functional as F
 import keras

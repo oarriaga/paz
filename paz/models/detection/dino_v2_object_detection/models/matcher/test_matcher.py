@@ -1,8 +1,16 @@
-import pytest
-import torch
-import numpy as np
 import os
 import sys
+
+import numpy as np
+import pytest
+
+_PT_DIR = "examples/rf-detr_original_pytorch_implementation"
+_PT_ROOT = os.path.join(os.path.dirname(__file__), *([".."] * 6))
+if not os.path.isdir(os.path.join(_PT_ROOT, _PT_DIR)):
+    pytest.skip("RF-DETR reference unavailable", allow_module_level=True)
+pytest.importorskip("torch")
+
+import torch
 import keras
 
 

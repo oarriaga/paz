@@ -25,6 +25,9 @@ _PT_ROOT = str(
     / "examples"
     / "rf-detr_original_pytorch_implementation"
 )
+if not Path(_PT_ROOT).is_dir():
+    pytest.skip("RF-DETR reference unavailable", allow_module_level=True)
+pytest.importorskip("torch")
 if _PT_ROOT not in sys.path:
     sys.path.insert(0, _PT_ROOT)
 
