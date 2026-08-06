@@ -114,6 +114,60 @@ def bilinear_sample_positions(source, target, ops):
     return lower, upper, positions - lower
 
 
+def sample_bilinear(images, positions):
+    """Samples images at normalized (x, y) positions inside ``[-1, 1]``.
+
+    Matches ``torch.grid_sample(align_corners=False, padding_mode="zeros")``:
+    corners outside the image contribute zero. Images are channels-last
+    ``(batch, height, width, channels)`` and positions are ``(batch, ..., 2)``.
+    Uses ``keras.ops`` so it traces inside functional models.
+    """
+    from keras import ops
+    points = int(np.prod(positions.shape[1:-1]))
+    flat = ops.reshape(positions, (-1, points, 2))
+    column = to_pixel_position(flat[..., 0], images.shape[2])
+    row = to_pixel_position(flat[..., 1], images.shape[1])
+    sampled = accumulate_corners(images, column, row, ops)
+    shape = (-1, *positions.shape[1:-1], images.shape[-1])
+    return ops.reshape(sampled, shape)
+
+
+def to_pixel_position(normalized, extent):
+    return ((normalized + 1) * extent - 1) / 2
+
+
+def accumulate_corners(images, column, row, ops):
+    left, top = ops.floor(column), ops.floor(row)
+    corners = (left, top), (left + 1, top), (left, top + 1), (left + 1, top + 1)
+    weights = build_corner_weights(column - left, row - top)
+    sampled = 0.0
+    for corner, weight in zip(corners, weights):
+        inside = compute_inside_image(images, *corner, ops)
+        pixels = take_pixels(images, *corner, ops)
+        sampled = sampled + pixels * ops.expand_dims(weight * inside, -1)
+    return sampled
+
+
+def build_corner_weights(weight_x, weight_y):
+    left, top = 1.0 - weight_x, 1.0 - weight_y
+    return left * top, weight_x * top, left * weight_y, weight_x * weight_y
+
+
+def compute_inside_image(images, corner_x, corner_y, ops):
+    inside_x = ops.logical_and(corner_x >= 0, corner_x <= images.shape[2] - 1)
+    inside_y = ops.logical_and(corner_y >= 0, corner_y <= images.shape[1] - 1)
+    return ops.cast(ops.logical_and(inside_x, inside_y), images.dtype)
+
+
+def take_pixels(images, corner_x, corner_y, ops):
+    height, width = images.shape[1], images.shape[2]
+    column = ops.cast(ops.clip(corner_x, 0, width - 1), "int32")
+    row = ops.cast(ops.clip(corner_y, 0, height - 1), "int32")
+    indices = ops.expand_dims(row * width + column, axis=-1)
+    pixels = ops.reshape(images, (-1, height * width, images.shape[-1]))
+    return ops.take_along_axis(pixels, indices, axis=1)
+
+
 def resize_opencv(image: jax.Array, size: tuple[int, int]) -> jax.Array:
     # TODO change to split size into H, W
     data = jax.ShapeDtypeStruct((size[0], size[1], image.shape[2]), image.dtype)

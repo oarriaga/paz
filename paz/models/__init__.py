@@ -8,6 +8,11 @@ from .detection import EFFICIENTDETD4
 from .detection import EFFICIENTDETD5
 from .detection import EFFICIENTDETD6
 from .detection import EFFICIENTDETD7
+from .detection import RFDETRNano
+from .detection import RFDETRSmall
+from .detection import RFDETRMedium
+from .detection import RFDETRBase
+from .detection import RFDETRLarge
 from .detection import HaarCascadeEyeDetector
 from .detection import HaarCascadeFrontalFaceDetector
 from .classification.xception import MiniXception
@@ -34,6 +39,7 @@ from .foundation.dinov2 import DINOv2Small
 from .foundation.dinov2 import DINOv2Base
 from .foundation.dinov2 import DINOv2Large
 from .foundation.dinov2 import DINOv2SmallFeatures
+from .foundation.dinov2 import DINOv2SmallWindowedFeatures
 from .foundation.dinov2 import DINOv2BaseFeatures
 from .foundation.dinov2 import DINOv2LargeFeatures
 from .foundation.depth_anything3 import DepthAnything3Small
