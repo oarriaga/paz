@@ -215,6 +215,39 @@ def compute_IOUs(boxes_A, boxes_B):
     return jp.clip(intersection_area / union_area, 0.0, 1.0)
 
 
+def compute_union_areas(boxes_A, boxes_B):
+    """Computes the area covered by either box, for every pair."""
+    xy_min = jp.maximum(boxes_A[:, None, 0:2], boxes_B[:, 0:2])
+    xy_max = jp.minimum(boxes_A[:, None, 2:4], boxes_B[:, 2:4])
+    sides = jp.maximum(0.0, xy_max - xy_min)
+    intersection_area = sides[:, :, 0] * sides[:, :, 1]
+    areas_A = compute_areas(boxes_A, keepdims=False)
+    areas_B = compute_areas(boxes_B, keepdims=False)
+    return (areas_A[:, jp.newaxis] + areas_B) - intersection_area
+
+
+def compute_generalized_IOUs(boxes_A, boxes_B):
+    """Computes generalized IOU between `boxes_A` and `boxes_B`.
+
+    Unlike IOU this keeps a gradient once boxes stop overlapping: it
+    subtracts the share of the smallest enclosing box that neither box
+    covers, so values run from -1 to 1.
+
+    # Arguments
+        boxes_A: Array with shape `(num_boxes_A, 4)` in corner form.
+        boxes_B: Array with shape `(num_boxes_B, 4)` in corner form.
+
+    # Returns
+        Array of shape `(num_boxes_A, num_boxes_B)`.
+    """
+    xy_min = jp.minimum(boxes_A[:, None, 0:2], boxes_B[:, 0:2])
+    xy_max = jp.maximum(boxes_A[:, None, 2:4], boxes_B[:, 2:4])
+    sides = jp.maximum(0.0, xy_max - xy_min)
+    hull_areas = jp.maximum(sides[:, :, 0] * sides[:, :, 1], 1e-8)
+    uncovered = hull_areas - compute_union_areas(boxes_A, boxes_B)
+    return compute_IOUs(boxes_A, boxes_B) - uncovered / hull_areas
+
+
 def xyxy_to_xywh(boxes):
     x_min, y_min, x_max, y_max = split(boxes)
     W = x_max - x_min

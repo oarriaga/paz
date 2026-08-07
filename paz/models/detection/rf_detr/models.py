@@ -14,7 +14,10 @@ globally.
 Models return ``(logits, boxes)``: per-query class logits and normalized
 ``(cx, cy, w, h)`` boxes.
 """
-from keras import Model
+import math
+
+import numpy as np
+from keras import Model, ops
 
 from paz.models.foundation.dinov2 import DINOv2SmallWindowedFeatures
 from paz.models.detection.rf_detr import decoder, projector
@@ -35,6 +38,33 @@ def build_rf_detr(image_shape, patch_size, num_windows, global_layers,
     args = args + (num_classes, NUM_QUERIES)
     outputs = decoder.build(features, num_decoder_layers, *args)
     return Model(backbone.input, outputs, name=name)
+
+
+def reset_class_heads(model, prior=0.01):
+    """Biases fresh class heads towards predicting almost nothing.
+
+    Both class heads are scored with a focal-style loss over every query and
+    class, so a head that starts at even odds swamps the box terms. Upstream
+    starts them at a prior of ``0.01``; a head reinitialized for a new class
+    count needs the same treatment.
+    """
+    bias = -math.log((1.0 - prior) / prior)
+    for name in ("class_embed", "enc_class_embed"):
+        layer = model.get_layer(name)
+        weights = layer.get_weights()
+        layer.set_weights([weights[0], np.full_like(weights[1], bias)])
+
+
+def join_outputs(model):
+    """Concatenates boxes and logits so one Keras loss sees both.
+
+    ``paz.losses.detr`` needs the boxes and the class logits together to match
+    queries against targets, but the detectors return them separately for
+    inference. This wraps a built detector for training.
+    """
+    logits, boxes = model.outputs
+    joined = ops.concatenate([boxes, logits], axis=-1)
+    return Model(model.input, joined, name=f"{model.name}_joined")
 
 
 def RFDETRNano(num_classes=91, name="rf_detr_nano"):

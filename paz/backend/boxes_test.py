@@ -69,6 +69,32 @@ def test_compute_ious(boxes_A, boxes_B, true_IOUs):
     assert jp.allclose(true_IOUs, pred_IOUs)
 
 
+def test_compute_generalized_IOUs_self_intersection(boxes_A):
+    IOUs = paz.boxes.compute_generalized_IOUs(boxes_A, boxes_A)
+    assert jp.allclose(1.0, jp.diag(IOUs))
+
+
+def test_compute_generalized_IOUs_match_IOUs_when_nested(boxes_A):
+    """A box inside another shares its hull, so both measures agree."""
+    inner = jp.array([[10.0, 10.0, 20.0, 20.0]])
+    outer = jp.array([[0.0, 0.0, 40.0, 40.0]])
+    IOUs = paz.boxes.compute_IOUs(inner, outer)
+    generalized = paz.boxes.compute_generalized_IOUs(inner, outer)
+    assert jp.allclose(IOUs, generalized)
+
+
+def test_compute_generalized_IOUs_are_negative_when_far_apart():
+    near = jp.array([[0.0, 0.0, 10.0, 10.0]])
+    far = jp.array([[100.0, 100.0, 110.0, 110.0]])
+    assert paz.boxes.compute_generalized_IOUs(near, far)[0, 0] < 0.0
+    assert paz.boxes.compute_IOUs(near, far)[0, 0] == 0.0
+
+
+def test_compute_generalized_IOUs_shape(boxes_A, boxes_B):
+    IOUs = paz.boxes.compute_generalized_IOUs(boxes_A, boxes_B)
+    assert IOUs.shape == (len(boxes_A), len(boxes_B))
+
+
 def test_to_center_form(boxes_D_corner_form, boxes_D_center_form):
     values = paz.boxes.to_center_form(boxes_D_corner_form)
     assert jp.allclose(boxes_D_center_form, values)

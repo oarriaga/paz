@@ -244,7 +244,9 @@ def DetectRFDETRLarge(score_thresh=0.50, draw=None):
 def DetectRFDETRCOCO(build_model, score_thresh, draw):
     model = build_model()
     model.load_weights(paz.models.detection.rf_detr.download_weights(model))
-    names = paz.datasets.labels("COCO_EFFICIENTDET")
+    # COCO identifiers start at one, so index zero is not a category. The
+    # label set already spells unused identifiers "0", so prepend one more.
+    names = ["0"] + paz.datasets.labels("COCO_EFFICIENTDET")
     if draw is None:
         colors = paz.draw.lincolor(len(names))
         draw = paz.partial(paz.draw.boxes2D, names=names, colors=colors)
@@ -283,12 +285,8 @@ def RFDETR(model, score_thresh, draw, num_select=300):
 
 
 def select_detections(logits, boxes, num_select):
-    """Keeps the highest scoring query and class pairs, boxes in corners.
-
-    Column zero of the logits is never trained, so dropping it leaves label
-    indexes that address the 90 entry COCO identifier space directly.
-    """
-    scores = jax.nn.sigmoid(logits[0, :, 1:])
+    """Keeps the highest scoring query and class pairs, boxes in corners."""
+    scores = jax.nn.sigmoid(logits[0])
     num_classes = scores.shape[1]
     scores, ranked = jax.lax.top_k(jp.reshape(scores, (-1,)), num_select)
     boxes = paz.boxes.to_corner_form(boxes[0][ranked // num_classes])
