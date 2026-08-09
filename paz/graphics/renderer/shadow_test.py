@@ -129,15 +129,15 @@ def test_select_shadow_depths_keep_back_side_second_root():
     args += receiver_normals, light_directions
     hit_masks, depths = shadow.select_shadow_depths(*args)
     occlusion_args = hit_masks, depths, jp.array([0.01])
-    result = shadow.compute_soft_occlusion(*occlusion_args)
+    result = shadow.compute_occlusion_mask(*occlusion_args)
     assert bool(hit_masks[0, 0])
     assert float(depths[0, 0]) == pytest.approx(0.2)
     assert bool(hit_masks[1, 0])
     assert float(depths[1, 0]) == pytest.approx(5e-4)
-    assert float(result[0]) > 0.5
+    assert float(result[0]) == 1.0
 
 
-def test_compute_soft_occlusion():
+def test_compute_occlusion_mask():
     light_lengths = jp.array([10.0, 10.0, 10.0, 10.0])
     depths = jp.array(
         [[paz.graphics.FARAWAY, 5.0, 10.0, 15.0], [11.0, 11.0, 10.0, 11.0]]
@@ -145,11 +145,11 @@ def test_compute_soft_occlusion():
     rows = [[True, True, True, True], [False, False, True, False]]
     hit_masks = jp.array(rows)
     args = hit_masks, depths, light_lengths
-    result = shadow.compute_soft_occlusion(*args, slope=10.0)
-    assert float(result[1]) > 0.9
-    assert float(result[2]) == pytest.approx(0.5)
-    assert float(result[3]) == 0.0
+    result = shadow.compute_occlusion_mask(*args)
     assert float(result[0]) == 0.0
+    assert float(result[1]) == 1.0
+    assert float(result[2]) == 1.0
+    assert float(result[3]) == 0.0
 
 
 def test_saved_pose_sphere_self_shadow_keeps_later_roots():

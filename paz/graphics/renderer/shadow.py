@@ -1,6 +1,5 @@
 from collections import namedtuple
 
-import jax
 import jax.numpy as jp
 
 import paz
@@ -40,7 +39,7 @@ def compute_occlusion(compiled, receiver, light, face_chunk):
         rows.append(compute_triangle_blockers(*blocker_args))
     masks = jp.concatenate([row[0] for row in rows], axis=0)
     depths = jp.concatenate([row[1] for row in rows], axis=0)
-    return compute_soft_occlusion(masks, depths, distance)
+    return compute_occlusion_mask(masks, depths, distance)
 
 
 def compute_light_directions(light, points):
@@ -144,12 +143,10 @@ def compute_shadow_depth_thresholds(same_shape):
     return jp.where(same_shape, SHADOW_SELF_HIT_EPSILON, paz.graphics.EPSILON)
 
 
-def compute_soft_occlusion(hit_masks, depths, light_lengths, slope=0.01):
+def compute_occlusion_mask(hit_masks, depths, light_lengths):
     closest_depths = jp.where(hit_masks, depths, paz.graphics.FARAWAY)
     closest_depths = jp.min(closest_depths, axis=0)
     scene_hit_mask = compute_scene_hit_mask(hit_masks)
     blockers = closest_depths <= light_lengths
     blocker_mask = jp.logical_and(scene_hit_mask, blockers)
-    difference = light_lengths - closest_depths
-    occlusion = jax.nn.sigmoid(slope * difference)
-    return jp.where(blocker_mask, occlusion, 0.0)
+    return jp.where(blocker_mask, 1.0, 0.0)
