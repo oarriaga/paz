@@ -854,6 +854,101 @@ def test_scene_mixes_meshes_and_shapes():
     assert jp.any(depth > 0)
 
 
+def build_cube_mesh_with_material(material):
+    vertices, faces, edges = build_cube(1.0)
+    colors = build_vertex_colors(vertices, [0.7, 0.3, 0.1])
+    transform = SE3.translation(jp.array([-0.45, 0.0, 0.0]))
+    args = vertices, colors, transform, material, faces, edges
+    return Mesh(*args)
+
+
+def render_mesh_with_material(material):
+    shape, y_FOV, pose, _, _, lights = make_multi_mesh_scene()
+    mesh = build_cube_mesh_with_material(material)
+    scene = paz.graphics.Scene([mesh, build_sphere_mesh()])
+    args = shape, y_FOV, pose, scene, None, lights, (1, 1), 1024
+    return paz.graphics.render(*args, False, None, 2)
+
+
+def test_mesh_reflective_material_changes_render():
+    matte = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100, 0.0)
+    mirror = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100, 0.9)
+    matte_image, _ = render_mesh_with_material(matte)
+    mirror_image, _ = render_mesh_with_material(mirror)
+    assert compute_max_abs_difference(matte_image, mirror_image) > 1e-3
+
+
+def test_mesh_transparent_material_changes_render():
+    opaque = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100, 0.0, 0.0)
+    glass = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100, 0.0, 0.8, 1.5)
+    opaque_image, _ = render_mesh_with_material(opaque)
+    glass_image, _ = render_mesh_with_material(glass)
+    assert compute_max_abs_difference(opaque_image, glass_image) > 1e-3
+
+
+def build_mesh_over_floor_scene():
+    vertices, faces, edges = build_cube(1.0)
+    colors = build_vertex_colors(vertices, [0.7, 0.3, 0.1])
+    material = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100)
+    transform = SE3.translation(jp.array([0.0, 1.0, 0.0]))
+    args = vertices, colors, transform, material, faces, edges
+    floor = paz.graphics.Plane(SE3.translation(jp.array([0.0, -0.5, 0.0])))
+    return paz.graphics.Scene([Mesh(*args), floor])
+
+
+def render_mesh_over_floor(shadows, shadow_mask=None):
+    camera_pose = SE3.view_transform(
+        jp.array([0.0, 2.0, -4.0]), jp.zeros(3), jp.array([0.0, 1.0, 0.0])
+    )
+    lights = [PointLight(jp.ones(3), jp.array([0.0, 5.0, -1.0]))]
+    scene = build_mesh_over_floor_scene()
+    args = (32, 32), jp.pi / 3.0, camera_pose, scene, None, lights
+    return paz.graphics.render(*args, (1, 1), 1024, shadows, shadow_mask)
+
+
+def test_mesh_casts_shadow_on_shape():
+    lit, _ = render_mesh_over_floor(False)
+    shadowed, _ = render_mesh_over_floor(True)
+    assert compute_max_abs_difference(lit, shadowed) > 1e-2
+    assert jp.all(shadowed <= lit + 1e-4)
+
+
+def test_mesh_shadow_mask_stops_mesh_casting():
+    casting, _ = render_mesh_over_floor(True)
+    blocked, _ = render_mesh_over_floor(True, jp.array([False, True]))
+    assert compute_max_abs_difference(casting, blocked) > 1e-2
+    assert jp.all(casting <= blocked + 1e-4)
+
+
+def build_mesh_only_shadow_scene():
+    vertices, faces, edges = build_cube(1.0)
+    colors = build_vertex_colors(vertices, [0.7, 0.4, 0.2])
+    material = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100)
+    blocker_pose = SE3.translation(jp.array([0.0, 1.4, 0.0]))
+    blocker = Mesh(vertices, colors, blocker_pose, material, faces, edges)
+    slab_pose = SE3.translation(jp.array([0.0, -0.6, 0.0]))
+    slab_pose = slab_pose @ SE3.scaling(jp.array([6.0, 0.2, 6.0]))
+    slab = Mesh(vertices, colors, slab_pose, material, faces, edges)
+    return paz.graphics.Scene([blocker, slab])
+
+
+def render_mesh_only_shadow(shadows):
+    camera_pose = SE3.view_transform(
+        jp.array([0.0, 2.4, -5.0]), jp.zeros(3), jp.array([0.0, 1.0, 0.0])
+    )
+    lights = [PointLight(jp.ones(3), jp.array([0.0, 6.0, -1.5]))]
+    scene = build_mesh_only_shadow_scene()
+    args = (32, 32), jp.pi / 3.0, camera_pose, scene, None, lights
+    return paz.graphics.render(*args, (1, 1), 1024, shadows)
+
+
+def test_mesh_receives_shadow_from_mesh():
+    lit, _ = render_mesh_only_shadow(False)
+    shadowed, _ = render_mesh_only_shadow(True)
+    assert compute_max_abs_difference(lit, shadowed) > 1e-2
+    assert jp.all(shadowed <= lit + 1e-4)
+
+
 def test_scene_rejects_meshes_with_mixed_pattern_sizes():
     plain = build_cube_mesh()
     textured = build_textured_quad_mesh()

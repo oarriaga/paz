@@ -8,7 +8,7 @@ import matplotlib.colors as mcolors
 import matplotlib.pyplot as plt
 import numpy as np
 import paz
-import paz.graphics.renderer as paz_renderer
+from paz.graphics.renderer import shadow
 import paz.utils.plot as plot
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
@@ -23,7 +23,7 @@ OUTLIER_RATIO = 1.25
 CURVATURE_RATIO = 1e-3
 LUMINANCE_WEIGHTS = jp.array([0.2126, 0.7152, 0.0722])
 SIGNED_CMAP = "RdBu_r"
-SOFT_OCCLUSION = paz_renderer.compute_soft_occlusion
+SOFT_OCCLUSION = shadow.compute_soft_occlusion
 CAMERA_ARGS = (
     jp.array([0.0, 2.0, 2.0]),
     jp.array([0.0, 0.0, 0.0]),
@@ -77,7 +77,7 @@ def build_scene(shape_transform=jp.eye(4)):
 
 
 def configure_soft_occlusion():
-    paz_renderer.compute_soft_occlusion = paz.partial(SOFT_OCCLUSION, slope=1.0)
+    shadow.compute_soft_occlusion = paz.partial(SOFT_OCCLUSION, slope=1.0)
 
 
 def compute_autodiff_gradient(function, args, basis):
