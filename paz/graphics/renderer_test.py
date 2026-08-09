@@ -8,7 +8,6 @@ from paz import SE3
 from paz.graphics import composite, renderer
 from paz.graphics.shapes.sphere import intersect_canonical_sphere
 from paz.graphics.types import (
-    Shape,
     Material,
     PointLight,
     Sphere,
@@ -21,7 +20,6 @@ from paz.graphics.types import (
     CylindricalPattern,
     Scene,
 )
-from paz.graphics import constants
 
 
 OLD_CAMERA_POSE = jp.array(
@@ -184,15 +182,9 @@ def test_compute_new_rays_reflection_is_normalized():
     normal = jp.array([[0.0, 1.0, 0.0]])
     eye = jp.array([[0.0, 1.0, -1.0]])
     point = jp.array([[0.0, 0.0, 0.0]])
-    transparancies = jp.array([0.0])
-    reflectance = jp.array([1.0])
+    transparencies = jp.array([0.0])
     _, direction = renderer.compute_new_rays(
-        normal,
-        eye,
-        jp.array([1.0]),
-        point,
-        transparancies,
-        reflectance,
+        normal, eye, jp.array([1.0]), point, transparencies
     )
     norm = jp.linalg.norm(direction, axis=-1)
     assert jp.allclose(norm, 1.0, atol=1e-5)
@@ -202,15 +194,9 @@ def test_compute_new_rays_refraction_is_normalized():
     normal = jp.array([[0.0, 0.0, -1.0]])
     eye = jp.array([[0.0, 0.0, -1.0]])
     point = jp.array([[0.0, 0.0, 0.0]])
-    transparancies = jp.array([1.0])
-    reflectance = jp.array([0.0])
+    transparencies = jp.array([1.0])
     _, direction = renderer.compute_new_rays(
-        normal,
-        eye,
-        jp.array([1.0 / 1.5]),
-        point,
-        transparancies,
-        reflectance,
+        normal, eye, jp.array([1.0 / 1.5]), point, transparencies
     )
     norm = jp.linalg.norm(direction, axis=-1)
     assert jp.allclose(norm, 1.0, atol=1e-5)
@@ -324,7 +310,7 @@ def test_find_closest_intersection_args():
     assert jp.array_equal(indices, jp.array([0, 1]))
 
 
-def test_get_material_properties():
+def test_compute_material_properties():
     mat1 = Material(reflective=0.5)
     mat2 = Material(transparency=0.8)
     shape1 = Sphere(material=mat1)
@@ -332,12 +318,10 @@ def test_get_material_properties():
     scene = Scene([shape1, shape2])
     compiled = paz.graphics.scene.compile(scene, [], None)
     indices = jp.array([0, 1])
-    reflectivities, transparencies, refractivities = (
-        renderer.get_material_properties(compiled, indices)
-    )
-    assert reflectivities[0] == 0.5
-    assert transparencies[1] == 0.8
-    assert refractivities[0] == 1.0
+    material = renderer.compute_material_properties(compiled, indices)
+    assert material.reflectivities[0] == 0.5
+    assert material.transparencies[1] == 0.8
+    assert material.refractive_indices[0] == 1.0
 
 
 def test_accumulate_color():
