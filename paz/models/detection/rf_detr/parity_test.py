@@ -9,8 +9,14 @@ transformer blocks and the decoder stack.
 """
 import os
 
+import jax
 import numpy as np
 import pytest
+
+# Reduced-precision float32 matmuls are the default on some CPUs and drift far
+# enough over twelve transformer blocks to fail the tolerances below. Pin the
+# precision here so the command in the docstring works on its own.
+jax.config.update("jax_default_matmul_precision", "highest")
 
 CHECKPOINTS = os.environ.get("RFDETR_CHECKPOINTS")
 VARIANTS = [

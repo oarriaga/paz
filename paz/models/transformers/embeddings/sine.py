@@ -25,5 +25,18 @@ def embed_axis(coordinates, frequencies):
 
 
 def build_frequencies(dim, dtype):
+    """Builds the geometric ladder of wavelengths the embedding divides by.
+
+    ``temperature`` is the ratio between the longest and shortest wavelength.
+    Its value is the one the original transformer picked and DETR kept, so it
+    is fixed by the published weights rather than free to tune.
+
+    Consecutive entries are paired because ``embed_axis`` reads a sine from the
+    even ones and a cosine from the odd ones: halving the step index makes both
+    halves of a pair share a wavelength, which is what lets the pair encode one
+    angle.
+    """
+    temperature = 10000.0
     steps = ops.arange(dim, dtype=dtype)
-    return 10000.0 ** (2 * ops.floor(steps / 2) / dim)
+    pair_index = 2 * ops.floor(steps / 2)
+    return temperature ** (pair_index / dim)

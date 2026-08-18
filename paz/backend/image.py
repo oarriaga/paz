@@ -6,6 +6,7 @@ import jax
 from jax import lax
 from jax.scipy.ndimage import map_coordinates
 import jax.numpy as jp
+from keras import ops
 
 import paz
 
@@ -88,7 +89,6 @@ def resize_bilinear_align_corners(image, size):
     uses ``keras.ops`` so it traces inside functional models and runs eagerly.
     Separable: interpolate rows, then columns.
     """
-    from keras import ops
     rows = interpolate_bilinear_axis(image, 1, size[0], ops)
     return interpolate_bilinear_axis(rows, 2, size[1], ops)
 
@@ -115,55 +115,83 @@ def bilinear_sample_positions(source, target, ops):
 
 
 def sample_bilinear(images, positions):
-    """Samples images at normalized (x, y) positions inside ``[-1, 1]``.
+    """Samples images at (x, y) positions given in ``[-1, 1]``.
 
     Matches ``torch.grid_sample(align_corners=False, padding_mode="zeros")``:
-    corners outside the image contribute zero. Images are channels-last
-    ``(batch, height, width, channels)`` and positions are ``(batch, ..., 2)``.
-    Uses ``keras.ops`` so it traces inside functional models.
+    positions outside the image contribute zero. Images are channels-last
+    ``(batch, height, width, channels)`` and positions are ``(batch, ..., 2)``,
+    so the result is ``(batch, ..., channels)``. Uses ``keras.ops`` so it
+    traces inside functional models.
     """
-    from keras import ops
-    points = int(np.prod(positions.shape[1:-1]))
-    flat = ops.reshape(positions, (-1, points, 2))
-    column = to_pixel_position(flat[..., 0], images.shape[2])
-    row = to_pixel_position(flat[..., 1], images.shape[1])
-    sampled = accumulate_corners(images, column, row, ops)
+    num_points = int(np.prod(positions.shape[1:-1]))
+    flat_positions = ops.reshape(positions, (-1, num_points, 2))
+    column = to_pixel_coordinate(flat_positions[..., 0], images.shape[2])
+    row = to_pixel_coordinate(flat_positions[..., 1], images.shape[1])
+    sampled = interpolate_pixels(images, column, row)
     shape = (-1, *positions.shape[1:-1], images.shape[-1])
     return ops.reshape(sampled, shape)
 
 
-def to_pixel_position(normalized, extent):
-    return ((normalized + 1) * extent - 1) / 2
+def to_pixel_coordinate(coordinate, num_pixels):
+    """Rescales one axis of a position from ``[-1, 1]`` to pixel units.
+
+    Pixel centers sit at whole numbers, so the axis spans ``-0.5`` to
+    ``num_pixels - 0.5``. The result is fractional: it lands between pixels.
+    """
+    return ((coordinate + 1) * num_pixels - 1) / 2
 
 
-def accumulate_corners(images, column, row, ops):
+def interpolate_pixels(images, column, row):
+    """Blends the four pixels surrounding each fractional column and row.
+
+    Each neighbor contributes in proportion to how close it is, and neighbors
+    that fall outside the image contribute nothing.
+    """
     left, top = ops.floor(column), ops.floor(row)
-    corners = (left, top), (left + 1, top), (left, top + 1), (left + 1, top + 1)
-    weights = build_corner_weights(column - left, row - top)
+    neighbors = build_neighbors(left, top)
+    weights = compute_neighbor_weights(column - left, row - top)
     sampled = 0.0
-    for corner, weight in zip(corners, weights):
-        inside = compute_inside_image(images, *corner, ops)
-        pixels = take_pixels(images, *corner, ops)
+    for neighbor, weight in zip(neighbors, weights):
+        inside = compute_inside_mask(images, *neighbor)
+        pixels = take_pixels(images, *neighbor)
         sampled = sampled + pixels * ops.expand_dims(weight * inside, -1)
     return sampled
 
 
-def build_corner_weights(weight_x, weight_y):
-    left, top = 1.0 - weight_x, 1.0 - weight_y
-    return left * top, weight_x * top, left * weight_y, weight_x * weight_y
+def build_neighbors(left, top):
+    """The four whole-pixel corners surrounding a fractional position."""
+    return (left, top), (left + 1, top), (left, top + 1), (left + 1, top + 1)
 
 
-def compute_inside_image(images, corner_x, corner_y, ops):
-    inside_x = ops.logical_and(corner_x >= 0, corner_x <= images.shape[2] - 1)
-    inside_y = ops.logical_and(corner_y >= 0, corner_y <= images.shape[1] - 1)
-    return ops.cast(ops.logical_and(inside_x, inside_y), images.dtype)
+def compute_neighbor_weights(column_fraction, row_fraction):
+    """Weights the four surrounding pixels by their distance.
+
+    Returns them in the neighbor order ``interpolate_pixels`` walks: top left,
+    top right, bottom left, bottom right. A pixel counts for more the closer
+    the sampled position sits to it, and the four weights sum to one.
+    """
+    left, top = 1.0 - column_fraction, 1.0 - row_fraction
+    right, bottom = column_fraction, row_fraction
+    return left * top, right * top, left * bottom, right * bottom
 
 
-def take_pixels(images, corner_x, corner_y, ops):
+def compute_inside_mask(images, column, row):
+    """Marks with one the pixels that lie inside the image, zero outside.
+
+    Multiplying a sampled pixel by this is what makes positions beyond the
+    border contribute zero instead of repeating the edge.
+    """
+    inside_column = ops.logical_and(column >= 0, column <= images.shape[2] - 1)
+    inside_row = ops.logical_and(row >= 0, row <= images.shape[1] - 1)
+    return ops.cast(ops.logical_and(inside_column, inside_row), images.dtype)
+
+
+def take_pixels(images, column, row):
+    """Reads the pixel at each whole column and row, clamped to the image."""
     height, width = images.shape[1], images.shape[2]
-    column = ops.cast(ops.clip(corner_x, 0, width - 1), "int32")
-    row = ops.cast(ops.clip(corner_y, 0, height - 1), "int32")
-    indices = ops.expand_dims(row * width + column, axis=-1)
+    columns = ops.cast(ops.clip(column, 0, width - 1), "int32")
+    rows = ops.cast(ops.clip(row, 0, height - 1), "int32")
+    indices = ops.expand_dims(rows * width + columns, axis=-1)
     pixels = ops.reshape(images, (-1, height * width, images.shape[-1]))
     return ops.take_along_axis(pixels, indices, axis=1)
 

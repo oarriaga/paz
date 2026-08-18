@@ -1,5 +1,6 @@
 import numpy as np
 import jax
+import keras
 from keras import Model
 
 from paz.models.detection.rf_detr.models import build_rf_detr
@@ -12,9 +13,11 @@ NUM_CLASSES = 7
 def build_detector():
     """Taps early blocks so Keras prunes the rest and the test stays quick.
 
-    The grid holds 18 x 18 cells, one more than the 300 queries the first
-    stage selects from it.
+    The grid holds 18 x 18 = 324 cells, enough for the 300 queries the first
+    stage selects from it. Seeded so the numerical assertions below compare the
+    same weights on every run.
     """
+    keras.utils.set_random_seed(0)
     args = IMAGE_SHAPE, 16, 2, (1,), (0, 2), 2
     return build_rf_detr(*args, NUM_CLASSES, "rf_detr_test")
 

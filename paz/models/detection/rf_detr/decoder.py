@@ -43,8 +43,14 @@ def build(features, num_layers, num_self_heads, num_cross_heads, num_points,
 def select_proposals(memory, grids, num_classes, num_queries):
     """Scores one anchor per cell and keeps the best ``num_queries``.
 
-    The feature maps must therefore hold at least ``num_queries`` cells.
+    The feature maps must therefore hold at least ``num_queries`` cells, which
+    is checked here so an undersized detector fails while it is being built
+    rather than on its first forward pass.
     """
+    num_cells = sum(height * width for height, width in grids)
+    if num_cells < num_queries:
+        message = f"Need at least {num_queries} feature cells, got {num_cells}"
+        raise ValueError(message)
     anchors, valid = build_anchor_boxes(grids)
     tokens = Dense(memory.shape[-1], name="enc_output")(memory * valid)
     tokens = normalize(tokens, "enc_output_norm")
