@@ -34,6 +34,12 @@ gear_wbc = [
     "onnx>=1.16",
     "pygame>=2.6",
 ]
+learning_to_walk = [
+    "mujoco>=3.3",
+    "pygame>=2.6",
+    "pyyaml>=6",
+    "torch>=2.0",
+]
 
 [project.urls]
 Homepage = "https://github.com/oarriaga/paz"
