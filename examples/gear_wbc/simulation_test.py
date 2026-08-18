@@ -37,7 +37,7 @@ def build_fake_data(seed=0):
 
 def test_observation_frame_places_every_field_at_its_release_offset():
     data = build_fake_data()
-    command = build_command()
+    command = build_command(0.0)
     action = np.arange(15, dtype="float32")
     frame = build_observation_frame(data, command, action)
     assert frame.shape == (86,)
@@ -55,8 +55,8 @@ def test_observation_frame_places_every_field_at_its_release_offset():
 def test_command_frame_scales_velocity_but_not_height_or_orientation():
     velocity = np.array([1.0, 1.0, 1.0], "float32")
     orientation = np.array([0.1, 0.2, 0.3], "float32")
-    command = build_command()._replace(velocity=velocity, height=0.5,
-                                       orientation=orientation)
+    fields = dict(velocity=velocity, height=0.5, orientation=orientation)
+    command = build_command(0.0)._replace(**fields)
     frame = build_command_frame(command)
     assert np.allclose(frame[0:3], VELOCITY_COMMAND_SCALE)
     assert frame[3] == pytest.approx(0.5)
@@ -96,7 +96,7 @@ def test_history_drops_the_oldest_frame_after_six_updates():
 
 def test_select_actor_switches_experts_at_the_release_threshold():
     models = namedtuple("Models", "balance walk")("balance", "walk")
-    standing = build_command()
+    standing = build_command(0.0)
     assert select_actor(models, standing) == "balance"
     fast = np.array([BALANCE_SPEED + 0.01, 0.0, 0.0], "float32")
     assert select_actor(models, standing._replace(velocity=fast)) == "walk"
