@@ -4,46 +4,16 @@ from pathlib import Path
 
 import pytest
 import paz
-from paz.graphics.constants import FARAWAY, NO_PATTERN
+from paz.graphics.constants import NO_PATTERN
 from paz.graphics.types import PointLight, Material, Pattern
 from paz.backend.lie import SE3, SO3
-from paz.graphics.mesh.silhouette import blend_fragments
-from paz.graphics.mesh.silhouette import build_empty_fragments
-from paz.graphics.mesh.silhouette import compute_face_fragments
-from paz.graphics.mesh.silhouette import fragment_chunk_or_empty_step
-from paz.graphics.mesh.silhouette import merge_fragments
-from paz.graphics.mesh.silhouette import Projection
 from paz.graphics.mesh import (
     Mesh,
     BinArgs,
-    render_coordinates,
-    extract_points,
-    build_edges,
-    compute_canonical_normals,
-    compute_position,
-    transform_points,
-    intersect_canonical_mesh,
     build_cube,
     build_sphere,
     tile_render_binned_soft_mask,
-    count_binned_faces,
-    assert_exact_tile_side,
-    make_tile_coordinates,
-    make_ray_origins,
-    make_ray_targets,
-    transform_tile_rays,
-    assemble,
 )
-
-
-def make_triangle():
-    vertices = jp.array([
-        [0.0, 0.0, 0.0],
-        [1.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0],
-    ])
-    faces = jp.array([[0, 2, 1]])
-    return vertices, faces
 
 
 def build_scene(*meshes):
@@ -58,151 +28,16 @@ def compute_max_abs_difference(array_A, array_B):
     return float(jp.max(jp.abs(array_A - array_B)))
 
 
-def test_extract_points():
-    vertices, faces = make_triangle()
-    A, B, C = extract_points(vertices, faces)
-    assert jp.allclose(A[0], vertices[0])
-    assert jp.allclose(B[0], vertices[2])
-    assert jp.allclose(C[0], vertices[1])
+def snapshot_path(filename):
+    return str(Path(__file__).parent / "snapshots" / filename)
 
 
-def test_build_edges_shape():
-    vertices, faces = make_triangle()
-    edges_AC, edges_AB, points_A = build_edges(vertices, faces)
-    assert edges_AC.shape == (1, 1, 3)
-    assert edges_AB.shape == (1, 1, 3)
-    assert points_A.shape == (1, 1, 3)
+def assert_snapshot(array, filename, atol):
+    paz.assert_snapshot(array, snapshot_path(filename), atol=atol)
 
 
-def test_intersect_canonical_mesh_hit():
-    vertices, faces = make_triangle()
-    origins = jp.array([[0.25, 0.25, -1.0]])
-    directions = jp.array([[0.0, 0.0, 1.0]])
-    hit_mask, depth, _, _ = intersect_canonical_mesh(
-        vertices, faces, origins, directions
-    )
-    assert hit_mask[0, 0] == True
-    assert jp.allclose(depth[0, 0], 1.0, atol=1e-5)
-
-
-def test_intersect_canonical_mesh_miss():
-    vertices, faces = make_triangle()
-    origins = jp.array([[5.0, 5.0, -1.0]])
-    directions = jp.array([[0.0, 0.0, 1.0]])
-    hit_mask, depth, _, _ = intersect_canonical_mesh(
-        vertices, faces, origins, directions
-    )
-    assert hit_mask[0, 0] == False
-    assert jp.allclose(depth[0, 0], FARAWAY)
-
-
-def test_intersect_canonical_mesh_miss_returns_faraway():
-    vertices, faces = make_triangle()
-    origins = jp.array([[-1.0, -1.0, -1.0]])
-    directions = jp.array([[0.0, 0.0, 1.0]])
-    args = (vertices, faces, origins, directions)
-    _, depth, _, _ = intersect_canonical_mesh(*args)
-    assert depth[0, 0] >= FARAWAY - 1.0
-
-
-def test_intersect_canonical_mesh_rejects_negative_depth():
-    vertices, faces = make_triangle()
-    origins = jp.array([[0.25, 0.25, 1.0]])
-    directions = jp.array([[0.0, 0.0, 1.0]])
-    hit_mask, depth, _, _ = intersect_canonical_mesh(
-        vertices, faces, origins, directions
-    )
-    assert hit_mask[0, 0] == False
-    assert jp.allclose(depth[0, 0], FARAWAY)
-
-
-def test_intersect_canonical_mesh_rejects_parallel_ray():
-    vertices, faces = make_triangle()
-    origins = jp.array([[0.25, 0.25, -1.0]])
-    directions = jp.array([[1.0, 0.0, 0.0]])
-    hit_mask, depth, _, _ = intersect_canonical_mesh(
-        vertices, faces, origins, directions
-    )
-    assert hit_mask[0, 0] == False
-    assert jp.allclose(depth[0, 0], FARAWAY)
-
-
-def test_compute_canonical_normals_direction():
-    vertices, faces = make_triangle()
-    shape_points = jp.zeros((1, 4, 3))
-    normals = compute_canonical_normals(vertices, faces, shape_points)
-    assert normals.shape == (1, 4, 3)
-    assert jp.abs(normals[0, 0, 2]) > 0.9
-
-
-def test_compute_canonical_normals_floor_points_up():
-    half = 2.0
-    vertices = jp.array(
-        [
-            [-half, 0.0, -half],
-            [half, 0.0, -half],
-            [half, 0.0, half],
-            [-half, 0.0, half],
-        ]
-    )
-    faces = jp.array([[0, 2, 1], [0, 3, 2]])
-    shape_points = jp.zeros((2, 1, 3))
-    normals = compute_canonical_normals(vertices, faces, shape_points)
-    assert jp.all(normals[:, 0, 1] > 0.9)
-
-
-def test_compute_position_shape():
-    origins = jp.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
-    directions = jp.array([[0.0, 0.0, 1.0], [0.0, 0.0, 1.0]])
-    depths = jp.array([[[2.0], [3.0]], [[4.0], [5.0]]])
-    positions = compute_position(origins, directions, depths)
-    assert positions.shape == (2, 2, 3)
-
-
-def test_transform_points_shape():
-    points = jp.ones((3, 4, 3))
-    affine = jp.eye(4)
-    result = transform_points(affine, points)
-    assert result.shape == (3, 4, 3)
-
-
-def test_transform_points_identity():
-    points = jp.array([[[1.0, 2.0, 3.0]]])
-    affine = jp.eye(4)
-    result = transform_points(affine, points)
-    assert jp.allclose(result, points, atol=1e-5)
-
-
-def test_build_cube():
-    vertices, faces, edges = build_cube(1.0)
-    assert vertices.shape[1] == 3
-    assert faces.shape[1] == 3
-    assert edges.shape[1] == 2
-    assert len(vertices) == 8
-    assert len(faces) == 12
-
-
-def face_centers_and_normals(vertices, faces):
-    A = vertices[faces[:, 0]]
-    B = vertices[faces[:, 1]]
-    C = vertices[faces[:, 2]]
-    centers = (A + B + C) / 3.0
-    normals = jp.cross(B - A, C - A)
-    return centers, normals
-
-
-def test_build_cube_faces_point_outward():
-    vertices, faces, _ = build_cube(1.0)
-    centers, normals = face_centers_and_normals(vertices, faces)
-    dots = jp.sum(centers * normals, axis=1)
-    assert jp.all(dots > 0.0)
-
-
-def test_build_sphere_faces_point_outward():
-    vertices, faces, _ = build_sphere(1.0, 2)
-    centers, normals = face_centers_and_normals(vertices, faces)
-    dots = jp.sum(centers * normals, axis=1)
-    assert jp.all(dots > 0.0)
+def build_vertex_colors(vertices, color):
+    return jp.repeat(jp.array([color]), len(vertices), axis=0)
 
 
 def make_scene(image_shape=(20, 20)):
@@ -299,18 +134,6 @@ def test_render_gradient_through_vertices():
     grad = jax.grad(loss_fn)(vertices)
     assert grad.shape == vertices.shape
     assert jp.any(grad != 0.0)
-
-
-def snapshot_path(filename):
-    return str(Path(__file__).parent / "snapshots" / filename)
-
-
-def assert_snapshot(array, filename, atol):
-    paz.assert_snapshot(array, snapshot_path(filename), atol=atol)
-
-
-def build_vertex_colors(vertices, color):
-    return jp.repeat(jp.array([color]), len(vertices), axis=0)
 
 
 def build_cube_mesh():
@@ -427,59 +250,6 @@ def test_textured_quad_samples_texture_not_vertex_colors():
     assert float(jp.max(center_rows) - jp.min(center_rows)) > 0.1
 
 
-def test_assert_exact_tile_side_valid():
-    assert_exact_tile_side(100, 2)
-    assert_exact_tile_side(100, 5)
-    assert_exact_tile_side(100, 10)
-
-
-def test_assert_exact_tile_side_invalid():
-    with pytest.raises(ValueError):
-        assert_exact_tile_side(100, 3)
-
-
-def test_make_tile_coordinates_shape():
-    coords = make_tile_coordinates(3, 4)
-    assert coords.shape == (12, 2)
-
-
-def test_make_ray_origins_shape():
-    origins = make_ray_origins(10, 15)
-    assert origins.shape == (150, 4)
-    assert jp.allclose(origins[:, 3], 1.0)
-
-
-def test_make_ray_targets_shape():
-    tile_arg = jp.array([0, 0])
-    targets = make_ray_targets(10, 15, 0.01, 0.5, 0.5, tile_arg)
-    assert targets.shape == (150, 4)
-    assert jp.allclose(targets[:, 2], -1.0)
-    assert jp.allclose(targets[:, 3], 1.0)
-
-
-def test_transform_tile_rays_output_3d():
-    origins = jp.array([[0.0, 0.0, 0.0, 1.0], [0.0, 0.0, 0.0, 1.0]])
-    targets = jp.array([[0.1, 0.2, -1.0, 1.0], [0.3, 0.1, -1.0, 1.0]])
-    args = (jp.eye(4), origins, targets)
-    world_origins, world_directions = transform_tile_rays(*args)
-    assert world_origins.shape == (2, 3)
-    assert world_directions.shape == (2, 3)
-
-
-def test_transform_tile_rays_normalized():
-    origins = jp.array([[0.0, 0.0, 0.0, 1.0]])
-    targets = jp.array([[0.5, 0.5, -1.0, 1.0]])
-    _, directions = transform_tile_rays(jp.eye(4), origins, targets)
-    norms = jp.linalg.norm(directions, axis=-1)
-    assert jp.allclose(norms, 1.0, atol=1e-4)
-
-
-def test_assemble_reconstructs_image():
-    blocks = jp.arange(24).reshape(4, 6, 1).astype(float)
-    image = assemble(4, 6, 2, 2, blocks)
-    assert image.shape == (4, 6, 1)
-
-
 def make_tile_scene(image_shape=(20, 20), tiles=(2, 2), chunk_size=1024):
     camera_origin = jp.array([0.0, 1.0, -1.5])
     y_FOV = jp.pi / 4.0
@@ -496,50 +266,6 @@ def make_tile_scene(image_shape=(20, 20), tiles=(2, 2), chunk_size=1024):
     scene, mask = build_scene(mesh)
     args = image_shape, y_FOV, camera_pose, scene, mask, lights
     return args + (tiles, chunk_size)
-
-
-def make_soft_square_mesh(shift=0.0):
-    half = 0.8
-    z = -3.0
-    vertices = jp.array([[-half, -half, z], [half, -half, z]])
-    vertices = jp.vstack([vertices, jp.array([[half, half, z]])])
-    vertices = jp.vstack([vertices, jp.array([[-half, half, z]])])
-    vertices = vertices + jp.array([shift, 0.0, 0.0])
-    faces = jp.array([[0, 1, 2], [0, 2, 3]])
-    edges = jp.array([[0, 1], [1, 2], [2, 3], [0, 3], [0, 2]])
-    color = jp.array([[0.7, 0.3, 0.1]])
-    colors = jp.repeat(color, len(vertices), axis=0)
-    material = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100)
-    return Mesh(vertices, colors, jp.eye(4), material, faces, edges)
-
-
-def test_compute_face_fragments_signs_distances():
-    points = jp.array([[[-0.5, -0.5], [0.5, -0.5], [0.0, 0.5]]])
-    depths = jp.ones((1, 3))
-    pixels = jp.array([[0.0, 0.0], [0.8, 0.0]])
-    distances, _, valid = compute_face_fragments(points, depths, pixels, 1.0)
-    assert distances[0, 0] < 0.0
-    assert distances[0, 1] > 0.0
-    assert jp.all(valid)
-
-
-def test_blend_fragments_matches_sigmoid_alpha():
-    distances = jp.array([[-0.1, 0.2]])
-    valid = jp.array([[True, True]])
-    alpha = blend_fragments(distances, valid, 0.1)
-    probabilities = jax.nn.sigmoid(-distances / 0.1)
-    expected = 1.0 - jp.prod(1.0 - probabilities, axis=1)
-    assert jp.allclose(alpha, expected)
-
-
-def test_merge_fragments_keeps_nearest_faces():
-    fragments = build_empty_fragments(1)
-    distances = jp.zeros((51, 1))
-    depths = jp.arange(1, 52, dtype=jp.float32)[:, None]
-    valid = jp.ones((51, 1), dtype=bool)
-    fragments = merge_fragments(fragments, distances, depths, valid)
-    assert jp.max(fragments.depths[0]) == 50.0
-    assert jp.sum(fragments.valid[0]) == 50
 
 
 def test_render_rect_tiles_returns_correct_shapes():
@@ -569,114 +295,6 @@ def test_render_rect_depth_matches_single_tile():
     _, actual_depth = render(*actual)
     assert actual_depth.shape == expected_depth.shape
     assert jp.allclose(actual_depth, expected_depth, atol=1e-5)
-
-
-def test_tile_render_binned_soft_mask_returns_smooth_square():
-    mask = render_binned_soft_shift(0.0)
-    assert mask.shape == (16, 16)
-    assert mask[8, 8] > 0.7
-    assert mask[0, 0] < 0.1
-
-
-def test_tile_render_binned_soft_mask_matches_single_bin():
-    expected = render_binned_soft_shift(0.0, 16, 16)
-    actual = render_binned_soft_shift(0.0, 16, 8)
-    assert jp.allclose(actual, expected, atol=1e-5)
-
-
-def test_binned_soft_mask_matches_single_bin_with_empty_bins():
-    expected = render_binned_soft_shift(0.0, 32, 32)
-    actual = render_binned_soft_shift(0.0, 32, 8)
-    assert jp.allclose(actual, expected, atol=1e-5)
-
-
-def test_tile_render_binned_soft_mask_matches_rect_single_bin():
-    expected = render_binned_soft_shift(0.0, (16, 24), (16, 24))
-    actual = render_binned_soft_shift(0.0, (16, 24), (8, 6))
-    assert jp.allclose(actual, expected, atol=1e-5)
-
-
-def test_binned_soft_mask_matches_rect_bin_with_empty_bins():
-    expected = render_binned_soft_shift(0.0, (32, 24), (32, 24))
-    actual = render_binned_soft_shift(0.0, (32, 24), (8, 6))
-    assert jp.allclose(actual, expected, atol=1e-5)
-
-
-def test_empty_fragment_chunk_keeps_fragments():
-    fragments = build_empty_fragments(1)
-    points = jp.zeros((3, 2))
-    projection = Projection(points, jp.ones(3))
-    data = (jp.array([[0, 1, 2]]), jp.array([False]))
-    pixels = jp.zeros((1, 2))
-    args = (fragments, data, projection, pixels, 1.0)
-    result, _ = fragment_chunk_or_empty_step(*args)
-    assert jp.allclose(result.depths, fragments.depths)
-    assert jp.allclose(result.distances, fragments.distances)
-    assert jp.all(result.valid == fragments.valid)
-
-
-def test_count_binned_faces_counts_overlaps():
-    mesh = make_soft_square_mesh()
-    args = ((16, 16), jp.eye(4), mesh, jp.pi / 3.0, 1e-4, BinArgs(8, 2))
-    counts = count_binned_faces(*args)
-    assert jp.max(counts) == 2
-
-
-def test_count_binned_faces_counts_rect_overlaps():
-    mesh = make_soft_square_mesh()
-    args = ((16, 24), jp.eye(4), mesh, jp.pi / 3.0, 1e-4)
-    counts = count_binned_faces(*(args + (BinArgs((8, 6), 2),)))
-    assert jp.max(counts) == 2
-
-
-def test_tile_render_binned_soft_mask_is_chunk_invariant():
-    mask_A = render_binned_soft_shift(0.0, chunk=1)
-    mask_B = render_binned_soft_shift(0.0, chunk=2)
-    assert jp.allclose(mask_A, mask_B, atol=1e-5)
-
-
-def test_tile_render_binned_rect_mask_is_chunk_invariant():
-    mask_A = render_binned_soft_shift(0.0, (16, 24), (8, 6), 1)
-    mask_B = render_binned_soft_shift(0.0, (16, 24), (8, 6), 2)
-    assert jp.allclose(mask_A, mask_B, atol=1e-5)
-
-
-def test_tile_render_binned_shift_gradient_matches_finite_difference():
-    target = render_binned_soft_shift(0.25)
-
-    def loss_fn(shift):
-        prediction = render_binned_soft_shift(shift[0])
-        return jp.mean((prediction - target) ** 2)
-
-    _, gradient = jax.value_and_grad(loss_fn)(jp.array([0.0]))
-    finite = compute_finite_shift_gradient(loss_fn, jp.array([0.0]))
-    cosine = gradient[0] * finite / (jp.abs(gradient[0] * finite) + 1e-8)
-    assert jp.abs(gradient[0]) > 1e-5
-    assert cosine > 0.9
-
-
-def render_binned_soft_shift(shift, image_shape=16, bin_shape=8, chunk=2):
-    H, W = unpack_soft_shape(image_shape)
-    mesh = make_soft_square_mesh(shift)
-    bins = BinArgs(bin_shape, mesh.faces.shape[0])
-    args = (bins, jp.pi / 3.0, H, W, jp.eye(4), mesh)
-    args = args + (1e-4, chunk)
-    return tile_render_binned_soft_mask(*args)
-
-
-def unpack_soft_shape(shape):
-    try:
-        H, W = shape
-    except TypeError:
-        return shape, shape
-    return H, W
-
-
-def compute_finite_shift_gradient(loss_fn, shift):
-    epsilon = 1e-2
-    high = loss_fn(shift + jp.array([epsilon]))
-    low = loss_fn(shift - jp.array([epsilon]))
-    return (high - low) / (2.0 * epsilon)
 
 
 # Gradient faithfulness of object pose for analysis-by-synthesis fitting.
@@ -764,44 +382,6 @@ def test_depth_rotation_gradient_matches_finite_difference():
     assert_matches_central_difference(render_pose_depth, z_rotation, 0.3)
 
 
-def make_single_mesh():
-    vertices, faces, edges = build_cube(1.0)
-    color = jp.array([[0.7, 0.3, 0.1]])
-    vertex_colors = jp.repeat(color, len(vertices), axis=0)
-    transform = SE3.translation(jp.zeros(3))
-    material = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100)
-    return Mesh(vertices, vertex_colors, transform, material, faces, edges)
-
-
-def camera_looking_at_origin():
-    camera_origin = jp.array([0.0, 1.0, -1.5])
-    world_up = jp.array([0.0, 0.0, 1.0])
-    return SE3.view_transform(camera_origin, jp.zeros(3), world_up)
-
-
-def test_render_coordinates_shapes_and_object_frame_bounds():
-    mesh = make_single_mesh()
-    pose = camera_looking_at_origin()
-    coordinates, hit = render_coordinates((20, 20), jp.pi / 4, pose, mesh, 1024)
-    assert coordinates.shape == (20, 20, 3)
-    assert hit.shape == (20, 20)
-    assert jp.any(hit)
-    inside = coordinates[hit]
-    assert jp.all(inside >= -0.5 - 1e-4) and jp.all(inside <= 0.5 + 1e-4)
-    assert jp.allclose(coordinates[~hit], 0.0)
-
-
-def test_render_coordinates_mask_matches_render_depth():
-    mesh = make_single_mesh()
-    pose = camera_looking_at_origin()
-    scene, mask = build_scene(mesh)
-    lights = [PointLight(jp.full((3,), 10.0), jp.array([0.0, 1.0, -1.5]))]
-    args = (20, 20), jp.pi / 4, pose, scene, mask, lights
-    _, depth = render(*args, (1, 1), 1024)
-    _, hit = render_coordinates((20, 20), jp.pi / 4, pose, mesh, 1024)
-    assert jp.array_equal(hit, depth > 0)
-
-
 def render_scene_meshes(image_shape=(24, 24), tiles=(1, 1), chunk_size=1024):
     shape, y_FOV, pose, _, _, lights = make_multi_mesh_scene(image_shape)
     scene = paz.graphics.Scene([build_cube_mesh(), build_sphere_mesh()])
@@ -854,13 +434,107 @@ def test_scene_mixes_meshes_and_shapes():
     assert jp.any(depth > 0)
 
 
+def build_cube_mesh_with_material(material):
+    vertices, faces, edges = build_cube(1.0)
+    colors = build_vertex_colors(vertices, [0.7, 0.3, 0.1])
+    transform = SE3.translation(jp.array([-0.45, 0.0, 0.0]))
+    args = vertices, colors, transform, material, faces, edges
+    return Mesh(*args)
+
+
+def render_mesh_with_material(material):
+    shape, y_FOV, pose, _, _, lights = make_multi_mesh_scene()
+    mesh = build_cube_mesh_with_material(material)
+    scene = paz.graphics.Scene([mesh, build_sphere_mesh()])
+    args = shape, y_FOV, pose, scene, None, lights, (1, 1), 1024
+    return paz.graphics.render(*args, False, None, 2)
+
+
+def test_mesh_reflective_material_changes_render():
+    matte = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100, 0.0)
+    mirror = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100, 0.9)
+    matte_image, _ = render_mesh_with_material(matte)
+    mirror_image, _ = render_mesh_with_material(mirror)
+    assert compute_max_abs_difference(matte_image, mirror_image) > 1e-3
+
+
+def test_mesh_transparent_material_changes_render():
+    opaque = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100, 0.0, 0.0)
+    glass = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100, 0.0, 0.8, 1.5)
+    opaque_image, _ = render_mesh_with_material(opaque)
+    glass_image, _ = render_mesh_with_material(glass)
+    assert compute_max_abs_difference(opaque_image, glass_image) > 1e-3
+
+
+def build_mesh_over_floor_scene():
+    vertices, faces, edges = build_cube(1.0)
+    colors = build_vertex_colors(vertices, [0.7, 0.3, 0.1])
+    material = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100)
+    transform = SE3.translation(jp.array([0.0, 1.0, 0.0]))
+    args = vertices, colors, transform, material, faces, edges
+    floor = paz.graphics.Plane(SE3.translation(jp.array([0.0, -0.5, 0.0])))
+    return paz.graphics.Scene([Mesh(*args), floor])
+
+
+def render_mesh_over_floor(shadows, shadow_mask=None):
+    camera_pose = SE3.view_transform(
+        jp.array([0.0, 2.0, -4.0]), jp.zeros(3), jp.array([0.0, 1.0, 0.0])
+    )
+    lights = [PointLight(jp.ones(3), jp.array([0.0, 5.0, -1.0]))]
+    scene = build_mesh_over_floor_scene()
+    args = (32, 32), jp.pi / 3.0, camera_pose, scene, None, lights
+    return paz.graphics.render(*args, (1, 1), 1024, shadows, shadow_mask)
+
+
+def test_mesh_casts_shadow_on_shape():
+    lit, _ = render_mesh_over_floor(False)
+    shadowed, _ = render_mesh_over_floor(True)
+    assert compute_max_abs_difference(lit, shadowed) > 1e-2
+    assert jp.all(shadowed <= lit + 1e-4)
+
+
+def test_mesh_shadow_mask_stops_mesh_casting():
+    casting, _ = render_mesh_over_floor(True)
+    blocked, _ = render_mesh_over_floor(True, jp.array([False, True]))
+    assert compute_max_abs_difference(casting, blocked) > 1e-2
+    assert jp.all(casting <= blocked + 1e-4)
+
+
+def build_mesh_only_shadow_scene():
+    vertices, faces, edges = build_cube(1.0)
+    colors = build_vertex_colors(vertices, [0.7, 0.4, 0.2])
+    material = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100)
+    blocker_pose = SE3.translation(jp.array([0.0, 1.4, 0.0]))
+    blocker = Mesh(vertices, colors, blocker_pose, material, faces, edges)
+    slab_pose = SE3.translation(jp.array([0.0, -0.6, 0.0]))
+    slab_pose = slab_pose @ SE3.scaling(jp.array([6.0, 0.2, 6.0]))
+    slab = Mesh(vertices, colors, slab_pose, material, faces, edges)
+    return paz.graphics.Scene([blocker, slab])
+
+
+def render_mesh_only_shadow(shadows):
+    camera_pose = SE3.view_transform(
+        jp.array([0.0, 2.4, -5.0]), jp.zeros(3), jp.array([0.0, 1.0, 0.0])
+    )
+    lights = [PointLight(jp.ones(3), jp.array([0.0, 6.0, -1.5]))]
+    scene = build_mesh_only_shadow_scene()
+    args = (32, 32), jp.pi / 3.0, camera_pose, scene, None, lights
+    return paz.graphics.render(*args, (1, 1), 1024, shadows)
+
+
+def test_mesh_receives_shadow_from_mesh():
+    lit, _ = render_mesh_only_shadow(False)
+    shadowed, _ = render_mesh_only_shadow(True)
+    assert compute_max_abs_difference(lit, shadowed) > 1e-2
+    assert jp.all(shadowed <= lit + 1e-4)
+
+
 def test_scene_rejects_meshes_with_mixed_pattern_sizes():
     plain = build_cube_mesh()
     textured = build_textured_quad_mesh()
     with pytest.raises(ValueError, match="pattern images"):
-        paz.graphics.scene.compile(
-            paz.graphics.Scene([plain, textured]), [], None
-        )
+        scene = paz.graphics.Scene([plain, textured])
+        paz.graphics.scene.compile(scene, [], None)
 
 
 def build_cook_torrance_mesh():

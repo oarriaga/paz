@@ -1,10 +1,6 @@
 import jax
 import jax.numpy as jp
 import paz
-import paz.graphics.renderer as paz_renderer
-
-soft_occlusion = paz_renderer.compute_soft_occlusion
-paz_renderer.compute_soft_occlusion = paz.partial(soft_occlusion, slope=1.0)
 
 H, W = 480, 640
 
