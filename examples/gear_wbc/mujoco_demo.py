@@ -21,15 +21,17 @@ from paz.models import GearWBC
 from paz.models.foundation.gear_wbc.model import ACTION_DIM
 
 from controller import CONTROLS
-from controller import build_pad
+from controller import find_pad
 from controller import read_command
 from simulation import CONTROL_DECIMATION
 from simulation import LOWER_BODY_ANGLES
+from simulation import ROCK_HEIGHT
 from simulation import SIMULATION_STEP
 from simulation import build_command
 from simulation import build_history
 from simulation import build_observation_frame
 from simulation import build_plant
+from simulation import build_rocky_plant
 from simulation import compile_actors
 from simulation import compute_action
 from simulation import compute_control
@@ -85,6 +87,15 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--scene-dir", type=Path, default=default_scene_dir,
                         help="g1 directory holding g1_gear_wbc.xml")
+    parser.add_argument("--terrain", default="flat",
+                        choices=["flat", "rocky"],
+                        help="ground the robot walks over")
+    parser.add_argument("--rock-height", type=float, default=ROCK_HEIGHT,
+                        help="tallest rock of the rocky terrain, in metres")
+    parser.add_argument("--seed", type=int, default=0,
+                        help="rock layout of the rocky terrain")
+    parser.add_argument("--speed", type=float, default=0.5,
+                        help="forward velocity held with no pad, in m/s")
     parser.add_argument("--steps", type=int, default=0,
                         help="stop after this many simulation steps")
     parser.add_argument("--headless", action="store_true")
@@ -94,13 +105,20 @@ if __name__ == "__main__":
     if not scene_path.exists():
         raise SystemExit(f"Missing MuJoCo scene: {scene_path}")
 
-    print(CONTROLS)
+    pad = find_pad()
+    if pad is None:
+        print(f"No pad found. Holding {arguments.speed} m/s forward.")
+    else:
+        print(CONTROLS)
     print(f"Loading PAZ GEAR-WBC weights and scene from {scene_path}")
     actors = compile_actors(GearWBC(weights="pretrained"))
-    model, data = build_plant(scene_path)
-    pad = build_pad()
+    if arguments.terrain == "flat":
+        model, data = build_plant(scene_path)
+    else:
+        rocks = arguments.seed, arguments.rock_height
+        model, data = build_rocky_plant(scene_path, *rocks)
 
-    command = build_command()
+    command = build_command(arguments.speed)
     history = build_history()
     action = np.zeros(ACTION_DIM, "float32")
     target_angles = LOWER_BODY_ANGLES.copy()
@@ -121,7 +139,8 @@ if __name__ == "__main__":
             mujoco.mj_step(model, data)
             step = step + 1
             if step % CONTROL_DECIMATION == 0:
-                command = read_command(pad)
+                if pad is not None:
+                    command = read_command(pad)
                 frame = build_observation_frame(data, command, action)
                 observation = update_history(history, frame)
                 action = compute_action(actors, observation, command)
@@ -134,7 +153,8 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         pass
 
-    print(f"\nRan {step} steps. Final base height {data.qpos[2]:.3f} m")
+    print(f"\nRan {step} steps. Travelled {data.qpos[0]:.2f} m."
+          f" Final base height {data.qpos[2]:.3f} m")
     if viewer is not None:
         viewer.close()
         time.sleep(0.25)

@@ -40,12 +40,14 @@ Every input self-centers: release the pad to stand at the default pose.
 """
 
 
-def build_pad():
+def find_pad():
     pygame.init()
     pygame.joystick.init()
     if pygame.joystick.get_count() == 0:
-        raise SystemExit("Connect a PlayStation controller and rerun.")
-    return pygame.joystick.Joystick(0)
+        pad = None
+    else:
+        pad = pygame.joystick.Joystick(0)
+    return pad
 
 
 def read_command(pad):

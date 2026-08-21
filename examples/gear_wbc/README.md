@@ -23,9 +23,10 @@ From the PAZ repository:
 
     python3 -m pip install -e '.[gear_wbc]'
 
-A PlayStation controller has to be connected before launching, over USB or
-Bluetooth. SDL reads it through `/dev/input/js0`, so no driver setup is
-needed beyond pairing it.
+A PlayStation controller is optional. Connect one over USB or Bluetooth to
+steer; SDL reads it through `/dev/input/js0`, so no driver setup is needed
+beyond pairing it. With no pad connected the robot holds `--speed` forward
+for the whole run, which is what makes the terrain measurable.
 
 The demo also needs the G1 MuJoCo plant from a local
 GR00T-WholeBodyControl checkout, at
@@ -63,10 +64,53 @@ per call and leaves the GPU free. To override:
 
     JAX_PLATFORMS=cuda python3 examples/gear_wbc/mujoco_demo.py
 
-A fixed-length headless run is useful as a smoke check. It still needs the
-pad connected, and holds whatever command the pad reports:
+A fixed-length headless run is useful as a smoke check, and as the way to
+measure a terrain. It reports how far the robot travelled and how high its
+base ended, which is enough to tell walking from falling.
 
-    python3 examples/gear_wbc/mujoco_demo.py --headless --steps 1000
+    python3 examples/gear_wbc/mujoco_demo.py --headless --steps 2000 \
+        --speed 0.5
+
+`--headless` only drops the viewer. A pad steers the run whenever one is
+connected, in both modes, and `--speed` takes over whenever one is not.
+
+## Terrain
+
+`--terrain` picks the ground. The default `flat` is the released scene's
+ground plane; `rocky` swaps that plane for a heightfield of rocks up to 3 cm
+tall on a 7.8 cm grid, spread over 20 by 20 metres:
+
+    python3 examples/gear_wbc/mujoco_demo.py --terrain rocky
+
+The rocks are uniform noise rescaled by MuJoCo to the heightfield peak, which
+is how MuJoCo Playground builds the rough terrain it walks its own G1 over.
+`--rock-height` sets that peak in metres, `--seed` redraws the layout, and the
+robot spawns one peak higher so it does not start inside a rock:
+
+    python3 examples/gear_wbc/mujoco_demo.py --terrain rocky \
+        --rock-height 0.05 --seed 3
+
+GEAR-WBC is blind: the observation carries no terrain, so the policy only
+feels the rocks through the base orientation and the joint states. Holding
+0.5 m/s forward for 10 s over ten seeds per height, counting a fall below
+0.4 m of base height:
+
+| Rock height | Falls | Median distance |
+| --- | --- | --- |
+| flat | 0/1 | 4.36 m |
+| 1 cm | 1/10 | 4.63 m |
+| 2 cm | 0/10 | 4.62 m |
+| 3 cm | 2/10 | 4.66 m |
+| 4 cm | 5/10 | 4.57 m |
+| 5 cm | 4/10 | 3.98 m |
+
+Failure is close to binary. A run that stays up covers the same ground it
+covers on flat, so the rocks cost almost no speed up to 3 cm, where one seed
+in five goes down. At 4 to 5 cm it is roughly a coin flip.
+
+Individual runs are chaotic: shifting the control phase by three simulation
+steps flips a marginal seed from walking to falling, so single runs say
+little and only the rate over many seeds is worth reading.
 
 ## Controls
 
