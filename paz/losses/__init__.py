@@ -1,4 +1,5 @@
 from paz.losses import depth
+from paz.losses import detr
 from paz.losses import multibox
 from paz.losses import pose
 from paz.losses.pose import MultiPoseLoss

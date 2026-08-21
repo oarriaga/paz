@@ -43,7 +43,7 @@ if __name__ == "__main__":
         image = paz.image.load(args.image)
     predictions, drawn = detect(image)
 
-    names = paz.datasets.labels("COCO_EFFICIENTDET")
+    names = ["0"] + paz.datasets.labels("COCO_EFFICIENTDET")
     for box, label, score in zip(*predictions):
         print(f"{names[label]:<16} {score:.3f} {np.array(box).tolist()}")
     paz.image.write(args.output, drawn)
