@@ -731,30 +731,6 @@ def comput_aspect_ratio(image):
     return W / H
 
 
-# def resize_with_aspect_ratio(
-#     image, largest_side, method="linear", antialias=False
-# ):
-#     H, W = get_size(image)
-#     min_scale = min(largest_side / H, largest_side / W)
-#     return scale(image, min_scale, method, antialias)
-
-
-# def resize_pad_top_left(image, largest_side, method="linear", antialias=False):
-#     # TODO refactor to be able to resize any shape (H, W)
-#     """Resizes and crops image by returning the scales to original"""
-#     image = resize_with_aspect_ratio(image, largest_side, method, antialias)
-#     H, W = get_size(image)
-#     return pad(image, 0, largest_side - H, 0, largest_side - W, "constant", 0)
-
-
-# def resize_with_aspect_ratio(image, H, W, method="linear", antialias=False):
-#     """Resize to fit within a given size while maintaining aspect ratio."""
-#     H_now, W_now = get_size(image)
-#     # Calculate the scaling factor to fit the image within the target dimensions
-#     scale_factor = min(H / H_now, W / W_now)
-#     return scale(image, scale_factor, method, antialias)
-
-
 def resize_with_aspect_ratio(image, H, W, method="linear", antialias=False):
     """Resizes to fit within a target size and pads it to that exact size."""
 
