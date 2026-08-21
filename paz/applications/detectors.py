@@ -221,6 +221,81 @@ def scale_boxes(detections, scale):
     return jp.concatenate([boxes, detections[:, 4:]], axis=1)
 
 
+def DetectRFDETRNano(score_thresh=0.50, draw=None):
+    return DetectRFDETRCOCO(paz.models.RFDETRNano, score_thresh, draw)
+
+
+def DetectRFDETRSmall(score_thresh=0.50, draw=None):
+    return DetectRFDETRCOCO(paz.models.RFDETRSmall, score_thresh, draw)
+
+
+def DetectRFDETRMedium(score_thresh=0.50, draw=None):
+    return DetectRFDETRCOCO(paz.models.RFDETRMedium, score_thresh, draw)
+
+
+def DetectRFDETRBase(score_thresh=0.50, draw=None):
+    return DetectRFDETRCOCO(paz.models.RFDETRBase, score_thresh, draw)
+
+
+def DetectRFDETRLarge(score_thresh=0.50, draw=None):
+    return DetectRFDETRCOCO(paz.models.RFDETRLarge, score_thresh, draw)
+
+
+def DetectRFDETRCOCO(build_model, score_thresh, draw):
+    model = build_model()
+    model.load_weights(paz.models.detection.rf_detr.download_weights(model))
+    names = paz.datasets.labels("COCO_EFFICIENTDET")
+    if draw is None:
+        colors = paz.draw.lincolor(len(names))
+        draw = paz.partial(paz.draw.boxes2D, names=names, colors=colors)
+    return RFDETR(model, score_thresh, draw)
+
+
+def RFDETR(model, score_thresh, draw, num_select=300):
+    forward = jax.jit(lambda x: model(x))
+    select = jax.jit(paz.lock(select_detections, num_select))
+    # Trained with the torchvision ImageNet statistics, which are rounded
+    # differently from paz.image.rgb_IMAGENET_MEAN.
+    mean = jp.array([0.485, 0.456, 0.406])
+    stdv = jp.array([0.229, 0.224, 0.225])
+
+    def preprocess(image):
+        """Squeezes the image into the detector's square input."""
+        image = paz.cast(image, "float32") / 255.0
+        image = paz.image.resize_opencv(image, paz.image.get_input_size(model))
+        image = paz.image.standardize(image, mean, stdv)
+        return jp.expand_dims(image, axis=0)
+
+    def postprocess(logits, boxes, image_size):
+        detections = select(logits, boxes)
+        detections = paz.detection.filter_by_score(detections, score_thresh, -1)
+        detections = paz.detection.denormalize(detections, *image_size)
+        return paz.detection.clip(detections, *image_size)
+
+    def call(image):
+        image_size = paz.image.get_size(image)
+        logits, boxes = forward(preprocess(image))
+        detections = postprocess(logits, boxes, image_size)
+        detections = paz.detection.remove_invalid(detections)
+        return paz.detection.to_boxes2D(detections)
+
+    return (lambda x: (y := call(x), draw(x, *y))) if callable(draw) else call
+
+
+def select_detections(logits, boxes, num_select):
+    """Keeps the highest scoring query and class pairs, boxes in corners.
+
+    Column zero of the logits is never trained, so dropping it leaves label
+    indexes that address the 90 entry COCO identifier space directly.
+    """
+    scores = jax.nn.sigmoid(logits[0, :, 1:])
+    num_classes = scores.shape[1]
+    scores, ranked = jax.lax.top_k(jp.reshape(scores, (-1,)), num_select)
+    boxes = paz.boxes.to_corner_form(boxes[0][ranked // num_classes])
+    labels = paz.cast(ranked % num_classes, "float32")
+    return jp.concatenate([boxes, scores[:, None], labels[:, None]], axis=1)
+
+
 def DetectMiniXceptionFER(box_scale=1.2, draw=None):
     # TODO add buffer window prediction
     classify = paz.applications.ClassifyMiniXceptionFER()

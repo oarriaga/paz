@@ -8,6 +8,11 @@ from .efficientdet import EFFICIENTDETD4
 from .efficientdet import EFFICIENTDETD5
 from .efficientdet import EFFICIENTDETD6
 from .efficientdet import EFFICIENTDETD7
+from .rf_detr import RFDETRNano
+from .rf_detr import RFDETRSmall
+from .rf_detr import RFDETRMedium
+from .rf_detr import RFDETRBase
+from .rf_detr import RFDETRLarge
 from .haar_cascade import HaarCascadeDetector
 from .haar_cascade import HaarCascadeEyeDetector
 from .haar_cascade import HaarCascadeFrontalFaceDetector

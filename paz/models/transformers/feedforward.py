@@ -1,7 +1,7 @@
 """Position-wise feedforward sub-layers (no norm, no residual).
 
-Flavors: ``gelu`` (vanilla Dense -> GELU -> Dense), ``glu`` (gated GeGLU),
-and ``swiglu`` (SiLU-gated, Llama-style).
+Flavors: ``gelu`` (vanilla Dense -> GELU -> Dense), ``relu`` (the same with a
+ReLU), ``glu`` (gated GeGLU), and ``swiglu`` (SiLU-gated, Llama-style).
 Callers pass layer names so weight loading keeps working, and wrap their own
 normalization / residual around the returned tensor.
 """
@@ -12,6 +12,12 @@ from keras.layers import Dense
 
 def gelu(x, inner_dim, output_dim, intermediate_name, output_name):
     inner = build_dense(inner_dim, intermediate_name, activations.gelu, True)
+    outer = build_dense(output_dim, output_name, None, True)
+    return outer(inner(x))
+
+
+def relu(x, inner_dim, output_dim, intermediate_name, output_name):
+    inner = build_dense(inner_dim, intermediate_name, activations.relu, True)
     outer = build_dense(output_dim, output_name, None, True)
     return outer(inner(x))
 
