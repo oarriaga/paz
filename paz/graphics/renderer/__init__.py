@@ -1,3 +1,4 @@
+import jax
 import jax.numpy as jp
 
 import paz
@@ -33,16 +34,18 @@ def render_masks(
     if num_objects is None:
         num_objects = len(scene.nodes)
     min_depth, max_depth = depth
-    masks = []
-    for object_arg in range(num_objects):
-        mask = build_object_mask(len(scene.nodes), object_arg)
-        args = shape, y_FOV, pose, scene, mask, lights, tiles, chunk_size
-        args += shadows, shadow_mask, num_bounces, face_chunk_size
-        _, depth_image = render(*args)
-        soft = paz.depth.to_soft_mask(depth_image, min_depth, max_depth)
-        masks.append(jp.expand_dims(soft, axis=-1))
-    return jp.stack(masks)
+    object_masks = jp.eye(len(scene.nodes), dtype=bool)[:num_objects]
+    args = shape, y_FOV, pose, scene, lights, tiles, chunk_size
+    args += shadows, shadow_mask, num_bounces, face_chunk_size
+    depths = jax.vmap(paz.lock(render_object_depth, *args))(object_masks)
+    masks = paz.depth.to_soft_mask(depths, min_depth, max_depth)
+    return jp.expand_dims(masks, axis=-1)
 
 
-def build_object_mask(num_nodes, object_arg):
-    return jp.zeros((num_nodes,), dtype=bool).at[object_arg].set(True)
+def render_object_depth(
+    mask, shape, y_FOV, pose, scene, lights, tiles, chunk_size,
+    shadows, shadow_mask, num_bounces, face_chunk_size,
+):
+    args = shape, y_FOV, pose, scene, mask, lights, tiles, chunk_size
+    args += shadows, shadow_mask, num_bounces, face_chunk_size
+    return render(*args)[1]
