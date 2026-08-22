@@ -13,35 +13,27 @@ import trimesh
 
 import paz
 import paz.utils.plot as plot
+from paz.backend import video
 from paz.graphics.mesh import BinArgs, Mesh, build_sphere
 from paz.graphics.mesh import compute_triangle_normals
 from paz.graphics.mesh import count_binned_faces, tile_render_binned_soft_mask
 from paz.graphics.types import Material, Pattern, PointLight
 from paz.optimization.history import trim_trace
 
-IMAGE_SHAPE = (128, 128)
-Y_FOV = jp.pi / 3.0
-NUM_VIEWS = 20
-MASK_SIGMA = 1e-4
-BINS = BinArgs(16, 4608)
-
 Parameters = namedtuple("Parameters", "offsets vertex_colors step_arg")
 Views = namedtuple("Views", "images masks poses")
 LossTerms = namedtuple("LossTerms", "rgb silhouette edge normal laplacian")
-WEIGHTS = LossTerms(1.0, 1.0, 1.0, 0.01, 1.0)
 
 
-def optimize(initial, loss_fn, max_steps):
+def optimize(initial, loss_fn, config):
     optimizer = build_optimizer()
-    parameters_trace = []
-    callbacks = [paz.optimization.TraceParameters(parameters_trace)]
-    args = (initial, loss_fn, optimizer, max_steps)
+    trace = []
+    callbacks = [paz.optimization.TraceParameters(trace)]
+    args = (initial, loss_fn, optimizer, config.max_steps)
     kwargs = {"callbacks": callbacks, "verbose": True}
     status, _, history = paz.minimize(*args, **kwargs)
     best_arg = int(jp.argmin(trim_trace(history).losses))
-    fitted = parameters_trace[best_arg]
-    trace = build_trace(parameters_trace, initial, fitted, history)
-    return status, fitted, trace, history
+    return status, best_arg, trace, history
 
 
 def build_optimizer():
@@ -70,23 +62,23 @@ def increment_step():
     return optax.stateless(project)
 
 
-def build_view_schedule(seed, max_steps):
+def build_view_schedule(config):
     views_per_step = 2
-    key = jax.random.PRNGKey(seed)
+    key = jax.random.PRNGKey(config.seed)
     schedule = []
-    for _ in range(max_steps):
+    for _ in range(config.max_steps):
         key, view_key = jax.random.split(key)
-        view_args = jax.random.permutation(view_key, NUM_VIEWS)
+        view_args = jax.random.permutation(view_key, config.num_views)
         schedule.append(view_args[:views_per_step])
     return jp.stack(schedule)
 
 
-def build_loss(sphere, views, face_pairs, degrees, view_schedule):
+def build_loss(sphere, views, face_pairs, degrees, view_schedule, config):
     def loss_fn(parameters):
         step_arg = jp.int32(jax.lax.stop_gradient(parameters.step_arg))
         step_views = subset_views(views, view_schedule[step_arg])
-        args = (parameters, sphere, step_views, face_pairs, degrees)
-        return weight_terms(compute_loss_terms(*args))
+        args = (parameters, sphere, step_views, face_pairs, degrees, config)
+        return weight_terms(compute_loss_terms(*args), config)
 
     return loss_fn
 
@@ -98,10 +90,10 @@ def subset_views(views, view_args):
     return Views(images, masks, poses)
 
 
-def compute_loss_terms(parameters, sphere, views, face_pairs, degrees):
+def compute_loss_terms(parameters, sphere, views, face_pairs, degrees, config):
     mesh = build_predicted_mesh(parameters, sphere)
-    rgb = compute_rgb_loss(mesh, views)
-    silhouette = compute_silhouette_loss(mesh, views)
+    rgb = compute_rgb_loss(mesh, views, config)
+    silhouette = compute_silhouette_loss(mesh, views, config)
     edge = edge_length_loss(mesh.vertices, mesh.edges)
     face_args = jp.arange(len(mesh.faces))
     normals = compute_triangle_normals(mesh.vertices, mesh.faces, face_args)
@@ -110,29 +102,33 @@ def compute_loss_terms(parameters, sphere, views, face_pairs, degrees):
     return LossTerms(rgb, silhouette, edge, normal, laplacian)
 
 
-def compute_rgb_loss(mesh, views):
+def compute_rgb_loss(mesh, views, config):
     def step(total, view):
         pose, image = view
-        prediction = render_mesh(mesh, pose)
+        prediction = render_mesh(mesh, pose, config)
         return total + paz.losses.mse(image, prediction), None
 
     total, _ = jax.lax.scan(step, jp.array(0.0), (views.poses, views.images))
     return total / views.poses.shape[0]
 
 
-def compute_silhouette_loss(mesh, views):
+def compute_silhouette_loss(mesh, views, config):
     def step(total, view):
         pose, mask = view
-        prediction = render_mesh_mask(mesh, pose)
+        prediction = render_mesh_mask(mesh, pose, config)
         return total + paz.losses.mse(mask, prediction), None
 
     total, _ = jax.lax.scan(step, jp.array(0.0), (views.poses, views.masks))
     return total / views.poses.shape[0]
 
 
-def weight_terms(terms):
-    weighted = [weight * term for weight, term in zip(WEIGHTS, terms)]
-    return sum(weighted)
+def weight_terms(terms, config):
+    loss = config.rgb_weight * terms.rgb
+    loss = loss + config.silhouette_weight * terms.silhouette
+    loss = loss + config.edge_weight * terms.edge
+    loss = loss + config.normal_weight * terms.normal
+    loss = loss + config.laplacian_weight * terms.laplacian
+    return loss
 
 
 def edge_length_loss(vertices, edges):
@@ -247,91 +243,116 @@ def camera_pose(origin):
     return paz.SE3.view_transform(origin, target, up)
 
 
-def validate_binned_masks(cow, sphere, poses):
-    cow_count = compute_max_bin_count(cow, poses)
-    sphere_count = compute_max_bin_count(sphere, poses)
+def validate_binned_masks(cow, sphere, poses, config):
+    cow_count = compute_max_bin_count(cow, poses, config)
+    sphere_count = compute_max_bin_count(sphere, poses, config)
     max_count = max(cow_count, sphere_count)
-    if max_count > BINS.max_faces:
-        raise ValueError("BINS.max_faces must be at least " + str(max_count))
+    if max_count > build_bins(config).max_faces:
+        message = "max_faces_per_bin must be at least "
+        raise ValueError(message + str(max_count))
 
 
-def compute_max_bin_count(mesh, poses):
-    counts = [compute_bin_counts(mesh, pose) for pose in poses]
+def compute_max_bin_count(mesh, poses, config):
+    counts = [compute_bin_counts(mesh, pose, config) for pose in poses]
     return int(jp.max(jp.stack(counts)))
 
 
-def compute_bin_counts(mesh, pose):
-    args = (IMAGE_SHAPE, pose, mesh, Y_FOV, MASK_SIGMA, BINS)
-    return count_binned_faces(*args)
+def compute_bin_counts(mesh, pose, config):
+    shape = (config.image_size, config.image_size)
+    args = (shape, pose, mesh, config.y_fov, config.mask_sigma)
+    return count_binned_faces(*args, build_bins(config))
 
 
-def render_target_views(mesh, poses):
-    render_fn = jax.jit(lambda pose: render_mesh(mesh, pose))
+def build_bins(config):
+    return BinArgs(config.mask_bin_size, config.max_faces_per_bin)
+
+
+def render_target_views(mesh, poses, config):
+    render_fn = jax.jit(lambda pose: render_mesh(mesh, pose, config))
     return jp.stack([render_fn(pose) for pose in poses])
 
 
-def render_target_masks(mesh, poses):
-    render_fn = jax.jit(lambda pose: render_mesh_mask(mesh, pose))
+def render_target_masks(mesh, poses, config):
+    render_fn = jax.jit(lambda pose: render_mesh_mask(mesh, pose, config))
     return jp.stack([render_fn(pose) for pose in poses])
 
 
-def render_mesh(mesh, pose):
+def render_mesh(mesh, pose, config):
     scene = paz.graphics.Scene([mesh])
     lights = [PointLight(jp.ones(3), jp.array([0.0, 0.0, -3.0]))]
-    args = (IMAGE_SHAPE, Y_FOV, pose, scene, None, lights, (2, 2), 4096)
+    shape = (config.image_size, config.image_size)
+    args = (shape, config.y_fov, pose, scene, None, lights, (2, 2), 4096)
     image, _ = paz.graphics.render(*args)
     return image
 
 
-def render_mesh_mask(mesh, pose):
-    H, W = IMAGE_SHAPE
-    args = (BINS, Y_FOV, H, W, pose, mesh, MASK_SIGMA, 512)
+def render_mesh_mask(mesh, pose, config):
+    H = W = config.image_size
+    args = (build_bins(config), config.y_fov, H, W, pose, mesh)
+    args = args + (config.mask_sigma, 512)
     return tile_render_binned_soft_mask(*args)
 
 
-def build_trace(parameters_trace, initial, fitted, history):
-    save_every = 250
-    stop_step = int(history.stop_step)
-    best_arg = int(jp.argmin(trim_trace(history).losses))
-    samples = {0: initial}
-    for step_arg in range(save_every, stop_step, save_every):
-        samples[step_arg] = parameters_trace[step_arg]
-    samples[best_arg] = fitted
-    return sorted(samples.items())
+def build_snapshots(trace, initial, best_arg):
+    grid_every = 250
+    snapshots = {0: initial}
+    for step_arg in range(grid_every, len(trace), grid_every):
+        snapshots[step_arg] = trace[step_arg]
+    snapshots[best_arg] = trace[best_arg]
+    return sorted(snapshots.items())
 
 
-def compute_metrics(parameters, sphere, views, face_pairs, degrees):
-    args = (parameters, sphere, views, face_pairs, degrees)
+def compute_metrics(parameters, sphere, views, face_pairs, degrees, config):
+    args = (parameters, sphere, views, face_pairs, degrees, config)
     terms = compute_loss_terms(*args)
     values = {name: float(term) for name, term in zip(terms._fields, terms)}
-    values["total"] = float(weight_terms(terms))
+    values["total"] = float(weight_terms(terms, config))
     return values
 
 
-def write_view_images(output_dir, initial, fitted, sphere, views):
-    view_arg = 1
+def write_view_images(output_dir, initial, fitted, sphere, views, config):
+    view_arg = select_view_arg(views)
     pose = views.poses[view_arg]
     initial_mesh = build_predicted_mesh(initial, sphere)
     fitted_mesh = build_predicted_mesh(fitted, sphere)
     images = [views.images[view_arg]]
-    images.append(render_mesh(initial_mesh, pose))
-    images.append(render_mesh(fitted_mesh, pose))
+    images.append(render_mesh(initial_mesh, pose, config))
+    images.append(render_mesh(fitted_mesh, pose, config))
     masks = [views.masks[view_arg]]
-    masks.append(render_mesh_mask(initial_mesh, pose))
-    masks.append(render_mesh_mask(fitted_mesh, pose))
+    masks.append(render_mesh_mask(initial_mesh, pose, config))
+    masks.append(render_mesh_mask(fitted_mesh, pose, config))
     write_image(output_dir / "comparison_view.png", jp.concatenate(images, 1))
     write_image(output_dir / "comparison_mask.png", jp.concatenate(masks, 1))
 
 
-def write_trace_images(output_dir, trace, sphere, views):
-    pose = views.poses[1]
+def write_trace_images(output_dir, snapshots, sphere, views, config):
+    pose = views.poses[select_view_arg(views)]
     images, masks = [], []
-    for _, parameters in trace:
+    for _, parameters in snapshots:
         mesh = build_predicted_mesh(parameters, sphere)
-        images.append(render_mesh(mesh, pose))
-        masks.append(render_mesh_mask(mesh, pose))
+        images.append(render_mesh(mesh, pose, config))
+        masks.append(render_mesh_mask(mesh, pose, config))
     write_image(output_dir / "trace_grid.png", build_image_grid(images))
     write_image(output_dir / "trace_mask_grid.png", build_image_grid(masks))
+
+
+def write_step_images(image_dir, trace, best_arg, sphere, views, config):
+    for stale_path in image_dir.glob("step_*.png"):
+        stale_path.unlink()
+    pose = views.poses[select_view_arg(views)]
+    render_fn = jax.jit(lambda mesh: render_mesh(mesh, pose, config))
+    step_args = set(range(0, len(trace), config.save_every))
+    image_paths = []
+    for step_arg in sorted(step_args | {best_arg}):
+        mesh = build_predicted_mesh(trace[step_arg], sphere)
+        image_path = image_dir / f"step_{step_arg:05d}.png"
+        write_image(image_path, render_fn(mesh))
+        image_paths.append(str(image_path))
+    return image_paths
+
+
+def select_view_arg(views):
+    return min(1, len(views.poses) - 1)
 
 
 def build_image_grid(images):
@@ -390,31 +411,52 @@ def write_summary(output_dir, config, history, status):
 if __name__ == "__main__":
     root = Path(__file__).resolve().parent
     parser = argparse.ArgumentParser(description="multi-view cow mesh fitting")
-    parser.add_argument("--mesh_dir", default=str(root / "data" / "cow_mesh"))
-    parser.add_argument("--output_dir", default=str(root / "results"))
-    parser.add_argument("--max_steps", default=2000, type=int)
-    parser.add_argument("--seed", default=777, type=int)
+    add = parser.add_argument
+    add("--mesh_dir", default=str(root / "data" / "cow_mesh"), type=str)
+    add("--output_dir", default=str(root / "results"), type=str)
+    add("--max_steps", default=2000, type=int)
+    add("--seed", default=777, type=int)
+    add("--image_size", default=128, type=int)
+    add("--y_fov", default=jp.pi / 3.0, type=float)
+    add("--num_views", default=20, type=int)
+    add("--mask_sigma", default=1e-4, type=float)
+    add("--mask_bin_size", default=16, type=int)
+    add("--max_faces_per_bin", default=4608, type=int)
+    add("--rgb_weight", default=1.0, type=float)
+    add("--silhouette_weight", default=1.0, type=float)
+    add("--edge_weight", default=1.0, type=float)
+    add("--normal_weight", default=0.01, type=float)
+    add("--laplacian_weight", default=1.0, type=float)
+    add("--save_every", default=10, type=int)
+    add("--video_fps", default=32, type=int)
     config = parser.parse_args()
 
     output_dir = Path(paz.directory.make(config.output_dir))
     cow, center, scale = load_cow_mesh(config.mesh_dir)
     sphere = build_sphere_mesh()
-    poses = build_camera_poses(2.7, NUM_VIEWS)
-    validate_binned_masks(cow, sphere, poses)
-    images = render_target_views(cow, poses)
-    masks = render_target_masks(cow, poses)
+    poses = build_camera_poses(2.7, config.num_views)
+    validate_binned_masks(cow, sphere, poses, config)
+    images = render_target_views(cow, poses, config)
+    masks = render_target_masks(cow, poses, config)
     views = Views(images, masks, poses)
     face_pairs = build_face_pairs(sphere)
     degrees = build_vertex_degrees(sphere)
-    view_schedule = build_view_schedule(config.seed, config.max_steps)
-    loss_fn = build_loss(sphere, views, face_pairs, degrees, view_schedule)
+    view_schedule = build_view_schedule(config)
+    args = (sphere, views, face_pairs, degrees, view_schedule, config)
+    loss_fn = build_loss(*args)
     initial = build_initial_parameters(sphere)
-    args = (initial, loss_fn, config.max_steps)
-    status, fitted, trace, history = optimize(*args)
-    write_view_images(output_dir, initial, fitted, sphere, views)
-    write_trace_images(output_dir, trace, sphere, views)
+    status, best_arg, trace, history = optimize(initial, loss_fn, config)
+    fitted = trace[best_arg]
+    snapshots = build_snapshots(trace, initial, best_arg)
+    write_view_images(output_dir, initial, fitted, sphere, views, config)
+    write_trace_images(output_dir, snapshots, sphere, views, config)
+    image_dir = Path(paz.directory.make(output_dir / "step_images"))
+    args = (image_dir, trace, best_arg, sphere, views, config)
+    image_paths = write_step_images(*args)
+    video_name = str(output_dir / "optimization.mp4")
+    video.from_paths(image_paths, video_name, config.video_fps)
     write_losses(output_dir, history)
-    metrics_args = (sphere, views, face_pairs, degrees)
+    metrics_args = (sphere, views, face_pairs, degrees, config)
     metrics = {"initial": compute_metrics(initial, *metrics_args)}
     metrics["final"] = compute_metrics(fitted, *metrics_args)
     paz.file.write_json(metrics, output_dir / "metrics.json")
