@@ -112,6 +112,13 @@ def build_batch(size, **fields):
     return ppo.Experience(**values)
 
 
+def test_likelihood_ratio_never_overflows():
+    ratio = ppo.compute_likelihood_ratio(jp.asarray(1e4), jp.asarray(0.0))
+    assert np.isfinite(float(ratio))
+    healthy = ppo.compute_likelihood_ratio(jp.asarray(0.1), jp.asarray(0.0))
+    assert np.isclose(float(healthy), np.exp(0.1), atol=1e-5)
+
+
 def test_diverged_samples_are_masked_from_the_loss():
     fields = dict(log_probability=jp.zeros(2), advantage=jp.ones(2))
     batch = build_batch(2, valid=jp.array([1.0, 0.0]), **fields)

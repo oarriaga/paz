@@ -18,33 +18,45 @@ class FakePhysics(namedtuple("FakePhysics", "qpos, qvel")):
 
 
 def test_sanitize_diverged_replaces_non_finite_states():
-    dynamics = FakeDynamics(jp.full(3, 0.5))
-    poisoned = FakePhysics(jp.array([1.0, jp.nan, 2.0]), jp.zeros(3))
+    dynamics = FakeDynamics(jp.full(9, 0.5))
+    poisoned = FakePhysics(jp.ones(9).at[1].set(jp.nan), jp.zeros(9))
     sanitized, diverged = common.sanitize_diverged(poisoned, dynamics)
     assert bool(diverged)
     assert np.allclose(np.asarray(sanitized.qpos), 0.5)
-    healthy = FakePhysics(jp.ones(3), jp.ones(3))
+    healthy = FakePhysics(jp.ones(9), jp.ones(9))
     sanitized, diverged = common.sanitize_diverged(healthy, dynamics)
     assert not bool(diverged)
     assert np.allclose(np.asarray(sanitized.qpos), 1.0)
 
 
 def test_sanitize_diverged_catches_infinite_velocity():
-    dynamics = FakeDynamics(jp.zeros(3))
-    poisoned = FakePhysics(jp.ones(3), jp.array([0.0, jp.inf, 0.0]))
+    dynamics = FakeDynamics(jp.zeros(9))
+    poisoned = FakePhysics(jp.ones(9), jp.zeros(9).at[1].set(jp.inf))
     sanitized, diverged = common.sanitize_diverged(poisoned, dynamics)
     assert bool(diverged)
     assert np.allclose(np.asarray(sanitized.qvel), 0.0)
 
 
 def test_sanitize_diverged_catches_unphysical_speeds():
-    dynamics = FakeDynamics(jp.zeros(3))
-    exploding = FakePhysics(jp.ones(3), jp.array([0.0, 2e3, 0.0]))
+    dynamics = FakeDynamics(jp.zeros(9))
+    exploding = FakePhysics(jp.ones(9), jp.zeros(9).at[1].set(2e3))
     sanitized, diverged = common.sanitize_diverged(exploding, dynamics)
     assert bool(diverged)
     assert np.allclose(np.asarray(sanitized.qvel), 0.0)
-    fast = FakePhysics(jp.ones(3), jp.full(3, 50.0))
+    fast = FakePhysics(jp.ones(9), jp.full(9, 50.0))
     sanitized, diverged = common.sanitize_diverged(fast, dynamics)
+    assert not bool(diverged)
+
+
+def test_sanitize_diverged_catches_runaway_joint_positions():
+    dynamics = FakeDynamics(jp.zeros(9))
+    qpos = jp.zeros(9).at[8].set(300.0)
+    runaway = FakePhysics(qpos, jp.zeros(9))
+    sanitized, diverged = common.sanitize_diverged(runaway, dynamics)
+    assert bool(diverged)
+    assert np.allclose(np.asarray(sanitized.qpos), 0.0)
+    bent = FakePhysics(jp.zeros(9).at[8].set(2.5), jp.zeros(9))
+    sanitized, diverged = common.sanitize_diverged(bent, dynamics)
     assert not bool(diverged)
 
 

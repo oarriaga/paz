@@ -137,8 +137,11 @@ def compute_policy_loss(log_prob, batch, clip_ratio):
     return compute_pessimistic_loss(loss, clipped_loss, batch.valid)
 
 
-def compute_likelihood_ratio(log_prob, old_log_prob):
-    return jp.exp(log_prob - old_log_prob)
+def compute_likelihood_ratio(log_prob, old_log_prob, bound=20.0):
+    # the clip keeps a corrupted sample from overflowing exp into inf and
+    # poisoning the gradients; it is far outside the trust region, so it
+    # never changes a healthy update
+    return jp.exp(jp.clip(log_prob - old_log_prob, -bound, bound))
 
 
 def compute_surrogate_objective(likelihood_ratio, advantage):

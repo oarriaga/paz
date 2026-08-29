@@ -159,16 +159,18 @@ def apply_scheduled_push(key, physics_state, episode_step, push_step):
     return physics_state.replace(qvel=qvel), push_step
 
 
-def sanitize_diverged(physics_state, dynamics, velocity_bound=100.0):
-    # a non-finite or unphysically fast state is a solver failure, not an
-    # outcome: replace it so no poison reaches the observation history, and
-    # report the divergence; the bound sits several times above the joint
-    # velocity limits, so it also caps how large any reward term can get
-    # before an explosion is caught
+def sanitize_diverged(physics_state, dynamics, velocity_bound=100.0, position_bound=10.0):  # fmt: skip
+    # a non-finite, unphysically fast, or mechanically impossible state is
+    # a solver failure, not an outcome: replace it so no poison reaches
+    # the observation history, and report the divergence; the bounds sit
+    # several times above the joint limits, so they also cap how large any
+    # reward term or observation can get before an explosion is caught
     finite_qpos = jp.all(jp.isfinite(physics_state.qpos))
+    stretch = jp.max(jp.abs(physics_state.qpos[7:]))
+    stable_joints = finite_qpos & (stretch < position_bound)
     speed = jp.max(jp.abs(physics_state.qvel))
     stable_qvel = jp.isfinite(speed) & (speed < velocity_bound)
-    diverged = ~(finite_qpos & stable_qvel)
+    diverged = ~(stable_joints & stable_qvel)
     qpos = jp.where(diverged, dynamics.qpos0, physics_state.qpos)
     qvel = jp.where(diverged, 0.0, physics_state.qvel)
     return physics_state.replace(qpos=qpos, qvel=qvel), diverged
