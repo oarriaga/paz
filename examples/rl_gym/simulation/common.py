@@ -11,6 +11,8 @@ import rewards
 from robots.g1 import DEFAULT_ANGLES
 
 STATE_FIELDS = "physics_state, history, tile, counters, command, reward_sum"
+EPISODE_STEPS = 1000
+COMMAND_PERIOD = 500
 ACTOR_FIELDS = "angular_velocity, gravity, command, joint_positions, joint_velocities, action"  # fmt: skip
 CRITIC_FIELDS = "linear_velocity, " + ACTOR_FIELDS
 ObservationHistory = namedtuple("ObservationHistory", "actor, critic")
@@ -19,7 +21,7 @@ CriticObservation = namedtuple("CriticObservation", CRITIC_FIELDS)
 Tile = namedtuple("Tile", "level, column, origin")
 StepCounters = namedtuple("StepCounters", "episode, command, push")
 Command = namedtuple("Command", "forward, sideways, turn")
-Transition = namedtuple("Transition", "reward, done, timeout, level, terms")  # fmt: skip
+Transition = namedtuple("Transition", "reward, done, timeout, level, terms, diverged")  # fmt: skip
 
 
 def build_qpos(key, qpos, origin, spawn_height=0.8):
@@ -157,6 +159,27 @@ def apply_scheduled_push(key, physics_state, episode_step, push_step):
     return physics_state.replace(qvel=qvel), push_step
 
 
+def sanitize_diverged(physics_state, dynamics, velocity_bound=1e3):
+    # a non-finite or unphysically fast state is a solver failure, not an
+    # outcome: replace it so no poison reaches the observation history, and
+    # report the divergence; the bound sits far above any physical motion
+    finite_qpos = jp.all(jp.isfinite(physics_state.qpos))
+    speed = jp.max(jp.abs(physics_state.qvel))
+    stable_qvel = jp.isfinite(speed) & (speed < velocity_bound)
+    diverged = ~(finite_qpos & stable_qvel)
+    qpos = jp.where(diverged, dynamics.qpos0, physics_state.qpos)
+    qvel = jp.where(diverged, 0.0, physics_state.qvel)
+    return physics_state.replace(qpos=qpos, qvel=qvel), diverged
+
+
+def discard_diverged(diverged, reward, terms):
+    # a diverged step carries no information, so it must not be learned from
+    diverged = diverged | ~jp.isfinite(reward)
+    reward = jp.where(diverged, 0.0, reward)
+    terms = jp.where(diverged, jp.zeros_like(terms), terms)
+    return diverged, reward, terms
+
+
 def run_physics(dynamics, physics_state, targets, decimation=4):
 
     def advance(physics_state, _):
@@ -181,11 +204,23 @@ def update_history(history, observation):
     return type(observation)(*terms)
 
 
-def resample_command(key, command, command_step, max_speed, period=500):
+def resample_command(key, command, command_step, max_speed, period=COMMAND_PERIOD):  # fmt: skip
     resample = command_step >= period
     sampled = sample_command(key, max_speed)
     values = jp.where(resample, jp.stack(sampled), jp.stack(command))
     return Command(*values), jp.where(resample, 0, command_step)
+
+
+def decorrelate_counters(key, state):
+    # stagger the initial episode and command phases so the parallel
+    # environments do not time out and resample in lockstep; the push
+    # schedule shifts with the episode so no push fires at spawn
+    keys = jr.split(key)
+    num_envs = state.counters.episode.shape[0]
+    episode = jr.randint(keys[0], (num_envs,), 0, EPISODE_STEPS)
+    command = jr.randint(keys[1], (num_envs,), 0, COMMAND_PERIOD)
+    counters = StepCounters(episode, command, episode + state.counters.push)
+    return state._replace(counters=counters)
 
 
 def read_foot_contact(physics_state, force_addresses):

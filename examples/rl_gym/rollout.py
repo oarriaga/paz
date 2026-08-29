@@ -11,8 +11,8 @@ from ppo import compute_value_targets
 from ppo import sample_actions
 from ppo import standardize_advantages
 
-Rollout = namedtuple("Rollout", "actor_observation, critic_observation, action, log_probability, mean, stdv, value, reward, done, terms, reward_sum")  # fmt: skip
-Metrics = namedtuple("Metrics", "reward, episode_return, terms")
+Rollout = namedtuple("Rollout", "actor_observation, critic_observation, action, log_probability, mean, stdv, value, reward, done, terms, reward_sum, diverged, level")  # fmt: skip
+Metrics = namedtuple("Metrics", "reward, episode_return, terms, divergences, level")  # fmt: skip
 
 
 def build_collect(actor, critic, reset, step, num_steps=24, gamma=0.99):
@@ -23,17 +23,18 @@ def build_collect(actor, critic, reset, step, num_steps=24, gamma=0.99):
             state, key = carry
             keys = jr.split(key, 4)
             history = state.history
+            stdv = jp.exp(parameters.log_stdv)
             mean = call_actor(actor, parameters.actor, history.actor)
-            action, log_probability = sample_actions(keys[1], mean, parameters.stdv)  # fmt: skip
+            action, log_probability = sample_actions(keys[1], mean, stdv)
             value = call_critic(critic, parameters.critic, history.critic)
             state, transition = step(keys[2], state, action, max_speed)
             reward_sum = state.reward_sum
             reward = bootstrap(critic, parameters, state, transition, gamma)
             fresh = reset(keys[3], transition.level, max_speed)
             state = select_done(transition.done, fresh, state)
-            stdv = jp.broadcast_to(parameters.stdv, mean.shape)
+            stdv = jp.broadcast_to(stdv, mean.shape)
             done = transition.done.astype(jp.float32)
-            step_args = history.actor, history.critic, action, log_probability, mean, stdv, value, reward, done, transition.terms, reward_sum  # fmt: skip
+            step_args = history.actor, history.critic, action, log_probability, mean, stdv, value, reward, done, transition.terms, reward_sum, transition.diverged, transition.level  # fmt: skip
             return (state, keys[0]), Rollout(*step_args)
 
         (state, key), rollout = jax.lax.scan(advance, (state, key), None, length=num_steps)  # fmt: skip
@@ -70,7 +71,8 @@ def is_per_environment(values, done):
 
 
 def build_experience(rollout, value_target, advantage):
-    args = rollout.actor_observation, rollout.critic_observation, rollout.action, rollout.log_probability, rollout.mean, rollout.stdv, rollout.value, value_target, advantage  # fmt: skip
+    valid = 1.0 - rollout.diverged.astype(jp.float32)
+    args = rollout.actor_observation, rollout.critic_observation, rollout.action, rollout.log_probability, rollout.mean, rollout.stdv, rollout.value, value_target, advantage, valid  # fmt: skip
     return jax.tree.map(merge_steps, Experience(*args))
 
 
@@ -83,4 +85,7 @@ def compute_metrics(rollout):
     total_return = jp.sum(rollout.reward_sum * rollout.done)
     episode_return = total_return / jp.maximum(completed, 1.0)
     terms = jp.mean(rollout.terms, axis=(0, 1))
-    return Metrics(jp.mean(rollout.reward), episode_return, terms)
+    divergences = jp.sum(rollout.diverged)
+    level = jp.mean(rollout.level.astype(jp.float32))
+    metric_args = jp.mean(rollout.reward), episode_return, terms
+    return Metrics(*metric_args, divergences, level)

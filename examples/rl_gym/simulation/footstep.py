@@ -5,7 +5,7 @@ import jax.numpy as jp
 import rewards
 from jax import random as jr
 
-from .common import STATE_FIELDS
+from .common import EPISODE_STEPS, STATE_FIELDS
 from .common import ACTOR_FIELDS, CRITIC_FIELDS
 from .common import StepCounters, Tile
 from .common import build_qpos, build_qvel, build_physics_state
@@ -15,6 +15,7 @@ from .common import build_observation_history, compute_local_phase
 from .common import rotate_yaw, rotate_yaw_inverse
 from .common import Transition, apply_scheduled_push, compute_targets
 from .common import compute_gravity, compute_robust_reward, is_fallen
+from .common import discard_diverged, sanitize_diverged
 from .common import read_foot_contact, resample_command, run_physics
 from .common import update_level, update_observation_history
 
@@ -92,22 +93,27 @@ def build_target_term(physics_state, targets, phase, stance_threshold=0.55):
     return jp.concatenate((left, right, gait))
 
 
-def step(key, dynamics, state, action, max_speed, robot, indices, tile_size, max_level, episode_steps=1000):  # fmt: skip
+def step(key, dynamics, state, action, max_speed, robot, indices, tile_size, max_level, episode_steps=EPISODE_STEPS):  # fmt: skip
     keys = jr.split(key, 11)
     counters = state.counters
     push_args = keys[0], state.physics_state, counters.episode, counters.push
     pushed, push_step = apply_scheduled_push(*push_args)
     physics_state = run_physics(dynamics, pushed, compute_targets(action))
+    physics_state, diverged = sanitize_diverged(physics_state, dynamics)
     episode = counters.episode + 1
     phase = compute_local_phase(episode)
     feet_args = keys[3:], physics_state, state, phase, robot, indices
     feet = update_feet(*feet_args)
     reward_args = physics_state, state, action, robot, indices, episode
     reward, terms = compute_robust_reward(*reward_args)
+    diverged, reward, terms = discard_diverged(diverged, reward, terms)
     bonus = compute_touchdown_bonus(physics_state, state, feet, robot)
+    bonus = jp.where(diverged, 0.0, bonus)
     command_args = keys[1], state.command, counters.command + 1, max_speed
     command, command_step = resample_command(*command_args)
     term = build_target_term(physics_state, feet.targets, phase)
+    # foot targets come from xpos, which sanitize_diverged does not cover
+    term = jp.where(diverged, jp.zeros_like(term), term)
     history_args = keys[2], physics_state, command, action, term
     history = update_observation_history(state.history, *build_observations(*history_args))  # fmt: skip
     counters = StepCounters(episode, command_step, push_step)
@@ -115,10 +121,12 @@ def step(key, dynamics, state, action, max_speed, robot, indices, tile_size, max
     state_args = physics_state, history, state.tile, counters, command
     state = State(*state_args, reward_sum, feet)
     gravity = compute_gravity(physics_state.qpos[3:7])
-    timeout = episode >= episode_steps
-    done = is_fallen(physics_state, gravity) | timeout
-    level = update_level(state, tile_size, max_level)
-    return state, Transition(reward + bonus, done, timeout, level, terms)
+    timeout = (episode >= episode_steps) & ~diverged
+    done = is_fallen(physics_state, gravity) | timeout | diverged
+    fresh_level = update_level(state, tile_size, max_level)
+    level = jp.where(diverged, state.tile.level, fresh_level)
+    transition = Transition(reward + bonus, done, timeout, level, terms, diverged)  # fmt: skip
+    return state, transition
 
 
 def build_observations(key, physics_state, command, action, term):
