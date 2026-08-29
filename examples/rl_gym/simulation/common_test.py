@@ -76,6 +76,17 @@ def test_discard_diverged_catches_non_finite_reward():
     assert float(reward) == 0.0
 
 
+def test_discard_diverged_catches_implausible_reward_magnitudes():
+    # corrupted contact sensors can inject huge finite rewards from
+    # states whose positions and velocities still look legal
+    terms = jp.ones(3)
+    args = jp.asarray(False), jp.asarray(-7e34), terms
+    diverged, reward, terms = common.discard_diverged(*args)
+    assert bool(diverged)
+    assert float(reward) == 0.0
+    assert np.allclose(np.asarray(terms), 0.0)
+
+
 def test_discard_diverged_keeps_healthy_steps():
     terms = jp.ones(3)
     args = jp.asarray(False), jp.asarray(0.7), terms

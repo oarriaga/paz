@@ -176,9 +176,13 @@ def sanitize_diverged(physics_state, dynamics, velocity_bound=100.0, position_bo
     return physics_state.replace(qpos=qpos, qvel=qvel), diverged
 
 
-def discard_diverged(diverged, reward, terms):
-    # a diverged step carries no information, so it must not be learned from
-    diverged = diverged | ~jp.isfinite(reward)
+def discard_diverged(diverged, reward, terms, reward_bound=1e3):
+    # a diverged step carries no information, so it must not be learned
+    # from; the magnitude bound also catches solver corruption that only
+    # shows in sensor-driven reward channels, where the state looks legal
+    # but no physically reachable state can produce such a reward
+    implausible = ~jp.isfinite(reward) | (jp.abs(reward) > reward_bound)
+    diverged = diverged | implausible
     reward = jp.where(diverged, 0.0, reward)
     terms = jp.where(diverged, jp.zeros_like(terms), terms)
     return diverged, reward, terms
