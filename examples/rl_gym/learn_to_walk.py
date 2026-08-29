@@ -126,8 +126,9 @@ if __name__ == "__main__":
             experience = distributed.shard_experience(mesh, experience)
             training, update_metrics = update(args.seed + iteration, training, experience)  # fmt: skip
             tracking = distributed.global_mean(mesh, metrics.terms[0])
-            speed_args = max_speed, tracking, iteration, args.num_steps
-            max_speed = curriculum.update_max_speed(*speed_args)
+            episode_length = distributed.global_mean(mesh, metrics.episode_length)  # fmt: skip
+            speed_args = max_speed, tracking, episode_length, iteration
+            max_speed = curriculum.update_max_speed(*speed_args, args.num_steps)  # fmt: skip
             save_now = iteration % args.save_interval == 0
             if is_leader and save_now:
                 save_args = Path(root) / "checkpoints", iteration

@@ -13,7 +13,7 @@ from ppo import sample_actions
 from ppo import standardize_advantages
 
 Rollout = namedtuple("Rollout", "actor_observation, critic_observation, action, log_probability, mean, stdv, value, reward, done, terms, reward_sum, diverged, level")  # fmt: skip
-Metrics = namedtuple("Metrics", "reward, episode_return, terms, divergences, level")  # fmt: skip
+Metrics = namedtuple("Metrics", "reward, episode_return, terms, divergences, level, episode_length")  # fmt: skip
 
 
 def build_collect(actor, critic, reset, step, num_steps=24, gamma=0.99):
@@ -88,5 +88,6 @@ def compute_metrics(rollout):
     terms = jp.mean(rollout.terms, axis=(0, 1))
     divergences = jp.sum(rollout.diverged)
     level = jp.mean(rollout.level.astype(jp.float32))
+    episode_length = rollout.done.size / jp.maximum(completed, 1.0)
     metric_args = jp.mean(rollout.reward), episode_return, terms
-    return Metrics(*metric_args, divergences, level)
+    return Metrics(*metric_args, divergences, level, episode_length)

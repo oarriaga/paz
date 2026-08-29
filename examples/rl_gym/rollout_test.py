@@ -65,3 +65,4 @@ def test_compute_metrics_counts_divergences():
     metrics = rollout.compute_metrics(build_rollout(**fields))
     assert int(metrics.divergences) == 2
     assert np.isclose(float(metrics.episode_return), 12.0 / 3.0)
+    assert np.isclose(float(metrics.episode_length), 6.0 / 3.0)
