@@ -22,7 +22,7 @@ if __name__ == "__main__":
     parser.add_argument("--load", default=None)
     # mujoco warp budgets contacts (naconmax) for the whole batch and
     # constraint rows (njmax) for one environment
-    parser.add_argument("--num_contacts", type=int, default=32)
+    parser.add_argument("--num_contacts", type=int, default=64)
     parser.add_argument("--num_constraints", type=int, default=256)
     # multi-GPU runs launch one process per GPU, each simulating its own
     # environments; gradients are averaged globally inside the update

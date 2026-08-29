@@ -9,7 +9,7 @@ from .common import EPISODE_STEPS, STATE_FIELDS
 from .common import ACTOR_FIELDS, CRITIC_FIELDS
 from .common import StepCounters, Tile
 from .common import build_qpos, build_qvel, build_physics_state
-from .common import sample_joint_velocity, sample_command, sample_push_step
+from .common import sample_command, sample_push_step
 from .common import build_actor_observation, build_critic_observation
 from .common import build_observation_history, compute_local_phase
 from .common import rotate_yaw, rotate_yaw_inverse
@@ -26,20 +26,19 @@ CriticObservation = namedtuple("CriticObservation", CRITIC_FIELDS + ", footstep"
 
 
 def reset(key, dynamics, level, max_speed, physics_template, origins, feet):  # fmt: skip
-    keys = jr.split(key, 7)
+    keys = jr.split(key, 6)
     column = jr.randint(keys[0], (), 0, origins.shape[1])
     origin = origins[level, column]
     qpos = build_qpos(keys[1], dynamics.qpos0, origin)
     num_joints = physics_template.ctrl.shape[0]
-    joint_velocity = sample_joint_velocity(keys[2], num_joints)
-    qvel = build_qvel(physics_template.qvel, joint_velocity)
+    qvel = build_qvel(physics_template.qvel)
     physics_state = build_physics_state(dynamics, physics_template, qpos, qvel)
-    command = sample_command(keys[3], max_speed)
-    push_step = sample_push_step(keys[4], 0)
+    command = sample_command(keys[2], max_speed)
+    push_step = sample_push_step(keys[3], 0)
     phase = compute_local_phase(0)
-    targets = generate_both_targets(keys[5], physics_state, command, feet)
+    targets = generate_both_targets(keys[4], physics_state, command, feet)
     action = jp.zeros(num_joints)
-    history_args = keys[6], physics_state, command, action, targets, phase
+    history_args = keys[5], physics_state, command, action, targets, phase
     history = build_initial_history(*history_args)
     tile = Tile(level, column, origin)
     counters = StepCounters(jp.array(0), jp.array(0), push_step)
@@ -94,7 +93,7 @@ def build_target_term(physics_state, targets, phase, stance_threshold=0.55):
 
 
 def step(key, dynamics, state, action, max_speed, robot, indices, tile_size, max_level, episode_steps=EPISODE_STEPS):  # fmt: skip
-    keys = jr.split(key, 11)
+    keys = jr.split(key, 12)
     counters = state.counters
     push_args = keys[0], state.physics_state, counters.episode, counters.push
     pushed, push_step = apply_scheduled_push(*push_args)
@@ -102,7 +101,7 @@ def step(key, dynamics, state, action, max_speed, robot, indices, tile_size, max
     physics_state, diverged = sanitize_diverged(physics_state, dynamics)
     episode = counters.episode + 1
     phase = compute_local_phase(episode)
-    feet_args = keys[3:], physics_state, state, phase, robot, indices
+    feet_args = keys[3:11], physics_state, state, phase, robot, indices
     feet = update_feet(*feet_args)
     reward_args = physics_state, state, action, robot, indices, episode
     reward, terms = compute_robust_reward(*reward_args)
@@ -123,7 +122,7 @@ def step(key, dynamics, state, action, max_speed, robot, indices, tile_size, max
     gravity = compute_gravity(physics_state.qpos[3:7])
     timeout = (episode >= episode_steps) & ~diverged
     done = is_fallen(physics_state, gravity) | timeout | diverged
-    fresh_level = update_level(state, tile_size, max_level)
+    fresh_level = update_level(keys[11], state, tile_size, max_level)
     level = jp.where(diverged, state.tile.level, fresh_level)
     transition = Transition(reward + bonus, done, timeout, level, terms, diverged)  # fmt: skip
     return state, transition

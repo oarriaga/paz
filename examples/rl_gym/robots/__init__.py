@@ -138,6 +138,14 @@ def reject_args(objects, suffix):
     return jp.array(args)
 
 
+def reject_keyword_args(objects, keyword):
+    args = []
+    for object_ in objects:
+        if keyword not in object_.name:
+            args.append(object_.arg)
+    return jp.array(args)
+
+
 def build_namedtuple(type_name, entries):
     fields, values, used = [], [], {}
     for name, value in entries:

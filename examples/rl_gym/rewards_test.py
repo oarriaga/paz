@@ -78,11 +78,19 @@ def test_compute_reward_weights_and_order():
     base = 3.0, 4.0, 5.0, 6.0
     joint = 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0
     feet = 15.0, 16.0, 17.0, 18.0
-    reward, values = rewards.compute_reward(tracking, joint, base, feet)
+    reward, values = rewards.compute_reward(tracking, joint, base, feet, 1.0)
     expected_order = [1.0, 2.0, 1.0, 3.0, 4.0, *joint, 5.0, 6.0, *feet]
     assert np.allclose(np.asarray(values), expected_order)
     expected = np.sum(np.asarray(values) * np.asarray(rewards.ROBUST_WEIGHTS))
     assert np.isclose(float(reward), expected * 0.02, atol=1e-5)
+
+
+def test_alive_reward_stops_on_the_falling_step():
+    tracking, base = (0.0, 0.0), (0.0, 0.0, 0.0, 0.0)
+    joint, feet = (0.0,) * 8, (0.0, 0.0, 0.0, 0.0)
+    standing, _ = rewards.compute_reward(tracking, joint, base, feet, 1.0)
+    fallen, _ = rewards.compute_reward(tracking, joint, base, feet, 0.0)
+    assert np.isclose(float(standing) - float(fallen), 0.15 * 0.02)
 
 
 def test_weights_match_reference_configuration():

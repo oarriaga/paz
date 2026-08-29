@@ -66,6 +66,26 @@ the training log counts these events.
   the noise fast enough to stall exploration in a standing policy.
 - Divergence handling above; the reference relied on external restarts.
 
+## Known remaining differences from the reference
+
+Documented after a four-way source audit (rsl_rl update math, IsaacLab
+manager semantics, reward formulas, physics configuration); all judged
+minor and left as is:
+
+- Root and foot velocities are taken at the frame origins; IsaacLab uses
+  the link centers of mass.
+- Foot contact is the last-substep net force; IsaacLab thresholds the
+  maximum over a three-substep history.
+- The critic sees a push one step later than IsaacLab does.
+- Pyramid slope tiles use a linear ramp and a slightly taller platform
+  than IsaacLab's bilinear profile.
+- Each reset samples a fresh terrain column; IsaacLab pins each
+  environment to one column for the whole run.
+- The MJCF torso is about 1.8 kg heavier than the training URDF.
+- PhysX clamps joint velocities at the actuator limits inside the
+  solver; MuJoCo has no such clamp, so unphysical states are instead
+  discarded by the divergence guards.
+
 ## Evaluation
 
 ```bash

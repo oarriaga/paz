@@ -8,7 +8,7 @@ from terrain import add_heightfield
 World = namedtuple("World", "robot, dynamics, physics_template, terrain")
 
 
-def build(robot, terrain, backend, num_envs, device, num_contacts=32, num_constraints=256):  # fmt: skip
+def build(robot, terrain, backend, num_envs, device, num_contacts=64, num_constraints=256):  # fmt: skip
     mjmodel = build_mjmodel(robot, terrain)
     dynamics = mjx.put_model(mjmodel, impl=backend, device=device)
     template_args = mjmodel, backend, num_envs, device

@@ -8,7 +8,7 @@ from jax import random as jr
 from .common import EPISODE_STEPS, STATE_FIELDS
 from .common import StepCounters, Tile
 from .common import build_qpos, build_qvel, build_physics_state
-from .common import sample_joint_velocity, sample_command, sample_push_step
+from .common import sample_command, sample_push_step
 from .common import build_actor_observation, build_critic_observation
 from .common import build_observation_history
 from .common import Transition, apply_scheduled_push, compute_targets
@@ -46,19 +46,18 @@ def build_batch_step(world, dynamics, dynamics_axes, indices, max_level):
 
 
 def reset(key, dynamics, level, max_speed, physics_template, origins):
-    keys = jr.split(key, 6)
+    keys = jr.split(key, 5)
     column = jr.randint(keys[0], (), 0, origins.shape[1])
     origin = origins[level, column]
     tile = Tile(level, column, origin)
     qpos = build_qpos(keys[1], dynamics.qpos0, origin)
     num_joints = physics_template.ctrl.shape[0]
-    joint_velocity = sample_joint_velocity(keys[2], num_joints)
-    qvel = build_qvel(physics_template.qvel, joint_velocity)
+    qvel = build_qvel(physics_template.qvel)
     physics_state = build_physics_state(dynamics, physics_template, qpos, qvel)
-    command = sample_command(keys[3], max_speed)
-    push_step = sample_push_step(keys[4], 0)
+    command = sample_command(keys[2], max_speed)
+    push_step = sample_push_step(keys[3], 0)
     action = jp.zeros(num_joints)
-    actor = build_actor_observation(keys[5], physics_state, command, action)
+    actor = build_actor_observation(keys[4], physics_state, command, action)
     critic = build_critic_observation(physics_state, command, action)
     history = build_observation_history(actor, critic)
     counters = StepCounters(jp.array(0), jp.array(0), push_step)
@@ -67,7 +66,7 @@ def reset(key, dynamics, level, max_speed, physics_template, origins):
 
 
 def step(key, dynamics, state, action, max_speed, robot, indices, tile_size, max_level, episode_steps=EPISODE_STEPS):  # fmt: skip
-    keys = jr.split(key, 3)
+    keys = jr.split(key, 4)
     counters = state.counters
     push_args = keys[0], state.physics_state, counters.episode, counters.push
     pushed, push_step = apply_scheduled_push(*push_args)
@@ -90,7 +89,7 @@ def step(key, dynamics, state, action, max_speed, robot, indices, tile_size, max
     gravity = compute_gravity(physics_state.qpos[3:7])
     fallen = is_fallen(physics_state, gravity)
     timeout = (episode >= episode_steps) & ~diverged
-    fresh_level = update_level(state, tile_size, max_level)
+    fresh_level = update_level(keys[3], state, tile_size, max_level)
     level = jp.where(diverged, state.tile.level, fresh_level)
     done = fallen | timeout | diverged
     return state, Transition(reward, done, timeout, level, terms, diverged)

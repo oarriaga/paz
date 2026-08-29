@@ -96,6 +96,27 @@ def test_discard_diverged_keeps_healthy_steps():
     assert np.allclose(np.asarray(terms), 1.0)
 
 
+def test_soft_limits_shrink_the_range_around_the_midpoint():
+    limits = jp.array([-1.0, 0.0]), jp.array([1.0, 4.0])
+    lower, upper = common.compute_soft_limits(limits)
+    assert np.allclose(np.asarray(lower), [-0.9, 0.2])
+    assert np.allclose(np.asarray(upper), [0.9, 3.8])
+
+
+def test_scheduled_push_adds_to_the_current_velocity():
+    qvel = jp.zeros(9).at[0].set(0.4)
+    physics_state = FakePhysics(jp.zeros(9), qvel)
+    args = jr.key(0), physics_state, jp.asarray(10), jp.asarray(5)
+    pushed, next_push = common.apply_scheduled_push(*args)
+    kick = float(pushed.qvel[0]) - 0.4
+    assert kick != 0.0 and abs(kick) <= 1.0
+    assert int(next_push) > 10
+    args = jr.key(0), physics_state, jp.asarray(3), jp.asarray(5)
+    unpushed, same_push = common.apply_scheduled_push(*args)
+    assert np.allclose(np.asarray(unpushed.qvel), np.asarray(qvel))
+    assert int(same_push) == 5
+
+
 def test_yaw_quaternion_roundtrip():
     yaw = 1.2
     quaternion = common.yaw_quaternion(yaw)
