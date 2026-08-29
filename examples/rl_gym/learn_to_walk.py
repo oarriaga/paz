@@ -4,6 +4,9 @@ import time
 from pathlib import Path
 
 os.environ.setdefault("KERAS_BACKEND", "jax")
+# leave a share of device memory to the warp physics allocator, which
+# lives outside XLA's preallocated pool
+os.environ.setdefault("XLA_PYTHON_CLIENT_MEM_FRACTION", "0.6")
 
 import distributed
 
