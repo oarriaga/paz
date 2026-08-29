@@ -4,9 +4,9 @@ import time
 from pathlib import Path
 
 os.environ.setdefault("KERAS_BACKEND", "jax")
-# leave a share of device memory to the warp physics allocator, which
-# lives outside XLA's preallocated pool
-os.environ.setdefault("XLA_PYTHON_CLIENT_MEM_FRACTION", "0.6")
+# the warp physics allocator lives outside XLA's pool and its solver
+# workspace dominates device memory, so XLA must allocate on demand
+os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
 
 import distributed
 
@@ -25,7 +25,7 @@ if __name__ == "__main__":
     parser.add_argument("--load", default=None)
     # mujoco warp budgets contacts (naconmax) for the whole batch and
     # constraint rows (njmax) for one environment
-    parser.add_argument("--num_contacts", type=int, default=64)
+    parser.add_argument("--num_contacts", type=int, default=32)
     parser.add_argument("--num_constraints", type=int, default=256)
     # multi-GPU runs launch one process per GPU, each simulating its own
     # environments; gradients are averaged globally inside the update
