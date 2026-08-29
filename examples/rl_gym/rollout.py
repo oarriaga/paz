@@ -6,6 +6,7 @@ from jax import random as jr
 
 from networks import call_actor
 from networks import call_critic
+from networks import read_stdv
 from ppo import Experience
 from ppo import compute_value_targets
 from ppo import sample_actions
@@ -23,7 +24,7 @@ def build_collect(actor, critic, reset, step, num_steps=24, gamma=0.99):
             state, key = carry
             keys = jr.split(key, 4)
             history = state.history
-            stdv = jp.exp(parameters.log_stdv)
+            stdv = read_stdv(parameters)
             mean = call_actor(actor, parameters.actor, history.actor)
             action, log_probability = sample_actions(keys[1], mean, stdv)
             value = call_critic(critic, parameters.critic, history.critic)
@@ -41,8 +42,9 @@ def build_collect(actor, critic, reset, step, num_steps=24, gamma=0.99):
         last_value = call_critic(critic, parameters.critic, state.history.critic)  # fmt: skip
         target_args = rollout.reward, rollout.done, rollout.value, last_value
         value_target = compute_value_targets(*target_args)
-        advantage = standardize_advantages(value_target - rollout.value)
-        experience = build_experience(rollout, value_target, advantage)
+        valid = 1.0 - rollout.diverged.astype(jp.float32)
+        advantage = standardize_advantages(value_target - rollout.value, valid)  # fmt: skip
+        experience = build_experience(rollout, value_target, advantage, valid)
         return state, key, experience, compute_metrics(rollout)
 
     return collect
@@ -70,8 +72,7 @@ def is_per_environment(values, done):
     return values.ndim > 0 and values.shape[0] == done.shape[0]
 
 
-def build_experience(rollout, value_target, advantage):
-    valid = 1.0 - rollout.diverged.astype(jp.float32)
+def build_experience(rollout, value_target, advantage, valid):
     args = rollout.actor_observation, rollout.critic_observation, rollout.action, rollout.log_probability, rollout.mean, rollout.stdv, rollout.value, value_target, advantage, valid  # fmt: skip
     return jax.tree.map(merge_steps, Experience(*args))
 

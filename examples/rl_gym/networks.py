@@ -4,7 +4,7 @@ from collections import namedtuple
 import jax.numpy as jp
 import keras
 
-Parameters = namedtuple("Parameters", "log_stdv, actor, critic")
+Parameters = namedtuple("Parameters", "stdv, actor, critic")
 
 
 def Actor(shapes, num_actions=29, hidden_units=(512, 256, 128)):
@@ -63,10 +63,16 @@ def dense_layer(inputs, units, activation, name):
 def PPO(actor_shapes, critic_shapes, num_actions=29):
     actor = Actor(actor_shapes, num_actions)
     critic = Critic(critic_shapes)
-    # the exploration noise is state independent and learned; the log
-    # parameterization keeps the sampled deviation positive by construction
-    log_stdv = keras.Variable(jp.zeros(num_actions), name="log_stdv")
-    return actor, critic, log_stdv
+    # the exploration noise is state independent and learned directly, as
+    # in the reference implementation; read_stdv guards its positivity
+    stdv = keras.Variable(jp.ones(num_actions), name="stdv")
+    return actor, critic, stdv
+
+
+def read_stdv(parameters, floor=1e-2):
+    # the floor keeps the action distribution valid if the optimizer ever
+    # drives the learned deviation to zero or below
+    return jp.maximum(parameters.stdv, floor)
 
 
 def call_actor(actor, actor_parameters, observations):
@@ -82,21 +88,21 @@ def call_critic(critic, critic_parameters, observations):
 
 
 def pack_parameters(parameters):
-    return [parameters.log_stdv] + list(parameters.actor) + list(parameters.critic)  # fmt: skip
+    return [parameters.stdv] + list(parameters.actor) + list(parameters.critic)  # fmt: skip
 
 
 def unpack_parameters(variables):
-    log_stdv = variables[0]
+    stdv = variables[0]
     num_network_variables = (len(variables) - 1) // 2
     actor_end = num_network_variables + 1
     actor_parameters = variables[1:actor_end]
-    return Parameters(log_stdv, actor_parameters, variables[actor_end:])
+    return Parameters(stdv, actor_parameters, variables[actor_end:])
 
 
-def Optimizer(actor, critic, log_stdv, learning_rate):
+def Optimizer(actor, critic, stdv, learning_rate):
     optimizer = keras.optimizers.Adam(learning_rate, epsilon=1e-8)
     trainable = actor.trainable_variables + critic.trainable_variables
-    optimizer.build([log_stdv] + trainable)
+    optimizer.build([stdv] + trainable)
     optimizer_state = [variable.value for variable in optimizer.variables]
     return optimizer, optimizer_state
 
@@ -108,6 +114,6 @@ def read_variables(model):
     return variables
 
 
-def snapshot_parameters(actor, critic, log_stdv):
+def snapshot_parameters(actor, critic, stdv):
     actor_parameters = read_variables(actor)
-    return Parameters(log_stdv.value, actor_parameters, read_variables(critic))  # fmt: skip
+    return Parameters(stdv.value, actor_parameters, read_variables(critic))

@@ -3,7 +3,7 @@ from pathlib import Path
 
 import numpy as np
 
-Checkpoint = namedtuple("Checkpoint", "log_stdv, optimizer_state, learning_rate, iteration, max_speed")  # fmt: skip
+Checkpoint = namedtuple("Checkpoint", "stdv, optimizer_state, learning_rate, iteration, max_speed")  # fmt: skip
 
 
 def save(directory, iteration, actor, critic, training, max_speed):
@@ -41,7 +41,7 @@ def assign_variables(model, values):
 
 
 def pack_arrays(training, iteration, max_speed):
-    arrays = {"log_stdv": np.asarray(training.parameters.log_stdv)}
+    arrays = {"stdv": np.asarray(training.parameters.stdv)}
     arrays["learning_rate"] = np.asarray(training.learning_rate)
     arrays["iteration"] = np.asarray(iteration)
     arrays["max_speed"] = np.asarray(max_speed)
@@ -51,11 +51,11 @@ def pack_arrays(training, iteration, max_speed):
 
 
 def unpack_arrays(arrays, iteration):
-    log_stdv = arrays["log_stdv"]
+    stdv = arrays["stdv"]
     learning_rate = float(arrays["learning_rate"])
     max_speed = float(arrays["max_speed"])
     optimizer_state = []
     while f"optimizer_{len(optimizer_state)}" in arrays:
         optimizer_state.append(arrays[f"optimizer_{len(optimizer_state)}"])
-    args = log_stdv, optimizer_state, learning_rate, iteration, max_speed
+    args = stdv, optimizer_state, learning_rate, iteration, max_speed
     return Checkpoint(*args)

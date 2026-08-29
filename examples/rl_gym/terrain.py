@@ -152,11 +152,28 @@ def add_heightfield(model_spec, terrain):
     floor = model_spec.geom("floor")
     floor.contype = 0
     floor.conaffinity = 0
+    # hide the coplanar floor plane, which z-fights with flat tiles
+    floor.group = 4
     geom = model_spec.worldbody.add_geom()
     geom.name = "terrain"
     geom.type = mujoco.mjtGeom.mjGEOM_HFIELD
     geom.hfieldname = "terrain_heightfield"
     geom.pos[2] = terrain.minimum
+    geom.material = add_terrain_material(model_spec)
+
+
+def add_terrain_material(model_spec, cells_per_meter=2):
+    # a checker texture so translation is visible in rendered videos
+    texture = model_spec.add_texture(name="terrain_checker")
+    texture.type = mujoco.mjtTexture.mjTEXTURE_2D
+    texture.builtin = mujoco.mjtBuiltin.mjBUILTIN_CHECKER
+    texture.rgb1, texture.rgb2 = [0.6, 0.6, 0.6], [0.45, 0.5, 0.45]
+    texture.width = texture.height = 512
+    material = model_spec.add_material(name="terrain_material")
+    material.textures[mujoco.mjtTextureRole.mjTEXROLE_RGB] = "terrain_checker"
+    material.texrepeat = [cells_per_meter, cells_per_meter]
+    material.texuniform = True
+    return material.name
 
 
 def draw(terrain, counts=TERRAIN_COUNTS):

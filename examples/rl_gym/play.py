@@ -45,12 +45,15 @@ def render_frames(mjmodel, positions, width, height, distance=3.0):
     renderer = mujoco.Renderer(mjmodel, height, width)
     camera = mujoco.MjvCamera()
     camera.distance, camera.azimuth, camera.elevation = distance, 90, -20
+    option = mujoco.MjvOption()
+    # the robot model only carries collision geoms, which live in group 3
+    option.geomgroup[3] = 1
     frames = []
     for qpos in positions:
         data.qpos[:] = qpos
         mujoco.mj_forward(mjmodel, data)
         camera.lookat[:] = qpos[:3]
-        renderer.update_scene(data, camera)
+        renderer.update_scene(data, camera, scene_option=option)
         frames.append(renderer.render())
     renderer.close()
     return frames
@@ -112,6 +115,9 @@ if __name__ == "__main__":
         if bool(transition.done[0]):
             print(f"episode ended at step {step_arg}")
             break
+    travelled = np.linalg.norm(positions[-1][:2] - positions[0][:2])
+    seconds = 0.02 * (len(positions) - 1)
+    print(f"travelled {travelled:.2f} m in {seconds:.1f} s")
     mjmodel = build_mjmodel(robot, terrain)
     frames = render_frames(mjmodel, positions, args.width, args.height)
     frame_directory = Path(args.filepath).with_suffix("")

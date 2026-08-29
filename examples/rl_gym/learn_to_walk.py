@@ -83,13 +83,13 @@ if __name__ == "__main__":
     keras.utils.set_random_seed(args.seed)
     actor_shapes = compute_shapes(state.history.actor)
     critic_shapes = compute_shapes(state.history.critic)
-    actor, critic, log_stdv = PPO(actor_shapes, critic_shapes)
-    optimizer_args = actor, critic, log_stdv, args.learning_rate
+    actor, critic, stdv = PPO(actor_shapes, critic_shapes)
+    optimizer_args = actor, critic, stdv, args.learning_rate
     optimizer, optimizer_state = Optimizer(*optimizer_args)
     learning_rate, start_iteration = args.learning_rate, 0
     if args.load:
         loaded = checkpoint.load(args.load, actor, critic)
-        log_stdv.assign(jp.asarray(loaded.log_stdv))
+        stdv.assign(jp.asarray(loaded.stdv))
         optimizer_state = jax.tree.map(jp.asarray, loaded.optimizer_state)
         learning_rate, start_iteration = loaded.learning_rate, loaded.iteration  # fmt: skip
         max_speed = jp.asarray(loaded.max_speed)
@@ -104,7 +104,7 @@ if __name__ == "__main__":
     update_args = actor, critic, optimizer, mesh.devices.size
     update = ppo.build_update(*update_args)
     collect = jax.jit(build_collect(actor, critic, reset, step, args.num_steps))  # fmt: skip
-    parameters = snapshot_parameters(actor, critic, log_stdv)
+    parameters = snapshot_parameters(actor, critic, stdv)
     learning_rate = jp.asarray(learning_rate)
     training = ppo.TrainingState(parameters, optimizer_state, learning_rate)
     training = distributed.replicate(mesh, training)

@@ -10,6 +10,7 @@ from jax import random as jr
 from networks import call_actor
 from networks import call_critic
 from networks import pack_parameters
+from networks import read_stdv
 from networks import unpack_parameters
 
 Experience = namedtuple("Experience", "actor_observation, critic_observation, action, log_probability, mean, stdv, value, value_target, advantage, valid")  # fmt: skip
@@ -115,7 +116,7 @@ def clip_gradients(gradients, max_gradient_norm=1.0, epsilon=1e-6):
 
 def compute_loss(actor, critic, variables, batch, clip_ratio=0.2, value_weight=1.0, entropy_weight=0.01):  # fmt: skip
     parameters = unpack_parameters(variables)
-    stdv = jp.exp(parameters.log_stdv)
+    stdv = read_stdv(parameters)
     mean = call_actor(actor, parameters.actor, batch.actor_observation)
     values = call_critic(critic, parameters.critic, batch.critic_observation)
     log_prob = compute_normal_logprob(batch.action, mean, stdv)
@@ -200,7 +201,11 @@ def compute_normal_logprob(actions, mean, stdv):
     return jp.sum(log_probabilities, axis=-1)
 
 
-def standardize_advantages(advantages, epsilon=1e-8):
-    mean = jp.mean(advantages)
-    stdv = jp.std(advantages, ddof=1)
+def standardize_advantages(advantages, valid, epsilon=1e-8):
+    # diverged samples are masked out of the statistics so a single
+    # corrupted advantage cannot flatten every other sample's signal
+    count = jp.maximum(jp.sum(valid), 2.0)
+    mean = jp.sum(advantages * valid) / count
+    squared = ((advantages - mean) ** 2) * valid
+    stdv = jp.sqrt(jp.sum(squared) / (count - 1.0))
     return (advantages - mean) / (stdv + epsilon)

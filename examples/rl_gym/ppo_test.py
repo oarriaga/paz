@@ -122,9 +122,17 @@ def test_diverged_samples_are_masked_from_the_loss():
 
 def test_standardize_advantages():
     advantages = jr.normal(jr.key(2), (100,)) * 3.0 + 5.0
-    standardized = ppo.standardize_advantages(advantages)
+    standardized = ppo.standardize_advantages(advantages, jp.ones(100))
     assert np.isclose(float(jp.mean(standardized)), 0.0, atol=1e-5)
     assert np.isclose(float(jp.std(standardized, ddof=1)), 1.0, atol=1e-3)
+
+
+def test_standardize_advantages_ignores_diverged_outliers():
+    advantages = jp.concatenate((jr.normal(jr.key(4), (99,)), jp.full(1, 1e9)))  # fmt: skip
+    valid = jp.ones(100).at[99].set(0.0)
+    standardized = ppo.standardize_advantages(advantages, valid)
+    spread = float(jp.std(standardized[:99], ddof=1))
+    assert np.isclose(spread, 1.0, atol=1e-2)
 
 
 def test_shuffle_preserves_and_permutes_each_shard():

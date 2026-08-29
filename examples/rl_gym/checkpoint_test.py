@@ -15,22 +15,22 @@ SHAPES = Shapes((5, 3), (5, 2))
 
 
 def test_save_and_load_roundtrip(tmp_path):
-    actor, critic, log_stdv = networks.PPO(SHAPES, SHAPES, num_actions=4)
-    optimizer_args = actor, critic, log_stdv, 1e-3
+    actor, critic, stdv = networks.PPO(SHAPES, SHAPES, num_actions=4)
+    optimizer_args = actor, critic, stdv, 1e-3
     optimizer, optimizer_state = networks.Optimizer(*optimizer_args)
-    log_stdv.assign(jp.full(4, -0.5))
-    parameters = networks.snapshot_parameters(actor, critic, log_stdv)
+    stdv.assign(jp.full(4, -0.5))
+    parameters = networks.snapshot_parameters(actor, critic, stdv)
     learning_rate = jp.asarray(3e-4)
     training = ppo.TrainingState(parameters, optimizer_state, learning_rate)
     checkpoint.save(tmp_path, 7, actor, critic, training, jp.asarray(0.4))
-    log_stdv.assign(jp.zeros(4))
+    stdv.assign(jp.zeros(4))
     loaded = checkpoint.load(tmp_path, actor, critic)
     assert loaded.iteration == 7
     assert np.isclose(loaded.learning_rate, 3e-4)
     assert np.isclose(loaded.max_speed, 0.4)
-    assert np.allclose(loaded.log_stdv, -0.5)
+    assert np.allclose(loaded.stdv, -0.5)
     assert len(loaded.optimizer_state) == len(optimizer_state)
-    restored = networks.snapshot_parameters(actor, critic, log_stdv)
+    restored = networks.snapshot_parameters(actor, critic, stdv)
     for one, other in zip(restored.actor, parameters.actor):
         assert np.allclose(np.asarray(one), np.asarray(other))
 

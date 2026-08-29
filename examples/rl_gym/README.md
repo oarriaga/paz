@@ -60,9 +60,10 @@ the training log counts these events.
 
 - Experience is reshuffled every epoch; rsl_rl draws one permutation per
   update and reuses it across epochs.
-- The action noise is parameterized as `log_stdv`, so the standard
-  deviation stays positive; rsl_rl learns the deviation directly, which is
-  a documented crash source.
+- The action noise is learned directly as in rsl_rl, but read through a
+  small positive floor; without it a negative deviation is a documented
+  crash source. A log parameterization was tried and rejected: it shrank
+  the noise fast enough to stall exploration in a standing policy.
 - Divergence handling above; the reference relied on external restarts.
 
 ## Evaluation
