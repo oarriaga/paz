@@ -85,6 +85,11 @@ minor and left as is:
 - PhysX clamps joint velocities at the actuator limits inside the
   solver; MuJoCo has no such clamp, so unphysical states are instead
   discarded by the divergence guards.
+- The explicit Euler integrator stays despite the reference's implicit
+  joint drives: an A/B run showed implicitfast slows early balance
+  learning by an order of magnitude here.
+- The reference trains with full-sole foot collision hulls; this model
+  ships four small spheres per foot, a harder support polygon.
 
 ## Evaluation
 
