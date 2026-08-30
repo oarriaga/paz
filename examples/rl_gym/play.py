@@ -15,6 +15,7 @@ import checkpoint
 import paz
 from paz.backend import video
 from robots.g1 import G1DoF29, build_reward_indices
+from rollout import build_normalizer, normalize
 from simulation import robust
 from simulation.common import Command
 from terrain import build as build_terrain
@@ -24,6 +25,24 @@ from world import build as build_world, build_mjmodel
 def load_actor(directory):
     iteration = checkpoint.find_latest_iteration(Path(directory))
     return keras.models.load_model(Path(directory) / f"actor_{iteration:06d}.keras")  # fmt: skip
+
+
+def load_actor_normalizer(directory, history):
+    # the policy expects inputs normalized with the training statistics;
+    # checkpoints without them saw raw observations, and the fresh
+    # normalizer is the identity
+    directory = Path(directory)
+    iteration = checkpoint.find_latest_iteration(directory)
+    arrays = np.load(directory / f"training_{iteration:06d}.npz")
+    normalizer = build_normalizer(history.actor)
+    leaves = []
+    for slot in range(len(jax.tree_util.tree_leaves(normalizer))):
+        name = f"normalizer_{slot}"
+        if name not in arrays:
+            return normalizer
+        leaves.append(jp.asarray(arrays[name]))
+    structure = jax.tree_util.tree_structure(normalizer)
+    return jax.tree_util.tree_unflatten(structure, leaves)
 
 
 def build_command(forward, sideways, turn):
@@ -97,18 +116,21 @@ if __name__ == "__main__":
     levels = jp.full((1,), args.level, dtype=jp.int32)
     key = jax.random.key(args.seed)
     state = jax.jit(reset)(key, levels, max_speed)
+    normalizer = load_actor_normalizer(args.checkpoint, state.history)
     state = hold_command(state, command)
     step = jax.jit(step)
     # a few warmup steps flush the reset command from the history
     for _ in range(5):
         key, step_key = jr.split(key)
-        action = actor(list(state.history.actor), training=False)
+        observation = normalize(state.history.actor, normalizer)
+        action = actor(list(observation), training=False)
         state, _ = step(step_key, state, action, max_speed)
         state = hold_command(state, command)
     positions = [np.asarray(state.physics_state.qpos[0])]
     for step_arg in range(args.num_steps):
         key, step_key = jr.split(key)
-        action = actor(list(state.history.actor), training=False)
+        observation = normalize(state.history.actor, normalizer)
+        action = actor(list(observation), training=False)
         state, transition = step(step_key, state, action, max_speed)
         state = hold_command(state, command)
         positions.append(np.asarray(state.physics_state.qpos[0]))

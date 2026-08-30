@@ -51,7 +51,7 @@ if __name__ == "__main__":
     import ppo
     import randomize
     from networks import Optimizer, PPO, compute_shapes, snapshot_parameters
-    from rollout import build_collect
+    from rollout import build_collect, build_normalizers
     from robots.g1 import G1DoF29, build_reward_indices
     from simulation import robust
     from simulation.common import decorrelate_counters
@@ -83,6 +83,7 @@ if __name__ == "__main__":
     state = jax.jit(reset)(environment_keys[2], levels, max_speed)
     state = jax.jit(decorrelate_counters)(environment_keys[3], state)
     rollout_key = environment_keys[4]
+    normalizers = build_normalizers(state.history)
     keras.utils.set_random_seed(args.seed)
     actor_shapes = compute_shapes(state.history.actor)
     critic_shapes = compute_shapes(state.history.critic)
@@ -96,6 +97,7 @@ if __name__ == "__main__":
         optimizer_state = jax.tree.map(jp.asarray, loaded.optimizer_state)
         learning_rate, start_iteration = loaded.learning_rate, loaded.iteration  # fmt: skip
         max_speed = jp.asarray(loaded.max_speed)
+        normalizers = checkpoint.restore_normalizers(loaded, normalizers)
         # redo the initial reset so the first commands follow the restored
         # speed curriculum, with keys advanced past the ones the original
         # run already consumed
@@ -124,8 +126,9 @@ if __name__ == "__main__":
     try:
         for iteration in range(start_iteration + 1, args.num_iterations + 1):
             parameters = distributed.localize(training.parameters)
-            collect_args = state, parameters, rollout_key, max_speed
-            state, rollout_key, experience, metrics = collect(*collect_args)
+            collect_args = state, parameters, normalizers, rollout_key, max_speed  # fmt: skip
+            outputs = collect(*collect_args)
+            state, rollout_key, experience, normalizers, metrics = outputs
             experience = distributed.shard_experience(mesh, experience)
             training, update_metrics = update(args.seed + iteration, training, experience)  # fmt: skip
             tracking = distributed.global_mean(mesh, metrics.terms[0])
@@ -135,7 +138,7 @@ if __name__ == "__main__":
             save_now = iteration % args.save_interval == 0
             if is_leader and save_now:
                 save_args = Path(root) / "checkpoints", iteration
-                checkpoint.save(*save_args, actor, critic, training, max_speed)  # fmt: skip
+                checkpoint.save(*save_args, actor, critic, training, max_speed, normalizers)  # fmt: skip
             if is_leader and iteration % args.log_interval == 0:
                 iterations = iteration - start_iteration
                 steps = iterations * num_envs * args.num_steps
