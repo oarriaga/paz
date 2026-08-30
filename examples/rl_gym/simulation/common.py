@@ -138,7 +138,9 @@ def sample_command(key, max_speed, turn_rate=0.1, standing_probability=0.02):
 
 
 def sample_push_step(key, episode_step, control_step=0.02):
-    seconds = jax.random.uniform(key, (), minval=3.0, maxval=8.0)
+    # mjlab pushes often and gently, a denser recovery curriculum than
+    # the reference's rare strong shoves
+    seconds = jax.random.uniform(key, (), minval=1.0, maxval=3.0)
     return episode_step + jp.round(seconds / control_step).astype(jp.int32)
 
 
@@ -146,14 +148,17 @@ def compute_targets(action):
     return DEFAULT_ANGLES + action * ACTION_SCALE
 
 
+PUSH_BOUNDS = jp.array([0.5, 0.5, 0.0, 0.52, 0.52, 0.78])
+
+
 def apply_scheduled_push(key, physics_state, episode_step, push_step):
-    # the reference adds the sampled velocity to the current one rather
-    # than replacing it
+    # velocities add to the current ones as in the reference; magnitudes
+    # and the angular components follow mjlab
     keys = jr.split(key, 2)
-    velocity = jr.uniform(keys[0], (2,), minval=-1.0, maxval=1.0)
+    kick = jr.uniform(keys[0], (6,), minval=-PUSH_BOUNDS, maxval=PUSH_BOUNDS)
     pushing = episode_step >= push_step
-    added = jp.where(pushing, velocity, 0.0)
-    qvel = physics_state.qvel.at[:2].add(added)
+    added = jp.where(pushing, kick, 0.0)
+    qvel = physics_state.qvel.at[:6].add(added)
     next_push = sample_push_step(keys[1], episode_step)
     push_step = jp.where(pushing, next_push, push_step)
     return physics_state.replace(qvel=qvel), push_step
