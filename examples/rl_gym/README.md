@@ -96,6 +96,15 @@ minor and left as is:
   learning by an order of magnitude here.
 - The reference trains with full-sole foot collision hulls; this model
   ships four small spheres per foot, a harder support polygon.
+- The entropy coefficient is 0.005 here against the reference's 0.01.
+  With 0.01 this environment balances the action noise at sigma 0.71,
+  where exploration noise alone fells the robot in 80% of episodes (a
+  sigma sweep of a trained policy showed 8.6% deterministic falls).
+  Both references settle at sigma 0.45-0.55 under 0.01, so their
+  environments punish noise harder; halving the coefficient lands the
+  noise in the same band and triggered the survival transition (full
+  1000-step episodes, speed curriculum unlocking) within 200 iterations
+  of resuming.
 
 ## Evaluation
 
