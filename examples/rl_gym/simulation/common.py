@@ -8,7 +8,7 @@ import paz
 from mujoco import mjx
 
 import rewards
-from robots.g1 import DEFAULT_ANGLES, VELOCITY_LIMITS
+from robots.g1 import DEFAULT_ANGLES
 
 STATE_FIELDS = "physics_state, history, tile, counters, command, reward_sum"
 EPISODE_STEPS = 1000
@@ -194,19 +194,11 @@ def run_physics(dynamics, physics_state, targets, decimation=4):
 
     def advance(physics_state, _):
         stepped = mjx.step(dynamics, physics_state.replace(ctrl=targets))
-        stepped = clamp_joint_velocities(stepped)
         return stepped, stepped.sensordata
 
     args = advance, physics_state, None
     physics_state, sensor_history = jax.lax.scan(*args, length=decimation)
     return physics_state, sensor_history
-
-
-def clamp_joint_velocities(physics_state):
-    # the reference solver clamps every joint at its actuator velocity
-    # limit each physics step; mujoco has no built-in equivalent
-    bounded = jp.clip(physics_state.qvel[6:], -VELOCITY_LIMITS, VELOCITY_LIMITS)  # fmt: skip
-    return physics_state.replace(qvel=physics_state.qvel.at[6:].set(bounded))
 
 
 def update_observation_history(history, actor, critic):

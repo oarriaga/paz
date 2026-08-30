@@ -10,9 +10,6 @@ from robots import read_sensor_addresses, reject_keyword_args
 
 ASSET_PATH = Path(__file__).parent.parent / "assets/g1_29dof.xml"
 DEFAULT_ANGLES = jp.array([-0.1, 0.0, 0.0, 0.3, -0.2, 0.0, -0.1, 0.0, 0.0, 0.3, -0.2, 0.0, 0.0, 0.0, 0.0, 0.3, 0.25, 0.0, 0.97, 0.15, 0.0, 0.0, 0.3, -0.25, 0.0, 0.97, -0.15, 0.0, 0.0])  # fmt: skip
-# per-joint actuator velocity limits from the reference articulation, which
-# its solver clamps every physics step
-VELOCITY_LIMITS = jp.array([32.0, 20.0, 32.0, 20.0, 30.0, 30.0, 32.0, 20.0, 32.0, 20.0, 30.0, 30.0, 32.0, 37.0, 37.0, 37.0, 37.0, 37.0, 37.0, 37.0, 22.0, 22.0, 37.0, 37.0, 37.0, 37.0, 37.0, 22.0, 22.0])  # fmt: skip
 FOOT_SUFFIX = "ankle_roll_link"
 
 
