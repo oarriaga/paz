@@ -48,6 +48,12 @@ python learn_to_walk.py --num_processes 2 --process_id 0 &
 python learn_to_walk.py --num_processes 2 --process_id 1
 ```
 
+Use both GPUs for real training runs. The reference trained with two
+ranks of 4096 environments, and the batch size sets the adaptive-KL
+learning rate: a single 4096-environment process equilibrates near
+1.4e-4 and anneals the action noise an order of magnitude slower than
+the reference's 3.8e-4, stalling the survival transition.
+
 ## Simulator divergence
 
 A non-finite or unphysically fast state after a physics step is treated as
