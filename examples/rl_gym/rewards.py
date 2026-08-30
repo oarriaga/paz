@@ -58,7 +58,7 @@ def tilt_error(gravity):
     return jp.sum(gravity[:2] ** 2)
 
 
-def base_height_error(height, height_target=0.78):
+def base_height_error(height, height_target=0.76):
     return paz.losses.mse(height, height_target, reduction="sum")
 
 

@@ -8,7 +8,7 @@ import paz
 from mujoco import mjx
 
 import rewards
-from robots.g1 import DEFAULT_ANGLES
+from robots.g1 import ACTION_SCALE, DEFAULT_ANGLES
 
 STATE_FIELDS = "physics_state, history, tile, counters, command, reward_sum"
 EPISODE_STEPS = 1000
@@ -24,7 +24,7 @@ Command = namedtuple("Command", "forward, sideways, turn")
 Transition = namedtuple("Transition", "reward, done, timeout, level, terms, diverged")  # fmt: skip
 
 
-def build_qpos(key, qpos, origin, spawn_height=0.8):
+def build_qpos(key, qpos, origin, spawn_height=0.78):
     key1, key2 = jax.random.split(key)
     position_noise = jr.uniform(key1, (2,), minval=-0.5, maxval=0.5)
     yaw = jr.uniform(key2, (), minval=-jp.pi, maxval=jp.pi)
@@ -45,9 +45,9 @@ def build_physics_state(dynamics, physics_template, qpos, qvel):
     return mjx.forward(dynamics, physics_template.replace(**fields))
 
 
-def read_action(physics_state, action_scale=0.25):
+def read_action(physics_state):
     offsets = physics_state.ctrl - DEFAULT_ANGLES
-    return offsets / action_scale
+    return offsets / ACTION_SCALE
 
 
 def build_actor_observation(key, physics_state, command, action):
@@ -142,8 +142,8 @@ def sample_push_step(key, episode_step, control_step=0.02):
     return episode_step + jp.round(seconds / control_step).astype(jp.int32)
 
 
-def compute_targets(action, action_scale=0.25):
-    return DEFAULT_ANGLES + action * action_scale
+def compute_targets(action):
+    return DEFAULT_ANGLES + action * ACTION_SCALE
 
 
 def apply_scheduled_push(key, physics_state, episode_step, push_step):
