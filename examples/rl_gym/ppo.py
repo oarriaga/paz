@@ -19,10 +19,10 @@ LossTerms = namedtuple("LossTerms", "policy_loss, value_loss, entropy, KL")
 UpdateMetrics = namedtuple("UpdateMetrics", "loss, policy_loss, value_loss, entropy, KL, gradient_norm, learning_rate")  # fmt: skip
 
 
-def build_update(actor, critic, optimizer, num_shards=1, num_epochs=5, num_batches=4):  # fmt: skip
+def build_update(actor, critic, optimizer, num_shards=1, num_epochs=5, num_batches=4, entropy_weight=0.01):  # fmt: skip
 
     def update(seed, state, experience):
-        run_batch = partial(apply_batch, actor, critic, optimizer)
+        run_batch = partial(apply_batch, actor, critic, optimizer, entropy_weight)  # fmt: skip
         experience = split_shards(experience, num_shards)
 
         def run_epoch(state, key):
@@ -71,11 +71,12 @@ def count_samples(experience):
     return any_field.shape[0]
 
 
-def apply_batch(actor, critic, optimizer, state, batch):
+def apply_batch(actor, critic, optimizer, entropy_weight, state, batch):
     batch = jax.tree.map(merge_shards, batch)
     variables = pack_parameters(state.parameters)
     compute_grads = jax.value_and_grad(compute_loss, 2, has_aux=True)
-    (loss, metrics), gradients = compute_grads(actor, critic, variables, batch)
+    grad_args = actor, critic, variables, batch
+    (loss, metrics), gradients = compute_grads(*grad_args, entropy_weight=entropy_weight)  # fmt: skip
     learning_rate = adapt_learning_rate(state.learning_rate, metrics.KL)
     optimizer_state = set_learning_rate(state.optimizer_state, learning_rate)
     gradients, gradient_norm = clip_gradients(gradients)

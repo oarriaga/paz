@@ -18,6 +18,7 @@ if __name__ == "__main__":
     parser.add_argument("--max_level", type=int, default=8)
     parser.add_argument("--initial_max_speed", type=float, default=0.1)
     parser.add_argument("--learning_rate", type=float, default=1e-3)
+    parser.add_argument("--entropy_coefficient", type=float, default=0.01)
     parser.add_argument("--num_iterations", type=int, default=10000)
     parser.add_argument("--num_steps", type=int, default=24)
     parser.add_argument("--log_interval", type=int, default=10)
@@ -107,7 +108,7 @@ if __name__ == "__main__":
         rollout_key = environment_keys[4]
     mesh = distributed.build_mesh()
     update_args = actor, critic, optimizer, mesh.devices.size
-    update = ppo.build_update(*update_args)
+    update = ppo.build_update(*update_args, entropy_weight=args.entropy_coefficient)  # fmt: skip
     collect = jax.jit(build_collect(actor, critic, reset, step, args.num_steps))  # fmt: skip
     parameters = snapshot_parameters(actor, critic, stdv)
     learning_rate = jp.asarray(learning_rate)
