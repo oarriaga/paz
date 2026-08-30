@@ -71,10 +71,10 @@ def step(key, dynamics, state, action, max_speed, robot, indices, tile_size, max
     push_args = keys[0], state.physics_state, counters.episode, counters.push
     pushed, push_step = apply_scheduled_push(*push_args)
     targets = compute_targets(action)
-    physics_state = run_physics(dynamics, pushed, targets)
+    physics_state, sensor_history = run_physics(dynamics, pushed, targets)
     physics_state, diverged = sanitize_diverged(physics_state, dynamics)
     episode = counters.episode + 1
-    reward_args = physics_state, state, action, robot, indices, episode
+    reward_args = physics_state, sensor_history, state, action, robot, indices, episode  # fmt: skip
     reward, terms = compute_robust_reward(*reward_args)
     diverged, reward, terms = discard_diverged(diverged, reward, terms)
     command_args = keys[1], state.command, counters.command + 1, max_speed

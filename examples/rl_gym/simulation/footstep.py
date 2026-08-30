@@ -97,13 +97,14 @@ def step(key, dynamics, state, action, max_speed, robot, indices, tile_size, max
     counters = state.counters
     push_args = keys[0], state.physics_state, counters.episode, counters.push
     pushed, push_step = apply_scheduled_push(*push_args)
-    physics_state = run_physics(dynamics, pushed, compute_targets(action))
+    targets = compute_targets(action)
+    physics_state, sensor_history = run_physics(dynamics, pushed, targets)
     physics_state, diverged = sanitize_diverged(physics_state, dynamics)
     episode = counters.episode + 1
     phase = compute_local_phase(episode)
-    feet_args = keys[3:11], physics_state, state, phase, robot, indices
+    feet_args = keys[3:11], physics_state, sensor_history, state, phase, robot, indices  # fmt: skip
     feet = update_feet(*feet_args)
-    reward_args = physics_state, state, action, robot, indices, episode
+    reward_args = physics_state, sensor_history, state, action, robot, indices, episode  # fmt: skip
     reward, terms = compute_robust_reward(*reward_args)
     diverged, reward, terms = discard_diverged(diverged, reward, terms)
     bonus = compute_touchdown_bonus(physics_state, state, feet, robot)
@@ -134,8 +135,8 @@ def build_observations(key, physics_state, command, action, term):
     return ActorObservation(*actor, term), CriticObservation(*critic, term)
 
 
-def update_feet(keys, physics_state, state, phase, robot, indices, control_step=0.02):  # fmt: skip
-    contact = read_foot_contact(physics_state, indices.foot_forces)
+def update_feet(keys, physics_state, sensor_history, state, phase, robot, indices, control_step=0.02):  # fmt: skip
+    contact = read_foot_contact(sensor_history, indices.foot_forces)
     air_time = jp.where(contact, 0.0, state.feet.air_time + control_step)
     target_args = keys, physics_state, state, phase, robot.contact_bodies
     targets, switch_phase = update_targets(*target_args)

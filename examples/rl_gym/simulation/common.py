@@ -189,13 +189,16 @@ def discard_diverged(diverged, reward, terms, reward_bound=1e3):
 
 
 def run_physics(dynamics, physics_state, targets, decimation=4):
+    # the sensor history over the substeps feeds the contact detection,
+    # which the reference pools over the last three physics steps
 
     def advance(physics_state, _):
-        return mjx.step(dynamics, physics_state.replace(ctrl=targets)), None
+        stepped = mjx.step(dynamics, physics_state.replace(ctrl=targets))
+        return stepped, stepped.sensordata
 
     args = advance, physics_state, None
-    physics_state, _ = jax.lax.scan(*args, length=decimation)
-    return physics_state
+    physics_state, sensor_history = jax.lax.scan(*args, length=decimation)
+    return physics_state, sensor_history
 
 
 def update_observation_history(history, actor, critic):
@@ -231,12 +234,14 @@ def decorrelate_counters(key, state):
     return state._replace(counters=counters)
 
 
-def read_foot_contact(physics_state, force_addresses, threshold=1.0):
-    # the reference thresholds the net foot force at one newton, so a
-    # feather-light graze does not count as stance contact
-    force = physics_state.sensordata[force_addresses].reshape(2, 4, 3)
-    net = jp.sum(force, axis=1)
-    return jp.linalg.norm(net, axis=-1) > threshold
+def read_foot_contact(sensor_history, force_addresses, threshold=1.0, history=3):  # fmt: skip
+    # the reference thresholds the net foot force at one newton and pools
+    # it over the last three physics substeps, so touchdown detection
+    # neither counts a feather-light graze nor drops between substeps
+    force = sensor_history[-history:, force_addresses].reshape(history, 2, 4, 3)  # fmt: skip
+    net = jp.sum(force, axis=2)
+    contact = jp.linalg.norm(net, axis=-1) > threshold
+    return jp.any(contact, axis=0)
 
 
 def read_foot_velocities(physics_state, velocity_addresses):
@@ -271,7 +276,7 @@ def update_level(key, state, tile_size, max_level, episode_seconds=20.0):
     return jp.clip(level - demote.astype(jp.int32), 0, max_level)
 
 
-def compute_robust_reward(physics_state, state, action, robot, indices, step):
+def compute_robust_reward(physics_state, sensor_history, state, action, robot, indices, step):  # fmt: skip
     command = jp.stack(state.command)
     quaternion = physics_state.qpos[3:7]
     gravity = compute_gravity(quaternion)
@@ -285,7 +290,7 @@ def compute_robust_reward(physics_state, state, action, robot, indices, step):
     base = rewards.compute_base_terms(*base_args)
     joint_args = read_joint_arguments(physics_state, state.physics_state, action, robot, indices)  # fmt: skip
     joint = rewards.compute_joint_terms(*joint_args)
-    feet_args = read_foot_arguments(physics_state, robot, indices, step, command)  # fmt: skip
+    feet_args = read_foot_arguments(physics_state, sensor_history, robot, indices, step, command)  # fmt: skip
     feet = rewards.compute_foot_terms(*feet_args)
     return rewards.compute_reward(tracking, joint, base, feet, alive)
 
@@ -309,8 +314,8 @@ def compute_soft_limits(limits, factor=0.9):
     return midpoint - half, midpoint + half
 
 
-def read_foot_arguments(physics_state, robot, indices, step, command):
-    contact = read_foot_contact(physics_state, indices.foot_forces)
+def read_foot_arguments(physics_state, sensor_history, robot, indices, step, command):  # fmt: skip
+    contact = read_foot_contact(sensor_history, indices.foot_forces)
     velocities = read_foot_velocities(physics_state, indices.foot_velocities)
     heights = physics_state.xpos[robot.contact_bodies, 2]
     undesired = count_undesired_contacts(physics_state, indices.other_bodies)
