@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <mujoco model="g1_29dof">
   <compiler angle="radian" autolimits="true" />
-  <option timestep="0.005" gravity="0 0 -9.81" wind="0 0 0" magnetic="0 -0.5 0" density="0" viscosity="0" integrator="implicitfast" solver="Newton" iterations="10" ls_iterations="20" tolerance="1e-8" ls_tolerance="0.01" cone="pyramidal" jacobian="auto" impratio="1" noslip_iterations="0" noslip_tolerance="1e-6" ccd_iterations="50" ccd_tolerance="1e-6" sdf_initpoints="40" sdf_iterations="10" />
+  <option timestep="0.005" gravity="0 0 -9.81" wind="0 0 0" magnetic="0 -0.5 0" density="0" viscosity="0" integrator="Euler" solver="Newton" iterations="4" ls_iterations="4" tolerance="1e-8" ls_tolerance="0.01" cone="pyramidal" jacobian="auto" impratio="1" noslip_iterations="0" noslip_tolerance="1e-6" ccd_iterations="50" ccd_tolerance="1e-6" sdf_initpoints="40" sdf_iterations="10" />
   <default>
     <geom condim="3" friction="1 0.005 0.0001" solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" />
     <default class="torso_motor">
