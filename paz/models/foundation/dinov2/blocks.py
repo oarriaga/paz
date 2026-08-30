@@ -1,7 +1,7 @@
 import keras
 from keras.layers import Add, Dense, EinsumDense, LayerNormalization
 
-from paz.models.transformers import feedforward
+from paz.models.transformers import feedforward, windowing
 from paz.models.transformers.attention import kernel
 from paz.models.transformers.attention import project_query_key_value
 from paz.models.transformers.attention import split_query_key_value
@@ -11,6 +11,25 @@ from paz.models.transformers.attention import merge_attention_heads
 
 def build(tokens, hidden_size, num_heads, MLP_ratio, scale_init, name):
     attended = apply_attention(tokens, hidden_size, num_heads, name)
+    args = hidden_size, MLP_ratio, scale_init, name
+    return add_branches(tokens, attended, *args)
+
+
+def build_global(tokens, hidden_size, num_heads, MLP_ratio, scale_init,
+                 num_windows, name):
+    """Attends across every window, then restores the window layout.
+
+    Windowed models fold windows into the batch, so a block that must see the
+    whole image unfolds them back into the sequence for its attention only.
+    """
+    merged = windowing.merge(tokens, num_windows)
+    attended = apply_attention(merged, hidden_size, num_heads, name)
+    attended = windowing.split(attended, num_windows)
+    args = hidden_size, MLP_ratio, scale_init, name
+    return add_branches(tokens, attended, *args)
+
+
+def add_branches(tokens, attended, hidden_size, MLP_ratio, scale_init, name):
     tokens = add_residual(tokens, attended, hidden_size, scale_init, name, 1)
     forwarded = apply_feedforward(tokens, hidden_size, MLP_ratio, name)
     return add_residual(tokens, forwarded, hidden_size, scale_init, name, 2)

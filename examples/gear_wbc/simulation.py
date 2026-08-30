@@ -27,6 +27,16 @@ VELOCITY_COMMAND_SCALE = np.array([2.0, 2.0, 0.5], "float32")
 DEFAULT_HEIGHT = 0.74
 BALANCE_SPEED = 0.05
 
+# MuJoCo reads a heightfield size as (radius_x, radius_y, peak, base). The
+# 20 by 20 metre patch and the 256 cell grid match the rough terrain MuJoCo
+# Playground walks its G1 over. Its peak is 0.05, where GEAR-WBC falls on
+# every seed, so the default here is lower.
+TERRAIN_NAME = "rocky"
+TERRAIN_RADIUS = 10.0
+TERRAIN_BASE = 1.0
+TERRAIN_CELLS = 256
+ROCK_HEIGHT = 0.03
+
 LOWER_BODY_ANGLES = np.array(
     [-0.1, 0.0, 0.0, 0.3, -0.2, 0.0,
      -0.1, 0.0, 0.0, 0.3, -0.2, 0.0,
@@ -50,16 +60,47 @@ DEFAULT_ANGLES = np.concatenate([LOWER_BODY_ANGLES, UPPER_BODY_ANGLES])
 Command = namedtuple("Command", "velocity height orientation")
 
 
-def build_command():
-    velocity = np.zeros(3, "float32")
+def build_command(speed):
+    velocity = np.array([speed, 0.0, 0.0], "float32")
     orientation = np.zeros(3, "float32")
     return Command(velocity, DEFAULT_HEIGHT, orientation)
 
 
 def build_plant(scene_path):
-    model = mujoco.MjModel.from_xml_path(str(scene_path))
+    return compile_plant(mujoco.MjSpec.from_file(str(scene_path)))
+
+
+def build_rocky_plant(scene_path, seed, rock_height):
+    spec = mujoco.MjSpec.from_file(str(scene_path))
+    add_rocky_terrain(spec, seed, rock_height)
+    model, data = compile_plant(spec)
+    data.qpos[2] = data.qpos[2] + rock_height
+    return model, data
+
+
+def compile_plant(spec):
+    model = spec.compile()
     model.opt.timestep = SIMULATION_STEP
     return model, mujoco.MjData(model)
+
+
+def add_rocky_terrain(spec, seed, rock_height):
+    size = [TERRAIN_RADIUS, TERRAIN_RADIUS, rock_height, TERRAIN_BASE]
+    terrain = spec.add_hfield(name=TERRAIN_NAME, size=size)
+    terrain.nrow, terrain.ncol = TERRAIN_CELLS, TERRAIN_CELLS
+    terrain.userdata = build_elevations(seed)
+    swap_floor_for_terrain(spec)
+
+
+def swap_floor_for_terrain(spec):
+    floor = spec.geom("floor")
+    floor.type = mujoco.mjtGeom.mjGEOM_HFIELD
+    floor.hfieldname = TERRAIN_NAME
+
+
+def build_elevations(seed):
+    # MuJoCo rescales elevations to [0, 1], so the peak comes from the size.
+    return np.random.default_rng(seed).uniform(size=TERRAIN_CELLS ** 2)
 
 
 def build_history():

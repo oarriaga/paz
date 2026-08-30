@@ -2,6 +2,7 @@ from keras import Input, Model
 from keras.layers import LayerNormalization, Reshape
 
 from paz.models.foundation.dinov2 import embeddings, encoder
+from paz.models.transformers import windowing
 
 
 def build_dinov2(image_shape, patch_size, hidden_size, depth, num_heads,
@@ -31,6 +32,34 @@ def build_dinov2_features(image_shape, patch_size, hidden_size, depth,
     maps = select_feature_maps(hidden_states, out_layers, num_registers,
                                grid, hidden_size)
     return Model(images, maps, name=name)
+
+
+def build_dinov2_windowed_features(image_shape, patch_size, hidden_size,
+                                   depth, num_heads, MLP_ratio, num_windows,
+                                   global_layers, out_layers, name):
+    """Windowed feature backbone, as used by the RF-DETR detectors.
+
+    Attention stays inside ``num_windows`` squared windows except in
+    ``global_layers``. Returns one channels-last map per tapped layer, each
+    normalized by the same final layer norm.
+    """
+    images = Input(image_shape, name="pixels")
+    grid = grid_shape(image_shape, patch_size)
+    args = images, patch_size, hidden_size, grid, num_windows
+    tokens = embeddings.build_windowed(*args)
+    args = hidden_size, depth, num_heads, MLP_ratio, 1e-5, num_windows
+    _, hidden_states = encoder.build_windowed(tokens, *args, global_layers)
+    maps = select_windowed_maps(hidden_states, out_layers, grid, num_windows)
+    return Model(images, maps, name=name)
+
+
+def select_windowed_maps(hidden_states, out_layers, grid, num_windows):
+    normalize = LayerNormalization(epsilon=1e-6, name="norm")
+    maps = []
+    for arg in out_layers:
+        patch_tokens = normalize(hidden_states[arg])[:, 1:]
+        maps.append(windowing.unpartition(patch_tokens, grid, num_windows))
+    return maps
 
 
 def select_feature_maps(hidden_states, out_layers, skip, grid, hidden_size):
@@ -77,6 +106,14 @@ def DINOv2SmallFeatures(image_shape=(518, 518, 3), out_layers=(5, 7, 9, 11),
                         num_registers=0, name="dinov2_small_features"):
     args = image_shape, 14, 384, 12, 6, 4.0
     return build_dinov2_features(*args, num_registers, out_layers, name)
+
+
+def DINOv2SmallWindowedFeatures(image_shape, patch_size, num_windows,
+                                global_layers, out_layers,
+                                name="dinov2_small_windowed_features"):
+    args = image_shape, patch_size, 384, 12, 6, 4.0, num_windows
+    args = args + (global_layers, out_layers, name)
+    return build_dinov2_windowed_features(*args)
 
 
 def DINOv2BaseFeatures(image_shape=(518, 518, 3), out_layers=(5, 7, 9, 11),
