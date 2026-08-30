@@ -54,6 +54,8 @@
                   <geom name="left_foot_collision_1" type="sphere" size="0.005" pos="-0.05 -0.025 -0.03" group="3" />
                   <geom name="left_foot_collision_2" type="sphere" size="0.005" pos="0.12 0.03 -0.03" group="3" />
                   <geom name="left_foot_collision_3" type="sphere" size="0.005" pos="0.12 -0.03 -0.03" group="3" />
+                  <geom name="left_foot_sole_0" type="capsule" size="0.005" fromto="-0.05 0.0275 -0.03 0.12 0.0275 -0.03" group="3" />
+                  <geom name="left_foot_sole_1" type="capsule" size="0.005" fromto="-0.05 -0.0275 -0.03 0.12 -0.0275 -0.03" group="3" />
                   <site name="left_foot" pos="0 0 0" size="0.01" />
                 </body>
               </body>
@@ -86,6 +88,8 @@
                   <geom name="right_foot_collision_1" type="sphere" size="0.005" pos="-0.05 -0.025 -0.03" group="3" />
                   <geom name="right_foot_collision_2" type="sphere" size="0.005" pos="0.12 0.03 -0.03" group="3" />
                   <geom name="right_foot_collision_3" type="sphere" size="0.005" pos="0.12 -0.03 -0.03" group="3" />
+                  <geom name="right_foot_sole_0" type="capsule" size="0.005" fromto="-0.05 0.0275 -0.03 0.12 0.0275 -0.03" group="3" />
+                  <geom name="right_foot_sole_1" type="capsule" size="0.005" fromto="-0.05 -0.0275 -0.03 0.12 -0.0275 -0.03" group="3" />
                   <site name="right_foot" pos="0 0 0" size="0.01" />
                 </body>
               </body>
