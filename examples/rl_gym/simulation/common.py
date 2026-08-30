@@ -292,7 +292,9 @@ def compute_robust_reward(physics_state, sensor_history, state, action, robot, i
     joint = rewards.compute_joint_terms(*joint_args)
     feet_args = read_foot_arguments(physics_state, sensor_history, robot, indices, step, command)  # fmt: skip
     feet = rewards.compute_foot_terms(*feet_args)
-    return rewards.compute_reward(tracking, joint, base, feet, alive)
+    posture = rewards.posture(physics_state.qpos[7:], DEFAULT_ANGLES, command)
+    stability = rewards.upright(gravity), posture
+    return rewards.compute_reward(tracking, joint, base, feet, alive, stability)  # fmt: skip
 
 
 def read_joint_arguments(physics_state, previous, action, robot, indices, control_step=0.02):  # fmt: skip

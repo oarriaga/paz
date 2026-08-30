@@ -1,7 +1,10 @@
 import jax.numpy as jp
 import paz
 
-ROBUST_WEIGHTS = jp.array([1.0, 0.5, 0.15, -2.0, -0.05, -0.001, -2.5e-7, -0.05, -5.0, -2e-5, -0.1, -1.0, -1.0, -5.0, -10.0, 0.5, -0.2, 1.0, -1.0])  # fmt: skip
+# the first nineteen weights follow the unitree reference; the final two
+# are mjlab's postural stabilizers, appended as a hybrid
+ROBUST_WEIGHTS = jp.array([1.0, 0.5, 0.15, -2.0, -0.05, -0.001, -2.5e-7, -0.05, -5.0, -2e-5, -0.1, -1.0, -1.0, -5.0, -10.0, 0.5, -0.2, 1.0, -1.0, 1.0, 1.0])  # fmt: skip
+POSTURE_STDS = jp.array([0.3, 0.15, 0.15, 0.35, 0.25, 0.1, 0.3, 0.15, 0.15, 0.35, 0.25, 0.1, 0.2, 0.08, 0.1, 0.15, 0.15, 0.1, 0.15, 0.3, 0.3, 0.3, 0.15, 0.15, 0.1, 0.15, 0.3, 0.3, 0.3])  # fmt: skip
 
 
 # Rewards: bigger is better, non-negative, entered with a positive weight.
@@ -35,6 +38,18 @@ def foot_clearance(heights, velocities, clearance_height=0.1, clearance_stdv=0.0
     height_error = (heights - clearance_height) ** 2
     speed = jp.tanh(speed_scale * jp.linalg.norm(velocities[:, :2], axis=-1))
     return jp.exp(-jp.sum(height_error * speed) / clearance_stdv)
+
+
+def upright(gravity, variance=0.2):
+    return jp.exp(-jp.sum(gravity[:2] ** 2) / variance)
+
+
+def posture(positions, defaults, command, standing_threshold=0.05, standing_std=0.05):  # fmt: skip
+    # anchors the pose with a speed-dependent tolerance, following mjlab
+    speed = jp.linalg.norm(command)
+    stds = jp.where(speed < standing_threshold, standing_std, POSTURE_STDS)
+    errors = ((positions - defaults) / stds) ** 2
+    return jp.exp(-jp.mean(errors))
 
 
 def exponential_decay(squared_error, stdv):
@@ -134,8 +149,8 @@ def compute_foot_terms(step, contact, velocities, heights, command, undesired): 
     return gait, slip, foot_clearance(heights, velocities), undesired
 
 
-def compute_reward(tracking, joint, base, feet, alive, control_step=0.02):
+def compute_reward(tracking, joint, base, feet, alive, stability, control_step=0.02):  # fmt: skip
     linear, angular = tracking
     vertical, roll_pitch, tilt, height = base
-    values = jp.array([linear, angular, alive, vertical, roll_pitch, *joint, tilt, height, *feet])  # fmt: skip
+    values = jp.array([linear, angular, alive, vertical, roll_pitch, *joint, tilt, height, *feet, *stability])  # fmt: skip
     return jp.sum(values * ROBUST_WEIGHTS) * control_step, values

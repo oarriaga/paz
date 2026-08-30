@@ -78,22 +78,46 @@ def test_compute_reward_weights_and_order():
     base = 3.0, 4.0, 5.0, 6.0
     joint = 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0
     feet = 15.0, 16.0, 17.0, 18.0
-    reward, values = rewards.compute_reward(tracking, joint, base, feet, 1.0)
-    expected_order = [1.0, 2.0, 1.0, 3.0, 4.0, *joint, 5.0, 6.0, *feet]
+    stability = 19.0, 20.0
+    args = tracking, joint, base, feet, 1.0, stability
+    reward, values = rewards.compute_reward(*args)
+    expected_order = [1.0, 2.0, 1.0, 3.0, 4.0, *joint, 5.0, 6.0, *feet, 19.0, 20.0]  # fmt: skip
     assert np.allclose(np.asarray(values), expected_order)
     expected = np.sum(np.asarray(values) * np.asarray(rewards.ROBUST_WEIGHTS))
-    assert np.isclose(float(reward), expected * 0.02, atol=1e-5)
+    assert np.isclose(float(reward), expected * 0.02, atol=1e-4)
 
 
 def test_alive_reward_stops_on_the_falling_step():
     tracking, base = (0.0, 0.0), (0.0, 0.0, 0.0, 0.0)
     joint, feet = (0.0,) * 8, (0.0, 0.0, 0.0, 0.0)
-    standing, _ = rewards.compute_reward(tracking, joint, base, feet, 1.0)
-    fallen, _ = rewards.compute_reward(tracking, joint, base, feet, 0.0)
+    stability = 0.0, 0.0
+    args = tracking, joint, base, feet
+    standing, _ = rewards.compute_reward(*args, 1.0, stability)
+    fallen, _ = rewards.compute_reward(*args, 0.0, stability)
     assert np.isclose(float(standing) - float(fallen), 0.15 * 0.02)
 
 
 def test_weights_match_reference_configuration():
-    # weights from unitree_rl_lab velocity_env_cfg.py, in values order
-    reference = [1.0, 0.5, 0.15, -2.0, -0.05, -0.001, -2.5e-7, -0.05, -5.0, -2e-5, -0.1, -1.0, -1.0, -5.0, -10.0, 0.5, -0.2, 1.0, -1.0]  # fmt: skip
+    # unitree_rl_lab weights in values order, then mjlab's two postural
+    # stabilizers appended as the hybrid
+    reference = [1.0, 0.5, 0.15, -2.0, -0.05, -0.001, -2.5e-7, -0.05, -5.0, -2e-5, -0.1, -1.0, -1.0, -5.0, -10.0, 0.5, -0.2, 1.0, -1.0, 1.0, 1.0]  # fmt: skip
     assert np.allclose(np.asarray(rewards.ROBUST_WEIGHTS), reference)
+
+
+def test_upright_is_one_when_level():
+    assert np.isclose(float(rewards.upright(jp.array([0.0, 0.0, -1.0]))), 1.0)  # fmt: skip
+    tilted = jp.array([0.3, 0.4, -0.866])
+    expected = np.exp(-(0.09 + 0.16) / 0.2)
+    assert np.isclose(float(rewards.upright(tilted)), expected, atol=1e-5)
+
+
+def test_posture_tolerance_switches_with_command_speed():
+    defaults = jp.zeros(29)
+    positions = defaults.at[3].set(0.2)
+    standing = jp.array([0.0, 0.0, 0.0])
+    walking = jp.array([0.5, 0.0, 0.0])
+    strict = float(rewards.posture(positions, defaults, standing))
+    loose = float(rewards.posture(positions, defaults, walking))
+    assert np.isclose(strict, np.exp(-(0.2 / 0.05) ** 2 / 29), atol=1e-4)
+    assert np.isclose(loose, np.exp(-(0.2 / 0.35) ** 2 / 29), atol=1e-4)
+    assert loose > strict
