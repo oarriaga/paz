@@ -24,7 +24,7 @@ Command = namedtuple("Command", "forward, sideways, turn")
 Transition = namedtuple("Transition", "reward, done, timeout, level, terms, diverged")  # fmt: skip
 
 
-def build_qpos(key, qpos, origin, heights, horizontal_scale, spawn_height=0.78):  # fmt: skip
+def build_qpos(key, qpos, origin, heights, horizontal_scale, spawn_height=0.8):  # fmt: skip
     key1, key2 = jax.random.split(key)
     position_noise = jr.uniform(key1, (2,), minval=-0.5, maxval=0.5)
     position = origin[:2] + position_noise

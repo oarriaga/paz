@@ -9,11 +9,10 @@ from robots import build as build_robot
 from robots import read_sensor_addresses, reject_keyword_args
 
 ASSET_PATH = Path(__file__).parent.parent / "assets/g1_29dof.xml"
-# the knees-bent default pose, the derived actuator gains, and the
-# per-group action scale follow mjlab, which trains this robot on this
-# simulator; the pose keeps the base at 0.76 m
-DEFAULT_ANGLES = jp.array([-0.312, 0.0, 0.0, 0.669, -0.363, 0.0, -0.312, 0.0, 0.0, 0.669, -0.363, 0.0, 0.0, 0.0, 0.0, 0.2, 0.2, 0.0, 0.6, 0.0, 0.0, 0.0, 0.2, -0.2, 0.0, 0.6, 0.0, 0.0, 0.0])  # fmt: skip
-ACTION_SCALE = jp.array([0.5475, 0.3507, 0.5475, 0.3507, 0.4386, 0.4386, 0.5475, 0.3507, 0.5475, 0.3507, 0.4386, 0.4386, 0.5475, 0.4386, 0.4386, 0.4386, 0.4386, 0.4386, 0.4386, 0.4386, 0.0745, 0.0745, 0.4386, 0.4386, 0.4386, 0.4386, 0.4386, 0.0745, 0.0745])  # fmt: skip
+# the default pose, gains, action scale, and armature follow the
+# reference configuration of the original unitree_rl_lab run
+DEFAULT_ANGLES = jp.array([-0.1, 0.0, 0.0, 0.3, -0.2, 0.0, -0.1, 0.0, 0.0, 0.3, -0.2, 0.0, 0.0, 0.0, 0.0, 0.3, 0.25, 0.0, 0.97, 0.15, 0.0, 0.0, 0.3, -0.25, 0.0, 0.97, -0.15, 0.0, 0.0])  # fmt: skip
+ACTION_SCALE = 0.25
 FOOT_SUFFIX = "ankle_roll_link"
 
 
@@ -29,9 +28,9 @@ def configure(model, simulation_step=0.005):
 
 
 def configure_actuators(model):
-    gains = np.array([40.1792, 99.0984, 40.1792, 99.0984, 28.5012, 28.5012, 40.1792, 99.0984, 40.1792, 99.0984, 28.5012, 28.5012, 40.1792, 28.5012, 28.5012, 14.2506, 14.2506, 14.2506, 14.2506, 14.2506, 16.7783, 16.7783, 14.2506, 14.2506, 14.2506, 14.2506, 14.2506, 16.7783, 16.7783], "float32")  # fmt: skip
-    dampings = np.array([2.5579, 6.3088, 2.5579, 6.3088, 1.8144, 1.8144, 2.5579, 6.3088, 2.5579, 6.3088, 1.8144, 1.8144, 2.5579, 1.8144, 1.8144, 0.9072, 0.9072, 0.9072, 0.9072, 0.9072, 1.0681, 1.0681, 0.9072, 0.9072, 0.9072, 0.9072, 0.9072, 1.0681, 1.0681], "float32")  # fmt: skip
-    limits = np.array([88, 139, 88, 139, 50, 50, 88, 139, 88, 139, 50, 50, 88, 50, 50, 25, 25, 25, 25, 25, 5, 5, 25, 25, 25, 25, 25, 5, 5], "float32")  # fmt: skip
+    gains = np.array([100, 100, 100, 150, 40, 40, 100, 100, 100, 150, 40, 40, 200, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40, 40], "float32")  # fmt: skip
+    dampings = np.array([2, 2, 2, 4, 2, 2, 2, 2, 2, 4, 2, 2, 5, 5, 5, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1], "float32")  # fmt: skip
+    limits = np.array([88, 139, 88, 139, 25, 25, 88, 139, 88, 139, 25, 25, 88, 25, 25, 25, 25, 25, 25, 25, 5, 5, 25, 25, 25, 25, 25, 5, 5], "float32")  # fmt: skip
     model.actuator_gainprm[:, 0] = gains
     model.actuator_biasprm[:, 1] = -gains
     model.actuator_biasprm[:, 2] = -dampings
@@ -42,10 +41,9 @@ def configure_actuators(model):
 
 
 def configure_joints(model):
-    armature = np.array([0.010178, 0.025102, 0.010178, 0.025102, 0.007219, 0.007219, 0.010178, 0.025102, 0.010178, 0.025102, 0.007219, 0.007219, 0.010178, 0.007219, 0.007219, 0.003610, 0.003610, 0.003610, 0.003610, 0.003610, 0.004250, 0.004250, 0.003610, 0.003610, 0.003610, 0.003610, 0.003610, 0.004250, 0.004250], "float32")  # fmt: skip
     model.dof_damping[6:] = 0.0
     model.dof_frictionloss[6:] = 0.0
-    model.dof_armature[6:] = armature
+    model.dof_armature[6:] = 0.01
     return model
 
 
