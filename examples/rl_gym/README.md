@@ -83,6 +83,9 @@ minor and left as is:
 - Foot contact is the last-substep net force; IsaacLab thresholds the
   maximum over a three-substep history.
 - The critic sees a push one step later than IsaacLab does.
+- The yaw command range widens with the linear speed curriculum from 0.1
+  to its 0.2 limit; the reference drives it with a separate angular
+  tracking criterion over the same span.
 - Pyramid slope tiles use a linear ramp and a slightly taller platform
   than IsaacLab's bilinear profile.
 - Each reset samples a fresh terrain column; IsaacLab pins each

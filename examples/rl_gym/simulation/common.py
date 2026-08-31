@@ -127,9 +127,10 @@ def compute_local_phase(step, control_step=0.02):
     return jp.mod(global_phase + jp.array([0.0, 0.5]), 1.0)
 
 
-def sample_command(key, max_speed, turn_rate=0.1, standing_probability=0.02):
+def sample_command(key, max_speed, standing_probability=0.02):
     keys = jr.split(key, 2)
     sideways = jp.minimum(max_speed, 0.3)
+    turn_rate = jp.minimum(max_speed, 0.2)
     lower = jp.array([-jp.minimum(max_speed, 0.5), -sideways, -turn_rate])
     upper = jp.array([jp.minimum(max_speed, 1.0), sideways, turn_rate])
     sample = jr.uniform(keys[0], (3,), minval=lower, maxval=upper)
@@ -138,9 +139,7 @@ def sample_command(key, max_speed, turn_rate=0.1, standing_probability=0.02):
 
 
 def sample_push_step(key, episode_step, control_step=0.02):
-    # mjlab pushes often and gently, a denser recovery curriculum than
-    # the reference's rare strong shoves
-    seconds = jax.random.uniform(key, (), minval=1.0, maxval=3.0)
+    seconds = jax.random.uniform(key, (), minval=3.0, maxval=8.0)
     return episode_step + jp.round(seconds / control_step).astype(jp.int32)
 
 
@@ -148,17 +147,17 @@ def compute_targets(action):
     return DEFAULT_ANGLES + action * ACTION_SCALE
 
 
-PUSH_BOUNDS = jp.array([0.5, 0.5, 0.0, 0.52, 0.52, 0.78])
+PUSH_SPEED = 1.0
 
 
 def apply_scheduled_push(key, physics_state, episode_step, push_step):
-    # velocities add to the current ones as in the reference; magnitudes
-    # and the angular components follow mjlab
+    # the reference overwrites the planar velocity and zeroes the vertical
+    # and angular rates, as in IsaacLab's push_by_setting_velocity
     keys = jr.split(key, 2)
-    kick = jr.uniform(keys[0], (6,), minval=-PUSH_BOUNDS, maxval=PUSH_BOUNDS)
+    kick = jr.uniform(keys[0], (2,), minval=-PUSH_SPEED, maxval=PUSH_SPEED)
     pushing = episode_step >= push_step
-    added = jp.where(pushing, kick, 0.0)
-    qvel = physics_state.qvel.at[:6].add(added)
+    pushed = jp.concatenate([kick, jp.zeros(4)])
+    qvel = physics_state.qvel.at[:6].set(jp.where(pushing, pushed, physics_state.qvel[:6]))  # fmt: skip
     next_push = sample_push_step(keys[1], episode_step)
     push_step = jp.where(pushing, next_push, push_step)
     return physics_state.replace(qvel=qvel), push_step

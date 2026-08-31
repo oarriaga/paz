@@ -98,9 +98,9 @@ def test_alive_reward_stops_on_the_falling_step():
 
 
 def test_weights_match_reference_configuration():
-    # unitree_rl_lab weights in values order, then mjlab's two postural
-    # stabilizers appended as the hybrid
-    reference = [1.0, 0.5, 0.15, -2.0, -0.05, -0.001, -2.5e-7, -0.05, -5.0, -2e-5, -0.1, -1.0, -1.0, -5.0, -10.0, 0.5, -0.2, 1.0, -1.0, 1.0, 1.0]  # fmt: skip
+    # unitree_rl_lab weights in values order; the two postural stabilizer
+    # slots stay in the array but carry no weight
+    reference = [1.0, 0.5, 0.15, -2.0, -0.05, -0.001, -2.5e-7, -0.05, -5.0, -2e-5, -0.1, -1.0, -1.0, -5.0, -10.0, 0.5, -0.2, 1.0, -1.0, 0.0, 0.0]  # fmt: skip
     assert np.allclose(np.asarray(rewards.ROBUST_WEIGHTS), reference)
 
 

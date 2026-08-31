@@ -2,8 +2,10 @@ import jax.numpy as jp
 import paz
 
 # the first nineteen weights follow the unitree reference; the final two
-# are mjlab's postural stabilizers, appended as a hybrid
-ROBUST_WEIGHTS = jp.array([1.0, 0.5, 0.15, -2.0, -0.05, -0.001, -2.5e-7, -0.05, -5.0, -2e-5, -0.1, -1.0, -1.0, -5.0, -10.0, 0.5, -0.2, 1.0, -1.0, 1.0, 1.0])  # fmt: skip
+# postural stabilizers are zeroed: they broke a survival wall whose real
+# cause was the entropy coefficient, and they penalize the lean and the
+# stride that command tracking needs
+ROBUST_WEIGHTS = jp.array([1.0, 0.5, 0.15, -2.0, -0.05, -0.001, -2.5e-7, -0.05, -5.0, -2e-5, -0.1, -1.0, -1.0, -5.0, -10.0, 0.5, -0.2, 1.0, -1.0, 0.0, 0.0])  # fmt: skip
 POSTURE_STDS = jp.array([0.3, 0.15, 0.15, 0.35, 0.25, 0.1, 0.3, 0.15, 0.15, 0.35, 0.25, 0.1, 0.2, 0.08, 0.1, 0.15, 0.15, 0.1, 0.15, 0.3, 0.3, 0.3, 0.15, 0.15, 0.1, 0.15, 0.3, 0.3, 0.3])  # fmt: skip
 
 

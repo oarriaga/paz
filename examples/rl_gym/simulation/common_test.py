@@ -154,7 +154,7 @@ def test_sample_command_bounds():
         command = common.sample_command(jr.key(seed), jp.asarray(0.8))
         assert -0.5 <= float(command.forward) <= 0.8
         assert -0.3 <= float(command.sideways) <= 0.3
-        assert -0.1 <= float(command.turn) <= 0.1
+        assert -0.2 <= float(command.turn) <= 0.2
 
 
 def test_decorrelate_counters_stays_in_range():
