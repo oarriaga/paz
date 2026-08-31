@@ -101,8 +101,9 @@ minor and left as is:
 - The explicit Euler integrator stays despite the reference's implicit
   joint drives: an A/B run showed implicitfast slows early balance
   learning by an order of magnitude here.
-- The reference trains with full-sole foot collision hulls; this model
-  ships four small spheres per foot, a harder support polygon.
+- The reference trains with four 5 mm spheres at the sole corners of
+  each foot; this model connects the same corners with capsule rails, a
+  slightly larger support polygon.
 - The entropy coefficient is 0.005 here against the reference's 0.01.
   With 0.01 this environment balances the action noise at sigma 0.71,
   where exploration noise alone fells the robot in 80% of episodes (a
