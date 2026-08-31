@@ -94,6 +94,10 @@ minor and left as is:
 - PhysX clamps joint velocities at the actuator limits inside the
   solver; MuJoCo has no such clamp, so unphysical states are instead
   discarded by the divergence guards.
+- The spawn height clears the tallest terrain cell under the robot
+  footprint. The reference spawns at a fixed height over the tile origin
+  and lets PhysX absorb any penetration; Euler ejects it instead, which
+  killed 6.8% of episodes in their first second on rough tiles.
 - The explicit Euler integrator stays despite the reference's implicit
   joint drives: an A/B run showed implicitfast slows early balance
   learning by an order of magnitude here.

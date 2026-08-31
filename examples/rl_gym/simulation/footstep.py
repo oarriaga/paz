@@ -25,11 +25,11 @@ ActorObservation = namedtuple("ActorObservation", ACTOR_FIELDS + ", footstep")  
 CriticObservation = namedtuple("CriticObservation", CRITIC_FIELDS + ", footstep")  # fmt: skip
 
 
-def reset(key, dynamics, level, max_speed, physics_template, origins, feet):  # fmt: skip
+def reset(key, dynamics, level, max_speed, physics_template, origins, heights, horizontal_scale, feet):  # fmt: skip
     keys = jr.split(key, 6)
     column = jr.randint(keys[0], (), 0, origins.shape[1])
     origin = origins[level, column]
-    qpos = build_qpos(keys[1], dynamics.qpos0, origin)
+    qpos = build_qpos(keys[1], dynamics.qpos0, origin, heights, horizontal_scale)  # fmt: skip
     num_joints = physics_template.ctrl.shape[0]
     qvel = build_qvel(physics_template.qvel)
     physics_state = build_physics_state(dynamics, physics_template, qpos, qvel)

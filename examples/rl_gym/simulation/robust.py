@@ -21,13 +21,17 @@ State = namedtuple("State", STATE_FIELDS)
 
 
 def build_batch_reset(world, dynamics, dynamics_axes):
-    axes = 0, dynamics_axes, 0, None, None, None
+    axes = 0, dynamics_axes, 0, None, None, None, None, None
     batched = jax.vmap(reset, in_axes=axes)
-    template, origins = world.physics_template, world.terrain.origins
+    template, terrain = world.physics_template, world.terrain
+    origins = terrain.origins
+    heights = jp.asarray(terrain.elevations * terrain.peak + terrain.minimum)
+    scale = terrain.horizontal_scale
 
     def batch_reset(key, level, max_speed):
         keys = jr.split(key, level.shape[0])
-        return batched(keys, dynamics, level, max_speed, template, origins)
+        args = keys, dynamics, level, max_speed, template, origins
+        return batched(*args, heights, scale)
 
     return batch_reset
 
@@ -45,12 +49,12 @@ def build_batch_step(world, dynamics, dynamics_axes, indices, max_level):
     return batch_step
 
 
-def reset(key, dynamics, level, max_speed, physics_template, origins):
+def reset(key, dynamics, level, max_speed, physics_template, origins, heights, horizontal_scale):  # fmt: skip
     keys = jr.split(key, 5)
     column = jr.randint(keys[0], (), 0, origins.shape[1])
     origin = origins[level, column]
     tile = Tile(level, column, origin)
-    qpos = build_qpos(keys[1], dynamics.qpos0, origin)
+    qpos = build_qpos(keys[1], dynamics.qpos0, origin, heights, horizontal_scale)  # fmt: skip
     num_joints = physics_template.ctrl.shape[0]
     qvel = build_qvel(physics_template.qvel)
     physics_state = build_physics_state(dynamics, physics_template, qpos, qvel)

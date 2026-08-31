@@ -24,14 +24,31 @@ Command = namedtuple("Command", "forward, sideways, turn")
 Transition = namedtuple("Transition", "reward, done, timeout, level, terms, diverged")  # fmt: skip
 
 
-def build_qpos(key, qpos, origin, spawn_height=0.78):
+def build_qpos(key, qpos, origin, heights, horizontal_scale, spawn_height=0.78):  # fmt: skip
     key1, key2 = jax.random.split(key)
     position_noise = jr.uniform(key1, (2,), minval=-0.5, maxval=0.5)
+    position = origin[:2] + position_noise
+    ground = read_ground_height(heights, horizontal_scale, position)
     yaw = jr.uniform(key2, (), minval=-jp.pi, maxval=jp.pi)
-    qpos = qpos.at[0:2].set(origin[:2] + position_noise)
-    qpos = qpos.at[2].set(origin[2] + spawn_height)
+    qpos = qpos.at[0:2].set(position)
+    qpos = qpos.at[2].set(ground + spawn_height)
     qpos = qpos.at[3:7].set(yaw_quaternion(yaw))
     return qpos.at[7:].set(DEFAULT_ANGLES)
+
+
+def read_ground_height(heights, horizontal_scale, position, radius_cells=3):
+    # the spawn height clears the tallest cell under the footprint, so a
+    # rough tile never starts the feet inside a bump; the reference leans
+    # on PhysX to absorb spawn penetration, which Euler ejects instead
+    width_y = (heights.shape[0] - 1) * horizontal_scale
+    width_x = (heights.shape[1] - 1) * horizontal_scale
+    row = (position[1] + width_y / 2.0) / horizontal_scale
+    column = (position[0] + width_x / 2.0) / horizontal_scale
+    row = jp.round(row).astype(jp.int32) - radius_cells
+    column = jp.round(column).astype(jp.int32) - radius_cells
+    size = 2 * radius_cells + 1
+    window = jax.lax.dynamic_slice(heights, (row, column), (size, size))
+    return jp.max(window)
 
 
 def build_qvel(qvel):
