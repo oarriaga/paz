@@ -24,7 +24,17 @@ def G1DoF29():
 def configure(model, simulation_step=0.005):
     model.opt.timestep = simulation_step
     model = configure_actuators(model)
-    return configure_joints(model)
+    model = configure_joints(model)
+    return configure_contacts(model)
+
+
+def configure_contacts(model, timeconst=0.15):
+    # a matched-dynamics bench against PhysX showed its depenetration cap
+    # absorbs deep contact starts (peak reaction 2.7 m/s) where MuJoCo's
+    # default 0.02 contact spring explodes; 0.15 reproduces the PhysX
+    # response (2.95 m/s) on the same tests
+    model.geom_solref[:, 0] = timeconst
+    return model
 
 
 def configure_actuators(model):
