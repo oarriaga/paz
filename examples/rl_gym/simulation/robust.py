@@ -21,16 +21,16 @@ State = namedtuple("State", STATE_FIELDS)
 
 
 def build_batch_reset(world, dynamics, dynamics_axes):
-    axes = 0, dynamics_axes, 0, None, None, None, None, None
+    axes = 0, dynamics_axes, 0, 0, None, None, None, None, None
     batched = jax.vmap(reset, in_axes=axes)
     template, terrain = world.physics_template, world.terrain
     origins = terrain.origins
     heights = jp.asarray(terrain.elevations * terrain.peak + terrain.minimum)
     scale = terrain.horizontal_scale
 
-    def batch_reset(key, level, max_speed):
+    def batch_reset(key, level, column, max_speed):
         keys = jr.split(key, level.shape[0])
-        args = keys, dynamics, level, max_speed, template, origins
+        args = keys, dynamics, level, column, max_speed, template, origins
         return batched(*args, heights, scale)
 
     return batch_reset
@@ -49,19 +49,20 @@ def build_batch_step(world, dynamics, dynamics_axes, indices, max_level):
     return batch_step
 
 
-def reset(key, dynamics, level, max_speed, physics_template, origins, heights, horizontal_scale):  # fmt: skip
-    keys = jr.split(key, 5)
-    column = jr.randint(keys[0], (), 0, origins.shape[1])
+def reset(key, dynamics, level, column, max_speed, physics_template, origins, heights, horizontal_scale):  # fmt: skip
+    # the terrain column is pinned per environment for the whole run, as
+    # in the reference; only the level changes with the curriculum
+    keys = jr.split(key, 4)
     origin = origins[level, column]
     tile = Tile(level, column, origin)
-    qpos = build_qpos(keys[1], dynamics.qpos0, origin, heights, horizontal_scale)  # fmt: skip
+    qpos = build_qpos(keys[0], dynamics.qpos0, origin, heights, horizontal_scale)  # fmt: skip
     num_joints = physics_template.ctrl.shape[0]
     qvel = build_qvel(physics_template.qvel)
     physics_state = build_physics_state(dynamics, physics_template, qpos, qvel)
-    command = sample_command(keys[2], max_speed)
-    push_step = sample_push_step(keys[3], 0)
+    command = sample_command(keys[1], max_speed)
+    push_step = sample_push_step(keys[2], 0)
     action = jp.zeros(num_joints)
-    actor = build_actor_observation(keys[4], physics_state, command, action)
+    actor = build_actor_observation(keys[3], physics_state, command, action)
     critic = build_critic_observation(physics_state, command, action)
     history = build_observation_history(actor, critic)
     counters = StepCounters(jp.array(0), jp.array(0), push_step)

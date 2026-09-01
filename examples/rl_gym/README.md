@@ -80,17 +80,21 @@ minor and left as is:
 
 - Root and foot velocities are taken at the frame origins; IsaacLab uses
   the link centers of mass.
-- Foot contact is the last-substep net force; IsaacLab thresholds the
-  maximum over a three-substep history.
+- Undesired contact is read from the last substep only; foot contact
+  pools the last three substeps as the reference does.
 - The critic sees a push one step later than IsaacLab does.
 - The yaw command range widens with the linear speed curriculum from 0.1
   to its 0.2 limit; the reference drives it with a separate angular
   tracking criterion over the same span.
 - Pyramid slope tiles use a linear ramp and a slightly taller platform
   than IsaacLab's bilinear profile.
-- Each reset samples a fresh terrain column; IsaacLab pins each
-  environment to one column for the whole run.
-- The MJCF torso is about 1.8 kg heavier than the training URDF.
+- The waist roll and pitch pivots sit one centimeter apart along z in
+  the MJCF where the training URDF makes them coincident; world-frame
+  link geometry and inertials match the URDF exactly (audited per link
+  after correcting the torso, which shipped 1.78 kg heavy).
+- Non-foot collisions are capsule approximations; the reference carries
+  convex mesh hulls on nearly every link, with self-collisions enabled.
+  Full parity would exceed the warp per-environment contact budget.
 - PhysX clamps joint velocities at the actuator limits inside the
   solver; MuJoCo has no such clamp, so unphysical states are instead
   discarded by the divergence guards.
@@ -101,22 +105,16 @@ minor and left as is:
 - The explicit Euler integrator stays despite the reference's implicit
   joint drives: an A/B run showed implicitfast slows early balance
   learning by an order of magnitude here.
-- The reference trains with four 5 mm spheres at the sole corners of
-  each foot; this model connects the same corners with capsule rails, a
-  slightly larger support polygon.
-- The entropy coefficient is 0.005 against the reference's 0.01. A
-  controlled bench series against headless Isaac (same robot, same PD
-  targets, matched initializations) matched every layer it could
-  isolate: free-space drive response to identical action noise (joint
-  speed p95 6.9 vs 6.6 rad/s, maxima within 20%), passive stability
-  (both robots tip over under pure PD), and the penetration response
-  (via the contact spring below). Training at 0.01 still walls at
-  episode length ~300 in three separate runs while the reference
-  transitioned at 7500 iterations, so the residual noise-lethality is
-  attributed to the one uncloneable layer: PhysX solves drive torques
-  and contacts together per step where MuJoCo applies explicit PD and
-  then resolves contacts. Halving the coefficient is the minimal
-  compensation and every transition observed happened under it.
+- The entropy coefficient default is the reference's 0.01. Every
+  transition observed so far happened at 0.005, but a one-to-one
+  dynamics bench against headless Isaac (identical spawn, identical PD
+  target sequences, same four-sphere feet and URDF-audited masses) now
+  matches every layer it isolates: free-space drive response, passive
+  tipping within three control steps, penetration response, and sliding
+  friction within 10% of ideal Coulomb at mu 0.3 to 1.0 for both the
+  pyramidal and elliptic cones. With matched dynamics the earlier
+  solver-coupling attribution no longer stands, and the residual
+  sample-efficiency gap is under investigation on the training side.
 
 ## Evaluation
 

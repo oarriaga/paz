@@ -114,8 +114,10 @@ if __name__ == "__main__":
     max_speed = jp.asarray(1.0)
     command = build_command(args.forward, args.sideways, args.turn)
     levels = jp.full((1,), args.level, dtype=jp.int32)
-    key = jax.random.key(args.seed)
-    state = jax.jit(reset)(key, levels, max_speed)
+    key, column_key = jax.random.split(jax.random.key(args.seed))
+    num_columns = world.terrain.origins.shape[1]
+    columns = jax.random.randint(column_key, (1,), 0, num_columns)
+    state = jax.jit(reset)(key, levels, columns, max_speed)
     normalizer = load_actor_normalizer(args.checkpoint, state.history)
     state = hold_command(state, command)
     step = jax.jit(step)

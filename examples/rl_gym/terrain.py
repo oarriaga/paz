@@ -24,9 +24,10 @@ def build(seed, num_levels=9, tile_size=8.0, border_width=20.0, horizontal_scale
     origins = np.zeros((num_levels, len(terrain_types), 3), "float32")
     rng = np.random.default_rng(seed)
     for level in range(num_levels):
-        # the reference draws each tile's difficulty inside its level band
-        difficulty = (level + rng.uniform()) / num_levels
         for column, terrain_type in enumerate(terrain_types):
+            # the reference draws every tile's difficulty inside its
+            # level band
+            difficulty = (level + rng.uniform()) / num_levels
             tile_args = rng, terrain_type, difficulty, tile_size, horizontal_scale, vertical_scale  # fmt: skip
             tile = build_tile(*tile_args)
             region_args = level, column, tile_cells, border_cells

@@ -54,8 +54,6 @@
                   <geom name="left_foot_collision_1" type="sphere" size="0.005" pos="-0.05 -0.025 -0.03" group="3" />
                   <geom name="left_foot_collision_2" type="sphere" size="0.005" pos="0.12 0.03 -0.03" group="3" />
                   <geom name="left_foot_collision_3" type="sphere" size="0.005" pos="0.12 -0.03 -0.03" group="3" />
-                  <geom name="left_foot_sole_0" type="capsule" size="0.005" fromto="-0.05 0.0275 -0.03 0.12 0.0275 -0.03" group="3" />
-                  <geom name="left_foot_sole_1" type="capsule" size="0.005" fromto="-0.05 -0.0275 -0.03 0.12 -0.0275 -0.03" group="3" />
                   <site name="left_foot" pos="0 0 0" size="0.01" />
                 </body>
               </body>
@@ -88,8 +86,6 @@
                   <geom name="right_foot_collision_1" type="sphere" size="0.005" pos="-0.05 -0.025 -0.03" group="3" />
                   <geom name="right_foot_collision_2" type="sphere" size="0.005" pos="0.12 0.03 -0.03" group="3" />
                   <geom name="right_foot_collision_3" type="sphere" size="0.005" pos="0.12 -0.03 -0.03" group="3" />
-                  <geom name="right_foot_sole_0" type="capsule" size="0.005" fromto="-0.05 0.0275 -0.03 0.12 0.0275 -0.03" group="3" />
-                  <geom name="right_foot_sole_1" type="capsule" size="0.005" fromto="-0.05 -0.0275 -0.03 0.12 -0.0275 -0.03" group="3" />
                   <site name="right_foot" pos="0 0 0" size="0.01" />
                 </body>
               </body>
@@ -101,14 +97,14 @@
         </body>
       </body>
       <body name="waist_yaw_link">
-        <inertial pos="0.003964 0 0.018769" quat="-0.0178291 0.628464 0.0282471 0.777121" mass="0.244" diaginertia="0.000158561 0.000124229 9.67669e-05" />
+        <inertial pos="0.003494 0.000233 0.018034" mass="0.214" fullinertia="0.00010673 0.00010422 0.0001625 2.703e-06 -7.631e-06 -2.01e-07" />
         <joint name="waist_yaw_joint" pos="0 0 0" axis="0 0 1" range="-2.618 2.618" actuatorfrcrange="-88 88" class="torso_motor" />
         <body name="waist_roll_link" pos="-0.0039635 0 0.035">
-          <inertial pos="0 -0.000236 0.010111" quat="0.99979 0.020492 0 0" mass="0.047" diaginertia="7.515e-06 6.40206e-06 3.98394e-06" />
+          <inertial pos="0 2.3e-05 0.009" mass="0.086" fullinertia="7.079e-06 6.339e-06 8.245e-06 0 0 0" />
           <joint name="waist_roll_joint" pos="0 0 0" axis="1 0 0" range="-0.52 0.52" actuatorfrcrange="-50 50" class="torso_motor" />
           <site name="imu_in_torso" size="0.01" pos="-0.03959 -0.00224 0.13792" />
           <body name="torso_link" pos="0 0 0.019">
-            <inertial pos="0.00331658 0.000261533 0.179856" quat="0.999831 0.000376204 0.0179895 -0.00377704" mass="9.598" diaginertia="0.12407 0.111951 0.0325382" />
+            <inertial pos="0.0020313345 0.00033972675 0.17459715" mass="7.817" fullinertia="0.12164652 0.10977258 0.027521919 3.111021e-05 -0.0037428196 -1.5429925e-05" />
             <joint name="waist_pitch_joint" pos="0 0 0" axis="0 1 0" range="-0.52 0.52" actuatorfrcrange="-50 50" class="torso_motor" />
             <body name="left_shoulder_pitch_link" pos="0.0039563 0.10022 0.23778" quat="0.990264 0.139201 1.38722e-05 -9.86868e-05">
               <inertial pos="0 0.035892 -0.011628" quat="0.654152 0.0130458 -0.326267 0.68225" mass="0.718" diaginertia="0.000465864 0.000432842 0.000406394" />

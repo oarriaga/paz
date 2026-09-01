@@ -9,7 +9,7 @@ from jax import random as jr
 
 import randomize
 
-FIELDS = "geom_friction, geom_solref, body_mass, nbody, body_ipos, actuator_gainprm, actuator_biasprm, dof_frictionloss, dof_armature"  # fmt: skip
+FIELDS = "geom_friction, geom_solref, body_mass, body_inertia, nbody, body_ipos, actuator_gainprm, actuator_biasprm, dof_frictionloss, dof_armature"  # fmt: skip
 FakeModel = namedtuple("FakeModel", FIELDS)
 
 NUM_JOINTS, TORSO = 4, 1
@@ -17,7 +17,8 @@ NUM_JOINTS, TORSO = 4, 1
 
 def build_model():
     num_dofs = 6 + NUM_JOINTS
-    args = jp.ones((3, 3)), jp.ones((3, 2)), jp.full(3, 2.0), 3
+    args = jp.ones((3, 3)), jp.ones((3, 2)), jp.full(3, 2.0)
+    args = args + (jp.full((3, 3), 0.5), 3)
     args = args + (jp.zeros((3, 3)), jp.full((NUM_JOINTS, 10), 40.0))
     args = args + (jp.full((NUM_JOINTS, 10), -2.0), jp.zeros(num_dofs))
     return FakeModel(*args, jp.zeros(num_dofs))
@@ -38,6 +39,10 @@ def test_randomized_ranges():
         assert gain.min() >= 0.8 and gain.max() <= 1.2
         offset = np.asarray(values["body_ipos"])[TORSO]
         assert np.all(np.abs(offset) <= 0.03)
+        inertia = np.asarray(values["body_inertia"])
+        ratio = inertia / np.asarray(model.body_inertia)
+        expected = (mass / np.asarray(model.body_mass))[:, None]
+        assert np.allclose(ratio, expected, rtol=1e-5)
 
 
 def test_payload_only_changes_torso():

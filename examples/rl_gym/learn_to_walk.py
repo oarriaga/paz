@@ -82,9 +82,12 @@ if __name__ == "__main__":
     reset = robust.build_batch_reset(world, dynamics, dynamics_axes)
     step_args = world, dynamics, dynamics_axes, indices, max_level
     step = robust.build_batch_step(*step_args)
-    levels = jax.random.randint(environment_keys[1], (args.num_envs,), 0, max_level + 1)  # fmt: skip
+    tile_keys = jr.split(environment_keys[1])
+    levels = jax.random.randint(tile_keys[0], (args.num_envs,), 0, max_level + 1)  # fmt: skip
+    num_columns = world.terrain.origins.shape[1]
+    columns = jax.random.randint(tile_keys[1], (args.num_envs,), 0, num_columns)  # fmt: skip
     max_speed = jp.asarray(args.initial_max_speed)
-    state = jax.jit(reset)(environment_keys[2], levels, max_speed)
+    state = jax.jit(reset)(environment_keys[2], levels, columns, max_speed)
     state = jax.jit(decorrelate_counters)(environment_keys[3], state)
     rollout_key = environment_keys[4]
     normalizers = build_normalizers(state.history)
@@ -106,7 +109,7 @@ if __name__ == "__main__":
         # speed curriculum, with keys advanced past the ones the original
         # run already consumed
         environment_keys = jr.split(jr.fold_in(environment_key, start_iteration), 5)  # fmt: skip
-        state = jax.jit(reset)(environment_keys[2], levels, max_speed)
+        state = jax.jit(reset)(environment_keys[2], levels, columns, max_speed)
         state = jax.jit(decorrelate_counters)(environment_keys[3], state)
         rollout_key = environment_keys[4]
     mesh = distributed.build_mesh()
