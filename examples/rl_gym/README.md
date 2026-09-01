@@ -104,15 +104,19 @@ minor and left as is:
 - The reference trains with four 5 mm spheres at the sole corners of
   each foot; this model connects the same corners with capsule rails, a
   slightly larger support polygon.
-- The entropy coefficient is 0.005 here against the reference's 0.01.
-  With 0.01 this environment balances the action noise at sigma 0.71,
-  where exploration noise alone fells the robot in 80% of episodes (a
-  sigma sweep of a trained policy showed 8.6% deterministic falls).
-  Both references settle at sigma 0.45-0.55 under 0.01, so their
-  environments punish noise harder; halving the coefficient lands the
-  noise in the same band and triggered the survival transition (full
-  1000-step episodes, speed curriculum unlocking) within 200 iterations
-  of resuming.
+- The entropy coefficient is 0.005 against the reference's 0.01. A
+  controlled bench series against headless Isaac (same robot, same PD
+  targets, matched initializations) matched every layer it could
+  isolate: free-space drive response to identical action noise (joint
+  speed p95 6.9 vs 6.6 rad/s, maxima within 20%), passive stability
+  (both robots tip over under pure PD), and the penetration response
+  (via the contact spring below). Training at 0.01 still walls at
+  episode length ~300 in three separate runs while the reference
+  transitioned at 7500 iterations, so the residual noise-lethality is
+  attributed to the one uncloneable layer: PhysX solves drive torques
+  and contacts together per step where MuJoCo applies explicit PD and
+  then resolves contacts. Halving the coefficient is the minimal
+  compensation and every transition observed happened under it.
 
 ## Evaluation
 
