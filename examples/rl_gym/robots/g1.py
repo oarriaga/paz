@@ -47,6 +47,9 @@ def configure_actuators(model):
     model.actuator_forcelimited[:] = 1
     model.actuator_forcerange[:, 0] = -limits
     model.actuator_forcerange[:, 1] = limits
+    # the reference leaves position targets unclipped; without this the
+    # joint-range ctrl clamp also rewrites the last-action observation
+    model.actuator_ctrllimited[:] = 0
     return model
 
 

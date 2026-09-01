@@ -19,6 +19,9 @@ if __name__ == "__main__":
     parser.add_argument("--initial_max_speed", type=float, default=0.1)
     parser.add_argument("--learning_rate", type=float, default=1e-3)
     parser.add_argument("--entropy_coefficient", type=float, default=0.01)
+    # the reference trains without empirical normalization; a fresh
+    # normalizer is the identity, so skipping its updates disables it
+    parser.add_argument("--normalize_observations", type=int, default=1)
     parser.add_argument("--num_iterations", type=int, default=10000)
     parser.add_argument("--num_steps", type=int, default=24)
     parser.add_argument("--log_interval", type=int, default=10)
@@ -129,7 +132,9 @@ if __name__ == "__main__":
             parameters = distributed.localize(training.parameters)
             collect_args = state, parameters, normalizers, rollout_key, max_speed  # fmt: skip
             outputs = collect(*collect_args)
-            state, rollout_key, experience, normalizers, metrics = outputs
+            state, rollout_key, experience, updated_normalizers, metrics = outputs  # fmt: skip
+            if args.normalize_observations:
+                normalizers = updated_normalizers
             experience = distributed.shard_experience(mesh, experience)
             training, update_metrics = update(args.seed + iteration, training, experience)  # fmt: skip
             tracking = distributed.global_mean(mesh, metrics.terms[0])
