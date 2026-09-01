@@ -5,16 +5,17 @@ import jax.numpy as jp
 import rewards
 from jax import random as jr
 
-from .common import STATE_FIELDS
+from .common import EPISODE_STEPS, STATE_FIELDS
 from .common import ACTOR_FIELDS, CRITIC_FIELDS
 from .common import StepCounters, Tile
 from .common import build_qpos, build_qvel, build_physics_state
-from .common import sample_joint_velocity, sample_command, sample_push_step
+from .common import sample_command, sample_push_step
 from .common import build_actor_observation, build_critic_observation
 from .common import build_observation_history, compute_local_phase
 from .common import rotate_yaw, rotate_yaw_inverse
 from .common import Transition, apply_scheduled_push, compute_targets
 from .common import compute_gravity, compute_robust_reward, is_fallen
+from .common import discard_diverged, sanitize_diverged
 from .common import read_foot_contact, resample_command, run_physics
 from .common import update_level, update_observation_history
 
@@ -24,21 +25,20 @@ ActorObservation = namedtuple("ActorObservation", ACTOR_FIELDS + ", footstep")  
 CriticObservation = namedtuple("CriticObservation", CRITIC_FIELDS + ", footstep")  # fmt: skip
 
 
-def reset(key, dynamics, level, max_speed, physics_template, origins, feet):  # fmt: skip
-    keys = jr.split(key, 7)
-    column = jr.randint(keys[0], (), 0, origins.shape[1])
+def reset(key, dynamics, level, column, max_speed, physics_template, origins, heights, horizontal_scale, feet):  # fmt: skip
+    # the terrain column is pinned per environment, as in robust.reset
+    keys = jr.split(key, 5)
     origin = origins[level, column]
-    qpos = build_qpos(keys[1], dynamics.qpos0, origin)
+    qpos = build_qpos(keys[0], dynamics.qpos0, origin, heights, horizontal_scale)  # fmt: skip
     num_joints = physics_template.ctrl.shape[0]
-    joint_velocity = sample_joint_velocity(keys[2], num_joints)
-    qvel = build_qvel(physics_template.qvel, joint_velocity)
+    qvel = build_qvel(physics_template.qvel)
     physics_state = build_physics_state(dynamics, physics_template, qpos, qvel)
-    command = sample_command(keys[3], max_speed)
-    push_step = sample_push_step(keys[4], 0)
+    command = sample_command(keys[1], max_speed)
+    push_step = sample_push_step(keys[2], 0)
     phase = compute_local_phase(0)
-    targets = generate_both_targets(keys[5], physics_state, command, feet)
+    targets = generate_both_targets(keys[3], physics_state, command, feet)
     action = jp.zeros(num_joints)
-    history_args = keys[6], physics_state, command, action, targets, phase
+    history_args = keys[4], physics_state, command, action, targets, phase
     history = build_initial_history(*history_args)
     tile = Tile(level, column, origin)
     counters = StepCounters(jp.array(0), jp.array(0), push_step)
@@ -92,22 +92,28 @@ def build_target_term(physics_state, targets, phase, stance_threshold=0.55):
     return jp.concatenate((left, right, gait))
 
 
-def step(key, dynamics, state, action, max_speed, robot, indices, tile_size, max_level, episode_steps=1000):  # fmt: skip
-    keys = jr.split(key, 11)
+def step(key, dynamics, state, action, max_speed, robot, indices, tile_size, max_level, episode_steps=EPISODE_STEPS):  # fmt: skip
+    keys = jr.split(key, 12)
     counters = state.counters
     push_args = keys[0], state.physics_state, counters.episode, counters.push
     pushed, push_step = apply_scheduled_push(*push_args)
-    physics_state = run_physics(dynamics, pushed, compute_targets(action))
+    targets = compute_targets(action)
+    physics_state, sensor_history = run_physics(dynamics, pushed, targets)
+    physics_state, diverged = sanitize_diverged(physics_state, dynamics)
     episode = counters.episode + 1
     phase = compute_local_phase(episode)
-    feet_args = keys[3:], physics_state, state, phase, robot, indices
+    feet_args = keys[3:11], physics_state, sensor_history, state, phase, robot, indices  # fmt: skip
     feet = update_feet(*feet_args)
-    reward_args = physics_state, state, action, robot, indices, episode
+    reward_args = physics_state, sensor_history, state, action, robot, indices, episode  # fmt: skip
     reward, terms = compute_robust_reward(*reward_args)
+    diverged, reward, terms = discard_diverged(diverged, reward, terms)
     bonus = compute_touchdown_bonus(physics_state, state, feet, robot)
+    bonus = jp.where(diverged, 0.0, bonus)
     command_args = keys[1], state.command, counters.command + 1, max_speed
     command, command_step = resample_command(*command_args)
     term = build_target_term(physics_state, feet.targets, phase)
+    # foot targets come from xpos, which sanitize_diverged does not cover
+    term = jp.where(diverged, jp.zeros_like(term), term)
     history_args = keys[2], physics_state, command, action, term
     history = update_observation_history(state.history, *build_observations(*history_args))  # fmt: skip
     counters = StepCounters(episode, command_step, push_step)
@@ -115,10 +121,12 @@ def step(key, dynamics, state, action, max_speed, robot, indices, tile_size, max
     state_args = physics_state, history, state.tile, counters, command
     state = State(*state_args, reward_sum, feet)
     gravity = compute_gravity(physics_state.qpos[3:7])
-    timeout = episode >= episode_steps
-    done = is_fallen(physics_state, gravity) | timeout
-    level = update_level(state, tile_size, max_level)
-    return state, Transition(reward + bonus, done, timeout, level, terms)
+    timeout = (episode >= episode_steps) & ~diverged
+    done = is_fallen(physics_state, gravity) | timeout | diverged
+    fresh_level = update_level(keys[11], state, tile_size, max_level)
+    level = jp.where(diverged, state.tile.level, fresh_level)
+    transition = Transition(reward + bonus, done, timeout, level, terms, diverged)  # fmt: skip
+    return state, transition
 
 
 def build_observations(key, physics_state, command, action, term):
@@ -127,8 +135,8 @@ def build_observations(key, physics_state, command, action, term):
     return ActorObservation(*actor, term), CriticObservation(*critic, term)
 
 
-def update_feet(keys, physics_state, state, phase, robot, indices, control_step=0.02):  # fmt: skip
-    contact = read_foot_contact(physics_state, indices.foot_forces)
+def update_feet(keys, physics_state, sensor_history, state, phase, robot, indices, control_step=0.02):  # fmt: skip
+    contact = read_foot_contact(sensor_history, indices.foot_forces)
     air_time = jp.where(contact, 0.0, state.feet.air_time + control_step)
     target_args = keys, physics_state, state, phase, robot.contact_bodies
     targets, switch_phase = update_targets(*target_args)

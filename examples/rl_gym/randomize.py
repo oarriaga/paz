@@ -1,11 +1,11 @@
-from functools import partial
 import paz
 
 import jax
+import jax.numpy as jp
 from jax import random as jr
 
 
-def physics(keys, model, num_joints=29, torso_arg=16):
+def physics(keys, model, num_joints, torso_arg):
 
     def build_model_in_axes(model):
         model_in_axes = jax.tree.map(lambda _: None, model)
@@ -23,6 +23,7 @@ def get_randomized_fields():
         "geom_friction",
         "geom_solref",
         "body_mass",
+        "body_inertia",
         "body_ipos",
         "actuator_gainprm",
         "actuator_biasprm",
@@ -32,17 +33,19 @@ def get_randomized_fields():
 
 
 def physics_model(key, model, num_joints, torso_arg):
-    keys = jr.split(key, 8)
+    keys = jr.split(key, 9)
     gain = actuator_gain(keys[4], model, num_joints)
     damping = actuator_velocity_damping(keys[5], model, num_joints)
+    body_mass = mass(keys[2], payload(keys[8], model, torso_arg))
     randomizations = [
         friction(keys[0], model),
         contact_damping_ratio(keys[1], model),
-        mass(keys[2], model),
+        body_mass,
+        scale_inertia(model, body_mass),
         torso_CoM(keys[3], model, torso_arg),
         build_actuator_gainprm(model, gain),
         build_actuator_biasprm(model, gain, damping),
-        joint_dry_friction(keys[6], model, num_joints),
+        joint_dry_friction(keys[6], model),
         armature(keys[7], model, num_joints),
     ]
     return dict(zip(get_randomized_fields(), randomizations))
@@ -58,9 +61,20 @@ def contact_damping_ratio(key, model, minval=0.9, maxval=1.0):
     return model.geom_solref.at[:, 1].set(damping_ratio)
 
 
-def mass(key, model, minval=0.9, maxval=1.1):
-    scale = jr.uniform(key, (model.nbody,), minval=minval, maxval=maxval)
-    return model.body_mass * scale
+def payload(key, model, torso_arg, minval=-1.0, maxval=3.0):
+    added = jr.uniform(key, (), minval=minval, maxval=maxval)
+    return model.body_mass.at[torso_arg].add(added)
+
+
+def mass(key, body_mass, minval=0.9, maxval=1.1):
+    scale = jr.uniform(key, body_mass.shape, minval=minval, maxval=maxval)
+    return body_mass * scale
+
+
+def scale_inertia(model, body_mass):
+    # the reference recomputes body inertia with the randomized mass
+    scale = body_mass / jp.maximum(model.body_mass, 1e-9)
+    return model.body_inertia * scale[:, None]
 
 
 def torso_CoM(key, model, torso_arg, minval=-0.03, maxval=0.03):
