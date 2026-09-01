@@ -90,8 +90,9 @@ minor and left as is:
   than IsaacLab's bilinear profile.
 - The waist roll and pitch pivots sit one centimeter apart along z in
   the MJCF where the training URDF makes them coincident; world-frame
-  link geometry and inertials match the URDF exactly (audited per link
-  after correcting the torso, which shipped 1.78 kg heavy).
+  link geometry and inertials match the URDF exactly, audited per link
+  after correcting the torso (shipped 1.78 kg heavy), waist yaw, and
+  waist roll inertials.
 - Non-foot collisions are capsule approximations; the reference carries
   convex mesh hulls on nearly every link, with self-collisions enabled.
   Full parity would exceed the warp per-environment contact budget.

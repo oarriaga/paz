@@ -25,20 +25,20 @@ ActorObservation = namedtuple("ActorObservation", ACTOR_FIELDS + ", footstep")  
 CriticObservation = namedtuple("CriticObservation", CRITIC_FIELDS + ", footstep")  # fmt: skip
 
 
-def reset(key, dynamics, level, max_speed, physics_template, origins, heights, horizontal_scale, feet):  # fmt: skip
-    keys = jr.split(key, 6)
-    column = jr.randint(keys[0], (), 0, origins.shape[1])
+def reset(key, dynamics, level, column, max_speed, physics_template, origins, heights, horizontal_scale, feet):  # fmt: skip
+    # the terrain column is pinned per environment, as in robust.reset
+    keys = jr.split(key, 5)
     origin = origins[level, column]
-    qpos = build_qpos(keys[1], dynamics.qpos0, origin, heights, horizontal_scale)  # fmt: skip
+    qpos = build_qpos(keys[0], dynamics.qpos0, origin, heights, horizontal_scale)  # fmt: skip
     num_joints = physics_template.ctrl.shape[0]
     qvel = build_qvel(physics_template.qvel)
     physics_state = build_physics_state(dynamics, physics_template, qpos, qvel)
-    command = sample_command(keys[2], max_speed)
-    push_step = sample_push_step(keys[3], 0)
+    command = sample_command(keys[1], max_speed)
+    push_step = sample_push_step(keys[2], 0)
     phase = compute_local_phase(0)
-    targets = generate_both_targets(keys[4], physics_state, command, feet)
+    targets = generate_both_targets(keys[3], physics_state, command, feet)
     action = jp.zeros(num_joints)
-    history_args = keys[5], physics_state, command, action, targets, phase
+    history_args = keys[4], physics_state, command, action, targets, phase
     history = build_initial_history(*history_args)
     tile = Tile(level, column, origin)
     counters = StepCounters(jp.array(0), jp.array(0), push_step)

@@ -87,8 +87,10 @@ if __name__ == "__main__":
     num_columns = world.terrain.origins.shape[1]
     columns = jax.random.randint(tile_keys[1], (args.num_envs,), 0, num_columns)  # fmt: skip
     max_speed = jp.asarray(args.initial_max_speed)
-    state = jax.jit(reset)(environment_keys[2], levels, columns, max_speed)
-    state = jax.jit(decorrelate_counters)(environment_keys[3], state)
+    jit_reset = jax.jit(reset)
+    jit_decorrelate = jax.jit(decorrelate_counters)
+    state = jit_reset(environment_keys[2], levels, columns, max_speed)
+    state = jit_decorrelate(environment_keys[3], state)
     rollout_key = environment_keys[4]
     normalizers = build_normalizers(state.history)
     keras.utils.set_random_seed(args.seed)
@@ -109,8 +111,8 @@ if __name__ == "__main__":
         # speed curriculum, with keys advanced past the ones the original
         # run already consumed
         environment_keys = jr.split(jr.fold_in(environment_key, start_iteration), 5)  # fmt: skip
-        state = jax.jit(reset)(environment_keys[2], levels, columns, max_speed)
-        state = jax.jit(decorrelate_counters)(environment_keys[3], state)
+        state = jit_reset(environment_keys[2], levels, columns, max_speed)
+        state = jit_decorrelate(environment_keys[3], state)
         rollout_key = environment_keys[4]
     mesh = distributed.build_mesh()
     update_args = actor, critic, optimizer, mesh.devices.size
