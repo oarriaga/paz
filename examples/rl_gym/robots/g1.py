@@ -26,11 +26,6 @@ def configure(model, simulation_step=0.005):
     # foot penetration 0.6 mm vs Isaac's 0.0 mm, where a softer 0.15
     # spring buries the feet 23 mm and turns the ground to mud
     model.opt.timestep = simulation_step
-    # implicit joint damping mirrors the reference's implicit PD drives:
-    # under identical action noise it cuts peak joint speeds from 19.8
-    # to 13.4 rad/s; an earlier explosion on warp traced to the soft
-    # contact spring, not the integrator
-    model.opt.integrator = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
     model = configure_actuators(model)
     return configure_joints(model)
 
