@@ -104,14 +104,14 @@ def test_soft_limits_shrink_the_range_around_the_midpoint():
 
 
 def test_scheduled_push_adds_to_the_current_velocity():
-    qvel = jp.zeros(9).at[0].set(0.4)
+    qvel = jp.zeros(9).at[0].set(0.4).at[2].set(-0.2).at[5].set(0.78)
     physics_state = FakePhysics(jp.zeros(9), qvel)
     args = jr.key(0), physics_state, jp.asarray(10), jp.asarray(5)
     pushed, next_push = common.apply_scheduled_push(*args)
     kick = float(pushed.qvel[0]) - 0.4
-    assert kick != 0.0 and abs(kick) <= 0.5
-    assert float(jp.abs(pushed.qvel[2])) == 0.0
-    assert float(jp.abs(pushed.qvel[5])) <= 0.78
+    assert kick != 0.0 and abs(kick) <= 1.0
+    assert float(pushed.qvel[2]) == -0.2
+    assert float(pushed.qvel[5]) == 0.78
     assert int(next_push) > 10
     args = jr.key(0), physics_state, jp.asarray(3), jp.asarray(5)
     unpushed, same_push = common.apply_scheduled_push(*args)

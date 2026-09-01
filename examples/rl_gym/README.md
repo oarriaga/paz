@@ -64,8 +64,6 @@ the training log counts these events.
 
 ## Deliberate differences from the reference implementation
 
-- Experience is reshuffled every epoch; rsl_rl draws one permutation per
-  update and reuses it across epochs.
 - The action noise is learned directly as in rsl_rl, but read through a
   small positive floor; without it a negative deviation is a documented
   crash source. A log parameterization was tried and rejected: it shrank

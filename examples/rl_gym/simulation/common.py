@@ -168,13 +168,13 @@ PUSH_SPEED = 1.0
 
 
 def apply_scheduled_push(key, physics_state, episode_step, push_step):
-    # the reference overwrites the planar velocity and zeroes the vertical
-    # and angular rates, as in IsaacLab's push_by_setting_velocity
+    # the reference adds the sampled kick to the current planar velocity
+    # and leaves the vertical and angular rates untouched
     keys = jr.split(key, 2)
     kick = jr.uniform(keys[0], (2,), minval=-PUSH_SPEED, maxval=PUSH_SPEED)
     pushing = episode_step >= push_step
-    pushed = jp.concatenate([kick, jp.zeros(4)])
-    qvel = physics_state.qvel.at[:6].set(jp.where(pushing, pushed, physics_state.qvel[:6]))  # fmt: skip
+    planar = physics_state.qvel[:2] + jp.where(pushing, kick, 0.0)
+    qvel = physics_state.qvel.at[:2].set(planar)
     next_push = sample_push_step(keys[1], episode_step)
     push_step = jp.where(pushing, next_push, push_step)
     return physics_state.replace(qvel=qvel), push_step

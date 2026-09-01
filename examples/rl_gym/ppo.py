@@ -24,14 +24,14 @@ def build_update(actor, critic, optimizer, num_shards=1, num_epochs=5, num_batch
     def update(seed, state, experience):
         run_batch = partial(apply_batch, actor, critic, optimizer, entropy_weight)  # fmt: skip
         experience = split_shards(experience, num_shards)
+        # as in rsl_rl, one permutation per update, reused every epoch
+        shuffled = shuffle_shards(jr.key(seed), experience)
+        batches = split_batches(shuffled, num_batches)
 
-        def run_epoch(state, key):
-            shuffled = shuffle_shards(key, experience)
-            batches = split_batches(shuffled, num_batches)
+        def run_epoch(state, _):
             return jax.lax.scan(run_batch, state, batches)
 
-        keys = jr.split(jr.key(seed), num_epochs)
-        state, metrics = jax.lax.scan(run_epoch, state, keys)
+        state, metrics = jax.lax.scan(run_epoch, state, None, num_epochs)
         return state, jax.tree.map(jp.mean, metrics)
 
     return jax.jit(update)
