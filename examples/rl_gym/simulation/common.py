@@ -19,7 +19,7 @@ CriticObservation = namedtuple("CriticObservation", CRITIC_FIELDS)
 Tile = namedtuple("Tile", "level, column, origin")
 StepCounters = namedtuple("StepCounters", "episode, command, push")
 Command = namedtuple("Command", "forward, sideways, turn")
-Transition = namedtuple("Transition", "reward, done, timeout, level, terms")  # fmt: skip
+Transition = namedtuple("Transition", "reward, done, timeout, level, terms, diverged")  # fmt: skip
 
 
 def build_qpos(key, qpos, origin, spawn_height=0.8):
@@ -148,6 +148,25 @@ def apply_scheduled_push(key, physics_state, episode_step, push_step):
     next_push = sample_push_step(keys[1], episode_step)
     push_step = jp.where(pushing, next_push, push_step)
     return physics_state.replace(qvel=qvel), push_step
+
+
+def discard_divergence(physics_state, reward, terms):
+    # a non-finite state or an unreachable reward is a solver failure, not
+    # an outcome: the step is scored zero and ends the episode without a
+    # bootstrap
+    diverged = detect_divergence(physics_state, reward)
+    reward = jp.where(diverged, 0.0, reward)
+    return diverged, reward, jp.where(diverged, 0.0, terms)
+
+
+def detect_divergence(physics_state, reward, reward_bound=10.0):
+    # healthy steps stay within -0.25..0.06 over millions of samples, while
+    # a joint kicked past its limit sends the action-rate term to -100..-700
+    # once in ~2M steps, enough to poison the value targets of a whole update
+    finite_qpos = jp.all(jp.isfinite(physics_state.qpos))
+    finite_qvel = jp.all(jp.isfinite(physics_state.qvel))
+    plausible = jp.isfinite(reward) & (jp.abs(reward) <= reward_bound)
+    return ~(finite_qpos & finite_qvel & plausible)
 
 
 def run_physics(dynamics, physics_state, targets, decimation=4):

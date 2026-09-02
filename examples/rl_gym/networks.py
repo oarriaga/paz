@@ -61,11 +61,18 @@ def dense_layer(inputs, units, activation, name):
 
 
 def PPO(actor_shapes, critic_shapes, num_actions=29):
-    actor = Actor(actor_shapes)
+    actor = Actor(actor_shapes, num_actions)
     critic = Critic(critic_shapes)
-    # TODO why do we have stdv?
+    # the exploration noise is state independent and learned directly, as
+    # in the reference implementation; read_stdv guards its positivity
     stdv = keras.Variable(jp.ones(num_actions), name="stdv")
     return actor, critic, stdv
+
+
+def read_stdv(parameters, floor=1e-2):
+    # the floor keeps the action distribution valid if the optimizer ever
+    # drives the learned deviation to zero or below
+    return jp.maximum(parameters.stdv, floor)
 
 
 def call_actor(actor, actor_parameters, observations):
@@ -77,7 +84,6 @@ def call_actor(actor, actor_parameters, observations):
 def call_critic(critic, critic_parameters, observations):
     inputs = list(observations)
     outputs, _ = critic.stateless_call(critic_parameters, [], inputs)
-    # TODO why do we squeeze?
     return jp.squeeze(outputs, axis=-1)
 
 

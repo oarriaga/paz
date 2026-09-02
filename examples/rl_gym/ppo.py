@@ -10,6 +10,7 @@ from jax import random as jr
 from networks import call_actor
 from networks import call_critic
 from networks import pack_parameters
+from networks import read_stdv
 from networks import unpack_parameters
 
 Experience = namedtuple("Experience", "actor_observation, critic_observation, action, log_probability, mean, stdv, value, value_target, advantage")  # fmt: skip
@@ -93,15 +94,16 @@ def clip_gradients(gradients, max_gradient_norm=1.0, epsilon=1e-6):
 
 def compute_loss(actor, critic, variables, batch, clip_ratio=0.2, value_weight=1.0, entropy_weight=0.01):  # fmt: skip
     parameters = unpack_parameters(variables)
+    stdv = read_stdv(parameters)
     mean = call_actor(actor, parameters.actor, batch.actor_observation)
     values = call_critic(critic, parameters.critic, batch.critic_observation)
-    log_prob = compute_normal_logprob(batch.action, mean, parameters.stdv)
+    log_prob = compute_normal_logprob(batch.action, mean, stdv)
     policy_loss = compute_policy_loss(log_prob, batch, clip_ratio)
     value_loss = compute_value_loss(values, batch, clip_ratio)
-    entropy = jp.mean(normal_entropy(parameters.stdv))
+    entropy = jp.mean(normal_entropy(stdv))
     weighted_value = value_weight * value_loss
     loss = policy_loss + weighted_value - (entropy_weight * entropy)
-    KL = compute_KL(mean, parameters.stdv, batch.mean, batch.stdv)
+    KL = compute_KL(mean, stdv, batch.mean, batch.stdv)
     return loss, LossTerms(policy_loss, value_loss, entropy, KL)
 
 

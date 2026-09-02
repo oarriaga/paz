@@ -13,6 +13,7 @@ from .common import build_actor_observation, build_critic_observation
 from .common import build_observation_history
 from .common import Transition, apply_scheduled_push, compute_targets
 from .common import compute_gravity, compute_robust_reward, is_fallen
+from .common import discard_divergence
 from .common import resample_command, run_physics, update_level
 from .common import update_observation_history
 
@@ -77,6 +78,7 @@ def step(key, dynamics, state, action, max_speed, robot, indices, tile_size, max
     episode = counters.episode + 1
     reward_args = physics_state, sensor_history, state, action, robot, indices, episode  # fmt: skip
     reward, terms = compute_robust_reward(*reward_args)
+    diverged, reward, terms = discard_divergence(physics_state, reward, terms)
     command_args = keys[1], state.command, counters.command + 1, max_speed
     command, command_step = resample_command(*command_args)
     actor = build_actor_observation(keys[2], physics_state, command, action)
@@ -88,7 +90,7 @@ def step(key, dynamics, state, action, max_speed, robot, indices, tile_size, max
     state = State(*state_args, reward_sum)
     gravity = compute_gravity(physics_state.qpos[3:7])
     fallen = is_fallen(physics_state, gravity)
-    timeout = episode >= episode_steps
+    timeout = (episode >= episode_steps) & ~diverged
     level = update_level(keys[3], state, tile_size, max_level)
-    done = fallen | timeout
-    return state, Transition(reward, done, timeout, level, terms)
+    done = fallen | timeout | diverged
+    return state, Transition(reward, done, timeout, level, terms, diverged)

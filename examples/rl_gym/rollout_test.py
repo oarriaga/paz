@@ -66,3 +66,30 @@ def test_compute_metrics_reports_episode_length_and_level():
     assert np.isclose(float(metrics.episode_return), 12.0 / 3.0)
     assert np.isclose(float(metrics.episode_length), 6.0 / 3.0)
     assert np.isclose(float(metrics.level), 2.0)
+
+
+def test_bootstrap_keeps_a_diverged_value_out_of_the_reward():
+    Parameters = namedtuple("Parameters", "critic")
+    History = namedtuple("History", "critic")
+    State = namedtuple("State", "history")
+    Transition = namedtuple("Transition", "reward, timeout")
+
+    def critic_call(critic, parameters, observation):
+        return observation
+
+    original = rollout.call_critic
+    rollout.call_critic = critic_call
+    try:
+        state = State(History(jp.array([jp.nan, 3.0])))
+        transition = Transition(jp.array([0.0, 1.0]), jp.array([0.0, 1.0]))
+        args = None, Parameters(None), state, transition, 0.99
+        rewards = rollout.bootstrap(*args)
+    finally:
+        rollout.call_critic = original
+    assert np.allclose(np.asarray(rewards), [0.0, 1.0 + 0.99 * 3.0], atol=1e-4)  # fmt: skip
+
+
+def test_compute_metrics_counts_divergences():
+    diverged = jp.array([[0.0, 1.0, 0.0], [1.0, 0.0, 0.0]])
+    metrics = rollout.compute_metrics(build_rollout(diverged=diverged))
+    assert int(metrics.divergences) == 2

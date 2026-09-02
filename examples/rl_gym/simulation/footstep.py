@@ -15,6 +15,7 @@ from .common import build_observation_history, compute_local_phase
 from .common import rotate_yaw, rotate_yaw_inverse
 from .common import Transition, apply_scheduled_push, compute_targets
 from .common import compute_gravity, compute_robust_reward, is_fallen
+from .common import discard_divergence
 from .common import read_foot_contact, resample_command, run_physics
 from .common import update_level, update_observation_history
 
@@ -104,6 +105,9 @@ def step(key, dynamics, state, action, max_speed, robot, indices, tile_size, max
     reward_args = physics_state, sensor_history, state, action, robot, indices, episode  # fmt: skip
     reward, terms = compute_robust_reward(*reward_args)
     bonus = compute_touchdown_bonus(physics_state, state, feet, robot)
+    total = reward + bonus
+    diverged, reward, terms = discard_divergence(physics_state, total, terms)
+    bonus = jp.where(diverged, 0.0, bonus)
     command_args = keys[1], state.command, counters.command + 1, max_speed
     command, command_step = resample_command(*command_args)
     term = build_target_term(physics_state, feet.targets, phase)
@@ -114,10 +118,11 @@ def step(key, dynamics, state, action, max_speed, robot, indices, tile_size, max
     state_args = physics_state, history, state.tile, counters, command
     state = State(*state_args, reward_sum, feet)
     gravity = compute_gravity(physics_state.qpos[3:7])
-    timeout = episode >= episode_steps
-    done = is_fallen(physics_state, gravity) | timeout
+    timeout = (episode >= episode_steps) & ~diverged
+    done = is_fallen(physics_state, gravity) | timeout | diverged
     level = update_level(keys[11], state, tile_size, max_level)
-    return state, Transition(reward + bonus, done, timeout, level, terms)
+    transition = reward + bonus, done, timeout, level, terms, diverged
+    return state, Transition(*transition)
 
 
 def build_observations(key, physics_state, command, action, term):

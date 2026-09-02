@@ -96,3 +96,21 @@ def test_update_history_appends_newest_last():
     updated = common.update_history(history, Observation(jp.ones(2)))
     assert np.allclose(np.asarray(updated.term[-1]), 1.0)
     assert np.allclose(np.asarray(updated.term[:-1]), 0.0)
+
+
+def test_detect_divergence_flags_non_finite_states_and_rewards():
+    healthy = FakePhysics(jp.ones(9), jp.ones(9))
+    assert not bool(common.detect_divergence(healthy, jp.asarray(0.7)))
+    poisoned = FakePhysics(jp.ones(9).at[1].set(jp.nan), jp.zeros(9))
+    assert bool(common.detect_divergence(poisoned, jp.asarray(0.0)))
+    exploding = FakePhysics(jp.ones(9), jp.zeros(9).at[1].set(jp.inf))
+    assert bool(common.detect_divergence(exploding, jp.asarray(0.0)))
+    assert bool(common.detect_divergence(healthy, jp.asarray(jp.nan)))
+
+
+def test_detect_divergence_flags_unreachable_rewards():
+    # a joint kicked far past its limit sends the action-rate term to
+    # hundreds while the state itself still looks legal
+    healthy = FakePhysics(jp.ones(9), jp.ones(9))
+    assert bool(common.detect_divergence(healthy, jp.asarray(-679.0)))
+    assert not bool(common.detect_divergence(healthy, jp.asarray(-0.25)))
