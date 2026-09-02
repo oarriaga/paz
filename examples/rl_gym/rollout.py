@@ -29,7 +29,7 @@ def build_collect(actor, critic, reset, step, num_steps=24, gamma=0.99):
             state, transition = step(keys[2], state, action, max_speed)
             reward_sum = state.reward_sum
             reward = bootstrap(critic, parameters, state, transition, gamma)
-            fresh = reset(keys[3], transition.level, max_speed)
+            fresh = reset(keys[3], transition.level, state.tile.column, max_speed)  # fmt: skip
             state = select_done(transition.done, fresh, state)
             stdv = jp.broadcast_to(parameters.stdv, mean.shape)
             done = transition.done.astype(jp.float32)

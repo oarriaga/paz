@@ -32,14 +32,6 @@ def build_qpos(key, qpos, origin, spawn_height=0.8):
     return qpos.at[7:].set(DEFAULT_ANGLES)
 
 
-def sample_joint_velocity(key, num_joints):
-    return jr.uniform(key, (num_joints,), minval=-1.0, maxval=1.0)
-
-
-def build_qvel(qvel, joint_velocity):
-    return jp.zeros_like(qvel).at[6:].set(joint_velocity)
-
-
 def build_physics_state(dynamics, physics_template, qpos, qvel):
     fields = dict(qpos=qpos, qvel=qvel, ctrl=DEFAULT_ANGLES)
     return mjx.forward(dynamics, physics_template.replace(**fields))
@@ -147,10 +139,11 @@ def compute_targets(action, action_scale=0.25):
 
 
 def apply_scheduled_push(key, physics_state, episode_step, push_step):
+    # the reference adds the sampled kick to the current planar velocity
     keys = jr.split(key, 2)
-    velocity = jr.uniform(keys[0], (2,), minval=-1.0, maxval=1.0)
+    kick = jr.uniform(keys[0], (2,), minval=-1.0, maxval=1.0)
     pushing = episode_step >= push_step
-    planar = jp.where(pushing, velocity, physics_state.qvel[:2])
+    planar = physics_state.qvel[:2] + jp.where(pushing, kick, 0.0)
     qvel = physics_state.qvel.at[:2].set(planar)
     next_push = sample_push_step(keys[1], episode_step)
     push_step = jp.where(pushing, next_push, push_step)
@@ -158,13 +151,15 @@ def apply_scheduled_push(key, physics_state, episode_step, push_step):
 
 
 def run_physics(dynamics, physics_state, targets, decimation=4):
+    # the sensor history over the substeps feeds the contact detection,
+    # which the reference pools over the last three physics steps
 
     def advance(physics_state, _):
-        return mjx.step(dynamics, physics_state.replace(ctrl=targets)), None
+        stepped = mjx.step(dynamics, physics_state.replace(ctrl=targets))
+        return stepped, stepped.sensordata
 
     args = advance, physics_state, None
-    physics_state, _ = jax.lax.scan(*args, length=decimation)
-    return physics_state
+    return jax.lax.scan(*args, length=decimation)
 
 
 def update_observation_history(history, actor, critic):
@@ -188,9 +183,13 @@ def resample_command(key, command, command_step, max_speed, period=500):
     return Command(*values), jp.where(resample, 0, command_step)
 
 
-def read_foot_contact(physics_state, force_addresses):
-    force = physics_state.sensordata[force_addresses].reshape(2, 4, 3)
-    return jp.any(jp.linalg.norm(force, axis=-1) > 0.0, axis=-1)
+def read_foot_contact(sensor_history, force_addresses, threshold=1.0, history=3):  # fmt: skip
+    # the reference thresholds the net foot force at one newton and pools
+    # it over the last three physics substeps
+    force = sensor_history[-history:, force_addresses].reshape(history, 2, 4, 3)  # fmt: skip
+    net = jp.sum(force, axis=2)
+    contact = jp.linalg.norm(net, axis=-1) > threshold
+    return jp.any(contact, axis=0)
 
 
 def read_foot_velocities(physics_state, velocity_addresses):
@@ -211,20 +210,26 @@ def is_fallen(physics_state, gravity, min_height=0.2, max_tilt=0.8):
     return (physics_state.qpos[2] < min_height) | tilted
 
 
-def update_level(state, tile_size, max_level, episode_seconds=20.0):
+def update_level(key, state, tile_size, max_level, episode_seconds=20.0):
     travelled = state.physics_state.qpos[:2] - state.tile.origin[:2]
     distance = jp.linalg.norm(travelled)
     promote = distance > tile_size / 2
     speed = jp.linalg.norm(jp.stack(state.command)[:2])
     demote = (distance < speed * episode_seconds * 0.5) & ~promote
     level = state.tile.level + promote.astype(jp.int32)
+    # environments promoted past the top respawn at a random level, as in
+    # the reference, instead of piling up at the hardest tiles
+    random_level = jr.randint(key, (), 0, max_level + 1)
+    level = jp.where(level > max_level, random_level, level)
     return jp.clip(level - demote.astype(jp.int32), 0, max_level)
 
 
-def compute_robust_reward(physics_state, state, action, robot, indices, step):
+def compute_robust_reward(physics_state, sensor_history, state, action, robot, indices, step):  # fmt: skip
     command = jp.stack(state.command)
     quaternion = physics_state.qpos[3:7]
     gravity = compute_gravity(quaternion)
+    # the reference pays no alive reward on the step a fall terminates
+    alive = 1.0 - is_fallen(physics_state, gravity).astype(jp.float32)
     linear = rotate_inverse(quaternion, physics_state.qvel[:3])
     yaw_linear = rotate_yaw_inverse(quaternion, physics_state.qvel[:3])
     angular = physics_state.qvel[3:6]
@@ -233,9 +238,9 @@ def compute_robust_reward(physics_state, state, action, robot, indices, step):
     base = rewards.compute_base_terms(*base_args)
     joint_args = read_joint_arguments(physics_state, state.physics_state, action, robot, indices)  # fmt: skip
     joint = rewards.compute_joint_terms(*joint_args)
-    feet_args = read_foot_arguments(physics_state, robot, indices, step, command)  # fmt: skip
-    feet = rewards.compute_foot_terms(*feet_args)
-    return rewards.compute_reward(tracking, joint, base, feet)
+    feet_args = physics_state, sensor_history, robot, indices, step, command
+    feet = rewards.compute_foot_terms(*read_foot_arguments(*feet_args))
+    return rewards.compute_reward(tracking, joint, base, feet, alive)
 
 
 def read_joint_arguments(physics_state, previous, action, robot, indices, control_step=0.02):  # fmt: skip
@@ -244,11 +249,21 @@ def read_joint_arguments(physics_state, previous, action, robot, indices, contro
     accelerations = (velocities - previous.qvel[6:]) / control_step
     torque = physics_state.actuator_force
     last_action = read_action(previous)
-    return positions, velocities, accelerations, torque, action, last_action, DEFAULT_ANGLES, robot.joint_limits, indices  # fmt: skip
+    limits = compute_soft_limits(robot.joint_limits)
+    return positions, velocities, accelerations, torque, action, last_action, DEFAULT_ANGLES, limits, indices  # fmt: skip
 
 
-def read_foot_arguments(physics_state, robot, indices, step, command):
-    contact = read_foot_contact(physics_state, indices.foot_forces)
+def compute_soft_limits(limits, factor=0.9):
+    # the reference penalizes crossing 90% of the joint range; against the
+    # hard limits the penalty would never fire
+    lower, upper = limits
+    midpoint = (lower + upper) / 2.0
+    half = (upper - lower) * (factor / 2.0)
+    return midpoint - half, midpoint + half
+
+
+def read_foot_arguments(physics_state, sensor_history, robot, indices, step, command):  # fmt: skip
+    contact = read_foot_contact(sensor_history, indices.foot_forces)
     velocities = read_foot_velocities(physics_state, indices.foot_velocities)
     heights = physics_state.xpos[robot.contact_bodies, 2]
     undesired = count_undesired_contacts(physics_state, indices.other_bodies)

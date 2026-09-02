@@ -134,8 +134,8 @@ def compute_foot_terms(step, contact, velocities, heights, command, undesired): 
     return gait, slip, foot_clearance(heights, velocities), undesired
 
 
-def compute_reward(tracking, joint, base, feet, control_step=0.02):
+def compute_reward(tracking, joint, base, feet, alive, control_step=0.02):
     linear, angular = tracking
     vertical, roll_pitch, tilt, height = base
-    values = jp.array([linear, angular, 1.0, vertical, roll_pitch, *joint, tilt, height, *feet])  # fmt: skip
+    values = jp.array([linear, angular, alive, vertical, roll_pitch, *joint, tilt, height, *feet])  # fmt: skip
     return jp.sum(values * ROBUST_WEIGHTS) * control_step, values

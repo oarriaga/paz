@@ -12,8 +12,6 @@ import jax
 import jax.numpy as jp
 from jax import random as jr
 
-from functools import partial
-
 import curriculum
 import log
 import paz
@@ -24,36 +22,6 @@ from robots.g1 import G1DoF29, build_reward_indices
 from simulation import robust
 from terrain import build as build_terrain
 from world import build as build_world
-
-
-def build_batch_reset(world):
-    axes = 0, None, 0, None, None, None
-    batched = jax.vmap(robust.reset, in_axes=axes)
-    template, origins = world.physics_template, world.terrain.origins
-
-    def reset(key, level, max_speed):
-        keys = jr.split(key, level.shape[0])
-        args = keys, world.dynamics, level, max_speed, template, origins
-        return batched(*args)
-
-    return reset
-
-
-def build_batch_step(world, robot, indices, max_level):
-    kwargs = dict(robot=robot, indices=indices, max_level=max_level)
-    kwargs["tile_size"] = world.terrain.tile_size
-    axes = 0, None, 0, 0, None
-    batched = jax.vmap(partial(robust.step, **kwargs), in_axes=axes)
-
-    def step(key, state, action, max_speed):
-        keys = jr.split(key, action.shape[0])
-        return batched(keys, world.dynamics, state, action, max_speed)
-
-    return step
-
-
-def sample_levels(key, num_envs, max_level):
-    return jax.random.randint(key, (num_envs,), 0, max_level + 1)
 
 
 if __name__ == "__main__":
@@ -81,12 +49,15 @@ if __name__ == "__main__":
     indices = build_reward_indices(robot)
     num_levels = world.terrain.origins.shape[0]
     max_level = min(args.max_level, num_levels - 1)
-    reset = build_batch_reset(world)
-    step = build_batch_step(world, robot, indices, max_level)
-    level_key = jax.random.key(args.seed + 1)
-    levels = sample_levels(level_key, args.num_envs, max_level)
+    reset = robust.build_batch_reset(world, world.dynamics, None)
+    step_args = world, world.dynamics, None, indices, max_level
+    step = robust.build_batch_step(*step_args)
+    tile_keys = jr.split(jax.random.key(args.seed + 1))
+    levels = jr.randint(tile_keys[0], (args.num_envs,), 0, max_level + 1)
+    num_columns = world.terrain.origins.shape[1]
+    columns = jr.randint(tile_keys[1], (args.num_envs,), 0, num_columns)
     max_speed = jp.asarray(args.initial_max_speed)
-    state = jax.jit(reset)(jax.random.key(args.seed), levels, max_speed)
+    state = jax.jit(reset)(jax.random.key(args.seed), levels, columns, max_speed)  # fmt: skip
     actor_shapes = compute_shapes(state.history.actor)
     critic_shapes = compute_shapes(state.history.critic)
     actor, critic, stdv = PPO(actor_shapes, critic_shapes)
