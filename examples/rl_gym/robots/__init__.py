@@ -130,10 +130,10 @@ def select_args(objects, suffix):
     return jp.array(args)
 
 
-def reject_args(objects, suffix):
+def reject_keyword_args(objects, keyword):
     args = []
     for object_ in objects:
-        if not object_.name.endswith(suffix):
+        if keyword not in object_.name:
             args.append(object_.arg)
     return jp.array(args)
 

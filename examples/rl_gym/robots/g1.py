@@ -6,7 +6,7 @@ import mujoco
 import numpy as np
 
 from robots import build as build_robot
-from robots import read_sensor_addresses, reject_args
+from robots import read_sensor_addresses, reject_keyword_args
 
 ASSET_PATH = Path(__file__).parent.parent / "assets/g1_29dof.xml"
 DEFAULT_ANGLES = jp.array([-0.1, 0.0, 0.0, 0.3, -0.2, 0.0, -0.1, 0.0, 0.0, 0.3, -0.2, 0.0, 0.0, 0.0, 0.0, 0.3, 0.25, 0.0, 0.97, 0.15, 0.0, 0.0, 0.3, -0.25, 0.0, 0.97, -0.15, 0.0, 0.0])  # fmt: skip
@@ -34,6 +34,9 @@ def configure_actuators(model):
     model.actuator_forcelimited[:] = 1
     model.actuator_forcerange[:, 0] = -limits
     model.actuator_forcerange[:, 1] = limits
+    # the reference leaves position targets unclipped; without this the
+    # joint-range ctrl clamp also rewrites the last-action observation
+    model.actuator_ctrllimited[:] = 0
     return model
 
 
@@ -58,7 +61,9 @@ def build_reward_indices(robot):
     hips = select_joint_slots(robot.joints, HIP_KEYWORDS)
     forces = read_sensor_addresses(robot.sensors, FOOT_FORCES)
     velocities = read_sensor_addresses(robot.sensors, FOOT_VELOCITIES)
-    other = reject_args(robot.bodies, FOOT_SUFFIX)[1:]
+    # the reference exempts every ankle link, pitch included, from the
+    # undesired contact penalty
+    other = reject_keyword_args(robot.bodies, "ankle")[1:]
     return RewardIndices(arms, waists, hips, forces, velocities, other)
 
 
