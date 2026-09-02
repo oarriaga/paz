@@ -8,22 +8,7 @@ os.environ.setdefault("KERAS_BACKEND", "jax")
 # workspace dominates device memory, so XLA must allocate on demand
 os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
 
-import jax
-import jax.numpy as jp
-from jax import random as jr
-
-import curriculum
-import log
-import paz
-import ppo
-import randomize
-from networks import Optimizer, PPO, compute_shapes, snapshot_parameters
-from rollout import build_collect
-from robots.g1 import G1DoF29, build_reward_indices
-from simulation import robust
-from terrain import build as build_terrain
-from world import build as build_world
-
+import distributed
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -40,8 +25,37 @@ if __name__ == "__main__":
     # constraint rows (njmax) for one environment
     parser.add_argument("--num_contacts", type=int, default=32)
     parser.add_argument("--num_constraints", type=int, default=256)
+    # multi-GPU runs launch one process per GPU, each simulating its own
+    # environments; gradients are averaged globally inside the update
+    parser.add_argument("--num_processes", type=int, default=1)
+    parser.add_argument("--process_id", type=int, default=0)
+    parser.add_argument("--coordinator", default="localhost:9911")
     parser.add_argument("--root", default="experiments")
     args = parser.parse_args()
+    if args.num_processes > 1:
+        initialize_args = args.coordinator, args.num_processes, args.process_id  # fmt: skip
+        distributed.initialize(*initialize_args)
+    # these imports build jax arrays at module scope, so in a multi-GPU
+    # run they must come after the distributed initialization
+    import jax
+    import jax.numpy as jp
+    import keras
+    from jax import random as jr
+
+    import curriculum
+    import log
+    import paz
+    import ppo
+    import randomize
+    from networks import Optimizer, PPO, compute_shapes, snapshot_parameters
+    from rollout import build_collect
+    from robots.g1 import G1DoF29, build_reward_indices
+    from simulation import robust
+    from terrain import build as build_terrain
+    from world import build as build_world
+
+    is_leader = jax.process_index() == 0
+    num_envs = args.num_envs * jax.process_count()
     terrain = build_terrain(args.seed)
     robot = G1DoF29()
     budget = args.num_contacts, args.num_constraints
@@ -50,52 +64,64 @@ if __name__ == "__main__":
     indices = build_reward_indices(robot)
     num_levels = world.terrain.origins.shape[0]
     max_level = min(args.max_level, num_levels - 1)
-    random_keys = jr.split(jax.random.key(args.seed + 3), args.num_envs)
+    environment_key = jr.fold_in(jax.random.key(args.seed), args.process_id)
+    environment_keys = jr.split(environment_key, 4)
+    random_keys = jr.split(environment_keys[0], args.num_envs)
     torso_arg = robot.bodies.torso_link.arg
     randomize_args = random_keys, world.dynamics, robot.num_actuators, torso_arg  # fmt: skip
     dynamics, dynamics_axes = randomize.physics(*randomize_args)
     reset = robust.build_batch_reset(world, dynamics, dynamics_axes)
     step_args = world, dynamics, dynamics_axes, indices, max_level
     step = robust.build_batch_step(*step_args)
-    tile_keys = jr.split(jax.random.key(args.seed + 1))
+    tile_keys = jr.split(environment_keys[1])
     levels = jr.randint(tile_keys[0], (args.num_envs,), 0, max_level + 1)
     num_columns = world.terrain.origins.shape[1]
     columns = jr.randint(tile_keys[1], (args.num_envs,), 0, num_columns)
     max_speed = jp.asarray(args.initial_max_speed)
-    state = jax.jit(reset)(jax.random.key(args.seed), levels, columns, max_speed)  # fmt: skip
+    state = jax.jit(reset)(environment_keys[2], levels, columns, max_speed)
+    rollout_key = environment_keys[3]
+    # every process builds the same initial networks
+    keras.utils.set_random_seed(args.seed)
     actor_shapes = compute_shapes(state.history.actor)
     critic_shapes = compute_shapes(state.history.critic)
     actor, critic, stdv = PPO(actor_shapes, critic_shapes)
     optimizer_args = actor, critic, stdv, args.learning_rate
     optimizer, optimizer_state = Optimizer(*optimizer_args)
-    update = ppo.build_update(actor, critic, optimizer)
+    mesh = distributed.build_mesh()
+    update = ppo.build_update(actor, critic, optimizer, mesh)
     collect = jax.jit(build_collect(actor, critic, reset, step, args.num_steps))  # fmt: skip
     parameters = snapshot_parameters(actor, critic, stdv)
     learning_rate = jp.asarray(args.learning_rate)
     training = ppo.TrainingState(parameters, optimizer_state, learning_rate)
-    rollout_key = jax.random.key(args.seed + 2)
-    root = paz.directory.make_timestamped(args.root, "walk")
-    paz.file.write_json(args.__dict__, Path(root) / "parameters.json")
-    log_file, writer = log.open_log(root)
-    print(f"walking on {args.num_envs} environments")
-    print(f"writing to {root}")
-    print(f"terrain {world.terrain.origins.shape} tiles")
-    print(f"actor parameters {actor.count_params()}")
-    print(f"critic parameters {critic.count_params()}")
+    training = distributed.replicate(mesh, training)
+    if is_leader:
+        root = paz.directory.make_timestamped(args.root, "walk")
+        paz.file.write_json(args.__dict__, Path(root) / "parameters.json")
+        log_file, writer = log.open_log(root)
+        print(f"walking on {num_envs} environments")
+        print(f"writing to {root}")
+        print(f"terrain {world.terrain.origins.shape} tiles")
+        print(f"actor parameters {actor.count_params()}")
+        print(f"critic parameters {critic.count_params()}")
     started = time.perf_counter()
     try:
         for iteration in range(1, args.num_iterations + 1):
-            collect_args = state, training.parameters, rollout_key, max_speed
+            parameters = distributed.localize(training.parameters)
+            collect_args = state, parameters, rollout_key, max_speed
             state, rollout_key, experience, metrics = collect(*collect_args)
+            experience = distributed.shard(mesh, experience)
             training, update_metrics = update(args.seed + iteration, training, experience)  # fmt: skip
-            speed_args = max_speed, metrics.terms[0], metrics.episode_length, iteration  # fmt: skip
+            tracking = distributed.global_mean(metrics.terms[0])
+            episode_length = distributed.global_mean(metrics.episode_length)
+            speed_args = max_speed, tracking, episode_length, iteration
             max_speed = curriculum.update_max_speed(*speed_args, args.num_steps)  # fmt: skip
-            if iteration % args.log_interval == 0:
-                steps = iteration * args.num_envs * args.num_steps
+            if is_leader and iteration % args.log_interval == 0:
+                steps = iteration * num_envs * args.num_steps
                 elapsed = time.perf_counter() - started
                 row_args = iteration, metrics, update_metrics, max_speed
                 row = log.build_row(*row_args, steps, elapsed)
                 log.write_row(writer, log_file, row)
                 log.print_row(row)
     finally:
-        log_file.close()
+        if is_leader:
+            log_file.close()

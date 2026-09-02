@@ -125,3 +125,29 @@ def test_shuffle_permutes_and_split_batches_partitions():
     batches = ppo.split_batches(experience, 2)
     assert batches.action.shape == (2, 4)
     assert np.allclose(np.asarray(batches.action[1]), [4.0, 5.0, 6.0, 7.0])
+
+
+def test_update_runs_on_a_single_shard_mesh():
+    from collections import namedtuple
+
+    import distributed
+    import networks
+
+    Shapes = namedtuple("Shapes", "first")
+    actor, critic, stdv = networks.PPO(Shapes((2, 3)), Shapes((2, 3)), num_actions=2)  # fmt: skip
+    optimizer, optimizer_state = networks.Optimizer(actor, critic, stdv, 1e-3)
+    parameters = networks.snapshot_parameters(actor, critic, stdv)
+    mesh = distributed.build_mesh()
+    update = ppo.build_update(actor, critic, optimizer, mesh)
+    state = ppo.TrainingState(parameters, optimizer_state, jp.asarray(1e-3))
+    keys = jr.split(jr.key(0), 3)
+    observation = Shapes(jr.normal(keys[0], (16, 2, 3)))
+    action = jr.normal(keys[1], (16, 2))
+    fields = dict(actor_observation=observation, critic_observation=observation, action=action, log_probability=jp.zeros(16), mean=jp.zeros((16, 2)), stdv=jp.ones((16, 2)), value=jp.zeros(16), value_target=jr.normal(keys[2], (16,)), advantage=jp.ones(16))  # fmt: skip
+    experience = distributed.shard(mesh, ppo.Experience(**fields))
+    state = distributed.replicate(mesh, state)
+    updated, metrics = update(0, state, experience)
+    assert np.isfinite(float(metrics.loss))
+    assert float(updated.learning_rate) > 0.0
+    changed = np.asarray(updated.parameters.actor[0]) - np.asarray(parameters.actor[0])  # fmt: skip
+    assert np.abs(changed).max() > 0.0

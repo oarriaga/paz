@@ -6,6 +6,7 @@ import jax
 import paz
 import jax.numpy as jp
 from jax import random as jr
+from jax.sharding import PartitionSpec
 
 from networks import call_actor
 from networks import call_critic
@@ -19,7 +20,7 @@ LossTerms = namedtuple("LossTerms", "policy_loss, value_loss, entropy, KL")
 UpdateMetrics = namedtuple("UpdateMetrics", "loss, policy_loss, value_loss, entropy, KL, gradient_norm, learning_rate")  # fmt: skip
 
 
-def build_update(actor, critic, optimizer, num_epochs=5, num_batches=4):
+def build_update(actor, critic, optimizer, mesh, num_epochs=5, num_batches=4):  # fmt: skip
 
     def update(seed, state, experience):
         run_batch = partial(apply_batch, actor, critic, optimizer)
@@ -33,7 +34,13 @@ def build_update(actor, critic, optimizer, num_epochs=5, num_batches=4):
         state, metrics = jax.lax.scan(run_epoch, state, None, num_epochs)
         return state, jax.tree.map(jp.mean, metrics)
 
-    return jax.jit(update)
+    # every process minibatches its own rollout shard and the gradients
+    # and the KL that drives the learning rate are averaged across shards,
+    # as rsl_rl does with one rank per GPU
+    specs = PartitionSpec(), PartitionSpec(), PartitionSpec("shards")
+    outputs = PartitionSpec(), PartitionSpec()
+    sharded = jax.shard_map(update, mesh=mesh, in_specs=specs, out_specs=outputs, check_vma=False)  # fmt: skip
+    return jax.jit(sharded)
 
 
 def shuffle_experience(key, experience):
@@ -58,6 +65,7 @@ def apply_batch(actor, critic, optimizer, state, batch):
     variables = pack_parameters(state.parameters)
     compute_grads = jax.value_and_grad(compute_loss, 2, has_aux=True)
     (loss, metrics), gradients = compute_grads(actor, critic, variables, batch)
+    loss, metrics, gradients = average_shards((loss, metrics, gradients))
     learning_rate = adapt_learning_rate(state.learning_rate, metrics.KL)
     optimizer_state = set_learning_rate(state.optimizer_state, learning_rate)
     gradients, gradient_norm = clip_gradients(gradients)
@@ -67,6 +75,10 @@ def apply_batch(actor, critic, optimizer, state, batch):
     state = TrainingState(parameters, optimizer_state, learning_rate)
     reported = loss, *metrics, gradient_norm, learning_rate
     return state, UpdateMetrics(*reported)
+
+
+def average_shards(values):
+    return jax.tree.map(lambda value: jax.lax.pmean(value, "shards"), values)
 
 
 def adapt_learning_rate(learning_rate, KL, desired_KL=0.01, minimum_rate=1e-5, maximum_rate=1e-2, step=1.5):  # fmt: skip
