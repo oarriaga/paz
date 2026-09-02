@@ -36,6 +36,43 @@ def shift_to_box_origin(points, box):
     return points + jp.array([x_min, y_min])
 
 
+def normalize_keypoints2D(points2D, height, width):
+    image_shape = jp.array([width, height])
+    return (2.0 * points2D / image_shape) - 1.0
+
+
+def denormalize_keypoints2D(points2D, height, width):
+    image_shape = jp.array([width, height])
+    return (points2D + 1.0) / 2.0 * image_shape
+
+
+def rotate_point2D(point2D, rotation_angle):
+    angle = jp.pi * rotation_angle / 180.0
+    sin_angle, cos_angle = jp.sin(angle), jp.cos(angle)
+    x = point2D[0] * cos_angle - point2D[1] * sin_angle
+    y = point2D[0] * sin_angle + point2D[1] * cos_angle
+    return jp.array([x, y])
+
+
+def rotate_keypoints2D(keypoints, angle, center):
+    cos_angle, sin_angle = jp.cos(angle), jp.sin(angle)
+    rotation = jp.array([[cos_angle, -sin_angle], [sin_angle, cos_angle]])
+    return (keypoints - center) @ rotation.T + center
+
+
+def flip_keypoints_left_right(keypoints, width):
+    x, y = jp.split(keypoints, 2, axis=1)
+    return jp.concatenate([width - x, y], axis=1)
+
+
+def translate_keypoints(keypoints, translation):
+    return keypoints + translation
+
+
+def uv_to_vu(keypoints):
+    return keypoints[:, ::-1]
+
+
 def denormalize(keypoints, H, W):
     """Transform nomralized points2D to image UV coordinates i.e.
         [-1, 1] -> [U, V]. UV have maximum values of [W, H] respectively.
