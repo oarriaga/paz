@@ -11,8 +11,8 @@ from ppo import compute_value_targets
 from ppo import sample_actions
 from ppo import standardize_advantages
 
-Rollout = namedtuple("Rollout", "actor_observation, critic_observation, action, log_probability, mean, stdv, value, reward, done, terms, reward_sum")  # fmt: skip
-Metrics = namedtuple("Metrics", "reward, episode_return, terms")
+Rollout = namedtuple("Rollout", "actor_observation, critic_observation, action, log_probability, mean, stdv, value, reward, done, terms, reward_sum, level")  # fmt: skip
+Metrics = namedtuple("Metrics", "reward, episode_return, terms, level, episode_length")  # fmt: skip
 
 
 def build_collect(actor, critic, reset, step, num_steps=24, gamma=0.99):
@@ -33,7 +33,7 @@ def build_collect(actor, critic, reset, step, num_steps=24, gamma=0.99):
             state = select_done(transition.done, fresh, state)
             stdv = jp.broadcast_to(parameters.stdv, mean.shape)
             done = transition.done.astype(jp.float32)
-            step_args = history.actor, history.critic, action, log_probability, mean, stdv, value, reward, done, transition.terms, reward_sum  # fmt: skip
+            step_args = history.actor, history.critic, action, log_probability, mean, stdv, value, reward, done, transition.terms, reward_sum, state.tile.level  # fmt: skip
             return (state, keys[0]), Rollout(*step_args)
 
         (state, key), rollout = jax.lax.scan(advance, (state, key), None, length=num_steps)  # fmt: skip
@@ -83,4 +83,6 @@ def compute_metrics(rollout):
     total_return = jp.sum(rollout.reward_sum * rollout.done)
     episode_return = total_return / jp.maximum(completed, 1.0)
     terms = jp.mean(rollout.terms, axis=(0, 1))
-    return Metrics(jp.mean(rollout.reward), episode_return, terms)
+    level = jp.mean(rollout.level.astype(jp.float32))
+    episode_length = rollout.done.size / jp.maximum(completed, 1.0)
+    return Metrics(jp.mean(rollout.reward), episode_return, terms, level, episode_length)  # fmt: skip

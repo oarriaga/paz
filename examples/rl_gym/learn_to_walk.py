@@ -87,10 +87,9 @@ if __name__ == "__main__":
         for iteration in range(1, args.num_iterations + 1):
             collect_args = state, training.parameters, rollout_key, max_speed
             state, rollout_key, experience, metrics = collect(*collect_args)
-            update_key = jax.random.key(args.seed + iteration)
-            training, update_metrics = update(update_key, training, experience)
-            speed_args = max_speed, metrics.terms[0], iteration
-            max_speed = curriculum.update_max_speed(*speed_args)
+            training, update_metrics = update(args.seed + iteration, training, experience)  # fmt: skip
+            speed_args = max_speed, metrics.terms[0], metrics.episode_length, iteration  # fmt: skip
+            max_speed = curriculum.update_max_speed(*speed_args, args.num_steps)  # fmt: skip
             if iteration % args.log_interval == 0:
                 steps = iteration * args.num_envs * args.num_steps
                 elapsed = time.perf_counter() - started

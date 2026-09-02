@@ -20,15 +20,16 @@ UpdateMetrics = namedtuple("UpdateMetrics", "loss, policy_loss, value_loss, entr
 
 def build_update(actor, critic, optimizer, num_epochs=5, num_batches=4):
 
-    def update(key, state, experience):
+    def update(seed, state, experience):
         run_batch = partial(apply_batch, actor, critic, optimizer)
+        # as in rsl_rl, one permutation per update, reused every epoch
+        shuffled = shuffle_experience(jr.key(seed), experience)
+        batches = split_batches(shuffled, num_batches)
 
-        def run_epoch(state, key):
-            shuffled = shuffle_experience(key, experience)
-            batches = split_batches(shuffled, num_batches)
+        def run_epoch(state, _):
             return jax.lax.scan(run_batch, state, batches)
 
-        state, metrics = jax.lax.scan(run_epoch, state, jr.split(key, num_epochs))  # fmt: skip
+        state, metrics = jax.lax.scan(run_epoch, state, None, num_epochs)
         return state, jax.tree.map(jp.mean, metrics)
 
     return jax.jit(update)
