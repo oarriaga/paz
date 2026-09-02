@@ -16,6 +16,7 @@ import curriculum
 import log
 import paz
 import ppo
+import randomize
 from networks import Optimizer, PPO, compute_shapes, snapshot_parameters
 from rollout import build_collect
 from robots.g1 import G1DoF29, build_reward_indices
@@ -49,8 +50,12 @@ if __name__ == "__main__":
     indices = build_reward_indices(robot)
     num_levels = world.terrain.origins.shape[0]
     max_level = min(args.max_level, num_levels - 1)
-    reset = robust.build_batch_reset(world, world.dynamics, None)
-    step_args = world, world.dynamics, None, indices, max_level
+    random_keys = jr.split(jax.random.key(args.seed + 3), args.num_envs)
+    torso_arg = robot.bodies.torso_link.arg
+    randomize_args = random_keys, world.dynamics, robot.num_actuators, torso_arg  # fmt: skip
+    dynamics, dynamics_axes = randomize.physics(*randomize_args)
+    reset = robust.build_batch_reset(world, dynamics, dynamics_axes)
+    step_args = world, dynamics, dynamics_axes, indices, max_level
     step = robust.build_batch_step(*step_args)
     tile_keys = jr.split(jax.random.key(args.seed + 1))
     levels = jr.randint(tile_keys[0], (args.num_envs,), 0, max_level + 1)
