@@ -4,6 +4,9 @@ import time
 from pathlib import Path
 
 os.environ.setdefault("KERAS_BACKEND", "jax")
+# the warp physics allocator lives outside XLA's pool and its solver
+# workspace dominates device memory, so XLA must allocate on demand
+os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
 
 import jax
 import jax.numpy as jp
@@ -64,10 +67,10 @@ if __name__ == "__main__":
     parser.add_argument("--num_iterations", type=int, default=10000)
     parser.add_argument("--num_steps", type=int, default=24)
     parser.add_argument("--log_interval", type=int, default=10)
-    # mujoco naconmax and njmax, budgets for the whole batch not one
-    # environment, so both are multiplied by num_envs
+    # mujoco warp budgets contacts (naconmax) for the whole batch and
+    # constraint rows (njmax) for one environment
     parser.add_argument("--num_contacts", type=int, default=32)
-    parser.add_argument("--num_constraints", type=int, default=32)
+    parser.add_argument("--num_constraints", type=int, default=256)
     parser.add_argument("--root", default="experiments")
     args = parser.parse_args()
     terrain = build_terrain(args.seed)

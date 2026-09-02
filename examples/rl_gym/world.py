@@ -8,7 +8,7 @@ from terrain import add_heightfield
 World = namedtuple("World", "robot, dynamics, physics_template, terrain")
 
 
-def build(robot, terrain, backend, num_envs, num_contacts=32, num_constraints=32):  # fmt: skip
+def build(robot, terrain, backend, num_envs, num_contacts=32, num_constraints=256):  # fmt: skip
     mjmodel = build_mjmodel(robot, terrain)
     dynamics = mjx.put_model(mjmodel, impl=backend)
     template_args = mjmodel, backend, num_envs, num_contacts, num_constraints
@@ -24,9 +24,10 @@ def build_mjmodel(robot, terrain):
 
 
 def build_physics_template(mjmodel, backend, num_envs, num_contacts, num_constraints):  # fmt: skip
+    # warp budgets naconmax over the whole batch but njmax per environment,
+    # so only the contact budget scales with the number of environments
     contacts = num_contacts * num_envs
-    constraints = num_constraints * num_envs
-    kwargs = dict(impl=backend, naconmax=contacts, njmax=constraints)
+    kwargs = dict(impl=backend, naconmax=contacts, njmax=num_constraints)
     return mjx.make_data(mjmodel, **kwargs)
 
 
