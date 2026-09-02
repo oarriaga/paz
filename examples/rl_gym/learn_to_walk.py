@@ -21,6 +21,7 @@ if __name__ == "__main__":
     parser.add_argument("--num_iterations", type=int, default=10000)
     parser.add_argument("--num_steps", type=int, default=24)
     parser.add_argument("--log_interval", type=int, default=10)
+    parser.add_argument("--save_interval", type=int, default=100)
     # mujoco warp budgets contacts (naconmax) for the whole batch and
     # constraint rows (njmax) for one environment
     parser.add_argument("--num_contacts", type=int, default=32)
@@ -42,6 +43,7 @@ if __name__ == "__main__":
     import keras
     from jax import random as jr
 
+    import checkpoint
     import curriculum
     import log
     import paz
@@ -115,6 +117,9 @@ if __name__ == "__main__":
             episode_length = distributed.global_mean(metrics.episode_length)
             speed_args = max_speed, tracking, episode_length, iteration
             max_speed = curriculum.update_max_speed(*speed_args, args.num_steps)  # fmt: skip
+            if is_leader and iteration % args.save_interval == 0:
+                save_args = Path(root) / "checkpoints", iteration, actor, critic
+                checkpoint.save(*save_args, distributed.localize(training.parameters))  # fmt: skip
             if is_leader and iteration % args.log_interval == 0:
                 steps = iteration * num_envs * args.num_steps
                 elapsed = time.perf_counter() - started
