@@ -22,10 +22,14 @@ python learn_to_walk.py --num_processes 2 --process_id 1 &
 Do not set `CUDA_VISIBLE_DEVICES`; each process picks its GPU from
 `--process_id`. Logs go to `experiments/<timestamp>_walk/training.csv`,
 checkpoints to `checkpoints/` next to it every `--save_interval`
-iterations. Expected curve (2 x 4096, entropy 0.01): mean episode length
-~330 at iteration 1000, full 1000-step episodes and the command
-curriculum unlocking from ~4,300, max speed 1.0 m/s and terrain level ~4
-by ~10,000. The original reached the same stages at 7,500 and 10,000.
+iterations. Expected curve (2 x 4096, entropy 0.01, measured on the
+acceptance run of this branch): mean episode length ~330 at iteration
+1000, full 1000-step episodes and the command curriculum unlocking from
+~3,700, max speed 1.0 m/s by ~9,200, then terrain level ~4.7, tracking
+~0.79 and return ~15 held from 10,000 to 30,000 with no divergence
+spikes. The original reached full episodes at ~7,500 and 1.0 m/s at
+10,000, with terrain level 4.7. The final policy walks 99% of episodes to
+timeout across all terrain types at level 8 and full speed.
 
 ## Evaluation
 

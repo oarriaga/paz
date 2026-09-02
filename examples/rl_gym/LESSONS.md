@@ -45,9 +45,12 @@ contact is evaluated within 4 m of a field origin. Upstream mujoco-warp
 this is worth reporting upstream.
 
 Result: with the reference hyperparameters (entropy 0.01, 2 x 4096
-environments) one 60k-iteration run transitioned to full episodes at
-~4,300 iterations (the original: ~7,500), unlocked 1.0 m/s by 9,500
-(original: 10,000) and reached terrain level ~4.2 (original: 4.7).
+environments) the rebuilt branch's acceptance run transitioned to full
+episodes at ~3,700 iterations (the original: ~7,500), unlocked 1.0 m/s by
+9,200 (original: 10,000) and held terrain level 4.7 (original: 4.7) from
+10,000 to 30,000. Earlier runs logged level 4.2 only because their level
+metric averaged the provisional promote/demote result instead of the
+environments' tile level.
 
 ## 2. What was required
 
@@ -132,8 +135,8 @@ were wrong even when the measurements were right.
 
 ## 6. Remaining gap
 
-At equal tracking (0.80 vs 0.82 per step) the mature return is 16 here
-against 23–26 in the original. Term by term inside PhysX our policy is
+At equal tracking (0.79 vs 0.82 per step) and equal terrain level the
+mature return is 15–16 here against 23–26 in the original. Term by term inside PhysX our policy is
 uniformly a little less refined: higher exploration noise (0.47 vs 0.45),
 more joint motion, larger deviations. Ranked hypotheses: single-seed
 variance (both curves are one seed), the exploration-noise equilibrium,
