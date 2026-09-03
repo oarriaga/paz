@@ -61,11 +61,14 @@ def test_compute_metrics_reports_episode_length_and_level():
     done = jp.array([[0.0, 1.0, 0.0], [1.0, 0.0, 1.0]])
     reward_sum = jp.array([[0.0, 4.0, 0.0], [2.0, 0.0, 6.0]])
     level = jp.array([[0, 2, 4], [0, 2, 4]])
-    fields = dict(done=done, reward_sum=reward_sum, level=level)
+    tracking_sum = jp.array([[0.0, 800.0, 0.0], [1000.0, 0.0, 600.0]])
+    fields = dict(done=done, reward_sum=reward_sum, tracking_sum=tracking_sum, level=level)  # fmt: skip
     metrics = rollout.compute_metrics(build_rollout(**fields))
     assert np.isclose(float(metrics.episode_return), 12.0 / 3.0)
     assert np.isclose(float(metrics.episode_length), 6.0 / 3.0)
     assert np.isclose(float(metrics.level), 2.0)
+    # the episodic tracking sums of 1000-step episodes, rated over 20 s
+    assert np.isclose(float(metrics.episodic_tracking), 0.8)
 
 
 def test_bootstrap_keeps_a_diverged_value_out_of_the_reward():

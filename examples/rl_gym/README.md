@@ -28,7 +28,9 @@ acceptance run of this branch): mean episode length ~330 at iteration
 ~3,700, max speed 1.0 m/s by ~9,200, then terrain level ~4.7, tracking
 ~0.79 and return ~15 held from 10,000 to 30,000 with no divergence
 spikes. The original reached full episodes at ~7,500 and 1.0 m/s at
-10,000, with terrain level 4.7. The final policy walks 99% of episodes to
+10,000, with terrain level 4.7. The acceptance run used an earlier
+speed gate that only fired once falls had desynchronised the episodes;
+with the reference's episodic gate the commands widen sooner. The final policy walks 99% of episodes to
 timeout across all terrain types at level 8 and full speed.
 
 ## Evaluation

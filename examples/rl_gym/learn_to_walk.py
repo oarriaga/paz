@@ -113,10 +113,9 @@ if __name__ == "__main__":
             state, rollout_key, experience, metrics = collect(*collect_args)
             experience = distributed.shard(mesh, experience)
             training, update_metrics = update(args.seed + iteration, training, experience)  # fmt: skip
-            tracking = distributed.global_mean(metrics.terms[0])
-            episode_length = distributed.global_mean(metrics.episode_length)
-            speed_args = max_speed, tracking, episode_length, iteration
-            max_speed = curriculum.update_max_speed(*speed_args, args.num_steps)  # fmt: skip
+            tracking = distributed.global_mean(metrics.episodic_tracking)
+            speed_args = max_speed, tracking, iteration, args.num_steps
+            max_speed = curriculum.update_max_speed(*speed_args)
             if is_leader and iteration % args.save_interval == 0:
                 save_args = Path(root) / "checkpoints", iteration, actor, critic
                 checkpoint.save(*save_args, distributed.localize(training.parameters))  # fmt: skip

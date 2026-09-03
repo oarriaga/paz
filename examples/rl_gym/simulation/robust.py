@@ -64,8 +64,8 @@ def reset(key, dynamics, level, column, max_speed, physics_template, origins):  
     critic = build_critic_observation(physics_state, command, action)
     history = build_observation_history(actor, critic)
     counters = StepCounters(jp.array(0), jp.array(0), push_step)
-    reward_sum = jp.zeros(())
-    return State(physics_state, history, tile, counters, command, reward_sum)
+    sums = jp.zeros(()), jp.zeros(())
+    return State(physics_state, history, tile, counters, command, *sums)
 
 
 def step(key, dynamics, state, action, max_speed, robot, indices, tile_size, max_level, episode_steps=1000):  # fmt: skip
@@ -86,8 +86,9 @@ def step(key, dynamics, state, action, max_speed, robot, indices, tile_size, max
     history = update_observation_history(state.history, actor, critic)
     counters = StepCounters(episode, command_step, push_step)
     reward_sum = state.reward_sum + reward
+    tracking_sum = state.tracking_sum + terms[0]
     state_args = physics_state, history, state.tile, counters, command
-    state = State(*state_args, reward_sum)
+    state = State(*state_args, reward_sum, tracking_sum)
     gravity = compute_gravity(physics_state.qpos[3:7])
     fallen = is_fallen(physics_state, gravity)
     timeout = (episode >= episode_steps) & ~diverged

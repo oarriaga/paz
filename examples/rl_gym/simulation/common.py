@@ -10,7 +10,7 @@ from mujoco import mjx
 import rewards
 from robots.g1 import DEFAULT_ANGLES
 
-STATE_FIELDS = "physics_state, history, tile, counters, command, reward_sum"
+STATE_FIELDS = "physics_state, history, tile, counters, command, reward_sum, tracking_sum"  # fmt: skip
 ACTOR_FIELDS = "angular_velocity, gravity, command, joint_positions, joint_velocities, action"  # fmt: skip
 CRITIC_FIELDS = "linear_velocity, " + ACTOR_FIELDS
 ObservationHistory = namedtuple("ObservationHistory", "actor, critic")
@@ -119,11 +119,12 @@ def compute_local_phase(step, control_step=0.02):
     return jp.mod(global_phase + jp.array([0.0, 0.5]), 1.0)
 
 
-def sample_command(key, max_speed, turn_rate=0.1, standing_probability=0.02):
+def sample_command(key, max_speed, sideways_limit=0.3, turn_limit=0.1, standing_probability=0.02):  # fmt: skip
     keys = jr.split(key, 2)
-    sideways = jp.minimum(max_speed, 0.3)
-    lower = jp.array([-jp.minimum(max_speed, 0.5), -sideways, -turn_rate])
-    upper = jp.array([jp.minimum(max_speed, 1.0), sideways, turn_rate])
+    sideways = jp.minimum(max_speed, sideways_limit)
+    turn = jp.minimum(max_speed, turn_limit)
+    lower = jp.array([-jp.minimum(max_speed, 0.5), -sideways, -turn])
+    upper = jp.array([jp.minimum(max_speed, 1.0), sideways, turn])
     sample = jr.uniform(keys[0], (3,), minval=lower, maxval=upper)
     standing = jr.uniform(keys[1]) < standing_probability
     return Command(*jp.where(standing, jp.zeros(3), sample))
@@ -195,9 +196,9 @@ def update_history(history, observation):
     return type(observation)(*terms)
 
 
-def resample_command(key, command, command_step, max_speed, period=500):
+def resample_command(key, command, command_step, max_speed, sideways_limit=0.3, turn_limit=0.1, period=500):  # fmt: skip
     resample = command_step >= period
-    sampled = sample_command(key, max_speed)
+    sampled = sample_command(key, max_speed, sideways_limit, turn_limit)
     values = jp.where(resample, jp.stack(sampled), jp.stack(command))
     return Command(*values), jp.where(resample, 0, command_step)
 

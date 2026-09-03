@@ -108,6 +108,12 @@ were wrong even when the measurements were right.
   `XLA_PYTHON_CLIENT_PREALLOCATE=false` is required next to warp.
 - Renderer: MuJoCo's near clipping plane scales with the model extent; a
   200 m terrain pushes it past a 3 m camera and clips half the robot.
+- Synchronized episodes fool rollout-level proxies. Every environment
+  starts at step zero, so all time out in the same rollout, exactly at the
+  curriculum's period boundary. A survival estimate built from
+  `steps / completions` reads ~25 there and blocked the command
+  curriculum; the reference gates on the mean episodic tracking sum of
+  the episodes ending in that rollout, which the state now carries.
 
 ## 5. Process lessons
 

@@ -41,10 +41,10 @@ def reset(key, dynamics, level, column, max_speed, physics_template, origins, fe
     history = build_initial_history(*history_args)
     tile = Tile(level, column, origin)
     counters = StepCounters(jp.array(0), jp.array(0), push_step)
-    reward_sum = jp.zeros(())
+    sums = jp.zeros(()), jp.zeros(())
     foot_state = build_initial_feet(targets, phase)
-    state_args = physics_state, history, tile, counters, command, reward_sum, foot_state  # fmt: skip
-    return State(*state_args)
+    state_args = physics_state, history, tile, counters, command, *sums
+    return State(*state_args, foot_state)
 
 
 def build_initial_history(key, physics_state, command, action, targets, phase):
@@ -115,8 +115,9 @@ def step(key, dynamics, state, action, max_speed, robot, indices, tile_size, max
     history = update_observation_history(state.history, *build_observations(*history_args))  # fmt: skip
     counters = StepCounters(episode, command_step, push_step)
     reward_sum = state.reward_sum + reward + bonus
+    tracking_sum = state.tracking_sum + terms[0]
     state_args = physics_state, history, state.tile, counters, command
-    state = State(*state_args, reward_sum, feet)
+    state = State(*state_args, reward_sum, tracking_sum, feet)
     gravity = compute_gravity(physics_state.qpos[3:7])
     timeout = (episode >= episode_steps) & ~diverged
     done = is_fallen(physics_state, gravity) | timeout | diverged
