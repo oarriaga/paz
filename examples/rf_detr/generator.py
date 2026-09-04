@@ -5,9 +5,10 @@ torchvision ImageNet statistics the weights were trained with. Targets are
 normalized ``(cx, cy, w, h)`` plus a class index, padded to a fixed count with
 -1 so the loss keeps static shapes.
 
-Augmentation is a horizontal flip only. The colour helpers in ``paz.image``
-expect 0-255 images and the scale-jitter ones move boxes out of normalized
-coordinates, so neither composes with this pipeline as written.
+Augmentation is ``paz.detection.augment_detection``: a photometric jitter,
+a zoom out, an IOU-mode sample crop and a horizontal flip. It keeps the
+image size and the box count fixed, so the whole batch runs as one
+``jit(vmap(...))``.
 """
 import math
 
@@ -89,7 +90,8 @@ def transform_batch(keys, images, detections, augment):
 
     def transform(key, image, detection):
         if augment:
-            image, detection = paz.detection.random_flip(key, image, detection)
+            args = key, image, detection, 255.0 * mean
+            image, detection = paz.detection.augment_detection(*args)
         image = paz.image.standardize(image / 255.0, mean, stdv)
         return image, to_center_form(detection)
 

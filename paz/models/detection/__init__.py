@@ -13,6 +13,11 @@ from .rf_detr import RFDETRSmall
 from .rf_detr import RFDETRMedium
 from .rf_detr import RFDETRBase
 from .rf_detr import RFDETRLarge
+from .rf_detr import TrainableRFDETRNano
+from .rf_detr import TrainableRFDETRSmall
+from .rf_detr import TrainableRFDETRMedium
+from .rf_detr import TrainableRFDETRBase
+from .rf_detr import TrainableRFDETRLarge
 from .haar_cascade import HaarCascadeDetector
 from .haar_cascade import HaarCascadeEyeDetector
 from .haar_cascade import HaarCascadeFrontalFaceDetector
