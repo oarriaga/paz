@@ -254,7 +254,10 @@ def DetectRFDETRCOCO(build_model, score_thresh, draw):
 
 
 def RFDETR(model, score_thresh, draw, num_select=300):
-    forward = jax.jit(lambda x: model(x))
+    # Keras compiles and caches this, and rereads its weights every call.
+    # A jitted ``model(x)`` would instead freeze them at trace time, so a
+    # detector wrapping a model that is still training would never move.
+    forward = model.predict_on_batch
     select = jax.jit(paz.lock(select_detections, num_select))
     # Trained with the torchvision ImageNet statistics, which are rounded
     # differently from paz.image.rgb_IMAGENET_MEAN.

@@ -136,3 +136,44 @@ def test_object_diameter_of_unit_cube():
 def test_is_correct_ADD_threshold():
     assert paz.evaluation.is_correct_ADD(0.09, 1.0, 0.1)
     assert not paz.evaluation.is_correct_ADD(0.11, 1.0, 0.1)
+
+
+def build_dataset(tmp_path, ground_truths):
+    image = np.zeros((16, 16, 3), "uint8")
+    paths = []
+    for index in range(len(ground_truths)):
+        path = os.path.join(str(tmp_path), f"{index}.png")
+        cv2.imwrite(path, image)
+        paths.append(path)
+    return paths
+
+
+def build_predictions(ground_truths, offset=0.0):
+    predictions = []
+    for ground_truth in ground_truths:
+        boxes = ground_truth[:, :4] + offset
+        classes = ground_truth[:, 4].astype("int32")
+        predictions.append((boxes, classes, np.ones(len(boxes))))
+    return predictions
+
+
+def test_compute_COCO_mAP_reaches_one_on_perfect_detector(tmp_path):
+    ground_truths = [np.array([[0.0, 0.0, 10.0, 10.0, 0]]),
+                     np.array([[1.0, 1.0, 9.0, 9.0, 1]])]
+    paths = build_dataset(tmp_path, ground_truths)
+    detector = build_detector(build_predictions(ground_truths))
+    args = detector, paths, ground_truths, 2
+    result = paz.evaluation.compute_COCO_mAP(*args)
+    assert np.isclose(result["mAP"], 1.0)
+
+
+def test_compute_COCO_mAP_punishes_loose_boxes(tmp_path):
+    """A box that only overlaps loosely still passes at 0.5 but not above."""
+    ground_truths = [np.array([[0.0, 0.0, 10.0, 10.0, 0]])]
+    paths = build_dataset(tmp_path, ground_truths)
+    predictions = build_predictions(ground_truths, offset=1.0)
+    result = paz.evaluation.compute_COCO_mAP(build_detector(predictions),
+                                             paths, ground_truths, 1)
+    assert np.isclose(result["mAP_50"], 1.0)
+    assert np.isclose(result["mAP_75"], 0.0)
+    assert 0.0 < result["mAP"] < 1.0
