@@ -2,21 +2,16 @@
 
 Run this with keras_hub's Gemma4 available (keras>=3.13 and the keras-hub
 source on PYTHONPATH); the paz runtime itself does not need keras_hub Gemma4.
-It writes the split inference artifacts that demo_e2b.py loads: config.json,
-decoder_step.weights.h5 and embedding_step.weights.h5.
+It writes the artifacts `Gemma4(...)` loads: config.json and
+backbone.weights.h5.
 """
 import argparse
 import re
-import sys
 from pathlib import Path
 
 import numpy as np
 import jax.numpy as jp
 from keras import ops
-
-ROOT = Path(__file__).resolve().parents[2]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
 
 from paz.models.foundation.gemma4.configuration import save_config
 from paz.models.foundation.gemma4.model import Gemma4Backbone
@@ -115,6 +110,8 @@ def read_text_config(config):
         or 10_000.0
     values["global_rope_wavelength"] = config.get("global_rope_wavelength") \
         or 1_000_000.0
+    values["num_global_key_value_heads"] = config.get(
+        "num_global_key_value_heads")
     values["global_layer_indices"] = None
     return values
 
