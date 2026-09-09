@@ -17,6 +17,15 @@ from paz.models.foundation.gemma4.vision import VisionEncoderArgs
 def GenerateGemma4(model_name="gemma4_2b", max_tokens=64, max_seq=512,
                    max_prompt=128, weights="pretrained", models_path=None,
                    models=None):
+    tokenize = Gemma4Tokenizer.tokenize_generation_prompt
+    args = (model_name, tokenize, max_tokens, max_seq, max_prompt, weights,
+            models_path, models)
+    return build_chat(*args)
+
+
+def build_chat(model_name, tokenize, max_tokens=64, max_seq=512,
+               max_prompt=128, weights="pretrained", models_path=None,
+               models=None):
     model_dir = resolve_dir(model_name, models_path)
     if models is None:
         models = Gemma4(model_name, weights=weights, models_path=model_dir)
@@ -27,8 +36,7 @@ def GenerateGemma4(model_name="gemma4_2b", max_tokens=64, max_seq=512,
     decode = build_text_generator(*args, emit=stream)
 
     def generate(prompt):
-        token_ids = tokenizer.tokenize_generation_prompt(prompt)
-        generated = decode(token_ids)
+        generated = decode(tokenize(tokenizer, prompt))
         print()
         return tokenizer.detokenize(generated)
 
@@ -123,6 +131,11 @@ def GenerateGemma42B(**kwargs):
 
 def GenerateGemma44B(**kwargs):
     return GenerateGemma4("gemma4_4b", **kwargs)
+
+
+def GenerateGemma412B(**kwargs):
+    tokenize = Gemma4Tokenizer.tokenize_answer_prompt
+    return build_chat("gemma4_12b", tokenize, **kwargs)
 
 
 def DescribeImageGemma42B(**kwargs):
