@@ -7,6 +7,7 @@ from paz.models.transformers.embeddings.reversible import ReversibleEmbedding
 from paz.models.transformers import cache as kv_cache
 from paz.models.foundation.gemma4.configuration import TextBackboneArgs
 from paz.models.foundation.gemma4.configuration import build_cache_head_dim
+from paz.models.foundation.gemma4.configuration import build_cache_num_kv_heads
 from paz.models.foundation.gemma4.configuration import build_kv_source_map
 from paz.models.foundation.gemma4.layers.decoder import Gemma4DecoderLayer
 from paz.models.foundation.gemma4.layers.normalization import build_rms_norm
@@ -181,7 +182,7 @@ def slice_per_layer(tensor, layer_index, per_layer_dim):
 def build_empty_cache(config, max_length, batch_size=1):
     cache_head_dim = build_cache_head_dim(config)
     args = (batch_size, config.num_layers, max_length,
-            config.num_key_value_heads, cache_head_dim, config.dtype)
+            build_cache_num_kv_heads(config), cache_head_dim, config.dtype)
     return kv_cache.build(*args)
 
 
@@ -201,6 +202,7 @@ def build_text_backbone_args(**overrides):
         "dropout": 0.0, "dtype": "float32", "hidden_size_per_layer_input": None,
         "num_kv_shared_layers": 0, "global_layer_indices": None,
         "use_double_wide_mlp": False,
+        "num_global_key_value_heads": None,
     }
     values.update(overrides)
     return TextBackboneArgs(**values)
