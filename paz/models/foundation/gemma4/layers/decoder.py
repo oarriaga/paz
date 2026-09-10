@@ -3,9 +3,11 @@ from keras import ops
 from keras.layers import EinsumDense, Layer
 
 from paz.models.foundation.gemma4.configuration import (
-    build_cache_head_dim, build_feedforward_dim, build_head_dim,
-    build_partial_rotary_factor, build_rope_scaling_factor,
-    build_rope_wavelength, is_global_attention_layer, use_sliding_window)
+    build_cache_head_dim, build_cache_num_kv_heads, build_feedforward_dim,
+    build_head_dim, build_num_kv_heads, build_partial_rotary_factor,
+    build_rope_scaling_factor, build_rope_wavelength,
+    is_global_attention_layer, shares_key_and_value,
+    use_sliding_window)
 from paz.models.transformers.numerics import add_residual, clip_float16
 from paz.models.foundation.gemma4.configuration import TextBackboneArgs
 from paz.models.foundation.gemma4.layers import attention as attend_ops
@@ -29,7 +31,11 @@ class Gemma4DecoderLayer(Layer):
         self.layer_index = layer_index
         self.is_global = is_global_attention_layer(config, layer_index)
         self.head_dim = build_head_dim(config, self.is_global)
-        self.cache_head_dim = build_cache_head_dim(config)
+        self.num_kv_heads = build_num_kv_heads(config, self.is_global)
+        self.shares_kv = shares_key_and_value(config, self.is_global)
+        self.kv_shape = (self.num_kv_heads, self.head_dim)
+        cache_heads = build_cache_num_kv_heads(config)
+        self.cache_kv_shape = (cache_heads, build_cache_head_dim(config))
         self.wavelength = build_rope_wavelength(config, self.is_global)
         self.scaling_factor = build_rope_scaling_factor(config, self.is_global)
         self.partial_rotary = build_partial_rotary_factor(
@@ -53,17 +59,26 @@ class Gemma4DecoderLayer(Layer):
             "attention_query")
         self.query_norm = build_rms_norm(epsilon, dtype, "attention_query_norm")
         self.key_proj = head_projection(
-            "btd,kdh->btkh", config.num_key_value_heads, head_dim, dtype,
+            "btd,kdh->btkh", self.num_kv_heads, head_dim, dtype,
             "attention_key")
         self.key_norm = build_rms_norm(epsilon, dtype, "attention_key_norm")
-        self.value_proj = head_projection(
-            "btd,kdh->btkh", config.num_key_value_heads, head_dim, dtype,
-            "attention_value")
+        self.value_proj = self.build_value_projection(head_dim, dtype)
         self.value_norm = build_v_norm(epsilon, dtype, "attention_value_norm")
         self.output_proj = dense(
             "btnh,nhd->btd", config.hidden_dim, dtype, "attention_output")
         self.post_attention_norm = build_rms_norm(
             epsilon, dtype, "post_attention_norm")
+
+    def build_value_projection(self, head_dim, dtype):
+        # None where the key projection doubles as the value one, so the
+        # duplicate weights are never allocated.
+        if self.shares_kv:
+            projection = None
+        else:
+            projection = head_projection(
+                "btd,kdh->btkh", self.num_kv_heads, head_dim, dtype,
+                "attention_value")
+        return projection
 
     def build_feedforward_layers(self):
         config = self.config
@@ -127,8 +142,7 @@ class Gemma4DecoderLayer(Layer):
         if shared_kv is not None:
             key, value = shared_kv[:, 0, ...], shared_kv[:, 1, ...]
         else:
-            key = self.key_with_rope(x)
-            value = attend_ops.project(x, self.value_proj, self.value_norm)
+            key, value = self.key_and_value(x)
         kv = ops.stack((key, value), axis=1)
         output = self.mix(query, key, value, mask)
         output = attend_ops.zero_masked_positions(output, mask)
@@ -147,13 +161,11 @@ class Gemma4DecoderLayer(Layer):
         if shared_kv_cache is not None:
             kv_source, updated_cache = shared_kv_cache, cache
         else:
-            key = self.key_with_rope(x, cache_positions)
-            value = attend_ops.project(x, self.value_proj, self.value_norm)
+            key, value = self.key_and_value(x, cache_positions)
             updated_cache = attend_ops.update_kv_cache(
-                cache, index, key, value, self.head_dim, self.cache_head_dim)
+                cache, index, key, value, self.kv_shape, self.cache_kv_shape)
             kv_source = updated_cache
-        key, value = attend_ops.read_kv_cache(
-            kv_source, self.head_dim, self.cache_head_dim)
+        key, value = attend_ops.read_kv_cache(kv_source, self.kv_shape)
         mask = attend_ops.build_cache_mask(key, index, positions, self.window)
         output = self.mix(query, key, value, mask)
         return self.output_proj(output), updated_cache
@@ -161,6 +173,16 @@ class Gemma4DecoderLayer(Layer):
     def query_with_rope(self, x, positions=None):
         query = attend_ops.project(x, self.query_proj, self.query_norm)
         return self.rope(query, positions)
+
+    def key_and_value(self, x, positions=None):
+        if self.shares_kv:
+            projected = self.key_proj(x)
+            key = self.rope(self.key_norm(projected), positions)
+            value = self.value_norm(projected)
+        else:
+            key = self.key_with_rope(x, positions)
+            value = attend_ops.project(x, self.value_proj, self.value_norm)
+        return key, value
 
     def key_with_rope(self, x, positions=None):
         key = attend_ops.project(x, self.key_proj, self.key_norm)
@@ -173,7 +195,7 @@ class Gemma4DecoderLayer(Layer):
 
     def mix(self, query, key, value, mask):
         args = (query, key, value, mask, self.config.num_query_heads,
-                self.config.num_key_value_heads, self.head_dim,
+                self.num_kv_heads, self.head_dim,
                 self.config.attention_logit_soft_cap, self.config.dropout,
                 self.config.dtype, self.name + "_attention")
         return attend_ops.compute_attention(*args)

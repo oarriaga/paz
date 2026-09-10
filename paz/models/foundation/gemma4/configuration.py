@@ -12,7 +12,7 @@ TEXT_BACKBONE_FIELDS = (
     "global_rope_partial_rotary_factor "
     "use_bidirectional_attention layer_norm_epsilon dropout dtype "
     "hidden_size_per_layer_input num_kv_shared_layers global_layer_indices "
-    "use_double_wide_mlp"
+    "use_double_wide_mlp num_global_key_value_heads"
 )
 TextBackboneArgs = namedtuple("TextBackboneArgs", TEXT_BACKBONE_FIELDS)
 
@@ -45,6 +45,7 @@ CONFIGS = {
         "num_kv_shared_layers": 20,
         "global_layer_indices": None,
         "use_double_wide_mlp": True,
+        "num_global_key_value_heads": None,
     },
     "gemma4_4b": {
         "vocabulary_size": 262_144,
@@ -74,6 +75,37 @@ CONFIGS = {
         "num_kv_shared_layers": 18,
         "global_layer_indices": None,
         "use_double_wide_mlp": False,
+        "num_global_key_value_heads": None,
+    },
+    "gemma4_12b": {
+        "vocabulary_size": 262_144,
+        "image_size": 896,
+        "num_layers": 48,
+        "num_query_heads": 16,
+        "num_key_value_heads": 8,
+        "hidden_dim": 3840,
+        "intermediate_dim": 15360,
+        "head_dim": 256,
+        "attention_logit_soft_cap": None,
+        "final_logit_soft_cap": 30.0,
+        "use_sliding_window_attention": True,
+        "sliding_window_size": 1024,
+        "sliding_window_pattern": 6,
+        "global_head_dim": 512,
+        "local_rope_wavelength": 10_000.0,
+        "global_rope_wavelength": 1_000_000.0,
+        "local_rope_scaling_factor": 1.0,
+        "global_rope_scaling_factor": 1.0,
+        "global_rope_partial_rotary_factor": 0.25,
+        "use_bidirectional_attention": False,
+        "layer_norm_epsilon": 1e-6,
+        "dropout": 0.0,
+        "dtype": "bfloat16",
+        "hidden_size_per_layer_input": 0,
+        "num_kv_shared_layers": 0,
+        "global_layer_indices": None,
+        "use_double_wide_mlp": False,
+        "num_global_key_value_heads": 1,
     },
 }
 
@@ -84,6 +116,7 @@ LEGACY_DEFAULTS = {
     "global_rope_wavelength": 1_000_000.0,
     # Only the E2B config predates this field, and E2B uses double-wide MLPs.
     "use_double_wide_mlp": True,
+    "num_global_key_value_heads": None,
 }
 
 
@@ -175,6 +208,23 @@ def build_head_dim(config, is_global):
     if is_global and config.global_head_dim is not None:
         return config.global_head_dim
     return config.head_dim
+
+
+def build_num_kv_heads(config, is_global):
+    if shares_key_and_value(config, is_global):
+        return config.num_global_key_value_heads
+    return config.num_key_value_heads
+
+
+def shares_key_and_value(config, is_global):
+    # Gemma4 global layers that narrow their key/value heads also reuse
+    # the key projection as the value one, as keras_hub couples the two.
+    return is_global and config.num_global_key_value_heads is not None
+
+
+def build_cache_num_kv_heads(config):
+    global_heads = config.num_global_key_value_heads or 0
+    return max(config.num_key_value_heads, global_heads)
 
 
 def use_sliding_window(config, is_global):
