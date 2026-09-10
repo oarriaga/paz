@@ -19,7 +19,10 @@ from paz.models.foundation.gemma4.causal_lm import Gemma4CausalLM
 from paz.models.foundation.gemma4.vision import VisionEncoderArgs
 from paz.models.foundation.gemma4.vision import build_vision_encoder
 
-GEMMA4_WEIGHTS_URL = "https://github.com/oarriaga/altamira-data/releases/download/v0.26/"  # fmt: skip
+GEMMA4_WEIGHTS_URL = "https://github.com/oarriaga/altamira-data/releases/download/"  # fmt: skip
+GEMMA4_RELEASES = {
+    "gemma4_2b": "v0.26", "gemma4_4b": "v0.26", "gemma4_12b": "v0.36",
+}
 GEMMA4_CACHE = "paz/models/gemma4"
 PART_BYTES = 1_900_000_000
 GEMMA4_WEIGHT_FILES = (
@@ -63,15 +66,19 @@ def resolve_dir(model_name, models_path):
 
 def download_weights(model_name):
     subdir = "{}/{}".format(GEMMA4_CACHE, model_name)
+    url = build_release_url(model_name)
     asset = "{}.manifest.json".format(model_name)
-    manifest_path = Path(get_file(
-        asset, GEMMA4_WEIGHTS_URL + asset, cache_subdir=subdir))
+    manifest_path = Path(get_file(asset, url + asset, cache_subdir=subdir))
     model_dir = manifest_path.parent
     manifest = json.loads(manifest_path.read_text())
     for filename, entry in manifest.items():
-        args = (model_dir / filename, entry, subdir, GEMMA4_WEIGHTS_URL)
+        args = (model_dir / filename, entry, subdir, url)
         assemble_weights_file(*args)
     return model_dir
+
+
+def build_release_url(model_name):
+    return "{}{}/".format(GEMMA4_WEIGHTS_URL, GEMMA4_RELEASES[model_name])
 
 
 def assemble_weights_file(path, entry, subdir, url):
@@ -84,7 +91,15 @@ def assemble_weights_file(path, entry, subdir, url):
     concatenate_parts(parts, path)
     if checksum is not None and compute_sha256(path) != checksum:
         raise ValueError("Checksum mismatch after assembling {}".format(path))
+    discard_parts(parts)
     return path
+
+
+def discard_parts(parts):
+    # The assembled file is verified by then, and keeping the parts would
+    # double the cache: 48 GB for gemma4_12b instead of 24 GB.
+    for part in parts:
+        Path(part).unlink()
 
 
 def is_complete(path, checksum):

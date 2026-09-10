@@ -23,9 +23,10 @@ from examples.gemma4.demo import chat
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Gemma 4 12B text chat demo")
     add = parser.add_argument
-    # There is no published paz artifact for 12B; convert the official
-    # checkpoint with paz.models.foundation.gemma4.huggingface first.
-    add("--models_path", required=True)
+    # Default downloads the published weights; pass a local dir to
+    # override, e.g. one written by
+    # paz.models.foundation.gemma4.huggingface.
+    add("--models_path", default=None)
     add("--max_tokens", default=64, type=int)
     add("--max_prompt", default=128, type=int)
     add("--max_seq", default=256, type=int)
