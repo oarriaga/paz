@@ -25,9 +25,11 @@ def build_face_edges(faces):
 
 
 def make_bunny_mesh(path):
-    vertices, faces, vertex_colors = load_mesh(path)
+    vertices, faces, _ = load_mesh(path)
     vertices = normalize_vertices(vertices)
     edges = build_face_edges(faces)
+    off_white = jp.array([0.93, 0.91, 0.87])
+    vertex_colors = jp.tile(off_white, (len(vertices), 1))
     material = Material(jp.zeros(3), 0.15, 0.75, 0.25, 64.0)
     shift = paz.SE3.translation(jp.array([0.0, 0.48, 0.0]))
     transform = shift
@@ -48,7 +50,7 @@ camera_up = jp.array([0.0, 1.0, 0.0])
 camera_pose = paz.SE3.view_transform(camera_origin, camera_target, camera_up)
 
 lights = [
-    PointLight(jp.array([0.6, 0.6, 0.7]), jp.array([-2.0, 3.0, 2.0])),
+    PointLight(jp.array([0.6, 0.6, 0.7]), jp.array([-2.0, 3.0, -2.0])),
 ]
 
 bunny = make_bunny_mesh(mesh_path)
