@@ -8,7 +8,8 @@ import paz
 from paz.graphics.composite import find_closest_intersection_args, take_closest
 from paz.graphics.types import Surfaces
 
-TRIANGLE_HIT_NAMES = "hit_mask depth points normals eyes albedo primitive"
+TRIANGLE_HIT_NAMES = "hit_mask depth points normals eyes albedo primitive "
+TRIANGLE_HIT_NAMES += "face_index"
 TriangleHit = namedtuple("TriangleHit", TRIANGLE_HIT_NAMES.split())
 
 
@@ -64,7 +65,7 @@ def build_triangle_hit(compiled, rays, face_chunk):
     albedo_args = triangles, face_index, u, v
     albedo = paz.graphics.albedo.compute_triangle_albedo(*albedo_args)
     args = hit_mask, depth, points, normals, eyes, albedo, primitive
-    return TriangleHit(*args)
+    return TriangleHit(*args, face_index)
 
 
 def intersect_shadow_groups(shapes, origins, directions):

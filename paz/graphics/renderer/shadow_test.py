@@ -174,3 +174,23 @@ def test_gpu_saved_pose_floor_has_no_near_zero_self_hits():
     _, depths, shape_indices, receiver_indices = selected
     plane_depths = take_shape_depths(depths, shape_indices, receiver_indices, 1)
     assert int(jp.sum(plane_depths < 1e-2)) == 0
+
+
+def build_flat_triangle_mesh():
+    vertices = jp.array([[-1.0, 0.0, -1.0], [1.0, 0.0, -1.0], [0.0, 0.0, 1.0]])
+    faces = jp.array([[0, 1, 2]])
+    material = Material(jp.ones(3), 0.1, 0.9, 0.0, 200.0)
+    args = vertices, jp.ones((3, 3)), jp.eye(4), material, faces, None
+    return paz.graphics.Mesh(*args)
+
+
+def test_a_triangle_does_not_shadow_itself():
+    mesh = build_flat_triangle_mesh()
+    light = PointLight(jp.ones(3), jp.array([0.0, -0.5, -1000.0]))
+    compiled = paz.graphics.scene.compile(Scene([mesh]), [light], None)
+    points = jp.zeros((1, 3))
+    normals = paz.algebra.normalize(jp.array([[0.0, 0.1, -1.0]]))
+    faces = jp.zeros(1, dtype=jp.int32)
+    receiver = shadow.Receiver(points, normals, faces - 1, faces)
+    occlusion = shadow.compute_occlusion(compiled, receiver, light, 1024)
+    assert jp.all(occlusion == 0.0)
