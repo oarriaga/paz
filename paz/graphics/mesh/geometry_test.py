@@ -1,8 +1,11 @@
 import jax.numpy as jp
 
+import paz
+
 from paz.graphics.mesh.geometry import build_edges
 from paz.graphics.mesh.geometry import compute_canonical_normals
 from paz.graphics.mesh.geometry import compute_position
+from paz.graphics.mesh.geometry import compute_vertex_normals
 from paz.graphics.mesh.geometry import extract_points
 from paz.graphics.mesh.geometry import transform_points
 
@@ -77,3 +80,10 @@ def test_transform_points_identity():
     affine = jp.eye(4)
     result = transform_points(affine, points)
     assert jp.allclose(result, points, atol=1e-5)
+
+
+def test_vertex_normals_of_a_sphere_point_outwards():
+    vertices, faces, edges = paz.graphics.mesh.build_sphere(1.0, 2)
+    normals = compute_vertex_normals(vertices, faces)
+    radial = vertices / jp.linalg.norm(vertices, axis=-1, keepdims=True)
+    assert jp.all(jp.sum(normals * radial, axis=-1) > 0.999)

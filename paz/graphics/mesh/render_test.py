@@ -4,6 +4,7 @@ import paz
 from paz.backend.lie import SE3
 from paz.graphics.types import Material, Mesh, PointLight
 from paz.graphics.mesh.builders import build_cube
+from paz.graphics.mesh.intersect import intersect_mesh
 from paz.graphics.mesh.render import render_coordinates
 
 
@@ -21,6 +22,25 @@ def camera_looking_at_origin():
     camera_origin = jp.array([0.0, 1.0, -1.5])
     world_up = jp.array([0.0, 0.0, 1.0])
     return SE3.view_transform(camera_origin, jp.zeros(3), world_up)
+
+
+def compute_object_frame_points(shape, y_FOV, pose, mesh):
+    origins, directions = paz.graphics.camera.build_rays(shape, y_FOV, pose)
+    depth = intersect_mesh(mesh, origins, directions, 1024)[1]
+    world_to_shape = jp.linalg.inv(mesh.transform)
+    args = world_to_shape, origins, directions
+    origins, directions = paz.algebra.transform_rays(*args)
+    points = origins + jp.expand_dims(depth, -1) * directions
+    return jp.reshape(points, (*shape, 3))
+
+
+def test_render_coordinates_match_object_frame_hit_points():
+    mesh = make_single_mesh()
+    pose = camera_looking_at_origin()
+    shape, y_FOV = (20, 20), jp.pi / 4
+    coordinates, hit = render_coordinates(shape, y_FOV, pose, mesh, 1024)
+    points = compute_object_frame_points(shape, y_FOV, pose, mesh)
+    assert jp.allclose(coordinates[hit], points[hit], atol=1e-5)
 
 
 def test_render_coordinates_shapes_and_object_frame_bounds():

@@ -9,22 +9,26 @@ from paz.graphics.renderer.intersect import intersect_shadow_groups
 
 SHADOW_ORIGIN_EPSILON = 1e-5
 SHADOW_SELF_HIT_EPSILON = 1e-5
-# A shadow ray leaving a mesh surface can re-hit its own triangle at a
-# grazing angle. Shapes reject that by identity; triangles have no such
-# index, so they need a distance that clears float error at scene scale.
+# A shadow ray leaving a mesh surface can still re-hit its own triangle at
+# a grazing angle, beyond the distance where float error explains it, so
+# the receiving face is rejected by identity as shapes already are.
 TRIANGLE_SELF_HIT_EPSILON = 1e-3
 NO_SHAPE = -1
+NO_FACE = -1
 
-Receiver = namedtuple("Receiver", ["points", "normals", "indices"])
+RECEIVER_NAMES = ["points", "normals", "indices", "faces"]
+Receiver = namedtuple("Receiver", RECEIVER_NAMES)
 
 
 def build_shape_receiver(closest, indices):
-    return Receiver(closest.point, closest.normal, indices)
+    faces = jp.full(len(closest.point), NO_FACE, dtype=jp.int32)
+    return Receiver(closest.point, closest.normal, indices, faces)
 
 
 def build_triangle_receiver(triangle_hit):
     indices = jp.full(len(triangle_hit.points), NO_SHAPE)
-    return Receiver(triangle_hit.points, triangle_hit.normals, indices)
+    args = triangle_hit.points, triangle_hit.normals, indices
+    return Receiver(*args, triangle_hit.face_index)
 
 
 def compute_occlusion(compiled, receiver, light, face_chunk):
@@ -35,7 +39,7 @@ def compute_occlusion(compiled, receiver, light, face_chunk):
         shape_args = compiled, receiver, origins, directions
         rows.append(compute_shape_blockers(*shape_args))
     if compiled.triangles is not None:
-        blocker_args = compiled, origins, directions, face_chunk
+        blocker_args = compiled, receiver, (origins, directions), face_chunk
         rows.append(compute_triangle_blockers(*blocker_args))
     masks = jp.concatenate([row[0] for row in rows], axis=0)
     depths = jp.concatenate([row[1] for row in rows], axis=0)
@@ -58,13 +62,14 @@ def compute_shape_blockers(compiled, receiver, origins, directions):
     return select_shadow_depths(*depth_args)
 
 
-def compute_triangle_blockers(compiled, origins, directions, face_chunk):
+def compute_triangle_blockers(compiled, receiver, rays, face_chunk):
     triangles = compiled.triangles
-    args = triangles.vertices, triangles.faces, (origins, directions)
+    args = triangles.vertices, triangles.faces, rays
     result = paz.graphics.mesh.intersect_chunked(*args, face_chunk)
     hit_mask, depth, _, _, face_index = result
     primitive = triangles.primitive_index[face_index]
     hit_mask = jp.logical_and(hit_mask, compiled.triangle_mask[primitive])
+    hit_mask = jp.logical_and(hit_mask, face_index != receiver.faces)
     hit_mask = jp.logical_and(hit_mask, depth > TRIANGLE_SELF_HIT_EPSILON)
     hit_mask = hide_non_casting_triangles(compiled, hit_mask, primitive)
     depth = jp.where(hit_mask, depth, paz.graphics.FARAWAY)

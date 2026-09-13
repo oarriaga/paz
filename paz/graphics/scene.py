@@ -237,12 +237,42 @@ def build_mesh_triangles(meshes):
     args = jp.concatenate(vertices), build_offset_faces(meshes)
     args += jp.concatenate(vertex_uvs), jp.concatenate(vertex_colors)
     args += build_primitive_index(meshes), stack_materials(meshes)
-    args += (stack_patterns(meshes),)
+    args += stack_patterns(meshes), build_corner_normals(meshes, vertices)
     return paz.graphics.Triangles(*args)
 
 
 def bake_vertices(mesh):
     return paz.algebra.transform_points(mesh.transform, mesh.vertices)
+
+
+def build_corner_normals(meshes, vertices):
+    corner_normals = []
+    for mesh, baked_vertices in zip(meshes, vertices):
+        corner_normals.append(build_mesh_corner_normals(mesh, baked_vertices))
+    return jp.concatenate(corner_normals)
+
+
+# Corner normals stay unnormalized so the hit normalizes exactly once.
+# paz.algebra.normalize divides by norm + 1e-5, so it is not idempotent.
+def build_mesh_corner_normals(mesh, vertices):
+    if mesh.vertex_normals is None:
+        corner_normals = repeat_face_normals(vertices, mesh.faces)
+    else:
+        corner_normals = transform_vertex_normals(mesh)[mesh.faces]
+    return corner_normals
+
+
+def repeat_face_normals(vertices, faces):
+    extract_points = paz.graphics.mesh.extract_points
+    points_A, points_B, points_C = extract_points(vertices, faces)
+    normals = jp.cross(points_B - points_A, points_C - points_A)
+    return jp.repeat(jp.expand_dims(normals, 1), 3, axis=1)
+
+
+def transform_vertex_normals(mesh):
+    inverse_transpose = jp.linalg.inv(mesh.transform).T
+    args = inverse_transpose, mesh.vertex_normals
+    return paz.algebra.transform_vectors(*args)
 
 
 def build_offset_faces(meshes):
