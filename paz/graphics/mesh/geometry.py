@@ -65,6 +65,15 @@ def compute_triangle_normals(vertices, faces, face_indices):
     return paz.algebra.normalize(jp.cross(B - A, C - A))
 
 
+def compute_vertex_normals(vertices, faces):
+    points_A, points_B, points_C = extract_points(vertices, faces)
+    face_normals = jp.cross(points_B - points_A, points_C - points_A)
+    normals = jp.zeros_like(vertices)
+    for corner in range(3):
+        normals = normals.at[faces[:, corner]].add(face_normals)
+    return paz.algebra.normalize(normals)
+
+
 def interpolate_corner_normals(corner_normals, face_indices, u, v):
     corners = corner_normals[face_indices]
     w_A = jp.expand_dims(1.0 - u - v, -1)

@@ -3,7 +3,7 @@ from pathlib import Path
 import jax.numpy as jp
 import paz
 from paz.graphics import Scene
-from paz.graphics.mesh import Mesh, load_mesh
+from paz.graphics.mesh import Mesh, compute_vertex_normals, load_mesh
 from paz.graphics.types import Material, PointLight
 from paz.graphics.viewer import scene_renderer, viewer
 
@@ -31,8 +31,9 @@ def make_bunny_mesh(path):
     material = Material(jp.zeros(3), 0.15, 0.75, 0.25, 64.0)
     shift = paz.SE3.translation(jp.array([0.0, 0.48, 0.0]))
     transform = shift
+    normals = compute_vertex_normals(vertices, faces)
     args = (vertices, vertex_colors, transform, material, faces, edges)
-    return Mesh(*args)
+    return Mesh(*args, vertex_normals=normals)
 
 
 example_dir = Path(__file__).resolve().parent
