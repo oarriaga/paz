@@ -1,62 +1,9 @@
-from collections import namedtuple
-import cv2
 import numpy as np
-import jax.numpy as jp
 import paz
-
-
-UPNP = cv2.SOLVEPNP_UPNP
-LEVENBERG_MARQUARDT = cv2.SOLVEPNP_ITERATIVE
-EPNP = cv2.SOLVEPNP_EPNP
-MIN_REQUIRED_POINTS = 4
-
-Pose6D = namedtuple("Pose6D", ["rotation_vector", "translation"])
-
-
-def build_cube_corners(width, height, depth):
-    """Build the 3D points of a cube in the openCV coordinate system:
-                               4--------1
-                              /|       /|
-                             / |      / |
-                            3--------2  |
-                            |  8_____|__5
-                            | /      | /
-                            |/       |/
-                            7--------6
-
-                   Z (depth)
-                  /
-                 /_____X (width)
-                 |
-                 |
-                 Y (height)
-
-    # Arguments
-        height: float, height of the 3D box.
-        width: float,  width of the 3D box.
-        depth: float,  width of the 3D box.
-
-    # Returns
-        Numpy array of shape ``(8, 3)'' corresponding to 3D keypoints of a cube
-    """
-    half_height, half_width, half_depth = height / 2.0, width / 2.0, depth / 2.0
-    point1 = [+half_width, -half_height, +half_depth]
-    point2 = [+half_width, -half_height, -half_depth]
-    point3 = [-half_width, -half_height, -half_depth]
-    point4 = [-half_width, -half_height, +half_depth]
-    point5 = [+half_width, +half_height, +half_depth]
-    point6 = [+half_width, +half_height, -half_depth]
-    point7 = [-half_width, +half_height, -half_depth]
-    point8 = [-half_width, +half_height, +half_depth]
-    points = [point1, point2, point3, point4, point5, point6, point7, point8]
-    return jp.array(points)
-
-
-def project_points3D(points3D, pose6D, camera):
-    args = (pose6D.translation, camera.intrinsics, camera.distortion)
-    points2D, _ = cv2.projectPoints(points3D, pose6D.rotation_vector, *args)
-    points2D = jp.squeeze(points2D, axis=1)  # openCV shape (num_points, 1, 2)
-    return points2D
+from paz.backend.poses import LEVENBERG_MARQUARDT
+from paz.backend.poses import project_points3D
+from paz.backend.poses import solve_PnP
+from paz.backend.pinhole import build_cube_points3D
 
 
 def draw_boxes3D(image, poses, points3D, camera, color, thickness=5, radius=2):
@@ -65,28 +12,6 @@ def draw_boxes3D(image, poses, points3D, camera, color, thickness=5, radius=2):
         points2D = paz.to_numpy(points2D).astype(np.int32)
         paz.draw.cube(image, points2D, color, thickness, radius)
     return image
-
-
-def solve_PnP(points2D, points3D, camera, solver=LEVENBERG_MARQUARDT):
-    points2D = np.array(points2D, np.float64).reshape((len(points3D), 1, 2))
-    args = (camera.intrinsics, camera.distortion, None, None, False, solver)
-    (_, rotation_vector, translation) = cv2.solvePnP(points3D, points2D, *args)
-    return Pose6D(rotation_vector, translation)
-
-
-def solve_PnP_RANSAC(points2D, points3D, camera, inlier_thresh=5.0,
-                     iterations=100):
-    if len(points3D) < MIN_REQUIRED_POINTS:
-        return None
-    points2D = np.array(points2D, np.float64).reshape((len(points3D), 1, 2))
-    points3D = np.array(points3D, np.float64)
-    args = (camera.intrinsics, camera.distortion, None, None, False,
-            iterations, inlier_thresh, 0.99, None, EPNP)
-    success, rotation, translation, inliers = cv2.solvePnPRansac(
-        points3D, points2D, *args)
-    if not success:
-        return None
-    return Pose6D(rotation, translation)
 
 
 def build_face_points3D():
@@ -122,7 +47,7 @@ def HeadPoseKeypointNet2D32(camera, box_scale=1.2, draw=None):
     solve_pose = paz.lock(solve_PnP, points3D, camera, LEVENBERG_MARQUARDT)
 
     if draw is None:
-        cube = paz.to_numpy(build_cube_corners(900, 1200, 800))
+        cube = paz.to_numpy(build_cube_points3D(900, 1200, 800))
         draw = paz.lock(draw_boxes3D, cube, camera, paz.draw.GREEN, 3, 5)
 
     def call(image):

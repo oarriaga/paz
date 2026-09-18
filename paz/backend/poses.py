@@ -1,7 +1,17 @@
+from collections import namedtuple
+
 import cv2
 import numpy as np
 
 from paz.datasets import human36m
+
+
+UPNP = cv2.SOLVEPNP_UPNP
+LEVENBERG_MARQUARDT = cv2.SOLVEPNP_ITERATIVE
+EPNP = cv2.SOLVEPNP_EPNP
+MIN_REQUIRED_POINTS = 4
+
+Pose6D = namedtuple("Pose6D", ["rotation_vector", "translation"])
 
 
 def match_poses(boxes, poses, prior_boxes, iou_threshold=0.5):
@@ -65,6 +75,50 @@ def project_to_image(rotation, translation, points3D, camera_intrinsics):
     fx, fy = camera_intrinsics[0, 0], camera_intrinsics[1, 1]
     cx, cy = camera_intrinsics[0, 2], camera_intrinsics[1, 2]
     return np.concatenate([fx * (x / z) + cx, fy * (y / z) + cy], axis=1)
+
+
+def project_points3D(points3D, pose6D, camera):
+    args = (pose6D.translation, camera.intrinsics, camera.distortion)
+    points2D, _ = cv2.projectPoints(points3D, pose6D.rotation_vector, *args)
+    return np.squeeze(points2D, axis=1)  # openCV shape (num_points, 1, 2)
+
+
+def solve_PnP(points2D, points3D, camera, solver=LEVENBERG_MARQUARDT):
+    points2D = np.array(points2D, np.float64).reshape((len(points3D), 1, 2))
+    args = (camera.intrinsics, camera.distortion, None, None, False, solver)
+    (_, rotation_vector, translation) = cv2.solvePnP(points3D, points2D, *args)
+    return Pose6D(rotation_vector, translation)
+
+
+def solve_PnP_RANSAC(points2D, points3D, camera, inlier_thresh=5.0,
+                     iterations=100):
+    if len(points3D) < MIN_REQUIRED_POINTS:
+        return None
+    points2D = np.array(points2D, np.float64).reshape((len(points3D), 1, 2))
+    points3D = np.array(points3D, np.float64)
+    args = (camera.intrinsics, camera.distortion, None, None, False,
+            iterations, inlier_thresh, 0.99, None, EPNP)
+    success, rotation, translation, inliers = cv2.solvePnPRansac(
+        points3D, points2D, *args)
+    if not success:
+        return None
+    return Pose6D(rotation, translation)
+
+
+def rotation_vector_to_matrix(rotation_vector):
+    return cv2.Rodrigues(rotation_vector)[0]
+
+
+def solve_pose_matrix_RANSAC(points2D, points3D, camera, max_points=1500,
+                             seed=0):
+    if len(points3D) > max_points:
+        choice = np.random.RandomState(seed).choice(len(points3D), max_points, False)  # fmt: skip
+        points2D, points3D = points2D[choice], points3D[choice]
+    pose6D = solve_PnP_RANSAC(points2D, points3D, camera)
+    if pose6D is None:
+        return None
+    rotation = rotation_vector_to_matrix(pose6D.rotation_vector)
+    return rotation, np.asarray(pose6D.translation).reshape(3)
 
 
 def filter_keypoints3D(keypoints3D, args_to_joints3D):
