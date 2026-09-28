@@ -13,7 +13,7 @@ Training follows the reference recipe: every decoder layer and the first
 stage are scored, the backbone trains slower the deeper the block, and
 AdamW clips its gradients, optionally accumulates them over several batches,
 keeps an exponential moving average of the weights and decays the rate on a
-cosine after a warmup.
+cosine after an optional warmup.
 
 Fine-tuning uses a single query group. Upstream trains with thirteen and
 drops all but the first at inference. --num_groups builds more, but the
@@ -32,9 +32,6 @@ from generator import Generator, preprocess_batch
 
 BACKBONE_PREFIXES = ("patch_embed", "cls_token", "pos_embed", "block_",
                      "norm")
-# DINOv2-small depth. Keras prunes the blocks past the last tapped one, so
-# the built model does not carry all twelve.
-NUM_BACKBONE_BLOCKS = 12
 # Reference fine-tune rates, relative to the base learning rate.
 ENCODER_RATE, LAYER_DECAY, COMPONENT_DECAY = 1.5, 0.8, 0.7
 NO_DECAY = ("bias", "gamma", "beta", "pos_embed", "cls_token")
@@ -101,16 +98,24 @@ def adapt_layer(layer, rank):
 
 def build_learning_rate_scales(model):
     """Rate factor per variable, as the reference recipe sets them."""
+    num_layers = compute_num_layers(model)
     scales = {}
     for variable in model.trainable_variables:
-        scales[variable.path] = compute_scale(variable.path)
+        scales[variable.path] = compute_scale(variable.path, num_layers)
     return scales
 
 
-def compute_scale(path):
+def compute_num_layers(model):
+    # Reference num_layers: last tapped block, counted from one, plus one.
+    names = [layer.name for layer in model.layers]
+    blocks = [name for name in names if name.startswith("block_")]
+    return max(read_block_number(name) for name in blocks) + 2
+
+
+def compute_scale(path, num_layers):
     """Earlier blocks train slower, and the decoder slower than the heads."""
     if path.startswith(BACKBONE_PREFIXES):
-        depth = NUM_BACKBONE_BLOCKS + 1 - read_block_index(path)
+        depth = num_layers + 1 - read_block_index(path, num_layers)
         scale = ENCODER_RATE * LAYER_DECAY**depth * COMPONENT_DECAY**2
     elif path.startswith("decoder"):
         scale = COMPONENT_DECAY
@@ -119,22 +124,26 @@ def compute_scale(path):
     return scale
 
 
-def read_block_index(path):
+def read_block_index(path, num_layers):
     """Zero for the patch embedding and ``i + 1`` for block ``i``."""
     if path.startswith("block_"):
-        index = int(path.split("_")[1]) + 1
+        index = read_block_number(path) + 1
     elif path.startswith(("patch_embed", "cls_token", "pos_embed")):
         index = 0
     else:
-        index = NUM_BACKBONE_BLOCKS + 1
+        index = num_layers + 1
     return index
 
 
+def read_block_number(name):
+    return int(name.split("_")[1])
+
+
 def build_schedule(learning_rate, warmup_steps, decay_steps):
-    """Linear warmup, then a cosine decay to a tenth of the rate."""
+    """Linear warmup, then a cosine decay to zero."""
     kwargs = dict(warmup_target=learning_rate, warmup_steps=warmup_steps)
     args = learning_rate / 100.0, decay_steps
-    return keras.optimizers.schedules.CosineDecay(*args, alpha=0.1, **kwargs)
+    return keras.optimizers.schedules.CosineDecay(*args, alpha=0.0, **kwargs)
 
 
 def build_optimizer(model, schedule, weight_decay, clipnorm, accumulation,
@@ -182,7 +191,7 @@ if __name__ == "__main__":
     parser.add_argument("--accumulation_steps", default=1, type=int)
     parser.add_argument("--ema_momentum", default=0.993, type=float)
     parser.add_argument("--epochs", default=30, type=int)
-    parser.add_argument("--warmup_epochs", default=1, type=int)
+    parser.add_argument("--warmup_epochs", default=0, type=int)
     parser.add_argument("--patience", default=10, type=int)
     parser.add_argument("--max_num_boxes", default=25, type=int)
     parser.add_argument("--num_groups", default=1, type=int)
