@@ -64,3 +64,22 @@ def test_LayerwiseAdamW_leaves_unlisted_variables_alone():
     scaled = paz.optimizers.LayerwiseAdamW({"w": 0.5}, 0.1, weight_decay=0.0)
     step = apply_one_step(scaled, "other")
     assert jp.allclose(step, apply_one_step(plain, "other"))
+
+
+def fit_kernel(optimizer):
+    dense = keras.layers.Dense(1, use_bias=False, kernel_initializer="zeros")
+    model = keras.Sequential([keras.Input((1,)), dense])
+    model.compile(optimizer, "mae")
+    model.fit(jp.ones((1, 1)), jp.full((1, 1), 100.0), epochs=10, verbose=0)
+    return jp.asarray(dense.kernel)
+
+
+def test_LayerwiseAdamW_ramps_in_the_moving_average():
+    kwargs = dict(weight_decay=0.0, use_ema=True, ema_momentum=0.993)
+    average = fit_kernel(paz.optimizers.LayerwiseAdamW({}, 0.1, **kwargs))
+    # A constant gradient moves Adam 0.1 a step; Keras seeds at step one.
+    expected = 0.1
+    for step in range(2, 11):
+        momentum = 0.993 * (1.0 - jp.exp(-step / 100.0))
+        expected = momentum * expected + (1.0 - momentum) * 0.1 * step
+    assert jp.allclose(average, expected, atol=1e-4)

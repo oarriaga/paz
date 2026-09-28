@@ -177,3 +177,27 @@ def test_compute_COCO_mAP_punishes_loose_boxes(tmp_path):
     assert np.isclose(result["mAP_50"], 1.0)
     assert np.isclose(result["mAP_75"], 0.0)
     assert 0.0 < result["mAP"] < 1.0
+
+
+def build_many_boxes(num_boxes):
+    boxes = []
+    for index in range(num_boxes):
+        boxes.append([2.0 * index, 0.0, 2.0 * index + 1.0, 1.0, 0])
+    return np.array(boxes)
+
+
+def build_many_boxes_args(tmp_path):
+    ground_truths = [build_many_boxes(250)]
+    paths = build_dataset(tmp_path, ground_truths)
+    detector = build_detector(build_predictions(ground_truths))
+    return detector, paths, ground_truths, 1
+
+
+def test_compute_mAP_default_cap_keeps_the_recall_tail(tmp_path):
+    kwargs = dict(max_objects=300)
+    args = build_many_boxes_args(tmp_path)
+    capped = paz.evaluation.compute_mAP(*args, max_detections=200, **kwargs)
+    args = build_many_boxes_args(tmp_path)
+    result = paz.evaluation.compute_mAP(*args, **kwargs)
+    assert capped["mAP"] < 0.9
+    assert np.isclose(result["mAP"], 1.0)

@@ -9,6 +9,8 @@ import paz.utils.progressbar as progressbar
 
 COCO_IOU_THRESHOLDS = (0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90,
                        0.95)
+# Above the 300 detections RF-DETR keeps, so it scores all of them.
+MAX_DETECTIONS = 500
 Sample = namedtuple("Sample", ["boxes", "labels", "scores", "true_boxes",
                                "true_labels", "difficult"])
 
@@ -19,7 +21,7 @@ def compute_mAP(
     ground_truths,
     num_classes,
     difficulties=None,
-    max_detections=200,
+    max_detections=MAX_DETECTIONS,
     max_objects=64,
     iou_thresh=0.5,
     use_07_metric=False,
@@ -42,7 +44,7 @@ def compute_COCO_mAP(
     ground_truths,
     num_classes,
     difficulties=None,
-    max_detections=200,
+    max_detections=MAX_DETECTIONS,
     max_objects=64,
     verbose=False,
 ):
