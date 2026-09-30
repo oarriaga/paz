@@ -273,7 +273,7 @@ def flip_left_right(boxes, W):
         Numpy array of shape `(num_boxes, 4)`.
     """
     x_min, y_min, x_max, y_max = split(boxes)
-    return merge(x_max, y_min, x_min, y_max)
+    return merge(W - x_max, y_min, W - x_min, y_max)
 
 
 def append_class(boxes, class_arg):
@@ -526,3 +526,33 @@ def fit_to_crop(boxes, crop_box):
     x_max = jp.minimum(x_max, x_max_crop)
     y_max = jp.minimum(y_max, y_max_crop)
     return paz.boxes.merge(x_min, y_min, x_max, y_max)
+
+
+def sample_resized_crop(key, H, W, short_sides, min_side, max_side):
+    side_key, crop_key = jax.random.split(key)
+    short_side = jax.random.choice(side_key, jp.array(short_sides))
+    H_new, W_new = paz.image.compute_short_side_size(H, W, short_side)
+    crop = sample_crop(crop_key, H_new, W_new, min_side, max_side)
+    return paz.cast(crop / jp.array([W_new, H_new, W_new, H_new]), jp.float32)
+
+
+def sample_crop(key, H, W, min_side, max_side):
+    W_key, H_key, offset_key = jax.random.split(key, 3)
+    W_crop = sample_crop_side(W_key, W, min_side, max_side)
+    H_crop = sample_crop_side(H_key, H, min_side, max_side)
+    crop = sample_with_shape(offset_key, H, W, H_crop, W_crop, 1)[0]
+    return paz.cast(crop, jp.int32)
+
+
+def sample_crop_side(key, size, min_side, max_side):
+    upper = jp.minimum(size, max_side) + 1
+    return jax.random.randint(key, (), min_side, upper)
+
+
+def clip_to_edges(boxes, H, W):
+    return jp.clip(boxes, 0, jp.array([W, H, W, H]))
+
+
+def has_area(boxes):
+    H, W = compute_sizes(boxes, keepdims=False)
+    return (W > 0) & (H > 0)

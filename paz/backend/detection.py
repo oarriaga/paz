@@ -748,3 +748,66 @@ def keep_valid(new_detections, reference):
     """Resets rows that were padding in `reference` back to -1."""
     valid = reference[:, 4:5] >= 0.0
     return jp.where(valid, new_detections, -1.0)
+
+
+def augment_to_square(key, image, detections, size):
+    flip_key, select_key = jax.random.split(key)
+    image, detections = random_flip(flip_key, image, detections)
+    sample = paz.lock(sample_crop_window, *paz.image.get_size(image))
+    full_window = jp.array([0.0, 0.0, 1.0, 1.0])
+    window = paz.maybe_apply(select_key, sample, full_window, 0.5)
+    image = paz.image.crop_and_resize(image, window, size, size)
+    return image, crop_to_window(detections, window)
+
+
+def sample_crop_window(key, window, H, W):
+    # maybe_apply passes the full window in; a sampled crop replaces it
+    return paz.boxes.sample_resized_crop(key, H, W, (400, 500, 600), 384, 600)
+
+
+def crop_to_window(detections, window):
+    boxes, class_args = split(detections)
+    boxes = paz.boxes.fit_to_crop(boxes, window)
+    size = window[2:] - window[:2]
+    boxes = (boxes - jp.tile(window[:2], 2)) / jp.tile(size, 2)
+    return keep_nonempty(merge(boxes, class_args))
+
+
+def keep_nonempty(detections):
+    nonempty = paz.boxes.has_area(get_boxes(detections))
+    return jp.where(nonempty[:, None], detections, -1.0)
+
+
+def random_flip_enhance_blur(key, image, detections, strength):
+    keys = jax.random.split(key, 5)
+    image, detections = random_flip(keys[0], image, detections)
+    image = enhance(keys[1], paz.image.adjust_brightness, image, strength)
+    image = enhance(keys[2], paz.image.adjust_contrast, image, strength)
+    image = enhance(keys[3], paz.image.adjust_color, image, strength)
+    image = paz.maybe_apply(keys[4], random_approximate_blur, image, 0.25)
+    return image, detections
+
+
+def enhance(key, adjust, image, strength):
+    return adjust(image, paz.image.sample_enhance_factor(key, strength))
+
+
+def random_approximate_blur(key, image):
+    stdv = jax.random.uniform(key, (), jp.float32, 0.2, 0.8)
+    return paz.image.approximate_gaussian_blur(image, stdv)
+
+
+def compute_multi_scale_sizes(resolution, patch_size, num_windows):
+    step = patch_size * num_windows
+    return compute_offset_sizes(resolution, step, range(-3, 5))
+
+
+def compute_expanded_multi_scale_sizes(resolution, patch_size, num_windows):
+    step = patch_size * num_windows
+    return compute_offset_sizes(resolution, step, range(-5, 6))
+
+
+def compute_offset_sizes(resolution, step, offsets):
+    base = resolution // step
+    sizes = [(base + offset) * step for offset in offsets]
+    return [size for size in sizes if size >= 2 * step]

@@ -3,6 +3,7 @@ import jax
 import jax.numpy as jp
 import paz
 import numpy as np
+from paz.backend.boxes_test import fits_resized_crop
 from paz.backend.detection import (
     encode,
     decode,
@@ -1059,3 +1060,247 @@ def test_augment_detection_is_jit_vmap_stable():
     assert out_detections.shape == (6, 8, 5)
     assert bool(jp.all(jp.isfinite(out_images)))
     assert augment._cache_size() == 1
+
+
+def augment_many(augment, seed, image, detections, num_keys):
+    keys = jax.random.split(jax.random.PRNGKey(seed), num_keys)
+    batched = jax.jit(jax.vmap(augment, (0, None, None)))
+    return batched(keys, image, detections), batched
+
+
+def recover_window(box, source):
+    size = (source[2:] - source[:2]) / (box[2:] - box[:2])
+    origin = source[:2] - box[:2] * size
+    return np.concatenate([origin, origin + size])
+
+
+def fit_reference_grids(box, sources):
+    # rfdetr RandomResize([400, 500, 600]) sizes of a 3:4 image
+    windows = [recover_window(box, source) for source in sources]
+    hits, sides = [], []
+    for H, W in ((400, 533), (500, 666), (600, 800)):
+        fits = [fits_resized_crop(window, H, W) for window in windows]
+        hits.append(any(fits))
+        sides.append((windows[0][2:] - windows[0][:2]) * [W, H])
+    return hits, np.array(sides)[hits]
+
+
+def matches_window_crop(output_image, box, sources):
+    interiors, differences, on_centres = [], [], []
+    for source_image, source_box in sources:
+        window = recover_window(box, source_box)
+        # an edge on a pixel centre makes the window-inclusion rule unstable
+        edges = window * np.array([80, 60, 80, 60]) - 0.5
+        on_centres.append(np.abs(edges - np.round(edges)).min() < 1e-3)
+        window = jp.array(window, jp.float32)
+        resized = paz.image.crop_and_resize(source_image, window, 32, 32)
+        difference = np.abs(resized - output_image)
+        interiors.append(difference[2:-2, 2:-2].max())
+        differences.append(difference.max())
+    # the textured interior tells which source, flipped or not, was used
+    source = int(np.argmin(interiors))
+    return differences[source] < 0.05 or on_centres[source]
+
+
+def compute_pillow_luminance(pixels):
+    pixels = pixels.astype(np.int64)
+    return (pixels @ np.array([19595, 38470, 7471]) + 32768) >> 16
+
+
+def enhance_like_pillow(row, brightness, contrast, color):
+    row = np.floor(np.clip(row * brightness, 0, 255))
+    mean = np.floor(np.mean(compute_pillow_luminance(row)) + 0.5)
+    row = np.floor(np.clip(mean + contrast * (row - mean), 0, 255))
+    gray = compute_pillow_luminance(row)[:, None]
+    return np.floor(np.clip(gray + color * (row - gray), 0, 255))
+
+
+def compute_red_box(image):
+    rows, columns = np.nonzero(np.asarray(image[..., 0]) > 127.5)
+    x_max, y_max = columns.max() + 1, rows.max() + 1
+    return np.array([columns.min(), rows.min(), x_max, y_max])
+
+
+def test_random_flip_left_right_mirrors_boxes_about_image_width():
+    image = jp.zeros((10, 100, 3))
+    detections = jp.array([[10.0, 20.0, 30.0, 40.0, 7.0]])
+    _, flipped = paz.detection.random_flip_left_right(image, detections)
+    # rfdetr transforms.hflip on a 100 pixel wide image
+    assert flipped.tolist() == [[70.0, 20.0, 90.0, 40.0, 7.0]]
+
+
+def test_keep_nonempty_marks_degenerate_rows_invalid():
+    rows = [[0.0, 10.0, 50.0, 40.0, 1.0], [60.0, 70.0, 60.0, 90.0, 2.0],
+            [10.0, 150.0, 40.0, 150.0, 3.0], [-1.0, -1.0, -1.0, -1.0, -1.0]]
+    kept = paz.detection.keep_nonempty(jp.array(rows))
+    # rfdetr ConvertCoco keep = (y_max > y_min) & (x_max > x_min)
+    assert kept.tolist() == rows[:1] + [[-1.0] * 5] * 3
+
+
+def test_crop_to_window_matches_reference_crop():
+    boxes = [[10.0, 10.0, 50.0, 40.0], [80.0, 20.0, 130.0, 60.0],
+             [150.0, 100.0, 190.0, 140.0], [95.0, 0.0, 100.0, 30.0]]
+    boxes = jp.array(boxes) / jp.array([200.0, 150.0, 200.0, 150.0])
+    classes = jp.array([[1.0], [2.0], [3.0], [4.0]])
+    detections = jp.hstack([boxes, classes])
+    detections = paz.detection.pad(detections, 5, "constant", -1)
+    window = jp.array([20 / 200, 5 / 150, 100 / 200, 95 / 150])
+    cropped = paz.detection.crop_to_window(detections, window)
+    # rfdetr transforms.crop(region=(5, 20, 90, 80)), normalized by (80, 90)
+    expected = [[0.0, 5 / 90, 0.375, 35 / 90, 1.0],
+                [0.75, 15 / 90, 1.0, 55 / 90, 2.0], [-1.0] * 5,
+                [0.9375, 0.0, 1.0, 25 / 90, 4.0], [-1.0] * 5]
+    assert jp.allclose(cropped, jp.array(expected), atol=1e-5)
+    rows = [[0.25, 0.25, 0.5, 0.75, 1.0], [0.25, 0.25, 0.75, 0.75, 2.0],
+            [0.6, 0.5, 0.9, 0.8, 3.0]]
+    window = jp.array([0.5, 0.0, 1.0, 0.5])
+    cropped = paz.detection.crop_to_window(jp.array(rows), window)
+    expected = [[-1.0] * 5, [0.0, 0.5, 0.5, 1.0, 2.0], [-1.0] * 5]
+    assert jp.allclose(cropped, jp.array(expected), atol=1e-6)
+
+
+def test_augment_to_square_keeps_boxes_on_their_pixels():
+    image = jp.zeros((60, 80, 3), jp.uint8).at[20:40, 25:50, 0].set(255)
+    texture = jp.reshape(jp.arange(60 * 80) * 37 % 256, (60, 80))
+    image = image.at[..., 1].set(texture.astype(jp.uint8))
+    rectangle = np.array([25 / 80, 20 / 60, 50 / 80, 40 / 60], np.float32)
+    mirrored = rectangle[[2, 1, 0, 3]] * [-1, 1, -1, 1] + [1, 0, 1, 0]
+    box = jp.array([list(rectangle) + [3.0]])
+    detections = paz.detection.pad(box, 4, "constant", -1)
+    augment, seed = paz.lock(paz.detection.augment_to_square, 32), 0
+    args = (augment, seed, image, detections, 512)
+    (images, outputs), augment = augment_many(*args)
+    assert images.shape == (512, 32, 32, 3) and images.dtype == jp.float32
+    assert float(images.min()) >= 0.0 and float(images.max()) <= 255.001
+    assert bool(jp.all(outputs[:, 1:] == -1.0))
+    # every sampled window overlaps the rectangle, so its box is always kept
+    assert bool(jp.all(outputs[:, 0, 4] == 3.0))
+    for output_image, output in zip(images[:64], outputs[:64]):
+        pixel_box = np.asarray(output[0, :4]) * 32
+        assert np.allclose(compute_red_box(output_image), pixel_box, atol=1.5)
+    boxes = np.asarray(outputs[:, 0, :4])
+    is_mirrored = np.all(boxes == np.float32(mirrored), axis=1)
+    is_full = np.all(boxes == rectangle, axis=1) | is_mirrored
+    assert 0.42 < is_full.mean() < 0.58
+    assert 0.35 < is_mirrored[is_full].mean() < 0.65
+    full_window = jp.array([0.0, 0.0, 1.0, 1.0])
+    for flipped in (False, True):
+        source = image[:, ::-1] if flipped else image
+        resized = paz.image.crop_and_resize(source, full_window, 32, 32)
+        selected = np.asarray(images)[is_full & (is_mirrored == flipped)]
+        assert np.allclose(selected, resized, atol=1e-3)
+    inside = ~is_full & np.all((boxes > 1e-3) & (boxes < 1 - 1e-3), axis=1)
+    assert inside.sum() > 20
+    hits, sides = [], []
+    for box in boxes[inside]:
+        box_hits, box_sides = fit_reference_grids(box, (rectangle, mirrored))
+        hits.append(box_hits)
+        sides.append(box_sides)
+    hits, sides = np.array(hits), np.concatenate(sides)
+    only_one = hits & (hits.sum(axis=1, keepdims=True) == 1)
+    assert np.all(hits.any(axis=1)) and np.all(only_one.sum(axis=0) > 20)
+    # RandomSizeCrop(384, 600) sides reach both ends of their range
+    assert sides.min() < 395 and sides.max() > 580
+    sources = ((image, rectangle), (image[:, ::-1], mirrored))
+    crops = zip(np.asarray(images)[inside][:32], boxes[inside][:32])
+    for output_image, box in crops:
+        assert matches_window_crop(output_image, box, sources)
+    keys = jax.random.split(jax.random.PRNGKey(seed), 512)
+    assert jp.array_equal(augment(keys, image, detections)[0], images)
+    assert augment._cache_size() == 1
+
+
+def test_augment_to_square_handles_small_images_and_no_boxes():
+    image = jax.random.randint(jax.random.PRNGKey(0), (100, 80, 3), 0, 256)
+    empty = jp.full((3, 5), -1.0)
+    augment = paz.lock(paz.detection.augment_to_square, 32)
+    args = (augment, 1, image.astype(jp.uint8), empty, 16)
+    (images, outputs), _ = augment_many(*args)
+    assert images.shape == (16, 32, 32, 3)
+    assert bool(jp.all(jp.isfinite(images)))
+    assert bool(jp.all(outputs == -1.0))
+
+
+def test_random_flip_enhance_blur_blurs_last_a_quarter_of_the_time():
+    image = jp.zeros((9, 9, 3), jp.uint8).at[4, 4].set(255)
+    function = paz.detection.random_flip_enhance_blur
+    args = (paz.lock(function, 0.0), 0, image, padded_detections(), 1024)
+    (images, outputs), _ = augment_many(*args)
+    centers = np.asarray(images[:, 4, 4, 0]).astype(int)
+    blurred = centers < 255
+    flipped = np.asarray(outputs[:, 0, 0]) > 0.4
+    assert 0.18 < blurred.mean() < 0.32
+    # PIL GaussianBlur centre values: 237, 225, 86 and 75 for stdv 0.2,
+    # 0.25, 0.75 and 0.8, so the stdv range must reach both ends
+    assert 75 <= centers[blurred].min() <= 86
+    assert 225 <= centers[blurred].max() <= 237
+    # the stdv draw must not depend on the flip draw
+    assert centers[blurred & flipped].min() <= 86
+    assert centers[blurred & ~flipped].max() >= 225
+    assert np.all(np.asarray(images)[~blurred] == np.asarray(image))
+    assert 0.4 < flipped.mean() < 0.6
+    args = (paz.lock(function, 0.35), 1, image, padded_detections(), 256)
+    (images, _), _ = augment_many(*args)
+    blurred = images[:, 4, 3, 0] > images[:, 0, 0, 0]
+    # enhancing first keeps the centre at most 255 before the blur
+    assert int(images[blurred, 4, 4, 0].max()) <= 240
+
+
+def test_random_flip_enhance_blur_draws_own_factors_in_order():
+    function = paz.lock(paz.detection.random_flip_enhance_blur, 0.35)
+    image = jp.full((4, 21, 3), 60, jp.uint8).at[:, 7:].set(140)
+    image = image.at[:, 14:].set(jp.array([150, 80, 70], jp.uint8))
+    box = jp.array([[14 / 21, 0.0, 1.0, 1.0, 1.0]])
+    args = (function, 2, image, box, 128)
+    (images, outputs), augment = augment_many(*args)
+    assert images.shape == (128, 4, 21, 3) and images.dtype == jp.uint8
+    flipped = np.asarray(outputs[:, 0, 0]) < 0.25
+    rows = np.asarray(images[:, 0], np.float32)
+    low = np.where(flipped, rows[:, 17, 0], rows[:, 3, 0])
+    high = rows[:, 10, 0]
+    color_pixels = np.where(flipped[:, None], rows[:, 3], rows[:, 17])
+    red, blue = color_pixels[:, 0], color_pixels[:, 2]
+    assert np.all(high > low) and np.all(red > blue)
+    brightness = (high + low) / 200
+    contrast = (high - low) / (80 * brightness)
+    color = (red - blue) / (80 * contrast * brightness)
+    factors = np.stack([brightness, contrast, color])
+    assert np.all(np.std(factors, axis=1) > 0.1)
+    # a shared key would make two of the three estimates equal
+    for first, second in ((0, 1), (0, 2), (1, 2)):
+        assert np.mean(np.abs(factors[first] - factors[second])) > 0.1
+    # blur spills over the 60 / 140 edge; its stdv must follow no factor
+    unflipped = np.where(flipped[:, None, None], rows[:, ::-1], rows)
+    spill = (unflipped[:, 6, 0] - low) / (high - low)
+    blurred = spill > 0
+    assert blurred.sum() > 10
+    for factor in factors:
+        correlation = np.corrcoef(spill[blurred], factor[blurred])[0, 1]
+        assert abs(correlation) < 0.8
+    assert augment._cache_size() == 1
+    # clipping bands make brightness, contrast and color order visible
+    bands = [[250, 250, 250], [240, 60, 40], [60, 60, 60], [240, 60, 40],
+             [250, 250, 250]]
+    row = np.repeat(np.array(bands, np.float32), 7, axis=0)
+    saturating = jp.array(np.broadcast_to(row, (4, 35, 3)), jp.uint8)
+    args = (function, 2, saturating, box, 128)
+    (images, _), _ = augment_many(*args)
+    # the same keys give the same factors, so predict with the estimates
+    for output, *step_factors in zip(images, *factors):
+        expected = enhance_like_pillow(row, *step_factors)[[3, 10, 17]]
+        observed = np.asarray(output[0, [3, 10, 17]], np.float32)
+        assert np.abs(expected - observed).max() <= 12
+
+
+def test_compute_multi_scale_sizes_match_reference():
+    # rfdetr coco.compute_multi_scale_scales(resolution, expanded, 16, 4)
+    plain = paz.detection.compute_multi_scale_sizes
+    expanded = paz.detection.compute_expanded_multi_scale_sizes
+    assert list(plain(384, 16, 4)) == list(range(192, 641, 64))
+    assert list(plain(128, 16, 4)) == [128, 192, 256, 320, 384]
+    assert list(plain(560, 14, 4)) == list(range(392, 785, 56))
+    assert list(plain(630, 16, 4)) == list(range(384, 833, 64))
+    assert list(expanded(630, 16, 4)) == list(range(256, 897, 64))
+    assert list(expanded(384, 16, 4)) == list(range(128, 705, 64))
+    assert list(expanded(704, 16, 4)) == list(range(384, 1025, 64))
+    assert list(expanded(384, 16, 2)) == list(range(224, 545, 32))
