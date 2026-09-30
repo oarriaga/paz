@@ -219,7 +219,7 @@ def scale_with_aspect_ratio(image, scale, method="linear", antialias=False):
     H, W = get_size(image)
     H_scaled = int(H * scale[0])
     W_scaled = int(W * scale[1])
-    resize(image, (H_scaled, W_scaled), method, antialias)
+    return resize(image, (H_scaled, W_scaled), method, antialias)
 
 
 def show(image, name="image", wait=True):
@@ -746,3 +746,116 @@ def resize_with_aspect_ratio(image, H, W, method="linear", antialias=False):
     pad_bottom = H - H_now
     pad_right = W - W_now
     return pad(resized_image, 0, pad_bottom, 0, pad_right, "constant", 0)
+
+
+def crop_and_resize(image, window, H, W):
+    H_now, W_now = get_size(image)
+    rows = compute_resize_weights(window[1], window[3], H_now, H)
+    columns = compute_resize_weights(window[0], window[2], W_now, W)
+    image = paz.cast(image, jp.float32)
+    return jp.einsum("oi,ijc,pj->opc", rows, image, columns)
+
+
+def compute_resize_weights(start, end, input_size, output_size):
+    start, end = start * input_size, end * input_size
+    scale = (end - start) / output_size
+    output_centers = start + (jp.arange(output_size) + 0.5) * scale
+    pixel_centers = jp.arange(input_size) + 0.5
+    weights = compute_triangle_weights(pixel_centers, output_centers, scale)
+    inside = (start <= pixel_centers) & (pixel_centers < end)
+    weights = jp.where(inside, weights, 0.0)
+    return weights / jp.sum(weights, axis=1, keepdims=True)
+
+
+def compute_triangle_weights(pixel_centers, output_centers, scale):
+    # shrinking widens the filter, which antialiases like PIL
+    support = jp.maximum(scale, 1.0)
+    distances = jp.abs(pixel_centers - output_centers[:, None])
+    return jp.maximum(0.0, 1.0 - distances / support)
+
+
+def compute_limited_short_side_size(H, W, short_side, max_long_side):
+    min_side, max_side = float(min(H, W)), float(max(H, W))
+    if max_side / min_side * short_side > max_long_side:
+        limited_side = int(round(max_long_side * min_side / max_side))
+    else:
+        limited_side = short_side
+    return compute_short_side_size(H, W, limited_side)
+
+
+def compute_short_side_size(H, W, short_side):
+    if W < H:
+        size = ((short_side * H) // W, short_side)
+    else:
+        size = (short_side, (short_side * W) // H)
+    return size
+
+
+def sample_enhance_factor(key, strength):
+    offset = jax.random.uniform(key, (), jp.float32, -strength, strength)
+    return jp.maximum(0.1, 1.0 + offset)
+
+
+def adjust_brightness(image, factor):
+    return blend(jp.zeros_like(image), image, factor)
+
+
+def adjust_contrast(image, factor):
+    return blend(compute_mean_luminance(image), image, factor)
+
+
+def adjust_color(image, factor):
+    return blend(compute_luminance(image), image, factor)
+
+
+def blend(degenerate, image, factor):
+    degenerate = paz.cast(degenerate, jp.float32)
+    image = paz.cast(image, jp.float32)
+    blended = jp.clip(degenerate + factor * (image - degenerate), 0, 255)
+    return paz.cast(jp.floor(blended), jp.uint8)
+
+
+def compute_mean_luminance(image):
+    luminance = paz.cast(compute_luminance(image), jp.uint32)
+    # L = 16 * high + low keeps every uint32 sum exact to about 68 MP
+    high_sum, low_sum = jp.sum(luminance >> 4), jp.sum(luminance & 15)
+    whole, remainder = jp.divmod(high_sum, luminance.size)
+    return 16 * whole + round_mean(16 * remainder + low_sum, luminance.size)
+
+
+def round_mean(total, num_values):
+    # integer form of PIL's int(mean + 0.5)
+    return (2 * total + num_values) // (2 * num_values)
+
+
+def compute_luminance(image):
+    weights = jp.array([19595, 38470, 7471], jp.int32)
+    luminance = (paz.cast(image, jp.int32) @ weights + 32768) >> 16
+    return paz.cast(luminance[..., None], jp.uint8)
+
+
+def approximate_gaussian_blur(image, stdv):
+    # matches PIL GaussianBlur only for stdv < sqrt(2); pipeline uses 0.2-0.8
+    center_weight, side_weight = compute_box_blur_weights(stdv)
+    blurred = paz.cast(image, jp.uint32)
+    for axis in (1, 1, 1, 0, 0, 0):
+        blurred = apply_box_blur(blurred, axis, center_weight, side_weight)
+    return paz.cast(blurred, jp.uint8)
+
+
+def compute_box_blur_weights(stdv):
+    variance = jp.float32(stdv) ** 2 / 3
+    extension = variance / (2 * (1 - variance))
+    center_weight = jp.floor(2**24 / (2 * extension + 1))
+    center_weight = paz.cast(center_weight, jp.uint32)
+    return center_weight, (2**24 - center_weight) // 2
+
+
+def apply_box_blur(image, axis, center_weight, side_weight):
+    last = image.shape[axis] - 1
+    indices = jp.arange(last + 1)
+    before = jp.take(image, jp.maximum(indices - 1, 0), axis=axis)
+    after = jp.take(image, jp.minimum(indices + 1, last), axis=axis)
+    weighted = center_weight * image + side_weight * (before + after)
+    # PIL rounds every pass back to 8 bits in 24-bit fixed point
+    return (weighted + 2**23) >> 24
