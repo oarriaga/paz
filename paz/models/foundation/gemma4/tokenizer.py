@@ -95,6 +95,9 @@ class Gemma4Tokenizer:
     def tokenize_generation_prompt(self, prompt):
         return self.tokenize(self.format_generation_prompt(prompt))
 
+    def tokenize_answer_prompt(self, prompt):
+        return self.tokenize("".join(build_answer_prompt_parts(prompt)))
+
     def get_stop_token_ids(self):
         stop_ids = [self.end_token_id]
         if self.end_of_turn_token_id >= 0:
@@ -328,6 +331,13 @@ def build_byte_piece_text(byte_value):
 
 def build_prompt_parts(prompt):
     return ("<bos>", "<|turn>user\n", prompt, "<turn|>\n", "<|turn>model\n")
+
+
+def build_answer_prompt_parts(prompt):
+    # Gemma4 12B opens a thought channel unless the prompt already closes
+    # an empty one, which is what its chat template emits when thinking is
+    # disabled. E2B and E4B templates have no such suffix.
+    return build_prompt_parts(prompt) + ("<|channel>thought\n", "<channel|>")
 
 
 def encode_byte_texts(text):

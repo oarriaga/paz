@@ -6,7 +6,8 @@ import numpy as np
 import jax.numpy as jp
 import pytest
 
-from paz.models.foundation.gemma4.configuration import load_config
+from paz.models.foundation.gemma4.configuration import (
+    load_config, shares_key_and_value)
 from paz.models.foundation.gemma4.conversion import (
     build_paz_config, build_target_backbone, save_paz_models, transfer)
 from paz.models.foundation.gemma4.model import Gemma4Backbone
@@ -58,3 +59,31 @@ def test_converter_writes_loadable_artifacts(tmp_path):
     model({"token_ids": jp.zeros((1, 1), "int32"),
            "padding_mask": jp.ones((1, 1), "int32")})
     model.load_weights(str(tmp_path / "backbone.weights.h5"))
+
+
+def build_shared_kv_reference():
+    # Global layers keep one KV head at head_dim 16 and share the key
+    # projection as the value one, as Gemma4 12B does.
+    return KerasHubGemma4Backbone(
+        vocabulary_size=64, image_size=16, num_layers=6, num_query_heads=4,
+        num_key_value_heads=2, hidden_dim=16, intermediate_dim=32,
+        head_dim=8, use_sliding_window_attention=True, sliding_window_size=4,
+        sliding_window_pattern=3, global_head_dim=16,
+        num_global_key_value_heads=1, hidden_size_per_layer_input=0,
+        global_rope_partial_rotary_factor=0.25, dtype="float32")
+
+
+def test_transfer_matches_keras_hub_with_shared_key_value():
+    reference = build_shared_kv_reference()
+    config = build_paz_config(reference)
+    assert config.num_global_key_value_heads == 1
+    assert shares_key_and_value(config, True)
+    model = build_target_backbone(config)
+    transfer(reference, model)
+    tokens, padding, positions = build_inputs()
+    expected = reference(
+        {"token_ids": tokens, "padding_mask": padding,
+         "position_ids": positions})
+    output = model({"token_ids": tokens, "padding_mask": padding})
+    diff = float(np.max(np.abs(np.array(expected) - np.array(output))))
+    assert diff < 1e-4

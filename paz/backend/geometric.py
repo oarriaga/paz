@@ -47,11 +47,12 @@ def compute_crop_limits(size):
 
 def generate_crop_dimensions(key, W, H):
     """Generates valid crop dimensions respecting aspect ratio constraints."""
+    W_key, H_key = jax.random.split(key)
     min_w, max_w = compute_crop_limits(W)
     min_h, max_h = compute_crop_limits(H)
     return (
-        jax.random.randint(key, (), min_w, max_w, dtype=jp.int32),
-        jax.random.randint(key, (), min_h, max_h, dtype=jp.int32),
+        jax.random.randint(W_key, (), min_w, max_w, dtype=jp.int32),
+        jax.random.randint(H_key, (), min_h, max_h, dtype=jp.int32),
     )
 
 
@@ -66,8 +67,7 @@ def build_crop_region(key, width, height, orig_width, orig_height):
     Returns:
         array: Crop region array [x_start, y_start, x_end, y_end].
     """
-    x_start = jax.random.randint(key, (), 0, orig_width - width, dtype=jp.int32)
-    y_start = jax.random.randint(
-        key, (), 0, orig_height - height, dtype=jp.int32
-    )
+    x_key, y_key = jax.random.split(key)
+    x_start = jax.random.randint(x_key, (), 0, orig_width - width, jp.int32)
+    y_start = jax.random.randint(y_key, (), 0, orig_height - height, jp.int32)
     return jp.array([x_start, y_start, x_start + width, y_start + height])

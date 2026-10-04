@@ -13,7 +13,9 @@ from .geometry import (
     compute_normals,
     compute_normals_for_hits,
     compute_triangle_normals,
+    compute_vertex_normals,
     compute_position,
+    interpolate_corner_normals,
     extract_points,
     transform_points,
 )
