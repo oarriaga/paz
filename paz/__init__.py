@@ -14,6 +14,7 @@ from paz.backend import depth
 from paz.backend import logger  # DEPRECATED - use directory, file, message
 from paz.backend import directory
 from paz.backend import file
+from paz.backend import video
 from paz.backend import message
 from paz.backend import log
 from paz.backend.camera import Camera, VideoPlayer
