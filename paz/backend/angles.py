@@ -26,8 +26,8 @@ def compute_orientation_vector(keypoints3D, parents):
 
 
 def quaternion_to_rotation_matrix(quaternion_xyzw):
-    x, y, z, w = quaternion_xyzw
-    return np.asarray(quaternion.to_matrix([w, x, y, z]))
+    quaternion_wxyz = quaternion.xyzw_to_wxyz(quaternion_xyzw)
+    return np.asarray(quaternion.to_matrix(quaternion_wxyz))
 
 
 def quaternions_to_rotation_matrices(quaternions):
