@@ -1,6 +1,7 @@
 import os
 import json
 import tempfile
+from collections import namedtuple
 
 import pytest
 
@@ -89,3 +90,27 @@ def test_load_csv_raises_on_column_mismatch():
 
         with pytest.raises(ValueError, match="Invalid column size"):
             file.load_csv(filepath)
+
+
+Row = namedtuple("Row", "iteration, loss")
+
+
+def test_open_csv_writes_the_header_once(tmp_path):
+    filepath = tmp_path / "training.csv"
+    log = file.open_csv(filepath, Row)
+    file.write_csv_row(log, Row(1, 0.5))
+    log.filedata.close()
+    log = file.open_csv(filepath, Row)
+    file.write_csv_row(log, Row(2, 0.3))
+    log.filedata.close()
+    assert filepath.read_text().count("iteration,loss") == 1
+    assert file.load_csv(filepath) == {"iteration": [1.0, 2.0],
+                                       "loss": [0.5, 0.3]}
+
+
+def test_write_csv_row_flushes_before_closing(tmp_path):
+    filepath = tmp_path / "training.csv"
+    log = file.open_csv(filepath, Row)
+    file.write_csv_row(log, Row(1, 0.5))
+    assert file.load_csv(filepath) == {"iteration": [1.0], "loss": [0.5]}
+    log.filedata.close()
