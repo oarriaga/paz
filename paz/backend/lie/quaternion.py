@@ -1,4 +1,25 @@
+import jax
 import jax.numpy as jp
+
+from paz.backend.lie import SO3
+
+# Quaternions are arrays [w, x, y, z] with the real part w first.
+
+
+def get_real(quaternion):
+    return quaternion[0]
+
+
+def get_imaginary(quaternion):
+    return quaternion[1:4]
+
+
+def wxyz_to_xyzw(quaternion):
+    return jp.roll(jp.asarray(quaternion), -1)
+
+
+def xyzw_to_wxyz(quaternion):
+    return jp.roll(jp.asarray(quaternion), 1)
 
 
 def to_matrix(quaternion):
@@ -28,24 +49,26 @@ def to_matrix(quaternion):
 
 
 def from_rotation_vector(rotation_vector):
-    """Transforms rotation vector into quaternion.
+    """Maps a rotation vector [3] to a quaternion [w, x, y, z]."""
+    # both parts depend only on the squared half angle so the value and
+    # its first two derivatives stay finite at the zero rotation
+    half_angle_squared = 0.25 * jp.dot(rotation_vector, rotation_vector)
+    versine_ratio = SO3.compute_versine_ratio(half_angle_squared)
+    real = 1.0 - half_angle_squared * versine_ratio
+    sinc = SO3.compute_sinc(half_angle_squared)
+    imaginary = 0.5 * sinc * rotation_vector
+    return jp.concatenate([real[None], imaginary])
 
-    # Arguments
-        rotation_vector: Array of shape ``[3]``.
 
-    # Returns
-        Array representing a quaternion having a shape ``[4]``.
-    """
-    theta = jp.linalg.norm(rotation_vector)
-    rotation_axis = rotation_vector / theta
-    half_theta = 0.5 * theta
-    norm = jp.sin(half_theta)
-    quaternion = jp.array(
-        [
-            norm * rotation_axis[0],
-            norm * rotation_axis[1],
-            norm * rotation_axis[2],
-            jp.cos(half_theta),
-        ]
-    )
-    return quaternion
+def compute_rates(rotation_vector, rate, acceleration):
+    """Returns the quaternion and its first two time derivatives."""
+
+    def compute_rate(rotation_vector, rate):
+        args = (rotation_vector,), (rate,)
+        return jax.jvp(from_rotation_vector, *args)[1]
+
+    args = (rotation_vector,), (rate,)
+    quaternion, quaternion_rate = jax.jvp(from_rotation_vector, *args)
+    args = (rotation_vector, rate), (rate, acceleration)
+    _, quaternion_acceleration = jax.jvp(compute_rate, *args)
+    return quaternion, quaternion_rate, quaternion_acceleration
