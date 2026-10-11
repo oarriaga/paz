@@ -3,6 +3,7 @@ import os
 os.environ["KERAS_BACKEND"] = "jax"
 
 import argparse
+from functools import partial
 
 import numpy as np
 import jax
@@ -13,29 +14,62 @@ import paz
 import facial_keypoints
 
 
+def rotate_image_and_keypoints(key, image, keypoints, rotation_range):
+    angle = jax.random.uniform(key, (), minval=-rotation_range,
+                               maxval=rotation_range)
+    height, width = image.shape[0], image.shape[1]
+    center = jp.array([(width - 1) / 2.0, (height - 1) / 2.0])
+    image = paz.image.rotate(image, angle)
+    return image, paz.points2D.rotate_keypoints2D(keypoints, angle, center)
+
+
+def translate_image_and_keypoints(key, image, keypoints, delta_scale):
+    height, width = image.shape[0], image.shape[1]
+    scale = jp.array([width * delta_scale[0], height * delta_scale[1]])
+    shift = jax.random.uniform(key, (2,), minval=-scale, maxval=scale)
+    image = paz.image.translate(image, shift)
+    return image, paz.points2D.translate_keypoints(keypoints, shift)
+
+
+def augment_image_and_keypoints(key, image, keypoints, rotation_range,
+                                delta_scale):
+    rotate_key, translate_key, bright_key = jax.random.split(key, 3)
+    args = (rotate_key, image, keypoints, rotation_range)
+    image, keypoints = rotate_image_and_keypoints(*args)
+    args = (translate_key, image, keypoints, delta_scale)
+    image, keypoints = translate_image_and_keypoints(*args)
+    image = paz.image.random_brightness(bright_key, image)
+    return image, keypoints
+
+
 class KeypointSequence(keras.utils.PyDataset):
-    def __init__(self, images, keypoints, batch_size, augment=False, seed=0):
+    def __init__(self, images, keypoints, batch_size, augment=False,
+                 rotation_range=jp.pi / 12, delta_scale=(0.1, 0.1), seed=0):
         super().__init__()
         self.images = np.asarray(images, "uint8")
-        self.keypoints = paz.gaussian_mixture.normalize_points(
-            np.asarray(keypoints, "float32"), 96, 96)
+        self.keypoints = np.asarray(keypoints, "float32")
         self.batch_size = batch_size
         self.augment = augment
         self.key = jax.random.PRNGKey(seed)
-        self.augment_images = jax.jit(jax.vmap(paz.image.random_brightness))
+        augment_one = partial(augment_image_and_keypoints,
+                              rotation_range=rotation_range,
+                              delta_scale=delta_scale)
+        self.augment_batch = jax.jit(jax.vmap(augment_one))
 
     def __len__(self):
         return len(self.images) // self.batch_size
 
     def __getitem__(self, index):
         chunk = slice(index * self.batch_size, (index + 1) * self.batch_size)
-        images = self.images[chunk][..., None]
+        images = jp.asarray(self.images[chunk][..., None], "float32")
+        keypoints = jp.asarray(self.keypoints[chunk])
         if self.augment:
-            key = jax.random.fold_in(self.key, index)
-            keys = jax.random.split(key, len(images))
-            images = self.augment_images(keys, jp.asarray(images))
-        images = np.asarray(images, "float32") / 255.0
-        return images, np.asarray(self.keypoints[chunk])
+            self.key, batch_key = jax.random.split(self.key)
+            keys = jax.random.split(batch_key, len(images))
+            images, keypoints = self.augment_batch(keys, images, keypoints)
+        images = np.asarray(images) / 255.0
+        keypoints = paz.gaussian_mixture.normalize_points(keypoints, 96, 96)
+        return images, np.asarray(keypoints)
 
 
 if __name__ == "__main__":
