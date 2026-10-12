@@ -197,3 +197,34 @@ def test_to_rotation_vector_jacobian_is_continuous_at_series_switch():
     jacobian_below = compute_jacobian(below)
     jacobian_above = compute_jacobian(above)
     assert jp.allclose(jacobian_below, jacobian_above, atol=1e-4)
+
+
+@pytest.mark.parametrize("rotation_vector", ROTATION_VECTORS)
+def test_rotate_matches_rotation_matrix(rotation_vector):
+    value = build_quaternion(rotation_vector)
+    vector = jp.array([0.2, -1.0, 0.7])
+    target = quaternion.to_matrix(value) @ vector
+    rotated = quaternion.rotate(value, vector)
+    assert jp.allclose(rotated, target, atol=1e-6)
+
+
+def test_rotate_quarter_turn_about_x():
+    value = build_quaternion([math.pi / 2, 0.0, 0.0])
+    rotated = quaternion.rotate(value, jp.array([0.0, 0.0, 1.0]))
+    assert jp.allclose(rotated, jp.array([0.0, -1.0, 0.0]), atol=1e-6)
+
+
+def test_rotate_preserves_length():
+    value = build_quaternion([1.0, 2.0, -1.5])
+    vector = jp.array([0.2, -1.0, 0.7])
+    rotated = quaternion.rotate(value, vector)
+    target = jp.linalg.norm(vector)
+    assert jp.allclose(jp.linalg.norm(rotated), target, atol=1e-6)
+
+
+def test_rotate_by_conjugate_undoes_rotation():
+    value = build_quaternion([1.0, 2.0, -1.5])
+    vector = jp.array([0.2, -1.0, 0.7])
+    rotated = quaternion.rotate(value, vector)
+    restored = quaternion.rotate(quaternion.conjugate(value), rotated)
+    assert jp.allclose(restored, vector, atol=1e-6)

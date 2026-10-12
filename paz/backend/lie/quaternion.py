@@ -94,6 +94,13 @@ def compute_angular_rate(quaternion, quaternion_rate):
     return 2.0 * get_imaginary(relative_rate)
 
 
+def rotate(quaternion, vector):
+    """Rotates a vector [3] by a quaternion [w, x, y, z]."""
+    pure = jp.concatenate([jp.zeros(1), vector])
+    rotated = multiply(multiply(quaternion, pure), conjugate(quaternion))
+    return get_imaginary(rotated)
+
+
 def multiply(quaternion_A, quaternion_B):
     """Hamilton product of two quaternions [w, x, y, z]."""
     real_A = get_real(quaternion_A)
