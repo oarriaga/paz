@@ -34,7 +34,7 @@ def mean_absolute_error(y_true, y_pred, axis=None, reduction="mean"):
     return result
 
 
-def soft_half_quadratic(values, axis=None, reduction="sum"):
+def half_quadratic(values, axis=None, reduction="sum"):
     """One-sided quadratic penalty for soft inequality constraints.
 
     Values less than or equal to zero are treated as satisfied constraints
