@@ -20,11 +20,11 @@ Hit = namedtuple("Hit", HIT_NAMES.split())
 Surfaces = namedtuple("Surfaces", ["points", "normals", "eyes"])
 
 MESH_NAMES = "vertices vertex_colors transform material faces edges "
-MESH_NAMES += "pattern vertex_uvs"
-Mesh = namedtuple("Mesh", MESH_NAMES.split(), defaults=(None, None))
+MESH_NAMES += "pattern vertex_uvs vertex_normals"
+Mesh = namedtuple("Mesh", MESH_NAMES.split(), defaults=(None, None, None))
 
 TRIANGLE_NAMES = "vertices faces vertex_uvs vertex_colors primitive_index "
-TRIANGLE_NAMES += "materials patterns"
+TRIANGLE_NAMES += "materials patterns corner_normals"
 Triangles = namedtuple("Triangles", TRIANGLE_NAMES.split())
 
 COMPILED_NAMES = "shapes triangles lights mask shadow_mask triangle_mask "

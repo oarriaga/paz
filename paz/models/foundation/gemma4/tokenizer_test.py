@@ -1,6 +1,7 @@
 import json
 
-from paz.models.foundation.gemma4.tokenizer import Gemma4Tokenizer
+from paz.models.foundation.gemma4.tokenizer import (
+    Gemma4Tokenizer, build_answer_prompt_parts, build_prompt_parts)
 
 # Tiny hand-built byte-BPE tokenizer whose ids are referenced by the asserts
 # below. Written to a temp file per test so no JSON asset is committed (the
@@ -88,3 +89,12 @@ def test_tokenizer_rejects_non_json_assets(tmp_path):
         assert "tokenizer.json only" in str(error)
         return
     raise AssertionError("Gemma4Tokenizer should reject non-json assets")
+
+
+def test_prompt_parts_match_the_official_chat_templates():
+    # Rendered by google/gemma-4-E2B-it and google/gemma-4-12B-it with
+    # add_generation_prompt=True and thinking disabled.
+    turn = "<bos><|turn>user\nhi<turn|>\n<|turn>model\n"
+    assert "".join(build_prompt_parts("hi")) == turn
+    channel = turn + "<|channel>thought\n<channel|>"
+    assert "".join(build_answer_prompt_parts("hi")) == channel

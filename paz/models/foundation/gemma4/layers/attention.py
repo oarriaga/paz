@@ -59,29 +59,27 @@ def zero_masked_positions(output, mask):
     return ops.where(no_tokens[..., None], zeros, output)
 
 
-def update_kv_cache(cache, index, key, value, head_dim, cache_head_dim):
-    key = ops.cast(key, cache.dtype)
-    value = ops.cast(value, cache.dtype)
-    if head_dim < cache_head_dim:
-        key = pad_to_cache_dim(key, cache_head_dim - head_dim)
-        value = pad_to_cache_dim(value, cache_head_dim - head_dim)
+def update_kv_cache(cache, index, key, value, kv_shape, cache_kv_shape):
+    key = pad_to_cache(ops.cast(key, cache.dtype), kv_shape, cache_kv_shape)
+    value = pad_to_cache(ops.cast(value, cache.dtype), kv_shape, cache_kv_shape)
     return kv_cache.update(cache, index, key, value)
 
 
-def read_kv_cache(kv_source, head_dim, cache_head_dim):
+def read_kv_cache(kv_source, kv_shape):
+    num_heads, head_dim = kv_shape
     key, value = ops.split(kv_source, 2, axis=1)
-    key = ops.squeeze(key, axis=1)
-    value = ops.squeeze(value, axis=1)
-    if head_dim < cache_head_dim:
-        key = key[..., :head_dim]
-        value = value[..., :head_dim]
+    key = ops.squeeze(key, axis=1)[..., :num_heads, :head_dim]
+    value = ops.squeeze(value, axis=1)[..., :num_heads, :head_dim]
     return key, value
 
 
-def pad_to_cache_dim(tensor, pad_size):
-    ndim = len(tensor.shape)
-    padding = [(0, 0)] * (ndim - 1) + [(0, pad_size)]
-    return ops.pad(tensor, padding)
+def pad_to_cache(tensor, kv_shape, cache_kv_shape):
+    num_heads, head_dim = kv_shape
+    cache_heads, cache_head_dim = cache_kv_shape
+    head_padding = (0, cache_heads - num_heads)
+    dim_padding = (0, cache_head_dim - head_dim)
+    leading = [(0, 0)] * (len(tensor.shape) - 2)
+    return ops.pad(tensor, leading + [head_padding, dim_padding])
 
 
 def build_cache_mask(full_key, index, positions, window):

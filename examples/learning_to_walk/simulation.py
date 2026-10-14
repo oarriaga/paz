@@ -123,8 +123,6 @@ def randomize_plant(model, data, height, rng):
 
 
 def sample_heading(rng):
-    # MuJoCo orders a quaternion w, x, y, z, which the paz
-    # from_rotation_vector helper does not, so the yaw is written out here.
     yaw = rng.uniform(-np.pi, np.pi)
     return np.array([np.cos(yaw / 2), 0.0, 0.0, np.sin(yaw / 2)])
 

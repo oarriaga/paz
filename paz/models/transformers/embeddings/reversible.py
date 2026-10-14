@@ -8,7 +8,7 @@ class ReversibleEmbedding(Embedding):
 
     Called normally it looks up token embeddings. Called with ``reverse=True``
     it projects from ``output_dim`` back to ``input_dim``. With tied weights
-    (the default) the reverse projection reuses the transposed embedding
+    (the default) the reverse projection contracts against the embedding
     matrix; otherwise it uses a separate ``reverse_embeddings`` weight.
     """
 
@@ -28,12 +28,16 @@ class ReversibleEmbedding(Embedding):
     def call(self, inputs, reverse=False):
         if not reverse:
             return super().call(inputs)
-        return ops.matmul(inputs, self.reverse_kernel())
+        return self.project_to_vocabulary(inputs)
 
-    def reverse_kernel(self):
+    def project_to_vocabulary(self, inputs):
+        # Contract against the untransposed table: transposing a tied
+        # vocabulary embedding first allocates a second copy of it, which
+        # costs 2 GB per call on a 12B-sized model.
         if self.tie_weights:
-            return ops.transpose(ops.convert_to_tensor(self.embeddings))
-        return self.reverse_embeddings
+            embeddings = ops.convert_to_tensor(self.embeddings)
+            return ops.einsum("...d,vd->...v", inputs, embeddings)
+        return ops.matmul(inputs, self.reverse_embeddings)
 
     def compute_output_spec(self, inputs, reverse=False):
         shape = list(inputs.shape)

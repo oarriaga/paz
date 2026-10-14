@@ -1,8 +1,11 @@
 import os
 import csv
 import json
+from collections import namedtuple
 
 import keras
+
+CSVLog = namedtuple("CSVLog", "filedata, writer")
 
 
 def write_json(dictionary, filepath, indent=4):
@@ -28,6 +31,25 @@ def write_weights(model, directory, name=None):
     name = model.name if name is None else name
     weights_path = os.path.join(directory, name + ".weights.h5")
     model.save_weights(weights_path)
+
+
+def open_csv(filepath, row_type):
+    """Opens a CSV file to append rows of a given namedtuple type.
+
+    Writes the header only when the file is new, so a resumed run keeps
+    appending to its log. The caller closes `filedata` when done.
+    """
+    exists = os.path.isfile(filepath)
+    filedata = open(filepath, "a", newline="")
+    writer = csv.DictWriter(filedata, fieldnames=row_type._fields)
+    if not exists:
+        writer.writeheader()
+    return CSVLog(filedata, writer)
+
+
+def write_csv_row(log, row):
+    log.writer.writerow(row._asdict())
+    log.filedata.flush()
 
 
 def load_latest(wildcard, filename):

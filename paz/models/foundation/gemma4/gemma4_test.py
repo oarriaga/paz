@@ -78,3 +78,38 @@ def test_gemma4_generates_capital_of_germany():
     no_vision = np.zeros((0, models.config.hidden_dim), "float32")
     generated = generate_eager(models.model, no_vision, prompt, [], stop, 16)
     assert "Berlin" in tokenizer.detokenize(generated)
+
+
+def test_release_url_is_per_model():
+    base = pretrained.GEMMA4_WEIGHTS_URL
+    assert pretrained.build_release_url("gemma4_2b") == base + "v0.26/"
+    assert pretrained.build_release_url("gemma4_12b") == base + "v0.36/"
+
+
+def test_assembling_verifies_then_discards_the_parts(tmp_path, monkeypatch):
+    blob = os.urandom(3_000_001)
+    source = tmp_path / "backbone.weights.h5"
+    source.write_bytes(blob)
+    names = pretrained.split_file(
+        source, tmp_path, "part", part_bytes=2_000_000)
+    monkeypatch.setattr(
+        pretrained, "get_file", lambda asset, url, **kwargs: tmp_path / asset)
+    entry = {"parts": names, "sha256": pretrained.compute_sha256(source)}
+    output = tmp_path / "assembled.h5"
+    pretrained.assemble_weights_file(output, entry, "subdir", "url/")
+    assert output.read_bytes() == blob
+    assert [name for name in names if (tmp_path / name).exists()] == []
+
+
+def test_a_corrupt_assembly_keeps_the_parts(tmp_path, monkeypatch):
+    source = tmp_path / "backbone.weights.h5"
+    source.write_bytes(os.urandom(3_000_001))
+    names = pretrained.split_file(
+        source, tmp_path, "part", part_bytes=2_000_000)
+    monkeypatch.setattr(
+        pretrained, "get_file", lambda asset, url, **kwargs: tmp_path / asset)
+    entry = {"parts": names, "sha256": "0" * 64}
+    with pytest.raises(ValueError, match="Checksum mismatch"):
+        pretrained.assemble_weights_file(
+            tmp_path / "assembled.h5", entry, "subdir", "url/")
+    assert all((tmp_path / name).exists() for name in names)

@@ -6,13 +6,14 @@ from jax import random as jr
 
 from networks import call_actor
 from networks import call_critic
+from networks import read_stdv
 from ppo import Experience
 from ppo import compute_value_targets
 from ppo import sample_actions
 from ppo import standardize_advantages
 
-Rollout = namedtuple("Rollout", "actor_observation, critic_observation, action, log_probability, mean, stdv, value, reward, done, terms, reward_sum")  # fmt: skip
-Metrics = namedtuple("Metrics", "reward, episode_return, terms")
+Rollout = namedtuple("Rollout", "actor_observation, critic_observation, action, log_probability, mean, stdv, value, reward, done, terms, reward_sum, level, diverged")  # fmt: skip
+Metrics = namedtuple("Metrics", "reward, episode_return, terms, level, episode_length, divergences")  # fmt: skip
 
 
 def build_collect(actor, critic, reset, step, num_steps=24, gamma=0.99):
@@ -23,17 +24,18 @@ def build_collect(actor, critic, reset, step, num_steps=24, gamma=0.99):
             state, key = carry
             keys = jr.split(key, 4)
             history = state.history
+            stdv = read_stdv(parameters)
             mean = call_actor(actor, parameters.actor, history.actor)
-            action, log_probability = sample_actions(keys[1], mean, parameters.stdv)  # fmt: skip
+            action, log_probability = sample_actions(keys[1], mean, stdv)
             value = call_critic(critic, parameters.critic, history.critic)
             state, transition = step(keys[2], state, action, max_speed)
             reward_sum = state.reward_sum
             reward = bootstrap(critic, parameters, state, transition, gamma)
-            fresh = reset(keys[3], transition.level, max_speed)
+            fresh = reset(keys[3], transition.level, state.tile.column, max_speed)  # fmt: skip
             state = select_done(transition.done, fresh, state)
-            stdv = jp.broadcast_to(parameters.stdv, mean.shape)
+            stdv = jp.broadcast_to(stdv, mean.shape)
             done = transition.done.astype(jp.float32)
-            step_args = history.actor, history.critic, action, log_probability, mean, stdv, value, reward, done, transition.terms, reward_sum  # fmt: skip
+            step_args = history.actor, history.critic, action, log_probability, mean, stdv, value, reward, done, transition.terms, reward_sum, state.tile.level, transition.diverged  # fmt: skip
             return (state, keys[0]), Rollout(*step_args)
 
         (state, key), rollout = jax.lax.scan(advance, (state, key), None, length=num_steps)  # fmt: skip
@@ -48,8 +50,11 @@ def build_collect(actor, critic, reset, step, num_steps=24, gamma=0.99):
 
 
 def bootstrap(critic, parameters, state, transition, gamma):
+    # a diverged state may hold a non-finite value; it never times out, so
+    # selecting instead of multiplying keeps the NaN out of the reward
     values = call_critic(critic, parameters.critic, state.history.critic)
-    return transition.reward + gamma * values * transition.timeout
+    bootstrapped = jp.where(transition.timeout > 0.0, values, 0.0)
+    return transition.reward + gamma * bootstrapped
 
 
 def select_done(done, fresh, state):
@@ -83,4 +88,7 @@ def compute_metrics(rollout):
     total_return = jp.sum(rollout.reward_sum * rollout.done)
     episode_return = total_return / jp.maximum(completed, 1.0)
     terms = jp.mean(rollout.terms, axis=(0, 1))
-    return Metrics(jp.mean(rollout.reward), episode_return, terms)
+    level = jp.mean(rollout.level.astype(jp.float32))
+    episode_length = rollout.done.size / jp.maximum(completed, 1.0)
+    divergences = jp.sum(rollout.diverged)
+    return Metrics(jp.mean(rollout.reward), episode_return, terms, level, episode_length, divergences)  # fmt: skip

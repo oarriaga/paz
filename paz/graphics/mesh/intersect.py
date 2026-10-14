@@ -21,7 +21,7 @@ def compute_f(edges_AC, edges_AB, ray_directions):
 
 
 def intersect_canonical_mesh(vertices, faces, ray_origins, ray_directions):
-    edges_AB, edges_AC, points_A = build_edges(vertices, faces)
+    edges_AC, edges_AB, points_A = build_edges(vertices, faces)
     f, directions_cross_edges_AC = compute_f(edges_AC, edges_AB, ray_directions)
     points_1_to_origin = ray_origins - points_A
     u = f * paz.algebra.dot(points_1_to_origin, directions_cross_edges_AC)
@@ -107,8 +107,8 @@ def intersect_triangles(triangles, rays, face_chunk_size=1024):
     hit_mask, depth, u, v, face_index = intersect_chunked(*args)
     ray_origins, ray_directions = rays
     points = ray_origins + jp.expand_dims(depth, -1) * ray_directions
-    normal_args = triangles.vertices, triangles.faces, face_index
-    normals = paz.graphics.mesh.compute_triangle_normals(*normal_args)
+    normal_args = triangles.corner_normals, face_index, u, v
+    normals = paz.graphics.mesh.interpolate_corner_normals(*normal_args)
     return hit_mask, depth, points, normals, -ray_directions, face_index, u, v
 
 

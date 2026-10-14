@@ -1,4 +1,25 @@
+import jax
 import jax.numpy as jp
+
+from paz.backend.lie import SO3
+
+# Quaternions are arrays [w, x, y, z] with the real part w first.
+
+
+def get_real(quaternion):
+    return quaternion[0]
+
+
+def get_imaginary(quaternion):
+    return quaternion[1:4]
+
+
+def wxyz_to_xyzw(quaternion):
+    return jp.roll(jp.asarray(quaternion), -1)
+
+
+def xyzw_to_wxyz(quaternion):
+    return jp.roll(jp.asarray(quaternion), 1)
 
 
 def to_matrix(quaternion):
@@ -28,24 +49,87 @@ def to_matrix(quaternion):
 
 
 def from_rotation_vector(rotation_vector):
-    """Transforms rotation vector into quaternion.
+    """Maps a rotation vector [3] to a quaternion [w, x, y, z]."""
+    # both parts depend only on the squared half angle so the value and
+    # its first two derivatives stay finite at the zero rotation
+    half_angle_squared = 0.25 * jp.dot(rotation_vector, rotation_vector)
+    versine_ratio = SO3.compute_versine_ratio(half_angle_squared)
+    real = 1.0 - half_angle_squared * versine_ratio
+    sinc = SO3.compute_sinc(half_angle_squared)
+    imaginary = 0.5 * sinc * rotation_vector
+    return jp.concatenate([real[None], imaginary])
 
-    # Arguments
-        rotation_vector: Array of shape ``[3]``.
 
-    # Returns
-        Array representing a quaternion having a shape ``[4]``.
+def compute_rates(rotation_vector, rate, acceleration):
+    """Returns the quaternion and its first two time derivatives."""
+
+    def compute_rate(rotation_vector, rate):
+        args = (rotation_vector,), (rate,)
+        return jax.jvp(from_rotation_vector, *args)[1]
+
+    args = (rotation_vector,), (rate,)
+    quaternion, quaternion_rate = jax.jvp(from_rotation_vector, *args)
+    args = (rotation_vector, rate), (rate, acceleration)
+    _, quaternion_acceleration = jax.jvp(compute_rate, *args)
+    return quaternion, quaternion_rate, quaternion_acceleration
+
+
+def to_rotation_vector(quaternion):
+    """Maps a quaternion [w, x, y, z] to a rotation vector [3]."""
+    # q and -q are the same rotation, a non-negative w keeps the angle in
+    # [0, pi]
+    is_flipped = get_real(quaternion) < 0.0
+    quaternion = jp.where(is_flipped, -quaternion, quaternion)
+    imaginary = get_imaginary(quaternion)
+    norm_squared = jp.dot(imaginary, imaginary)
+    ratio = compute_angle_ratio(norm_squared, get_real(quaternion))
+    return ratio * imaginary
+
+
+def compute_angular_rate(quaternion, quaternion_rate):
+    """Maps a quaternion rate to the body-frame angular rate."""
+    # q' = q (0, w) / 2 gives w = 2 Im(q* q'). Passing q'' gives the angular
+    # acceleration since q* q'' = (w / 2)^2 + w' / 2 and (w / 2)^2 is real
+    relative_rate = multiply(conjugate(quaternion), quaternion_rate)
+    return 2.0 * get_imaginary(relative_rate)
+
+
+def rotate_vector(quaternion, vector):
+    """Rotates a vector [3] by a quaternion [w, x, y, z]."""
+    pure = jp.concatenate([jp.zeros(1), vector])
+    rotated = multiply(multiply(quaternion, pure), conjugate(quaternion))
+    return get_imaginary(rotated)
+
+
+def multiply(quaternion_A, quaternion_B):
+    """Hamilton product of two quaternions [w, x, y, z]."""
+    real_A = get_real(quaternion_A)
+    real_B = get_real(quaternion_B)
+    imaginary_A = get_imaginary(quaternion_A)
+    imaginary_B = get_imaginary(quaternion_B)
+    real = real_A * real_B - jp.dot(imaginary_A, imaginary_B)
+    scaled = real_A * imaginary_B + real_B * imaginary_A
+    imaginary = scaled + jp.cross(imaginary_A, imaginary_B)
+    return jp.concatenate([real[None], imaginary])
+
+
+def conjugate(quaternion):
+    return quaternion * jp.array([1.0, -1.0, -1.0, -1.0])
+
+
+def compute_angle_ratio(norm_squared, real):
+    """Ratio `2 atan2(norm, real) / norm` of rotation angle to vector norm.
+
+    It is `0 / 0` at `norm = 0` with the limit `2 / real`. When the
+    tangent `t = norm / real` is small a Taylor series in `t^2` replaces
+    the ratio, and safe values keep the unused branch free of NaN under
+    autodiff.
     """
-    theta = jp.linalg.norm(rotation_vector)
-    rotation_axis = rotation_vector / theta
-    half_theta = 0.5 * theta
-    norm = jp.sin(half_theta)
-    quaternion = jp.array(
-        [
-            norm * rotation_axis[0],
-            norm * rotation_axis[1],
-            norm * rotation_axis[2],
-            jp.cos(half_theta),
-        ]
-    )
-    return quaternion
+    use_taylor = norm_squared < 1e-8 * real**2
+    safe_norm_squared = jp.where(use_taylor, 1.0, norm_squared)
+    norm = jp.sqrt(safe_norm_squared)
+    exact = 2.0 * jp.arctan2(norm, real) / norm
+    safe_real = jp.where(use_taylor, real, 1.0)
+    t_squared = norm_squared / safe_real**2
+    series = 1.0 - t_squared / 3.0 + t_squared**2 / 5.0
+    return jp.where(use_taylor, (2.0 / safe_real) * series, exact)

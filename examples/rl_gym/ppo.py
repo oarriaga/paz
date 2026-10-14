@@ -6,10 +6,12 @@ import jax
 import paz
 import jax.numpy as jp
 from jax import random as jr
+from jax.sharding import PartitionSpec
 
 from networks import call_actor
 from networks import call_critic
 from networks import pack_parameters
+from networks import read_stdv
 from networks import unpack_parameters
 
 Experience = namedtuple("Experience", "actor_observation, critic_observation, action, log_probability, mean, stdv, value, value_target, advantage")  # fmt: skip
@@ -18,20 +20,27 @@ LossTerms = namedtuple("LossTerms", "policy_loss, value_loss, entropy, KL")
 UpdateMetrics = namedtuple("UpdateMetrics", "loss, policy_loss, value_loss, entropy, KL, gradient_norm, learning_rate")  # fmt: skip
 
 
-def build_update(actor, critic, optimizer, num_epochs=5, num_batches=4):
+def build_update(actor, critic, optimizer, mesh, num_epochs=5, num_batches=4):  # fmt: skip
 
-    def update(key, state, experience):
+    def update(seed, state, experience):
         run_batch = partial(apply_batch, actor, critic, optimizer)
+        # as in rsl_rl, one permutation per update, reused every epoch
+        shuffled = shuffle_experience(jr.key(seed), experience)
+        batches = split_batches(shuffled, num_batches)
 
-        def run_epoch(state, key):
-            shuffled = shuffle_experience(key, experience)
-            batches = split_batches(shuffled, num_batches)
+        def run_epoch(state, _):
             return jax.lax.scan(run_batch, state, batches)
 
-        state, metrics = jax.lax.scan(run_epoch, state, jr.split(key, num_epochs))  # fmt: skip
+        state, metrics = jax.lax.scan(run_epoch, state, None, num_epochs)
         return state, jax.tree.map(jp.mean, metrics)
 
-    return jax.jit(update)
+    # every process minibatches its own rollout shard and the gradients
+    # and the KL that drives the learning rate are averaged across shards,
+    # as rsl_rl does with one rank per GPU
+    specs = PartitionSpec(), PartitionSpec(), PartitionSpec("shards")
+    outputs = PartitionSpec(), PartitionSpec()
+    sharded = jax.shard_map(update, mesh=mesh, in_specs=specs, out_specs=outputs, check_vma=False)  # fmt: skip
+    return jax.jit(sharded)
 
 
 def shuffle_experience(key, experience):
@@ -56,6 +65,7 @@ def apply_batch(actor, critic, optimizer, state, batch):
     variables = pack_parameters(state.parameters)
     compute_grads = jax.value_and_grad(compute_loss, 2, has_aux=True)
     (loss, metrics), gradients = compute_grads(actor, critic, variables, batch)
+    loss, metrics, gradients = average_shards((loss, metrics, gradients))
     learning_rate = adapt_learning_rate(state.learning_rate, metrics.KL)
     optimizer_state = set_learning_rate(state.optimizer_state, learning_rate)
     gradients, gradient_norm = clip_gradients(gradients)
@@ -65,6 +75,10 @@ def apply_batch(actor, critic, optimizer, state, batch):
     state = TrainingState(parameters, optimizer_state, learning_rate)
     reported = loss, *metrics, gradient_norm, learning_rate
     return state, UpdateMetrics(*reported)
+
+
+def average_shards(values):
+    return jax.tree.map(lambda value: jax.lax.pmean(value, "shards"), values)
 
 
 def adapt_learning_rate(learning_rate, KL, desired_KL=0.01, minimum_rate=1e-5, maximum_rate=1e-2, step=1.5):  # fmt: skip
@@ -92,15 +106,16 @@ def clip_gradients(gradients, max_gradient_norm=1.0, epsilon=1e-6):
 
 def compute_loss(actor, critic, variables, batch, clip_ratio=0.2, value_weight=1.0, entropy_weight=0.01):  # fmt: skip
     parameters = unpack_parameters(variables)
+    stdv = read_stdv(parameters)
     mean = call_actor(actor, parameters.actor, batch.actor_observation)
     values = call_critic(critic, parameters.critic, batch.critic_observation)
-    log_prob = compute_normal_logprob(batch.action, mean, parameters.stdv)
+    log_prob = compute_normal_logprob(batch.action, mean, stdv)
     policy_loss = compute_policy_loss(log_prob, batch, clip_ratio)
     value_loss = compute_value_loss(values, batch, clip_ratio)
-    entropy = jp.mean(normal_entropy(parameters.stdv))
+    entropy = jp.mean(normal_entropy(stdv))
     weighted_value = value_weight * value_loss
     loss = policy_loss + weighted_value - (entropy_weight * entropy)
-    KL = compute_KL(mean, parameters.stdv, batch.mean, batch.stdv)
+    KL = compute_KL(mean, stdv, batch.mean, batch.stdv)
     return loss, LossTerms(policy_loss, value_loss, entropy, KL)
 
 
