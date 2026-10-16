@@ -9,9 +9,14 @@ so no gradient flows into it.
 
 ``y_true`` is ``(batch, max_boxes, 5)``: normalized ``(cx, cy, w, h)`` and a
 class index, padded with -1. ``y_pred`` is
-``(batch, num_queries, 4 + num_classes)``: normalized ``(cx, cy, w, h)``
-followed by class logits, which is what ``rf_detr.models.join_outputs``
-produces.
+``(batch, stages, groups, num_queries, 4 + num_classes)``: normalized
+``(cx, cy, w, h)`` followed by class logits, for every supervised stage and
+query group, which is what the trainable ``rf_detr`` detectors produce.
+
+Stages are summed and query groups averaged. That is how the reference
+weights its auxiliary and first-stage terms, which carry the same
+coefficients as the final stage, and how it normalizes group-DETR by the box
+count times the group count.
 """
 import numpy as np
 import jax
@@ -29,7 +34,13 @@ UNMATCHABLE_COST = 1e6
 
 @register_keras_serializable("detr_loss", "call")
 def call(y_true, y_pred):
-    """Sums the classification, regression and generalized-IOU terms."""
+    """Sums every stage, averaging the query groups inside each stage."""
+    targets, predictions = flatten_stages(y_true, y_pred)
+    return y_pred.shape[1] * compute_total(targets, predictions)
+
+
+def compute_total(y_true, y_pred):
+    """Classification, regression and generalized-IOU terms of one stage."""
     boxes, logits, targets, labels, valid = unpack(y_true, y_pred)
     queries = match(boxes, logits, targets, labels, valid)
     args = boxes, targets, valid, queries
@@ -42,7 +53,8 @@ def call(y_true, y_pred):
 @register_keras_serializable("detr_loss", "classification")
 def classification(y_true, y_pred):
     """IOU-aware binary cross entropy over every query and class."""
-    boxes, logits, targets, labels, valid = unpack(y_true, y_pred)
+    unpacked = unpack(y_true, read_last_stage(y_pred))
+    boxes, logits, targets, labels, valid = unpacked
     queries = match(boxes, logits, targets, labels, valid)
     args = boxes, logits, targets, labels, valid, queries
     return compute_classification(*args)
@@ -51,7 +63,8 @@ def classification(y_true, y_pred):
 @register_keras_serializable("detr_loss", "regression")
 def regression(y_true, y_pred):
     """Mean absolute error between matched boxes, in center form."""
-    boxes, logits, targets, labels, valid = unpack(y_true, y_pred)
+    unpacked = unpack(y_true, read_last_stage(y_pred))
+    boxes, logits, targets, labels, valid = unpacked
     queries = match(boxes, logits, targets, labels, valid)
     return compute_regression(boxes, targets, valid, queries)
 
@@ -59,7 +72,8 @@ def regression(y_true, y_pred):
 @register_keras_serializable("detr_loss", "generalized_IOU")
 def generalized_IOU(y_true, y_pred):
     """One minus the generalized IOU of every matched pair."""
-    boxes, logits, targets, labels, valid = unpack(y_true, y_pred)
+    unpacked = unpack(y_true, read_last_stage(y_pred))
+    boxes, logits, targets, labels, valid = unpacked
     queries = match(boxes, logits, targets, labels, valid)
     return compute_IOU_error(boxes, targets, valid, queries)
 
@@ -183,6 +197,22 @@ def build_selections(queries, labels, shape):
     query_hot = jax.nn.one_hot(queries, shape[1])
     class_hot = jax.nn.one_hot(labels, shape[2])
     return query_hot[..., None] * class_hot[:, :, None, :]
+
+
+def flatten_stages(y_true, y_pred):
+    """Folds stages and query groups into the batch axis.
+
+    Every stage and group is matched and scored on its own, so each becomes
+    one more row of the batch.
+    """
+    repeats = y_pred.shape[1] * y_pred.shape[2]
+    predictions = jp.reshape(y_pred, (-1,) + y_pred.shape[3:])
+    return jp.repeat(y_true, repeats, axis=0), predictions
+
+
+def read_last_stage(y_pred):
+    """Final decoder layer of the first group, which is what runs at test."""
+    return y_pred[:, -1, 0]
 
 
 def unpack(y_true, y_pred):
