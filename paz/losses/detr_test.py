@@ -13,6 +13,11 @@ def build_targets(boxes_and_labels):
 
 
 def build_predictions(boxes, labels, confidence=8.0):
+    """One stage and one query group, as a single-group detector reports."""
+    return build_stage(boxes, labels, confidence)[:, None, None]
+
+
+def build_stage(boxes, labels, confidence=8.0):
     logits = np.full((1, NUM_QUERIES, NUM_CLASSES), -confidence, "float32")
     predicted = np.full((1, NUM_QUERIES, 4), 0.5, "float32")
     for query, (box, label) in enumerate(zip(boxes, labels)):
@@ -82,3 +87,36 @@ def test_call_is_jit_compatible():
     eager = float(detr.call(y_true, y_pred))
     jitted = float(jax.jit(detr.call)(y_true, y_pred))
     assert np.allclose(eager, jitted, atol=1e-5)
+
+
+def test_stages_are_summed():
+    y_true = build_targets([[0.5, 0.5, 0.2, 0.2, 1]])
+    stage = build_stage([[0.4, 0.4, 0.3, 0.3]], [1])
+    stages = jp.stack([stage, stage], axis=1)[:, :, None]
+    single = float(detr.call(y_true, stage[:, None, None]))
+    assert np.isclose(float(detr.call(y_true, stages)), 2.0 * single)
+
+
+def test_query_groups_are_averaged():
+    y_true = build_targets([[0.5, 0.5, 0.2, 0.2, 1]])
+    stage = build_stage([[0.4, 0.4, 0.3, 0.3]], [1])
+    groups = jp.stack([stage, stage], axis=1)[:, None]
+    single = float(detr.call(y_true, stage[:, None, None]))
+    assert np.isclose(float(detr.call(y_true, groups)), single)
+
+
+def test_a_worse_group_raises_the_loss():
+    y_true = build_targets([[0.5, 0.5, 0.2, 0.2, 1]])
+    right = build_stage([[0.5, 0.5, 0.2, 0.2]], [1])
+    wrong = build_stage([[0.1, 0.1, 0.2, 0.2]], [0])
+    groups = jp.stack([right, wrong], axis=1)[:, None]
+    single = float(detr.call(y_true, right[:, None, None]))
+    assert float(detr.call(y_true, groups)) > single
+
+
+def test_metrics_read_the_last_stage_only():
+    y_true = build_targets([[0.5, 0.5, 0.2, 0.2, 1]])
+    right = build_stage([[0.5, 0.5, 0.2, 0.2]], [1])
+    wrong = build_stage([[0.1, 0.1, 0.2, 0.2]], [0])
+    stages = jp.stack([wrong, right], axis=1)[:, :, None]
+    assert float(detr.regression(y_true, stages)) == 0.0

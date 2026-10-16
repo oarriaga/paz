@@ -4,6 +4,11 @@ from paz.models.detection.rf_detr.models import RFDETRSmall
 from paz.models.detection.rf_detr.models import RFDETRMedium
 from paz.models.detection.rf_detr.models import RFDETRBase
 from paz.models.detection.rf_detr.models import RFDETRLarge
-from paz.models.detection.rf_detr.models import join_outputs
+from paz.models.detection.rf_detr.models import TrainableRFDETRNano
+from paz.models.detection.rf_detr.models import TrainableRFDETRSmall
+from paz.models.detection.rf_detr.models import TrainableRFDETRMedium
+from paz.models.detection.rf_detr.models import TrainableRFDETRBase
+from paz.models.detection.rf_detr.models import TrainableRFDETRLarge
+from paz.models.detection.rf_detr.models import build_detector
 from paz.models.detection.rf_detr.models import reset_class_heads
 from paz.models.detection.rf_detr.pretrained import download_weights
