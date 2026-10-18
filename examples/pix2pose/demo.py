@@ -9,8 +9,8 @@ import jax
 import jax.numpy as jp
 
 import paz
-from paz.applications.pose_estimators import solve_PnP_RANSAC
-from paz.applications.pose_estimators import project_points3D, build_cube_corners
+from paz.poses import solve_PnP_RANSAC, project_points3D
+from paz.pinhole import build_cube_points3D
 import scenes
 
 Camera = namedtuple("Camera", ["intrinsics", "distortion"])
@@ -70,7 +70,7 @@ reprojection_error = np.mean(np.linalg.norm(reprojected - points2D, axis=1))
 print(f"correspondences: {len(points3D)} | "
       f"mean reprojection error: {reprojection_error:.2f} px")
 
-cube = paz.to_numpy(build_cube_corners(*extents))
+cube = paz.to_numpy(build_cube_points3D(*extents))
 drawn = paz.applications.pose_estimators.draw_boxes3D(
     image.copy(), [pose6D], cube, camera, paz.draw.GREEN, 2, 3)
 paz.image.write(args.output, drawn)

@@ -162,6 +162,20 @@ def build_cube_corners(min_extents, max_extents):
     )
 
 
+def build_cube_points3D(width, height, depth):
+    half_width, half_height, half_depth = width / 2, height / 2, depth / 2
+    point1 = [+half_width, -half_height, +half_depth]
+    point2 = [+half_width, -half_height, -half_depth]
+    point3 = [-half_width, -half_height, -half_depth]
+    point4 = [-half_width, -half_height, +half_depth]
+    point5 = [+half_width, +half_height, +half_depth]
+    point6 = [+half_width, +half_height, -half_depth]
+    point7 = [-half_width, +half_height, -half_depth]
+    point8 = [-half_width, +half_height, +half_depth]
+    points = [point1, point2, point3, point4, point5, point6, point7, point8]
+    return jp.array(points)
+
+
 def compute_AABB(vertices):
     min_extents = jp.min(vertices, axis=0)
     max_extents = jp.max(vertices, axis=0)
