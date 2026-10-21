@@ -20,6 +20,7 @@ from .classification.xception import MiniXceptionFER
 from .classification.xception import MiniXceptionIMDB
 from .classification.xception import build_mini_xception_imdb
 from .classification.protonet import ProtoNet
+from .tracking.deep_sort.mobilenet_v2.model import MobileNetV2
 from .attention.stn import STN
 from .keypoint.keypointnet import KeypointNet2D
 from .keypoint.keypointnet import FaceKeypointNet2D32
