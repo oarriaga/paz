@@ -18,8 +18,8 @@ from pathlib import Path
 import jax
 import numpy as np
 
+from paz.models.foundation.llm2vec import WEIGHTS_NAME
 from paz.models.foundation.llm2vec import model as encoder
-from paz.models.foundation.llm2vec.pretrained import WEIGHTS_NAME
 
 
 def convert(base_dir, adapter_dirs, output_dir):

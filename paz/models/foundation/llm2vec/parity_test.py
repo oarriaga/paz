@@ -58,8 +58,8 @@ def test_tokens_match(fixtures, llm2vec, index):
 @pytest.mark.parametrize("index", [0, 1, 2])
 def test_hidden_states_match_bfloat16_reference(fixtures, llm2vec, index):
     token_ids = jp.asarray(fixtures[f"bfloat16_{index}_input_ids"], "int32")
-    hidden = encoding.forward(llm2vec.model, llm2vec.variables, token_ids)
-    table = llm2vec.model.get_layer("token_embedding").embeddings
+    hidden = llm2vec.forward(llm2vec.variables, token_ids)
+    table = llm2vec.variables[0][0]
     embeddings = np.asarray(table, "float32")[np.asarray(token_ids)]
     error, _ = report("embeddings", embeddings,
                       fixtures[f"bfloat16_{index}_embeddings"])
