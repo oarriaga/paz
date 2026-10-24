@@ -59,37 +59,37 @@ default 100), `--text-weight` and `--constraint-weight` (separated
 classifier-free guidance, default 2.0 each). Post-processing is not
 applied, matching the reference, which disables it for G1.
 
-## Encoding new prompts
+## Text encoder
 
-Text goes through Kimodo's official LLM2Vec encoder (Llama-3-8B-Instruct
-with two LoRA adapters), which is a torch model and is kept out of the JAX
-path. Encode prompts once and pass the file to the demo:
+Prompts are embedded natively by the ported LLM2Vec encoder
+(`paz.models.foundation.llm2vec`): the bidirectional Llama-3-8B-Instruct
+with both LLM2Vec LoRA adapters merged, run one prompt at a time with mean
+pooling exactly as the reference does. The first run downloads its 16 GB
+bfloat16 weights; the encoder needs about 17 GB of GPU memory and is freed
+before SONIC starts. Any sentence works, for example:
 
-    PYTHONPATH=/path/to/nv-tlabs/kimodo python3 examples/kimodo/encode_text.py \
-        "A person waves." "A person sits down." --output my_prompts.npz
-    python3 examples/kimodo/mujoco_demo.py "A person waves." \
-        --prompts my_prompts.npz
-
-`encode_text.py` needs torch, `transformers==5.1`, `peft`, and a clone of
-the upstream repository on `PYTHONPATH`. It loads the Llama base from the
-ungated `NousResearch/Meta-Llama-3-8B-Instruct` mirror after checking that
-its shards carry the sha256 of the official gated files, so no Hugging
-Face access request is needed. Encoding takes about 16 GB of GPU memory in
-bfloat16; use `--device cpu` on smaller cards.
+    python3 examples/kimodo/mujoco_demo.py "A person waves, then sits down."
 
 ## Tests
 
-    pytest paz/models/foundation/kimodo examples/kimodo
+    pytest paz/models/foundation/kimodo paz/models/foundation/llm2vec \
+        examples/kimodo
 
-Parity against the torch reference and the end-to-end simulation are
+Parity against the torch references and the end-to-end simulation are
 opt-in:
 
     KIMODO_FIXTURES=~/.keras/paz/models/kimodo/reference_fixtures.npz \
     KIMODO_WEIGHTS_DIR=~/.keras/paz/models/kimodo \
     pytest paz/models/foundation/kimodo/parity_test.py -s
 
+    LLM2VEC_FIXTURES=~/.keras/paz/models/llm2vec_fixtures.npz \
+    LLM2VEC_WEIGHTS_DIR=~/.keras/paz/models/llm2vec \
+    pytest paz/models/foundation/llm2vec/parity_test.py -s
+
     KIMODO_PIPELINE_TEST=1 pytest examples/kimodo/pipeline_test.py -s
 
-`reference.py` captures the fixtures from the upstream implementation and
-`conversion.py` converts the released safetensors checkpoint; both are
+Each package has a `reference.py` that captures fixtures from the upstream
+torch implementation and a `conversion.py` that converts the released
+checkpoints (the LLM2Vec one merges the LoRA adapters and verifies the
+Llama mirror against the sha256 of the official gated shards); these are
 one-time development tools that need torch.

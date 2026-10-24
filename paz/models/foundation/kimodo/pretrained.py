@@ -1,9 +1,8 @@
 """Download and build the pretrained ``Kimodo-G1-RP-v1`` denoiser.
 
-The converted bundle holds ``kimodo_g1_rp_v1.weights.h5`` (both stages),
-``kimodo_g1_rp_v1_assets.npz`` (normalization statistics) and a small
-``kimodo_g1_rp_v1_prompts.npz`` of LLM2Vec embeddings for a few prompts.
-Weights are released under the NVIDIA Open Model License.
+The converted bundle holds ``kimodo_g1_rp_v1.weights.h5`` (both stages)
+and ``kimodo_g1_rp_v1_assets.npz`` (normalization statistics). Weights
+are released under the NVIDIA Open Model License.
 """
 from collections import namedtuple
 from pathlib import Path
@@ -19,7 +18,6 @@ WEIGHTS_URL = ALTAMIRA + "/v0.30/"
 CACHE_SUBDIR = "paz/models/kimodo"
 WEIGHTS_NAME = "kimodo_g1_rp_v1.weights.h5"
 ASSETS_NAME = "kimodo_g1_rp_v1_assets.npz"
-PROMPTS_NAME = "kimodo_g1_rp_v1_prompts.npz"
 KIMODO = namedtuple("KIMODO", "denoiser stats")
 
 
@@ -51,18 +49,3 @@ def download_assets():
 
 def fetch_asset(name):
     return Path(get_file(name, WEIGHTS_URL + name, cache_subdir=CACHE_SUBDIR))
-
-
-def fetch_prompt_embeddings(models_path=None):
-    """Loads ``{sanitized prompt: (1, 4096) embedding}`` from the bundle."""
-    if models_path is None:
-        path = fetch_asset(PROMPTS_NAME)
-    else:
-        path = Path(models_path) / PROMPTS_NAME
-    return load_prompt_embeddings(path)
-
-
-def load_prompt_embeddings(path):
-    with np.load(path) as prompts:
-        embeddings = {text: prompts[text] for text in prompts.files}
-    return embeddings

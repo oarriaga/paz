@@ -1,9 +1,9 @@
 """Generate a G1 motion from text with Kimodo and track it with SONIC.
 
-The prompt is looked up in an ``.npz`` of LLM2Vec embeddings (the bundled
-set, or one written by ``encode_text.py``), Kimodo samples a 30 Hz motion,
-the motion is exported to MuJoCo ``qpos`` rows, resampled to SONIC's 50 Hz
-clip format, and the existing SONIC MuJoCo demo is launched on it.
+The prompt is embedded with the ported LLM2Vec encoder, Kimodo samples a
+30 Hz motion, the motion is exported to MuJoCo ``qpos`` rows, resampled
+to SONIC's 50 Hz clip format, and the existing SONIC MuJoCo demo is
+launched on it. Everything before MuJoCo runs in Keras/JAX.
 """
 import argparse
 import json
@@ -25,26 +25,21 @@ from paz.models.foundation.kimodo import features
 from paz.models.foundation.kimodo import mujoco as export
 from paz.models.foundation.kimodo import sampling
 from paz.models.foundation.kimodo.pretrained import KimodoG1RP
-from paz.models.foundation.kimodo.pretrained import fetch_prompt_embeddings
-from paz.models.foundation.kimodo.pretrained import load_prompt_embeddings
 from paz.models.foundation.kimodo.text import sanitize_text
+from paz.models.foundation.llm2vec.pretrained import LLM2VecLlama3
+from paz.models.foundation.llm2vec.pretrained import embed
 
 from sonic_clip import KIMODO_FPS, SONIC_FPS, resample_qpos, write_clip
 
 SONIC_DEMO = Path(__file__).resolve().parents[1] / "sonic" / "mujoco_demo.py"
 
 
-def load_prompt_embedding(prompt, prompts_path, models_path):
-    if prompts_path is None:
-        prompts = fetch_prompt_embeddings(models_path)
-    else:
-        prompts = load_prompt_embeddings(prompts_path)
-    text = sanitize_text(prompt)
-    if text not in prompts:
-        known = "\n  ".join(sorted(prompts))
-        raise ValueError(f"No embedding for {text!r}; encode it or pick one "
-                         f"of:\n  {known}")
-    return prompts[text]
+def embed_prompt(prompt, encoder_path):
+    """Sanitizes and embeds the prompt, then frees the 16 GB encoder."""
+    llm2vec = LLM2VecLlama3(encoder_path)
+    embedding = np.asarray(embed(llm2vec, sanitize_text(prompt)))
+    del llm2vec
+    return embedding[None]
 
 
 def build_condition(num_frames, waypoints_path, stats):
@@ -104,10 +99,10 @@ def build_sonic_command(clip_dir, headless):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("prompt", nargs="?", default="A person walks forward.")
-    parser.add_argument("--prompts", type=Path,
-                        help="npz from encode_text.py; bundled set if omitted")
     parser.add_argument("--models-path", type=Path,
                         help="folder with converted Kimodo assets")
+    parser.add_argument("--encoder-path", type=Path,
+                        help="folder with converted LLM2Vec assets")
     parser.add_argument("--duration", type=float, default=5.0,
                         help="motion length in seconds")
     parser.add_argument("--num-steps", type=int, default=100,
@@ -124,8 +119,8 @@ if __name__ == "__main__":
                         help="run SONIC without a viewer through the clip")
     args = parser.parse_args()
 
-    embedding = load_prompt_embedding(args.prompt, args.prompts,
-                                      args.models_path)
+    print(f"Embedding {sanitize_text(args.prompt)!r} with LLM2Vec")
+    embedding = embed_prompt(args.prompt, args.encoder_path)
     print("Loading the pretrained Kimodo-G1-RP-v1 denoiser")
     kimodo = KimodoG1RP(models_path=args.models_path)
     num_frames = int(round(args.duration * KIMODO_FPS))

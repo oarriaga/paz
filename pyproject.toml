@@ -19,6 +19,7 @@ dependencies = [
     "tfp-nightly",
     "matplotlib",
     "optax",
+    "regex",
     "scipy",
     "trimesh",
     "fast_simplification"

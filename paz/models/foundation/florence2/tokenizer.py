@@ -8,7 +8,9 @@ import json
 import re
 from collections import namedtuple
 
-from paz.models.transformers.tokenizers import build_character_to_byte
+from paz.models.transformers.tokenizers import build_byte_to_char
+from paz.models.transformers.tokenizers import build_merge_ranks
+from paz.models.transformers.tokenizers import merge_pairs
 
 FLOW_TOKEN_ID = 51289
 GPT2_SPLITS = (r"'s|'t|'re|'ve|'m|'ll|'d| ?[^\W\d_]+| ?\d+"
@@ -20,22 +22,8 @@ Tokenizer = namedtuple("Tokenizer", "vocabulary merge_ranks byte_to_char")
 def load_tokenizer(path):
     source = json.loads(open(path).read())
     vocabulary = source["model"]["vocab"]
-    merges = source["model"]["merges"]
-    pairs = [unpack_merge(merge) for merge in merges]
-    merge_ranks = {pair: rank for rank, pair in enumerate(pairs)}
-    byte_to_char = build_byte_to_char()
-    return Tokenizer(vocabulary, merge_ranks, byte_to_char)
-
-
-def unpack_merge(merge):
-    if isinstance(merge, str):
-        return tuple(merge.split(" "))
-    return tuple(merge)
-
-
-def build_byte_to_char():
-    character_to_byte = build_character_to_byte()
-    return {byte: char for char, byte in character_to_byte.items()}
+    merge_ranks = build_merge_ranks(source["model"]["merges"])
+    return Tokenizer(vocabulary, merge_ranks, build_byte_to_char())
 
 
 def encode(tokenizer, text, max_length=77):
@@ -57,40 +45,6 @@ def encode_piece(tokenizer, piece):
 def to_visible_characters(tokenizer, piece):
     piece_bytes = piece.encode("utf-8")
     return "".join(tokenizer.byte_to_char[byte] for byte in piece_bytes)
-
-
-def merge_pairs(parts, merge_ranks):
-    while len(parts) > 1:
-        pair = find_best_pair(parts, merge_ranks)
-        if pair is None:
-            break
-        parts = merge_pair(parts, pair)
-    return parts
-
-
-def find_best_pair(parts, merge_ranks):
-    best_pair, best_rank = None, None
-    for pair in zip(parts[:-1], parts[1:]):
-        rank = merge_ranks.get(pair)
-        if rank is None:
-            continue
-        if best_rank is None or rank < best_rank:
-            best_pair, best_rank = pair, rank
-    return best_pair
-
-
-def merge_pair(parts, pair):
-    merged, index = [], 0
-    while index < len(parts):
-        has_next = index < len(parts) - 1
-        is_pair_start = has_next and (parts[index], parts[index + 1]) == pair
-        if is_pair_start:
-            merged.append(parts[index] + parts[index + 1])
-            index = index + 2
-        else:
-            merged.append(parts[index])
-            index = index + 1
-    return merged
 
 
 def build_policy_prompt(instruction):

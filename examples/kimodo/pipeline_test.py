@@ -1,7 +1,8 @@
 """End-to-end smoke test: text embedding -> Kimodo -> SONIC in MuJoCo.
 
-Opt in with ``KIMODO_PIPELINE_TEST=1``; it downloads the Kimodo and SONIC
-assets (or reads ``KIMODO_WEIGHTS_DIR``) and runs about a minute.
+Opt in with ``KIMODO_PIPELINE_TEST=1``; it downloads the LLM2Vec, Kimodo
+and SONIC assets (or reads ``LLM2VEC_WEIGHTS_DIR`` and
+``KIMODO_WEIGHTS_DIR``) and runs about a minute.
 """
 import os
 import re
@@ -31,6 +32,9 @@ def test_text_to_motion_to_sonic(tmp_path):
     weights_dir = os.environ.get("KIMODO_WEIGHTS_DIR")
     if weights_dir is not None:
         command.extend(["--models-path", weights_dir])
+    encoder_dir = os.environ.get("LLM2VEC_WEIGHTS_DIR")
+    if encoder_dir is not None:
+        command.extend(["--encoder-path", encoder_dir])
     result = subprocess.run(command, check=True, cwd=DEMO.parent,
                             capture_output=True, text=True)
     qpos = np.loadtxt(tmp_path / "qpos.csv", delimiter=",")

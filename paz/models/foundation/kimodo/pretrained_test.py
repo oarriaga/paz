@@ -1,5 +1,4 @@
 import numpy as np
-import pytest
 
 from paz.models.foundation.kimodo import features, pretrained
 
@@ -12,8 +11,6 @@ def write_assets(directory):
         arrays[f"{block}_mean"] = np.zeros(dim, "float32")
         arrays[f"{block}_std"] = np.ones(dim, "float32")
     np.savez(directory / pretrained.ASSETS_NAME, **arrays)
-    np.savez(directory / pretrained.PROMPTS_NAME,
-             **{"A person walks forward.": np.ones((1, 4096), "float32")})
 
 
 def test_builds_released_architecture_from_local_assets(tmp_path):
@@ -38,10 +35,3 @@ def test_download_fetches_weights_and_assets(tmp_path, monkeypatch):
     assert names == [pretrained.WEIGHTS_NAME, pretrained.ASSETS_NAME]
     assert all(url.startswith(pretrained.WEIGHTS_URL)
                for _, url in requested)
-    prompts = pretrained.fetch_prompt_embeddings()
-    assert set(prompts) == {"A person walks forward."}
-
-
-def test_missing_prompt_bundle_raises(tmp_path):
-    with pytest.raises(FileNotFoundError):
-        pretrained.fetch_prompt_embeddings(tmp_path)

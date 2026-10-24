@@ -124,12 +124,13 @@ def compute_sha256(path):
     return digest.hexdigest()
 
 
-def shard_weights(source_dir, model_name, output_dir, part_bytes=PART_BYTES):
+def shard_weights(source_dir, model_name, output_dir, part_bytes=PART_BYTES,
+                  filenames=GEMMA4_WEIGHT_FILES):
     """Split a local weights dir into <2 GB parts plus an upload manifest."""
     source_dir, output_dir = Path(source_dir), Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     manifest = {}
-    for filename in GEMMA4_WEIGHT_FILES:
+    for filename in filenames:
         source = source_dir / filename
         if not source.exists():
             continue
