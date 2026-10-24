@@ -1,6 +1,7 @@
 """Interactive MuJoCo demonstration of the PAZ SONIC actor."""
 
 import argparse
+from collections import namedtuple
 import os
 from pathlib import Path
 import signal
@@ -8,6 +9,7 @@ import time
 
 os.environ.setdefault("KERAS_BACKEND", "jax")
 
+import cv2
 import jax
 import mujoco
 import mujoco.viewer
@@ -36,11 +38,41 @@ from simulation import compute_pd_torque
 from simulation import compute_reference_markers
 from simulation import find_joint_addresses
 from simulation import load_motion_set
+from simulation import pose_reference
 from simulation import update_viewer_markers
 
 
 INIT_SECONDS = 3.0
 CONTROL_WARMUP_SECONDS = 2.0
+VIDEO_SIZE = (640, 480)
+Recorder = namedtuple("Recorder", "renderer camera writer ghost")
+
+
+def build_recorder(model, pelvis_id, path, fps):
+    """Offscreen renderer plus a writer for reference-and-robot frames."""
+    width, height = VIDEO_SIZE
+    camera = mujoco.MjvCamera()
+    camera.type = mujoco.mjtCamera.mjCAMERA_TRACKING
+    camera.trackbodyid = pelvis_id
+    camera.azimuth, camera.elevation, camera.distance = 135, -15, 2.8
+    codec = cv2.VideoWriter_fourcc(*"mp4v")
+    writer = cv2.VideoWriter(str(path), codec, fps, (2 * width, height))
+    renderer = mujoco.Renderer(model, height, width)
+    return Recorder(renderer, camera, writer, mujoco.MjData(model))
+
+
+def record_frame(recorder, data, model, joints, clip, frame):
+    pose_reference(model, recorder.ghost, joints, clip, frame)
+    reference = render_view(recorder, recorder.ghost, "Kimodo reference")
+    robot = render_view(recorder, data, "SONIC in MuJoCo")
+    recorder.writer.write(np.concatenate([reference, robot], axis=1))
+
+
+def render_view(recorder, data, label):
+    recorder.renderer.update_scene(data, recorder.camera)
+    image = recorder.renderer.render()[..., ::-1].copy()
+    args = (label, (16, 32), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 255), 2)
+    return cv2.putText(image, *args)
 
 
 def interpolate_targets(start, end, ratio):
@@ -144,6 +176,12 @@ if __name__ == "__main__":
     parser.add_argument("--sim-dt", type=float, default=0.005)
     parser.add_argument("--control-dt", type=float, default=0.02)
     parser.add_argument("--headless", action="store_true")
+    parser.add_argument(
+        "--video",
+        type=Path,
+        help="record a side-by-side reference/robot mp4 of the playback "
+             "(offscreen; run with MUJOCO_GL=egl when there is no display)",
+    )
     parser.add_argument("--steps", type=int)
     parser.add_argument("--start-paused", action="store_true")
     parser.add_argument("--no-realtime", action="store_true")
@@ -320,6 +358,11 @@ if __name__ == "__main__":
     reset_state()
     state["pending_reset"] = False
     update_hud(viewer, state)
+    recorder = None
+    if args.video is not None:
+        args.video.parent.mkdir(parents=True, exist_ok=True)
+        fps = 1.0 / args.control_dt
+        recorder = build_recorder(model, pelvis_id, args.video, fps)
     max_steps = args.steps
     if args.headless and max_steps is None:
         # Startup, warmup, and the whole clip at one frame per policy tick.
@@ -404,6 +447,9 @@ if __name__ == "__main__":
                     else:
                         clear_viewer_markers(viewer)
                     update_hud(viewer, state)
+                if recorder is not None and state["phase"] == "running":
+                    record_frame(recorder, data, model, joints,
+                                 state["clip"], state["frame"])
 
             apply_support_force(
                 model, data, pelvis_id, float(state["support_enabled"]))
@@ -428,6 +474,9 @@ if __name__ == "__main__":
     finally:
         if viewer is not None:
             close_viewer(viewer)
+        if recorder is not None:
+            recorder.writer.release()
+            print(f"Wrote {args.video}")
 
     print(
         f"Completed {step} simulation steps; mode={state['mode']}, "

@@ -33,9 +33,11 @@ Pick another bundled prompt, a longer motion, or a different sample:
     python3 examples/kimodo/mujoco_demo.py "A person walks in a circle." \
         --duration 6 --seed 3
 
-Headless smoke run (SONIC stops after its startup plus the clip):
+Headless smoke run (SONIC stops after its startup plus the clip), with an
+optional side-by-side video of the Kimodo reference and the simulated
+robot:
 
-    python3 examples/kimodo/mujoco_demo.py --headless
+    python3 examples/kimodo/mujoco_demo.py --headless --video walk.mp4
 
 Outputs land in `--output-dir` (default `kimodo_output/`): `motion.npz`
 with the reference keys (`posed_joints`, `global_rot_mats`,

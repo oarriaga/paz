@@ -113,7 +113,9 @@ The same entry point provides a deterministic smoke test without a window:
         --headless --mode g1 --motion squat
 
 Without `--steps`, a headless run stops after the startup phases and the
-whole clip.
+whole clip. `--video out.mp4` records the playback offscreen as a
+side-by-side view of the kinematic reference (posed on the same G1 model)
+and the simulated robot; without a display, run it with `MUJOCO_GL=egl`.
 
     python3 examples/sonic/mujoco_demo.py \
         --headless --steps 2000 --mode teleop --motion walking

@@ -88,11 +88,13 @@ def save_motion(path, motion):
     )
 
 
-def build_sonic_command(clip_dir, headless):
+def build_sonic_command(clip_dir, headless, video):
     command = [sys.executable, str(SONIC_DEMO), "--motion-dir", str(clip_dir),
                "--motion", "generated", "--mode", "g1"]
     if headless:
         command.append("--headless")
+    if video is not None:
+        command.extend(["--video", str(video)])
     return command
 
 
@@ -117,6 +119,8 @@ if __name__ == "__main__":
                         default=Path("kimodo_output"))
     parser.add_argument("--headless", action="store_true",
                         help="run SONIC without a viewer through the clip")
+    parser.add_argument("--video", type=Path,
+                        help="record the SONIC playback to this mp4")
     args = parser.parse_args()
 
     print(f"Embedding {sanitize_text(args.prompt)!r} with LLM2Vec")
@@ -139,6 +143,9 @@ if __name__ == "__main__":
     write_clip(clip_dir / "generated", qpos_sonic, SONIC_FPS)
     print(f"Wrote {len(qpos_sonic)} SONIC frames to {clip_dir / 'generated'}")
 
-    command = build_sonic_command(clip_dir, args.headless)
+    command = build_sonic_command(clip_dir, args.headless, args.video)
     print("Launching SONIC:", " ".join(command))
-    subprocess.run(command, check=True)
+    environment = dict(os.environ)
+    if args.video is not None:
+        environment.setdefault("MUJOCO_GL", "egl")
+    subprocess.run(command, check=True, env=environment)

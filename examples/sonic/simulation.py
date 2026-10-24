@@ -487,6 +487,14 @@ def compute_apply_delta_heading(heading_state):
     return apply_delta
 
 
+def pose_reference(model, data, joints, clip, frame):
+    """Poses a second MuJoCo state from the clip for side-by-side views."""
+    data.qpos[:3] = clip.body_pos[frame, 0]
+    data.qpos[3:7] = clip.body_quat[frame, 0]
+    data.qpos[joints.body_qpos] = clip.joint_pos[frame][SCENE_FROM_POLICY]
+    mujoco.mj_forward(model, data)
+
+
 def compute_action_targets(action_policy):
     scene_action = np.asarray(action_policy)[SCENE_FROM_POLICY]
     return DEFAULT_ANGLES + scene_action * ACTION_SCALE
