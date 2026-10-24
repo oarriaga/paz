@@ -70,10 +70,11 @@ def encode(encoder, texts, device):
 
 
 def load_prompts(path):
-    if not path.exists():
-        return {}
-    with np.load(path) as prompts:
-        return {text: prompts[text] for text in prompts.files}
+    embeddings = {}
+    if path.exists():
+        with np.load(path) as prompts:
+            embeddings = {text: prompts[text] for text in prompts.files}
+    return embeddings
 
 
 if __name__ == "__main__":

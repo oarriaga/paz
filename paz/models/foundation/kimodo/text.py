@@ -9,28 +9,26 @@ FINAL_PUNCTUATION = ".!?\"])'"
 
 def sanitize_text(text):
     text = " ".join(text.split())
-    if text == "":
-        return text
-    text = strip_leading_symbols(text).capitalize()
-    text = strip_trailing_symbols(text)
-    if text[-1] not in ".!?":
-        text = text + "."
-    return capitalize_sentences(text)
+    if text != "":
+        text = strip_leading_symbols(text).capitalize()
+        text = strip_trailing_symbols(text)
+        if text[-1] not in ".!?":
+            text = text + "."
+        text = capitalize_sentences(text)
+    return text
 
 
 def strip_leading_symbols(text):
-    for index, character in enumerate(text):
-        if character.isalnum():
-            return text[index:]
-    return text
+    alphanumeric = [index for index, c in enumerate(text) if c.isalnum()]
+    start = alphanumeric[0] if alphanumeric else 0
+    return text[start:]
 
 
 def strip_trailing_symbols(text):
-    for index in range(len(text) - 1, -1, -1):
-        character = text[index]
-        if character.isalnum() or character in FINAL_PUNCTUATION:
-            return text[:index + 1]
-    return text
+    keep = [index for index, c in enumerate(text)
+            if c.isalnum() or c in FINAL_PUNCTUATION]
+    end = keep[-1] + 1 if keep else len(text)
+    return text[:end]
 
 
 def capitalize_sentences(text):

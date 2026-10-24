@@ -33,14 +33,19 @@ def KimodoG1RP(weights="pretrained", models_path=None):
 
 
 def resolve_dir(models_path):
-    if models_path is not None:
-        return Path(models_path)
-    return fetch_asset(WEIGHTS_NAME).parent
+    if models_path is None:
+        model_dir = download_assets()
+    else:
+        model_dir = Path(models_path)
+    return model_dir
+
+
+def download_assets():
+    paths = [fetch_asset(name) for name in (WEIGHTS_NAME, ASSETS_NAME)]
+    return paths[0].parent
 
 
 def fetch_asset(name):
-    if name == WEIGHTS_NAME:
-        fetch_asset(ASSETS_NAME)
     path = get_file(name, KIMODO_WEIGHTS_URL + name, cache_subdir=KIMODO_CACHE)
     return Path(path)
 
@@ -52,4 +57,5 @@ def fetch_prompt_embeddings(models_path=None):
     else:
         path = Path(models_path) / PROMPTS_NAME
     with np.load(path) as prompts:
-        return {text: prompts[text] for text in prompts.files}
+        embeddings = {text: prompts[text] for text in prompts.files}
+    return embeddings
