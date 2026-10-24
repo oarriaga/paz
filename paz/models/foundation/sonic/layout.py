@@ -4,7 +4,25 @@ from collections import namedtuple
 from pathlib import Path
 import re
 
+import numpy as np
 import yaml
+
+# Joint order of the deploy policy (IsaacLab) relative to the MuJoCo scene:
+# policy[i] = scene[POLICY_FROM_SCENE[i]].
+SCENE_FROM_POLICY = np.asarray(
+    [
+        0, 3, 6, 9, 13, 17, 1, 4, 7, 10, 14, 18, 2, 5, 8,
+        11, 15, 19, 21, 23, 25, 27, 12, 16, 20, 22, 24, 26, 28,
+    ],
+    dtype=np.int32,
+)
+POLICY_FROM_SCENE = np.asarray(
+    [
+        0, 6, 12, 1, 7, 13, 2, 8, 14, 3, 9, 15, 22, 4, 10,
+        16, 23, 5, 11, 17, 24, 18, 25, 19, 26, 20, 27, 21, 28,
+    ],
+    dtype=np.int32,
+)
 
 _MULTI_FRAME_PATTERN = re.compile(
     r"^(?P<base>.+)_(?P<frames>\d+)frame_step\d+$")

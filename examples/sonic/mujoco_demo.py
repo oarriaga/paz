@@ -129,6 +129,11 @@ if __name__ == "__main__":
         help="local gear_sonic_deploy directory (or set SONIC_DEPLOY_DIR); "
              "downloads the bundled scene and motions when omitted",
     )
+    parser.add_argument(
+        "--motion-dir",
+        type=Path,
+        help="folder of SONIC clip folders that replaces the bundled motions",
+    )
     parser.add_argument("--mode", choices=("g1", "teleop", "smpl"),
                         default="g1")
     parser.add_argument(
@@ -153,10 +158,11 @@ if __name__ == "__main__":
         scene_path = sonic_root.parent / "gear_sonic" / "data"
         scene_path = scene_path / "robot_model/model_data/g1/scene_43dof.xml"
         motion_dir = sonic_root / "reference" / "example"
-        missing = [str(p) for p in (scene_path, motion_dir) if not p.exists()]
-        if missing:
-            parser.error(
-                "SONIC deployment assets are missing: " + ", ".join(missing))
+    if args.motion_dir is not None:
+        motion_dir = args.motion_dir.expanduser().resolve()
+    missing = [str(p) for p in (scene_path, motion_dir) if not p.exists()]
+    if missing:
+        parser.error("SONIC assets are missing: " + ", ".join(missing))
     if args.control_dt < args.sim_dt:
         parser.error("--control-dt must be at least --sim-dt")
 
@@ -420,5 +426,6 @@ if __name__ == "__main__":
 
     print(
         f"Completed {step} simulation steps; mode={state['mode']}, "
-        f"motion={state['clip'].name}, pelvis_z={data.qpos[2]:.3f}"
+        f"motion={state['clip'].name}, frame={state['frame']}, "
+        f"pelvis_xyz={np.round(data.qpos[:3], 3).tolist()}"
     )

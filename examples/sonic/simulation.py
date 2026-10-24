@@ -11,6 +11,8 @@ import numpy as np
 from paz.models.foundation.sonic.layout import compute_encoder_input_dim
 from paz.models.foundation.sonic.layout import compute_policy_tail_dim
 from paz.models.foundation.sonic.layout import find_encoder_span
+from paz.models.foundation.sonic.layout import POLICY_FROM_SCENE
+from paz.models.foundation.sonic.layout import SCENE_FROM_POLICY
 
 
 MotionClip = namedtuple(
@@ -36,20 +38,6 @@ ROOT_QPOS_OFFSET = 7
 ROOT_QVEL_OFFSET = 6
 HISTORY_FRAMES = 10
 
-SCENE_FROM_POLICY = np.asarray(
-    [
-        0, 3, 6, 9, 13, 17, 1, 4, 7, 10, 14, 18, 2, 5, 8,
-        11, 15, 19, 21, 23, 25, 27, 12, 16, 20, 22, 24, 26, 28,
-    ],
-    dtype=np.int32,
-)
-POLICY_FROM_SCENE = np.asarray(
-    [
-        0, 6, 12, 1, 7, 13, 2, 8, 14, 3, 9, 15, 22, 4, 10,
-        16, 23, 5, 11, 17, 24, 18, 25, 19, 26, 20, 27, 21, 28,
-    ],
-    dtype=np.int32,
-)
 LOWER_BODY_POLICY = np.asarray(
     [0, 3, 6, 9, 13, 17, 1, 4, 7, 10, 14, 18], dtype=np.int32)
 WRIST_POLICY = np.asarray([23, 24, 25, 26, 27, 28], dtype=np.int32)
