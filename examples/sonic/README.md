@@ -36,6 +36,12 @@ SONIC_DEPLOY_DIR can be set instead of passing the flag every time. Meshes
 and motions in that checkout are stored with git-lfs, so run `git lfs pull`
 there first.
 
+Any folder of clip folders in the same CSV format can replace the motions
+with `--motion-dir`, for example the clips written by
+`examples/kimodo/mujoco_demo.py`:
+
+    python3 examples/sonic/mujoco_demo.py --motion-dir kimodo_output/clips
+
 ## Run
 
 Launch the GUI in reference-motion mode:
@@ -104,7 +110,10 @@ the physics, controller history, and startup workflow.
 The same entry point provides a deterministic smoke test without a window:
 
     python3 examples/sonic/mujoco_demo.py \
-        --headless --steps 2600 --mode g1 --motion squat
+        --headless --mode g1 --motion squat
+
+Without `--steps`, a headless run stops after the startup phases and the
+whole clip.
 
     python3 examples/sonic/mujoco_demo.py \
         --headless --steps 2000 --mode teleop --motion walking
