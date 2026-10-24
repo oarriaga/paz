@@ -25,8 +25,9 @@ def load_tokenizer(path):
     source = json.loads(Path(path).read_text(encoding="utf-8"))
     vocabulary = dict(source["model"]["vocab"])
     merge_ranks = bpe.build_merge_ranks(source["model"]["merges"])
-    special_ids = {token["content"]: token["id"]
-                   for token in source["added_tokens"]}
+    special_ids = {}
+    for token in source["added_tokens"]:
+        special_ids[token["content"]] = token["id"]
     split_pattern = regex.compile(read_split_pattern(source))
     args = (vocabulary, merge_ranks, bpe.build_byte_to_char(), special_ids,
             build_special_pattern(special_ids), split_pattern)

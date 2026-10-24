@@ -11,6 +11,7 @@ from collections import namedtuple
 from paz.models.transformers.tokenizers import build_byte_to_char
 from paz.models.transformers.tokenizers import build_merge_ranks
 from paz.models.transformers.tokenizers import merge_pairs
+from paz.models.transformers.tokenizers import to_visible_characters
 
 FLOW_TOKEN_ID = 51289
 GPT2_SPLITS = (r"'s|'t|'re|'ve|'m|'ll|'d| ?[^\W\d_]+| ?\d+"
@@ -37,14 +38,9 @@ def encode(tokenizer, text, max_length=77):
 
 
 def encode_piece(tokenizer, piece):
-    visible = to_visible_characters(tokenizer, piece)
+    visible = to_visible_characters(tokenizer.byte_to_char, piece)
     parts = merge_pairs(list(visible), tokenizer.merge_ranks)
     return [tokenizer.vocabulary[part] for part in parts]
-
-
-def to_visible_characters(tokenizer, piece):
-    piece_bytes = piece.encode("utf-8")
-    return "".join(tokenizer.byte_to_char[byte] for byte in piece_bytes)
 
 
 def build_policy_prompt(instruction):

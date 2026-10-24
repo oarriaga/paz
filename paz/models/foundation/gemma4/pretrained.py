@@ -66,7 +66,11 @@ def resolve_dir(model_name, models_path):
 
 def download_weights(model_name):
     subdir = "{}/{}".format(GEMMA4_CACHE, model_name)
-    url = build_release_url(model_name)
+    return download_bundle(model_name, build_release_url(model_name), subdir)
+
+
+def download_bundle(model_name, url, subdir):
+    """Fetches a manifest and reassembles every sharded file it lists."""
     asset = "{}.manifest.json".format(model_name)
     manifest_path = Path(get_file(asset, url + asset, cache_subdir=subdir))
     model_dir = manifest_path.parent

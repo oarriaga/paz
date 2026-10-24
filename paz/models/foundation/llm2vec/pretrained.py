@@ -6,14 +6,10 @@ sharded into parts below the GitHub asset cap and reassembled with the
 Gemma 4 helpers. Llama 3 weights follow the Llama 3 Community License.
 """
 from collections import namedtuple
-import json
 from pathlib import Path
 
-import jax
-from keras.utils import get_file
-
 import paz
-from paz.models.foundation.gemma4.pretrained import assemble_weights_file
+from paz.models.foundation.gemma4.pretrained import download_bundle
 from paz.models.foundation.gemma4.pretrained import shard_weights
 from paz.models.foundation.llm2vec import encoding
 from paz.models.foundation.llm2vec import model as encoder
@@ -38,27 +34,15 @@ def LLM2VecLlama3(models_path=None):
 
 
 def embed(llm2vec, text):
-    return encoding.embed(llm2vec.model, llm2vec.variables, llm2vec.tokenizer,
-                          text)
+    args = (llm2vec.model, llm2vec.variables, llm2vec.tokenizer, text)
+    return encoding.embed(*args)
 
 
 def resolve_dir(models_path):
     if models_path is None:
-        model_dir = download_weights()
+        model_dir = download_bundle(MODEL_NAME, WEIGHTS_URL, CACHE_SUBDIR)
     else:
         model_dir = Path(models_path)
-    return model_dir
-
-
-def download_weights():
-    asset = f"{MODEL_NAME}.manifest.json"
-    manifest_path = get_file(asset, WEIGHTS_URL + asset,
-                             cache_subdir=CACHE_SUBDIR)
-    model_dir = Path(manifest_path).parent
-    manifest = json.loads(Path(manifest_path).read_text())
-    for filename, entry in manifest.items():
-        args = (model_dir / filename, entry, CACHE_SUBDIR, WEIGHTS_URL)
-        assemble_weights_file(*args)
     return model_dir
 
 
@@ -66,9 +50,3 @@ def shard_for_release(model_dir, output_dir):
     """Splits the converted bundle into release assets plus a manifest."""
     args = (model_dir, MODEL_NAME, output_dir)
     return shard_weights(*args, filenames=(TOKENIZER_NAME, WEIGHTS_NAME))
-
-
-def place_on_device(llm2vec, device):
-    variables = jax.tree.map(lambda leaf: jax.device_put(leaf, device),
-                             llm2vec.variables)
-    return llm2vec._replace(variables=variables)

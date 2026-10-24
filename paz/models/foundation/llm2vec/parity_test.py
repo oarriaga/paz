@@ -49,8 +49,8 @@ def report(name, actual, expected):
 @pytest.mark.parametrize("index", [0, 1, 2])
 def test_tokens_match(fixtures, llm2vec, index):
     prompt = str(fixtures["prompts"][index])
-    token_ids, num_pooled = encoding.build_prompt_tokens(llm2vec.tokenizer,
-                                                         prompt)
+    tokens = encoding.build_prompt_tokens(llm2vec.tokenizer, prompt)
+    token_ids, num_pooled = tokens
     assert token_ids == fixtures[f"bfloat16_{index}_input_ids"][0].tolist()
     assert num_pooled == int(fixtures[f"bfloat16_{index}_embed_mask"].sum())
 

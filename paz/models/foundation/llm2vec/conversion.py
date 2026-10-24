@@ -19,13 +19,7 @@ import jax
 import numpy as np
 
 from paz.models.foundation.llm2vec import model as encoder
-
-WEIGHTS_NAME = "llm2vec_llama3.weights.h5"
-SKIPPED = {"lm_head.weight": "the encoder never projects to the vocabulary"}
-ATTENTION = (("query", "self_attn.q_proj"), ("key", "self_attn.k_proj"),
-             ("value", "self_attn.v_proj"))
-FEEDFORWARD = (("gate", "mlp.gate_proj"), ("up", "mlp.up_proj"),
-               ("down", "mlp.down_proj"))
+from paz.models.foundation.llm2vec.pretrained import WEIGHTS_NAME
 
 
 def convert(base_dir, adapter_dirs, output_dir):
@@ -95,23 +89,18 @@ def transfer_layer(model, read_base, read_merged, layer):
         layer_name = f"{target}_{name}"
         scale = model.get_layer(layer_name).scale
         scale.assign(read_base(f"{source}.{key}.weight", layer_name))
-    for name, key in ATTENTION:
-        layer_name = f"{target}_attention_{name}"
+    projections = (("attention_query", "self_attn.q_proj"),
+                   ("attention_key", "self_attn.k_proj"),
+                   ("attention_value", "self_attn.v_proj"),
+                   ("attention_output", "self_attn.o_proj"),
+                   ("feedforward_gate", "mlp.gate_proj"),
+                   ("feedforward_up", "mlp.up_proj"),
+                   ("feedforward_down", "mlp.down_proj"))
+    for name, key in projections:
+        layer_name = f"{target}_{name}"
         kernel = model.get_layer(layer_name).kernel
         weight = read_merged(f"layers.{layer}.{key}", layer_name)
-        kernel.assign(to_heads(weight, kernel.shape))
-    layer_name = f"{target}_attention_output"
-    kernel = model.get_layer(layer_name).kernel
-    weight = read_merged(f"layers.{layer}.self_attn.o_proj", layer_name)
-    kernel.assign(weight.T.reshape(kernel.shape))
-    for name, key in FEEDFORWARD:
-        layer_name = f"{target}_feedforward_{name}"
-        weight = read_merged(f"layers.{layer}.{key}", layer_name)
-        model.get_layer(layer_name).kernel.assign(weight.T)
-
-
-def to_heads(weight, kernel_shape):
-    return weight.T.reshape(kernel_shape)
+        kernel.assign(weight.T.reshape(kernel.shape))
 
 
 def merge_adapters(base, adapters, relative, used, target):
@@ -135,14 +124,17 @@ def round_to_bfloat16(weight):
 
 def count_layers(base):
     prefix = "model.layers."
-    layers = {key[len(prefix):].split(".")[0] for key in base
-              if key.startswith(prefix)}
+    layers = set()
+    for key in base:
+        if key.startswith(prefix):
+            layers.add(key[len(prefix):].split(".")[0])
     return len(layers)
 
 
 def audit(base, adapters, used):
     consumed = {key for key, _ in used}
-    expected = set(base) - set(SKIPPED)
+    # The encoder never projects to the vocabulary.
+    expected = set(base) - {"lm_head.weight"}
     for adapter, _ in adapters:
         expected.update(adapter)
     unused = sorted(expected - consumed)

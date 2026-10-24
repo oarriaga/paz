@@ -39,6 +39,8 @@ def embed_prompt(prompt, encoder_path):
     llm2vec = LLM2VecLlama3(encoder_path)
     embedding = np.asarray(embed(llm2vec, sanitize_text(prompt)))
     del llm2vec
+    # The jit cache keys on the model and would keep its buffers alive.
+    jax.clear_caches()
     return embedding[None]
 
 

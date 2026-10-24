@@ -11,17 +11,19 @@ import jax.numpy as jp
 import paz
 from paz.models.foundation.llm2vec import tokenizer as llama_tokenizer
 
-HEADER = "<|start_header_id|>user<|end_header_id|>\n\n"
-END_OF_TURN = "<|eot_id|>"
+MAX_LENGTH = 512
 
 
 def build_prompt_tokens(tokenizer, text):
     """Token ids of the wrapped prompt and how many of them are pooled."""
+    header = "<|start_header_id|>user<|end_header_id|>\n\n"
+    # The reference strips after prefixing a separator, so only the
+    # trailing whitespace of the prompt goes.
+    body = text.rstrip() + "<|eot_id|>"
     begin = tokenizer.special_ids[llama_tokenizer.BEGIN_OF_TEXT]
-    body = text.strip() + END_OF_TURN
-    token_ids = [begin] + llama_tokenizer.encode(tokenizer, HEADER + body)
+    token_ids = [begin] + llama_tokenizer.encode(tokenizer, header + body)
     num_pooled = len(llama_tokenizer.encode(tokenizer, body))
-    return token_ids, num_pooled
+    return token_ids[:MAX_LENGTH], min(num_pooled, MAX_LENGTH)
 
 
 def embed(model, variables, tokenizer, text):
