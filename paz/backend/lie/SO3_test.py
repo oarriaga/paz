@@ -181,3 +181,24 @@ def test_sample_function(sample_key):
     assert jp.allclose(jp.dot(SO3_matrix, SO3_matrix.T), jp.eye(3), atol=1e-6)
     # Assert that the determinant is 1
     assert jp.isclose(jp.linalg.det(SO3_matrix), 1.0)
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_from_6d_recovers_sampled_rotation(seed):
+    rotation = SO3.sample(jax.random.PRNGKey(seed))
+    assert jp.allclose(SO3.from_6d(SO3.to_6d(rotation)), rotation, atol=1e-6)
+
+
+def test_from_6d_orthonormalizes_scaled_columns():
+    rotation = SO3.sample(jax.random.PRNGKey(3))
+    rotation_6d = SO3.to_6d(rotation) * jp.array([3.0] * 3 + [0.5] * 3)
+    recovered = SO3.from_6d(rotation_6d)
+    assert jp.allclose(recovered, rotation, atol=1e-6)
+    assert jp.allclose(jp.linalg.det(recovered), 1.0, atol=1e-6)
+
+
+def test_from_6d_is_vmappable():
+    keys = jax.random.split(jax.random.PRNGKey(4), 5)
+    rotations = jax.vmap(SO3.sample)(keys)
+    recovered = jax.vmap(SO3.from_6d)(jax.vmap(SO3.to_6d)(rotations))
+    assert jp.allclose(recovered, rotations, atol=1e-6)

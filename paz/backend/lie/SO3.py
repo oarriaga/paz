@@ -289,3 +289,16 @@ def rotation_y(angle):
         ]
     )
     return rotation_matrix_y
+
+
+def from_6d(rotation_6d):
+    """Builds a rotation matrix from its first two columns (Gram-Schmidt)."""
+    column_0 = rotation_6d[:3] / jp.linalg.norm(rotation_6d[:3])
+    column_2 = jp.cross(column_0, rotation_6d[3:])
+    column_2 = column_2 / jp.linalg.norm(column_2)
+    column_1 = jp.cross(column_2, column_0)
+    return jp.stack([column_0, column_1, column_2], axis=1)
+
+
+def to_6d(SO3_matrix):
+    return jp.concatenate([SO3_matrix[:, 0], SO3_matrix[:, 1]])
