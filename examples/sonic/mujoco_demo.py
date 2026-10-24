@@ -150,16 +150,19 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.sonic_root is None:
-        print("Downloading the SONIC scene and reference motions")
+        print("Downloading the SONIC scene")
         scene_path = fetch_scene_assets()
-        motion_dir = fetch_motion_assets()
     else:
         sonic_root = args.sonic_root.expanduser().resolve()
         scene_path = sonic_root.parent / "gear_sonic" / "data"
         scene_path = scene_path / "robot_model/model_data/g1/scene_43dof.xml"
-        motion_dir = sonic_root / "reference" / "example"
     if args.motion_dir is not None:
         motion_dir = args.motion_dir.expanduser().resolve()
+    elif args.sonic_root is None:
+        print("Downloading the bundled reference motions")
+        motion_dir = fetch_motion_assets()
+    else:
+        motion_dir = sonic_root / "reference" / "example"
     missing = [str(p) for p in (scene_path, motion_dir) if not p.exists()]
     if missing:
         parser.error("SONIC assets are missing: " + ", ".join(missing))
@@ -319,7 +322,9 @@ if __name__ == "__main__":
     update_hud(viewer, state)
     max_steps = args.steps
     if args.headless and max_steps is None:
-        max_steps = 1500
+        # Startup, warmup, and the whole clip at one frame per policy tick.
+        ticks = init_steps + warmup_steps + state["clip"].num_frames
+        max_steps = ticks * policy_steps
     realtime = not args.headless and not args.no_realtime
     last_time = time.perf_counter()
     step = 0

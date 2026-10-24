@@ -6,7 +6,6 @@ predicts the body block from the local root derived from that prediction.
 Both stages are post-norm transformer encoders over the sequence
 ``[text tokens | time | heading | motion frames]``.
 """
-import numpy as np
 from keras import Model, ops
 from keras.layers import Dense, Input, LayerNormalization, Reshape
 
@@ -119,7 +118,7 @@ def add_and_normalize(x, residual, name):
 
 def convert_root_to_local(root, stats, fps):
     """Global root block to the local root block, both normalized."""
-    root = unnormalize(root, stats.global_root)
+    root = features.unnormalize(root, stats.global_root)
     position = root[..., :3]
     heading = ops.arctan2(root[..., 4], root[..., 3])
     heading_rate = repeat_last(fps * compute_angle_differences(heading))
@@ -127,7 +126,8 @@ def convert_root_to_local(root, stats, fps):
     planar_velocity = repeat_last(ops.take(velocity, [0, 2], axis=-1))
     local = [ops.expand_dims(heading_rate, -1), planar_velocity,
              position[..., 1:2]]
-    return normalize(ops.concatenate(local, axis=-1), stats.local_root)
+    local = ops.concatenate(local, axis=-1)
+    return features.normalize(local, stats.local_root)
 
 
 def compute_angle_differences(angles):
@@ -139,12 +139,3 @@ def compute_angle_differences(angles):
 
 def repeat_last(values):
     return ops.concatenate([values, values[:, -1:]], axis=1)
-
-
-def normalize(x, normalization):
-    mean, stdv = np.asarray(normalization.mean), np.asarray(normalization.stdv)
-    return (x - mean) / stdv
-
-
-def unnormalize(x, normalization):
-    return x * np.asarray(normalization.stdv) + np.asarray(normalization.mean)

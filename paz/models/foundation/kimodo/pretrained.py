@@ -15,21 +15,25 @@ from paz.models.foundation.kimodo import features
 from paz.models.foundation.kimodo import model as denoiser_model
 
 ALTAMIRA = "https://github.com/oarriaga/altamira-data/releases/download"
-KIMODO_WEIGHTS_URL = ALTAMIRA + "/v0.30/"
-KIMODO_CACHE = "paz/models/kimodo"
+WEIGHTS_URL = ALTAMIRA + "/v0.30/"
+CACHE_SUBDIR = "paz/models/kimodo"
 WEIGHTS_NAME = "kimodo_g1_rp_v1.weights.h5"
 ASSETS_NAME = "kimodo_g1_rp_v1_assets.npz"
 PROMPTS_NAME = "kimodo_g1_rp_v1_prompts.npz"
 KIMODO = namedtuple("KIMODO", "denoiser stats")
 
 
-def KimodoG1RP(weights="pretrained", models_path=None):
+def KimodoG1RP(models_path=None):
+    """Pretrained denoiser and statistics; downloads unless a path is given."""
     model_dir = resolve_dir(models_path)
-    stats = features.build_stats(np.load(model_dir / ASSETS_NAME))
-    denoiser = denoiser_model.build(stats)
-    if weights is not None:
-        denoiser.load_weights(str(model_dir / WEIGHTS_NAME))
-    return KIMODO(denoiser, stats)
+    kimodo = build_from_assets(model_dir)
+    kimodo.denoiser.load_weights(str(model_dir / WEIGHTS_NAME))
+    return kimodo
+
+
+def build_from_assets(model_dir):
+    stats = features.build_stats(np.load(Path(model_dir) / ASSETS_NAME))
+    return KIMODO(denoiser_model.build(stats), stats)
 
 
 def resolve_dir(models_path):
@@ -46,8 +50,7 @@ def download_assets():
 
 
 def fetch_asset(name):
-    path = get_file(name, KIMODO_WEIGHTS_URL + name, cache_subdir=KIMODO_CACHE)
-    return Path(path)
+    return Path(get_file(name, WEIGHTS_URL + name, cache_subdir=CACHE_SUBDIR))
 
 
 def fetch_prompt_embeddings(models_path=None):
@@ -56,6 +59,10 @@ def fetch_prompt_embeddings(models_path=None):
         path = fetch_asset(PROMPTS_NAME)
     else:
         path = Path(models_path) / PROMPTS_NAME
+    return load_prompt_embeddings(path)
+
+
+def load_prompt_embeddings(path):
     with np.load(path) as prompts:
         embeddings = {text: prompts[text] for text in prompts.files}
     return embeddings

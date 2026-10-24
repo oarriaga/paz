@@ -18,7 +18,7 @@ def write_assets(directory):
 
 def test_builds_released_architecture_from_local_assets(tmp_path):
     write_assets(tmp_path)
-    kimodo = pretrained.KimodoG1RP(weights=None, models_path=tmp_path)
+    kimodo = pretrained.build_from_assets(tmp_path)
     # Parameter count of the released safetensors checkpoint.
     assert kimodo.denoiser.count_params() == 283_527_585
     assert kimodo.stats.body.mean.shape == (features.BODY_DIM,)
@@ -36,7 +36,7 @@ def test_download_fetches_weights_and_assets(tmp_path, monkeypatch):
     assert pretrained.resolve_dir(None) == tmp_path
     names = [name for name, _ in requested]
     assert names == [pretrained.WEIGHTS_NAME, pretrained.ASSETS_NAME]
-    assert all(url.startswith(pretrained.KIMODO_WEIGHTS_URL)
+    assert all(url.startswith(pretrained.WEIGHTS_URL)
                for _, url in requested)
     prompts = pretrained.fetch_prompt_embeddings()
     assert set(prompts) == {"A person walks forward."}

@@ -44,7 +44,7 @@ def fixtures():
 
 @pytest.fixture(scope="module")
 def kimodo():
-    return KimodoG1RP(models_path=Path(WEIGHTS_DIR).expanduser())
+    return KimodoG1RP(Path(WEIGHTS_DIR).expanduser())
 
 
 def report(name, actual, expected, tolerance):
@@ -120,15 +120,15 @@ def test_local_root_matches(fixtures, kimodo):
 
 def test_three_step_sampling_matches(fixtures, kimodo):
     config = sampling.SamplingConfig(60, 3, 2.0, 2.0, 0.0)
-    observed, mask = sampling.build_empty_constraints(2, 60)
+    empty = conditioning.normalize(conditioning.build_empty(60), kimodo.stats)
     text = jp.asarray(fixtures["text"])
     heading = fixtures["heading"]
     sampled = []
     for sample in range(2):
         config = config._replace(heading_angle=float(heading[sample]))
         noise = jp.asarray(fixtures["sampling_noise"][sample:sample + 1])
-        args = (kimodo.denoiser, text[sample:sample + 1], observed[:1],
-                mask[:1], config)
+        args = (kimodo.denoiser, text[sample:sample + 1],
+                empty.observed[None], empty.mask[None], config)
         sampled.append(sampling.denoise_from_noise(noise, *args))
     report("3-step sample", jp.concatenate(sampled), fixtures["sampled"], 2e-3)
 

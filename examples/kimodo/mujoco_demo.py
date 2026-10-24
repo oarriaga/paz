@@ -26,25 +26,24 @@ from paz.models.foundation.kimodo import mujoco as export
 from paz.models.foundation.kimodo import sampling
 from paz.models.foundation.kimodo.pretrained import KimodoG1RP
 from paz.models.foundation.kimodo.pretrained import fetch_prompt_embeddings
+from paz.models.foundation.kimodo.pretrained import load_prompt_embeddings
 from paz.models.foundation.kimodo.text import sanitize_text
 
 from sonic_clip import KIMODO_FPS, SONIC_FPS, resample_qpos, write_clip
 
 SONIC_DEMO = Path(__file__).resolve().parents[1] / "sonic" / "mujoco_demo.py"
-SONIC_STARTUP_SECONDS = 5.0
 
 
 def load_prompt_embedding(prompt, prompts_path, models_path):
     if prompts_path is None:
         prompts = fetch_prompt_embeddings(models_path)
     else:
-        with np.load(prompts_path) as archive:
-            prompts = {text: archive[text] for text in archive.files}
+        prompts = load_prompt_embeddings(prompts_path)
     text = sanitize_text(prompt)
     if text not in prompts:
         known = "\n  ".join(sorted(prompts))
-        raise KeyError(f"No embedding for {text!r}; encode it or pick one "
-                       f"of:\n  {known}")
+        raise ValueError(f"No embedding for {text!r}; encode it or pick one "
+                         f"of:\n  {known}")
     return prompts[text]
 
 
@@ -52,11 +51,17 @@ def build_condition(num_frames, waypoints_path, stats):
     """Root-path constraint from a JSON list of ``[frame, x, z]`` rows."""
     condition = conditioning.build_empty(num_frames)
     if waypoints_path is not None:
-        waypoints = np.asarray(json.loads(waypoints_path.read_text()))
-        frames = jp.asarray(waypoints[:, 0], dtype=jp.int32)
-        positions_xz = jp.asarray(waypoints[:, 1:3], dtype=jp.float32)
+        frames, positions_xz = read_waypoints(waypoints_path, num_frames)
         condition = conditioning.add_root_path(condition, frames, positions_xz)
     return conditioning.normalize(condition, stats)
+
+
+def read_waypoints(path, num_frames):
+    waypoints = np.asarray(json.loads(path.read_text()), dtype=np.float32)
+    frames = waypoints[:, 0].astype(np.int32)
+    if frames.min() < 0 or frames.max() >= num_frames:
+        raise ValueError(f"Waypoint frames must lie in [0, {num_frames})")
+    return jp.asarray(frames), jp.asarray(waypoints[:, 1:3])
 
 
 def generate_motion(kimodo, embedding, condition, config, seed):
@@ -88,13 +93,11 @@ def save_motion(path, motion):
     )
 
 
-def build_sonic_command(clip_dir, headless, steps):
+def build_sonic_command(clip_dir, headless):
     command = [sys.executable, str(SONIC_DEMO), "--motion-dir", str(clip_dir),
                "--motion", "generated", "--mode", "g1"]
     if headless:
         command.append("--headless")
-    if steps is not None:
-        command.extend(["--steps", str(steps)])
     return command
 
 
@@ -117,10 +120,8 @@ if __name__ == "__main__":
                              "Kimodo coordinates (meters, z forward)")
     parser.add_argument("--output-dir", type=Path,
                         default=Path("kimodo_output"))
-    parser.add_argument("--sim-dt", type=float, default=0.005)
-    parser.add_argument("--headless", action="store_true")
-    parser.add_argument("--steps", type=int,
-                        help="MuJoCo steps; headless default covers the clip")
+    parser.add_argument("--headless", action="store_true",
+                        help="run SONIC without a viewer through the clip")
     args = parser.parse_args()
 
     embedding = load_prompt_embedding(args.prompt, args.prompts,
@@ -143,11 +144,6 @@ if __name__ == "__main__":
     write_clip(clip_dir / "generated", qpos_sonic, SONIC_FPS)
     print(f"Wrote {len(qpos_sonic)} SONIC frames to {clip_dir / 'generated'}")
 
-    steps = args.steps
-    if args.headless and steps is None:
-        seconds = SONIC_STARTUP_SECONDS + args.duration + 0.5
-        steps = int(seconds / args.sim_dt)
-    command = build_sonic_command(clip_dir, args.headless, steps)
-    command.extend(["--sim-dt", str(args.sim_dt)])
+    command = build_sonic_command(clip_dir, args.headless)
     print("Launching SONIC:", " ".join(command))
     subprocess.run(command, check=True)

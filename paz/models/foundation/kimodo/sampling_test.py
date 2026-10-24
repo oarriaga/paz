@@ -3,15 +3,20 @@ import jax.numpy as jp
 import numpy as np
 
 import paz
+from paz.models.foundation.kimodo import conditioning
 from paz.models.foundation.kimodo import model as denoiser_model
 from paz.models.foundation.kimodo import sampling
 from paz.models.foundation.kimodo.model_test import TINY, build_unit_stats
 
 
 def build_setup(num_frames=6, num_steps=3):
-    denoiser = denoiser_model.build(build_unit_stats(), **TINY)
+    stats = build_unit_stats()
+    denoiser = denoiser_model.build(stats, **TINY)
     text = jax.random.normal(jax.random.PRNGKey(1), (2, 1, TINY["text_dim"]))
-    constraints = sampling.build_empty_constraints(2, num_frames)
+    empty = conditioning.normalize(conditioning.build_empty(num_frames), stats)
+    shape = (2, num_frames, empty.observed.shape[-1])
+    constraints = (jp.broadcast_to(empty.observed, shape),
+                   jp.broadcast_to(empty.mask, shape))
     config = sampling.SamplingConfig(num_frames, num_steps, 2.0, 2.0, 0.0)
     return denoiser, text, constraints, config
 

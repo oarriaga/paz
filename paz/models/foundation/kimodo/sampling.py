@@ -42,11 +42,6 @@ def denoise_from_noise(noise, denoiser, text, observed_motion, motion_mask,
     return motion
 
 
-def build_empty_constraints(batch_size, num_frames):
-    shape = (batch_size, num_frames, features.FEATURE_DIM)
-    return jp.zeros(shape, "float32"), jp.zeros(shape, "float32")
-
-
 def _denoise_step(denoiser, variables, schedule, motion, text, observed,
                   mask, heading, weights, step):
     base_timestep = schedule.base_timesteps[step]

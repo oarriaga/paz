@@ -33,8 +33,7 @@ Pick another bundled prompt, a longer motion, or a different sample:
     python3 examples/kimodo/mujoco_demo.py "A person walks in a circle." \
         --duration 6 --seed 3
 
-Headless smoke run (the step count defaults to the SONIC startup plus the
-clip length):
+Headless smoke run (SONIC stops after its startup plus the clip):
 
     python3 examples/kimodo/mujoco_demo.py --headless
 
