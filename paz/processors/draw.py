@@ -58,7 +58,8 @@ class DrawBoxes2D(Processor):
 
     def call(self, image, boxes2D):
         for box2D in boxes2D:
-            x_min, y_min, x_max, y_max = box2D.coordinates
+            coordinates = [int(round(value)) for value in box2D.coordinates]
+            x_min, y_min, x_max, y_max = coordinates
             class_name = box2D.class_name
             color = self.class_to_color[class_name]
             if self.weighted:
