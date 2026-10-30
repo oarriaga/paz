@@ -47,18 +47,18 @@ def parameters_to_scene(geometry, floor_material, materials, shapes):
 
 
 def build_shape_model(camera, geometry, shadows):
-    image_shape, y_FOV, world_to_camera, min_depth, max_depth = camera
+    image_shape, intrinsics, world_to_camera, min_depth, max_depth = camera
 
     def model(lights, floor_material, materials, scale_vectors, distances):
         shapes = (scale_vectors, distances)
         scene_args = (geometry, floor_material, materials, shapes)
         result = parameters_to_scene(*scene_args)
         scene, transforms, points3D, final_scale_vectors = result
-        view_args = image_shape, y_FOV, world_to_camera, scene, None, lights
-        view_args = view_args + ((1, 1), image_shape[0] * image_shape[1])
+        view_args = image_shape, intrinsics, world_to_camera, scene, None
+        view_args = view_args + (lights, (1, 1), image_shape[0] * image_shape[1])
         image, depth = paz.graphics.render(*view_args, shadows)
         num_objects = len(scene.nodes) - 1
-        mask_args = image_shape, y_FOV, world_to_camera, scene, lights
+        mask_args = image_shape, intrinsics, world_to_camera, scene, lights
         depth_range = min_depth, max_depth
         masks = render_masks(
             *mask_args,
@@ -80,7 +80,7 @@ def build_shape_model(camera, geometry, shadows):
 
 
 def build_mesh_model(camera, meshes, mesh_weights, floor, lights):
-    image_shape, y_FOV, world_to_camera = camera[0], camera[1], camera[2]
+    image_shape, intrinsics, world_to_camera = camera[0], camera[1], camera[2]
     min_depth, max_depth = camera[3], camera[4]
     tile_shape, chunk_size = camera[5], camera[6]
     face_chunk = camera[7]
@@ -91,14 +91,14 @@ def build_mesh_model(camera, meshes, mesh_weights, floor, lights):
         deformed_verts = jax.vmap(deform)(cage_vertices)
         updated = meshes._replace(vertices=deformed_verts)
         scene = paz.graphics.Scene(build_scene_meshes(updated, floor))
-        render_args = image_shape, y_FOV, world_to_camera, scene
+        render_args = image_shape, intrinsics, world_to_camera, scene
         render_args = render_args + (None, lights, tile, chunk_size)
         image, depth = paz.graphics.render(
             *render_args, face_chunk_size=face_chunk)
         depth_range = (min_depth, max_depth)
         object_scene = paz.graphics.Scene(unbatch_meshes(updated))
-        mask_args = image_shape, y_FOV, world_to_camera, object_scene, lights
-        mask_args = mask_args + (depth_range, tile, chunk_size)
+        mask_args = image_shape, intrinsics, world_to_camera, object_scene
+        mask_args = mask_args + (lights, depth_range, tile, chunk_size)
         masks = render_masks(
             *mask_args, face_chunk_size=face_chunk)
         depth = jp.expand_dims(depth, axis=-1)

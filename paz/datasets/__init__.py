@@ -85,13 +85,3 @@ def get_intrinsics(name):
     else:
         raise ValueError
     return intrinsics
-
-
-def get_y_FOV(name):
-    if name.lower() == "fewsol":
-        y_FOV = fewsol.get_y_FOV()
-    elif name.lower() == "fsclvr":
-        y_FOV = fsclvr.get_y_FOV()
-    else:
-        raise ValueError
-    return y_FOV

@@ -28,15 +28,16 @@ parser.add_argument("--seed", default=0, type=int)
 args = parser.parse_args()
 
 size = (args.image_size, args.image_size)
+intrinsics = paz.graphics.camera.compute_intrinsics(args.y_FOV, *size)
 mesh = scenes.build_mesh(scenes.download_power_drill(), args.target_faces)
 extents = np.asarray(scenes.object_extents(mesh))
 print(f"drill: {mesh.vertices.shape[0]} vertices, {mesh.faces.shape[0]} faces")
 print(f"object extents (m): {np.round(extents, 4)}")
 
 render_image = scenes.build_image_renderer(
-    mesh, size, np.mean(args.distance), args.y_FOV, args.chunk_size, tuple(args.tiles))  # fmt: skip
+    mesh, size, np.mean(args.distance), intrinsics, args.chunk_size, tuple(args.tiles))  # fmt: skip
 render_coordinates = scenes.build_coordinate_renderer(
-    mesh, size, args.y_FOV)
+    mesh, size, intrinsics)
 
 keys = jax.random.split(jax.random.PRNGKey(args.seed), args.num_samples)
 poses = [scenes.sample_pose(key, args.distance) for key in keys]

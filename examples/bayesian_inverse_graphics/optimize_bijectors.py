@@ -370,8 +370,9 @@ camera_upward = jp.array([0.0, 1.0, 0.0])
 camera_pose = paz.SE3.view_transform(
     camera_origin, camera_target, camera_upward
 )
+intrinsics = paz.graphics.camera.compute_intrinsics(y_FOV, *image_shape)
 _render = build_render_function(
-    image_shape, y_FOV, camera_pose, lights, args.shadows
+    image_shape, intrinsics, camera_pose, lights, args.shadows
 )
 render = build_observation_model(_render, floor)
 

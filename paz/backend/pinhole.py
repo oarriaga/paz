@@ -107,13 +107,17 @@ def build_frustum_grid(corners, depth_steps, width_steps):
 
 
 def get_image_size(camera_intrinsics):
-    W = int(camera_intrinsics[0, 2] * 2.0)
-    H = int(camera_intrinsics[1, 2] * 2.0)
+    # Pixel centers sit on integer coordinates, so cx is (W - 1) / 2.
+    W = int(jp.round(camera_intrinsics[0, 2] * 2.0 + 1.0))
+    H = int(jp.round(camera_intrinsics[1, 2] * 2.0 + 1.0))
     return H, W
 
 
 def resize_intrinsics(camera_intrinsics, scale):
-    return camera_intrinsics.copy().at[:2, :].mul(scale)
+    # Pixel centers sit on integer coordinates, so a resize by `scale`
+    # moves the center of pixel u to (u + 0.5) * scale - 0.5.
+    resized = camera_intrinsics.at[:2, :].mul(scale)
+    return resized.at[:2, 2].add((scale - 1.0) / 2.0)
 
 
 def project_to_2D(camera_matrix, point3D):
@@ -241,8 +245,8 @@ def intrinsics_from_HFOV(H, W, HFOV=70):
     focal_length = (W / 2) * (1 / np.tan(np.deg2rad(HFOV / 2.0)))
     camera_intrinsics = jp.array(
         [
-            [focal_length, 0, W / 2.0],
-            [0, focal_length, H / 2.0],
+            [focal_length, 0, (W - 1) / 2.0],
+            [0, focal_length, (H - 1) / 2.0],
             [0, 0, 1.0],
         ]
     )

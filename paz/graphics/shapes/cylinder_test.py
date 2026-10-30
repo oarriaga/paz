@@ -110,7 +110,8 @@ def test_rotated_oblique_cap_hit_keeps_cap_normal():
         target = jp.array([0.0, 0.0, 1.0])
         up = jp.array([0.0, 1.0, 0.0])
         pose = paz.SE3.view_transform(eye, target, up)
-        rays = paz.graphics.camera.build_rays((128, 128), jp.pi / 3.0, pose)
+        intrinsics = paz.graphics.camera.compute_intrinsics(jp.pi / 3, 128, 128)
+        rays = paz.graphics.camera.build_rays((128, 128), intrinsics, pose)
         ray_origin = rays[0][6456:6457]
         ray_direction = rays[1][6456:6457]
         args = shape, ray_origin, ray_direction

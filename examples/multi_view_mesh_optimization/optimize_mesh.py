@@ -259,8 +259,13 @@ def compute_max_bin_count(mesh, poses, config):
 
 def compute_bin_counts(mesh, pose, config):
     shape = (config.image_size, config.image_size)
-    args = (shape, pose, mesh, config.y_fov, config.mask_sigma)
+    args = (shape, pose, mesh, build_intrinsics(config), config.mask_sigma)
     return count_binned_faces(*args, build_bins(config))
+
+
+def build_intrinsics(config):
+    H = W = config.image_size
+    return paz.graphics.camera.compute_intrinsics(config.y_fov, H, W)
 
 
 def build_bins(config):
@@ -281,14 +286,15 @@ def render_mesh(mesh, pose, config):
     scene = paz.graphics.Scene([mesh])
     lights = [PointLight(jp.ones(3), jp.array([0.0, 0.0, -3.0]))]
     shape = (config.image_size, config.image_size)
-    args = (shape, config.y_fov, pose, scene, None, lights, (2, 2), 4096)
+    intrinsics = build_intrinsics(config)
+    args = (shape, intrinsics, pose, scene, None, lights, (2, 2), 4096)
     image, _ = paz.graphics.render(*args)
     return image
 
 
 def render_mesh_mask(mesh, pose, config):
     H = W = config.image_size
-    args = (build_bins(config), config.y_fov, H, W, pose, mesh)
+    args = (build_bins(config), build_intrinsics(config), H, W, pose, mesh)
     args = args + (config.mask_sigma, 512)
     return tile_render_binned_soft_mask(*args)
 

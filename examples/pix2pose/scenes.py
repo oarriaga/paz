@@ -68,22 +68,22 @@ def object_extents(mesh):
     return jp.max(mesh.vertices, axis=0) - jp.min(mesh.vertices, axis=0)
 
 
-def build_image_renderer(mesh, size, distance, y_FOV, chunk_size, tiles):
+def build_image_renderer(mesh, size, distance, intrinsics, chunk_size, tiles):
     scene = Scene([mesh])
     position = jp.array([1.5, 2.0, 2.5]) * distance
     lights = [PointLight(jp.ones(3) * 1.6, position)]
     H, W = size
-    args = scene, H, W, y_FOV, lights, False, chunk_size, tiles
+    args = scene, H, W, intrinsics, lights, False, chunk_size, tiles
     return scene_renderer(*args)
 
 
-def build_coordinate_renderer(mesh, size, y_FOV, face_chunk=128):
+def build_coordinate_renderer(mesh, size, intrinsics, face_chunk=128):
     lower = jp.min(mesh.vertices, axis=0)
     upper = jp.max(mesh.vertices, axis=0)
 
     @jax.jit
     def render_nocs(pose):
-        args = size, y_FOV, pose, mesh, face_chunk
+        args = size, intrinsics, pose, mesh, face_chunk
         coordinates, hit = render_coordinates(*args)
         nocs = (coordinates - lower) / (upper - lower)
         nocs = nocs * hit[..., None]

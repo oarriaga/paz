@@ -24,8 +24,9 @@ def camera_looking_at_origin():
     return SE3.view_transform(camera_origin, jp.zeros(3), world_up)
 
 
-def compute_object_frame_points(shape, y_FOV, pose, mesh):
-    origins, directions = paz.graphics.camera.build_rays(shape, y_FOV, pose)
+def compute_object_frame_points(shape, intrinsics, pose, mesh):
+    rays = paz.graphics.camera.build_rays(shape, intrinsics, pose)
+    origins, directions = rays
     depth = intersect_mesh(mesh, origins, directions, 1024)[1]
     world_to_shape = jp.linalg.inv(mesh.transform)
     args = world_to_shape, origins, directions
@@ -37,16 +38,18 @@ def compute_object_frame_points(shape, y_FOV, pose, mesh):
 def test_render_coordinates_match_object_frame_hit_points():
     mesh = make_single_mesh()
     pose = camera_looking_at_origin()
-    shape, y_FOV = (20, 20), jp.pi / 4
-    coordinates, hit = render_coordinates(shape, y_FOV, pose, mesh, 1024)
-    points = compute_object_frame_points(shape, y_FOV, pose, mesh)
+    shape = (20, 20)
+    intrinsics = paz.graphics.camera.compute_intrinsics(jp.pi / 4, *shape)
+    coordinates, hit = render_coordinates(shape, intrinsics, pose, mesh, 1024)
+    points = compute_object_frame_points(shape, intrinsics, pose, mesh)
     assert jp.allclose(coordinates[hit], points[hit], atol=1e-5)
 
 
 def test_render_coordinates_shapes_and_object_frame_bounds():
     mesh = make_single_mesh()
     pose = camera_looking_at_origin()
-    args = (20, 20), jp.pi / 4, pose, mesh, 1024
+    intrinsics = paz.graphics.camera.compute_intrinsics(jp.pi / 4, 20, 20)
+    args = (20, 20), intrinsics, pose, mesh, 1024
     coordinates, hit = render_coordinates(*args)
     assert coordinates.shape == (20, 20, 3)
     assert hit.shape == (20, 20)
@@ -61,7 +64,8 @@ def test_render_coordinates_mask_matches_render_depth():
     pose = camera_looking_at_origin()
     scene = paz.graphics.Scene([mesh])
     lights = [PointLight(jp.full((3,), 10.0), jp.array([0.0, 1.0, -1.5]))]
-    render_args = (20, 20), jp.pi / 4, pose, scene, None, lights
+    intrinsics = paz.graphics.camera.compute_intrinsics(jp.pi / 4, 20, 20)
+    render_args = (20, 20), intrinsics, pose, scene, None, lights
     _, depth = paz.graphics.render(*render_args, (1, 1), 1024)
-    _, hit = render_coordinates((20, 20), jp.pi / 4, pose, mesh, 1024)
+    _, hit = render_coordinates((20, 20), intrinsics, pose, mesh, 1024)
     assert jp.array_equal(hit, depth > 0)

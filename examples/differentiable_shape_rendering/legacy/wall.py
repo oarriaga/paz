@@ -235,7 +235,8 @@ lights = PointLight(jp.array([1.0, 1.0, 1.0]), jp.array([5.0, 4.0, 8.0]))
 
 H, W = 1024, 1024
 y_FOV = jp.pi / 4.0
-rays = paz.graphics.camera.build_rays((H, W), y_FOV, camera_pose)
+intrinsics = paz.graphics.camera.compute_intrinsics(y_FOV, H, W)
+rays = paz.graphics.camera.build_rays((H, W), intrinsics, camera_pose)
 render = jax.jit(
     paz.partial(
         paz.graphics.render,

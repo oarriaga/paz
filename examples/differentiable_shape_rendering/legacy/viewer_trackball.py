@@ -25,7 +25,8 @@ def build_viewer(scene_elements, lights):
         y_FOV = jp.pi / 4.0
         # world_to_camera = jp.linalg.inv(camera_pose)
         # rays = camera.build_rays((H, W), y_FOV, world_to_camera)
-        rays = camera.build_rays((H, W), y_FOV, camera_pose)
+        intrinsics = camera.compute_intrinsics(y_FOV, H, W)
+        rays = camera.build_rays((H, W), intrinsics, camera_pose)
 
         image_data, _ = core_render(
             (H, W), camera_pose, rays, flat_scene, processed_lights, mask

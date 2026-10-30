@@ -67,13 +67,13 @@ def build_observation_model(render, floor):
 
 
 def build_render_function(
-    image_shape, y_FOV, camera_pose, lights, shadows=False
+    image_shape, intrinsics, camera_pose, lights, shadows=False
 ):
     """Builds a JIT-compiled render function for the observation model.
 
     Args:
         image_shape: Tuple (H, W) for image dimensions
-        y_FOV: Float, vertical field of view in radians
+        intrinsics: Array (3, 3), OpenCV camera intrinsics
         camera_pose: Array (4, 4), camera SE3 transformation
         lights: paz.graphics.PointLight or list of lights
         shadows: Boolean, whether to use shadows (static argument)
@@ -81,7 +81,7 @@ def build_render_function(
     Returns:
         JIT-compiled render function
     """
-    render_args = image_shape, y_FOV, camera_pose
+    render_args = image_shape, intrinsics, camera_pose
     render_kwargs = dict(
         lights=lights,
         mask=None,

@@ -41,8 +41,9 @@ camera_pose = paz.SE3.view_transform(
 )
 
 light = paz.graphics.PointLight(jp.ones(3), jp.array([-4.0, 5.0, 6.0]))
-H, W, y_FOV = 480, 640, jp.pi / 4.0
-render_args = (H, W), y_FOV, camera_pose, scene, None, light
+H, W = 480, 640
+intrinsics = paz.graphics.camera.compute_intrinsics(jp.pi / 4.0, H, W)
+render_args = (H, W), intrinsics, camera_pose, scene, None, light
 render_args = render_args + ((1, 1), 1024)
 image, depth = paz.graphics.render(*render_args, False)
 paz.graphics.save("assets/axes", axes)

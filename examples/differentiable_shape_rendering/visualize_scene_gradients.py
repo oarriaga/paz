@@ -59,7 +59,8 @@ def build_area_light():
 
 
 def build_render(shape):
-    args = shape, Y_FOV, CAMERA_POSE
+    intrinsics = paz.graphics.camera.compute_intrinsics(Y_FOV, *shape)
+    args = shape, intrinsics, CAMERA_POSE
     kwargs = dict(lights=build_area_light(), mask=None, tiles=TILES)
     kwargs.update(chunk_size=CHUNK_SIZE, shadows=True, num_bounces=4)
     return paz.partial(paz.graphics.render, *args, **kwargs)

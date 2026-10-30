@@ -39,7 +39,8 @@ W = 2040
 H = 2040
 y_FOV = jp.pi / 3
 key = jax.random.PRNGKey(777)
-rays = paz.graphics.camera.build_rays((H, W), y_FOV, camera_transform)
+intrinsics = paz.graphics.camera.compute_intrinsics(y_FOV, H, W)
+rays = paz.graphics.camera.build_rays((H, W), intrinsics, camera_transform)
 
 
 def visualize_gradient_magnitude(gradients, cmap):

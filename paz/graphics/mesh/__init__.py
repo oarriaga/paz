@@ -35,10 +35,7 @@ from .tile import (
     assemble,
     assert_exact_tile_side,
     build_tile_rays,
-    make_ray_origins,
-    make_ray_targets,
     make_tile_coordinates,
-    transform_tile_rays,
 )
 from .silhouette import (
     BinArgs,

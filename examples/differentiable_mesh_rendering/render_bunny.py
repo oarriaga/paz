@@ -8,7 +8,7 @@ from paz.graphics.types import Material, PointLight
 from paz.graphics.viewer import scene_renderer, viewer
 
 H, W = 512, 512
-Y_FOV = jp.pi / 4.0
+INTRINSICS = paz.graphics.camera.compute_intrinsics(jp.pi / 4.0, H, W)
 
 
 def normalize_vertices(vertices):
@@ -59,6 +59,6 @@ scene = Scene([bunny, plane])
 
 TILES = (4, 4)
 tile_rays = (H * W) // (TILES[0] * TILES[1])
-render_args = scene, H, W, Y_FOV, lights, True, tile_rays, TILES
+render_args = scene, H, W, INTRINSICS, lights, True, tile_rays, TILES
 render_fn = scene_renderer(*render_args)
 viewer(render_fn, camera_pose, H=H, W=W)

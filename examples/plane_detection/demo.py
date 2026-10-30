@@ -145,7 +145,6 @@ num_spheres = 100
 radius = 0.005
 max_depth = 1.0
 dataset = "fewsol"
-y_FOV = paz.datasets.get_y_FOV(dataset)
 camera_intrinsics = paz.datasets.get_intrinsics(dataset)
 world_to_camera = jp.eye(4)
 size = paz.SE3.scaling(radius)
@@ -209,7 +208,7 @@ for position in paz.pointcloud.sample(key, pointcloud_filtered, num_spheres):
 scene = paz.graphics.Scene(nodes)
 
 lights = [paz.graphics.PointLight(jp.ones(3), jp.ones(3))]
-render_args = (H, W), y_FOV, world_to_camera
+render_args = (H, W), camera_intrinsics, world_to_camera
 render_karg = dict(
     lights=lights,
     mask=None,

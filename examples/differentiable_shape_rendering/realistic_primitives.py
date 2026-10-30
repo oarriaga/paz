@@ -26,7 +26,8 @@ def main():
 
 def build_render(lights, shadows, num_bounces, scale):
     shape = (H * scale, W * scale)
-    args = shape, Y_FOV, CAMERA_POSE
+    intrinsics = paz.graphics.camera.compute_intrinsics(Y_FOV, *shape)
+    args = shape, intrinsics, CAMERA_POSE
     kwargs = dict(lights=lights, tiles=(1, 1), chunk_size=2**10)
     kwargs.update(shadows=shadows, num_bounces=num_bounces, mask=None)
     return jax.jit(paz.partial(paz.graphics.render, *args, **kwargs))

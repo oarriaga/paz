@@ -227,7 +227,7 @@ lights = [
 ]
 
 H, W = 1024 // 2, 1024 // 2
-y_FOV = jp.pi / 3.5
+intrinsics = paz.graphics.camera.compute_intrinsics(jp.pi / 3.5, H, W)
 
 # --- Rendering ---
 
@@ -235,7 +235,7 @@ render = jax.jit(
     paz.partial(
         paz.graphics.render,
         shape=(H, W),
-        y_FOV=y_FOV,
+        intrinsics=intrinsics,
         pose=camera_pose,
         lights=lights,
         tiles=(1, 1),

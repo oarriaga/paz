@@ -68,10 +68,6 @@ def get_intrinsics():
     )
 
 
-def get_y_FOV():
-    return float(2.0 * jp.arctan(480.0 / (2 * 610.02844238)))
-
-
 def arg_to_marker_name(arg):
     return "marker_%02d" % (arg)
 

@@ -123,7 +123,6 @@ keras.utils.set_random_seed(args.seed)
 key = jax.random.PRNGKey(args.seed)
 print("Loading CLEVRPOSE: single RGBD image as observations I, D (Sec. III)")
 intrinsics = clevrpose.get_intrinsics()
-y_FOV = clevrpose.get_y_FOV()
 shot = clevrpose.load(args.concept_arg)[0]
 pose_image = jp.array(shot.image)
 true_image = jp.array(shot.image) / 255.0
@@ -131,6 +130,7 @@ true_depth = jp.array(shot.depth)
 H, W, _ = true_image.shape
 ratio = args.image_size_ratio
 image_shape = [int(H * ratio), int(W * ratio)]
+render_intrinsics = paz.pinhole.resize_intrinsics(intrinsics, ratio)
 min_depth = args.min_depth
 max_depth = args.max_depth
 
@@ -163,7 +163,8 @@ print("Constraining positions to rays: p_k = t*d + o (line constraint, Fig. 3)")
 directions3D, origins3D, distances = initialize_lines(camera_origin, points3D)
 initial_scale = jax.vmap(paz.SE3.scaling)(scale_vectors)
 print("Building differentiable JAX ray tracer with spherical shapes (Sec. IV)")
-camera = (image_shape, y_FOV, world_to_camera_opengl, min_depth, max_depth)
+camera = (image_shape, render_intrinsics, world_to_camera_opengl)
+camera = (*camera, min_depth, max_depth)
 geometry = (initial_scale, directions3D, origins3D)
 model = build_shape_model(camera, geometry, args.shadows)
 jit_model = jit(model)
@@ -347,7 +348,8 @@ for shape_arg, mask in enumerate(best_masks):
 
 if args.render_final_scene:
     print("Rendering orbital video of the reconstructed scene (Fig. 6)")
-    orbit = (image_shape, y_FOV, scene, lights, args.shadows, args.scene_views)
+    orbit = (image_shape, render_intrinsics, scene, lights, args.shadows)
+    orbit = orbit + (args.scene_views,)
     round_name = f"{args.video_name}_round"
     round_path = args.round_path
     orbit_config = (root, round_path, round_name, frame_rate)

@@ -44,10 +44,11 @@ camera_shift = 1.8 * jp.array([-1.0, 1.0, -2.0])
 world_to_camera = paz.SE3.view_transform(camera_shift, jp.zeros(3), world_up)
 
 H, W, y_fov, resize_factor = 1024, 1024, jp.pi / 5.0, 1
+intrinsics = paz.graphics.camera.compute_intrinsics(y_fov, H, W)
 shading = dict(mask=None, shadows=True, lights=lights)
 chunking = dict(tiles=(1, 1), chunk_size=RENDER_CHUNK_SIZE)
 render_kwargs = paz.merge_dicts(shading, chunking)
-render_args = ((H, W), y_fov, world_to_camera)
+render_args = ((H, W), intrinsics, world_to_camera)
 render = jax.jit(partial(paz.graphics.render, *render_args, **render_kwargs))
 
 floor_half_height = 0.1

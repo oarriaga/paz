@@ -130,13 +130,13 @@ keras.utils.set_random_seed(args.seed)
 
 print("Loading CLEVRPOSE: single RGBD image as observations I, D (Sec. III)")
 intrinsics = clevrpose.get_intrinsics()
-y_FOV = clevrpose.get_y_FOV()
 shot = clevrpose.load(args.concept_arg)[0]
 true_image = jp.array(shot.image) / 255.0
 true_depth = jp.array(shot.depth)
 H, W, _ = true_image.shape
 ratio = args.image_size_ratio
 image_shape = [int(H * ratio), int(W * ratio)]
+render_intrinsics = paz.pinhole.resize_intrinsics(intrinsics, ratio)
 min_depth, max_depth = args.min_depth, args.max_depth
 
 print("Projecting pointcloud C into camera frame using intrinsics K (Eq. 4)")
@@ -185,7 +185,8 @@ initial_volumes = jax.vmap(paz.mesh.compute_volume)(
 print("Building differentiable JAX mesh ray tracer (Sec. IV)")
 obs_args = (true_image, true_depth, shot.masks.copy(), image_shape)
 true_image, true_depth, true_masks = preprocess_observations(*obs_args)
-camera = (image_shape, y_FOV, world_to_camera_opengl, min_depth, max_depth)
+camera = (image_shape, render_intrinsics, world_to_camera_opengl)
+camera = (*camera, min_depth, max_depth)
 camera = (*camera, args.tile_shape, args.chunk_size)
 camera = (*camera, args.face_chunk_size)
 model = build_mesh_model(camera, meshes, mesh_weights, floor, lights)
@@ -349,7 +350,8 @@ if args.compute_image_callback:
 
 if args.render_final_scene:
     print("Rendering orbital video of the reconstructed mesh scene")
-    orbit = (best_scene, image_shape, y_FOV, lights, args.scene_views, 128)
+    orbit = (best_scene, image_shape, render_intrinsics, lights)
+    orbit = (*orbit, args.scene_views, 128)
     video_name = f"{args.video_name}_round"
     path_args = (root, args.round_path, video_name, frame_rate)
     export_mesh_orbit(*path_args, orbit, camera_origin)

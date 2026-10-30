@@ -16,6 +16,10 @@ from paz.graphics.mesh import (
 )
 
 
+def build_intrinsics(y_FOV, image_shape):
+    return paz.graphics.camera.compute_intrinsics(y_FOV, *image_shape)
+
+
 def build_scene(*meshes):
     return paz.graphics.Scene(list(meshes)), None
 
@@ -42,7 +46,7 @@ def build_vertex_colors(vertices, color):
 
 def make_scene(image_shape=(20, 20)):
     camera_origin = jp.array([0.0, 1.0, -1.5])
-    y_FOV = jp.pi / 4.0
+    intrinsics = build_intrinsics(jp.pi / 4.0, image_shape)
     camera_pose = SE3.view_transform(
         camera_origin, jp.zeros(3), jp.array([0.0, 0.0, 1.0])
     )
@@ -54,7 +58,7 @@ def make_scene(image_shape=(20, 20)):
     material = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100)
     mesh = Mesh(vertices, vertex_colors, transform, material, faces, edges)
     scene, mask = build_scene(mesh)
-    return image_shape, y_FOV, camera_pose, scene, mask, lights
+    return image_shape, intrinsics, camera_pose, scene, mask, lights
 
 
 def render_scene(image_shape=(20, 20), tiles=(1, 1), chunk_size=1024):
@@ -95,16 +99,16 @@ def test_render_depth_is_chunk_invariant():
 
 
 def test_render_depth_respects_mask():
-    image_shape, y_FOV, camera_pose, scene, _, lights = make_scene()
+    image_shape, intrinsics, camera_pose, scene, _, lights = make_scene()
     mask = jp.zeros(len(scene.nodes), dtype=bool)
-    args = image_shape, y_FOV, camera_pose, scene, mask, lights
+    args = image_shape, intrinsics, camera_pose, scene, mask, lights
     _, depth = render(*args, (1, 1), 1024)
     assert jp.allclose(depth, 0.0)
 
 
 def test_render_masks_returns_mesh_masks():
-    shape, y_FOV, pose, scene, mask, lights = make_scene()
-    args = shape, y_FOV, pose, scene, lights, (0.1, 10.0), (2, 2), 1024
+    shape, intrinsics, pose, scene, mask, lights = make_scene()
+    args = shape, intrinsics, pose, scene, lights, (0.1, 10.0), (2, 2), 1024
     masks = paz.graphics.render_masks(*args)
     assert masks.shape == (1, 20, 20, 1)
     assert jp.any(masks > 0.0)
@@ -112,8 +116,8 @@ def test_render_masks_returns_mesh_masks():
 
 def test_render_gradient_through_vertices():
     camera_origin = jp.array([0.0, 1.0, -1.5])
-    y_FOV = jp.pi / 4.0
     image_shape = (10, 10)
+    intrinsics = build_intrinsics(jp.pi / 4.0, image_shape)
     camera_pose = SE3.view_transform(
         camera_origin, jp.zeros(3), jp.array([0.0, 0.0, 1.0])
     )
@@ -127,7 +131,7 @@ def test_render_gradient_through_vertices():
     def loss_fn(verts):
         mesh = Mesh(verts, vertex_colors, transform, material, faces, edges)
         scene, mask = build_scene(mesh)
-        args = image_shape, y_FOV, camera_pose, scene, mask, lights
+        args = image_shape, intrinsics, camera_pose, scene, mask, lights
         image, _ = render(*args, (1, 1), 1024)
         return jp.sum(image)
 
@@ -161,7 +165,8 @@ def make_multi_mesh_scene(image_shape=(24, 24)):
     )
     lights = [PointLight(jp.full((3,), 1.0), camera_origin)]
     scene, mask = build_scene(build_cube_mesh(), build_sphere_mesh())
-    return image_shape, jp.pi / 4.0, camera_pose, scene, mask, lights
+    intrinsics = build_intrinsics(jp.pi / 4.0, image_shape)
+    return image_shape, intrinsics, camera_pose, scene, mask, lights
 
 
 def render_multi_mesh(image_shape=(24, 24), tiles=(1, 1), chunk_size=1024):
@@ -183,21 +188,21 @@ def test_multi_mesh_render_is_tile_invariant():
 
 
 def test_multi_mesh_render_masks_matches_snapshot():
-    shape, y_FOV, pose, scene, _, lights = make_multi_mesh_scene()
-    args = shape, y_FOV, pose, scene, lights, (0.1, 10.0), (1, 1), 1024
+    shape, intrinsics, pose, scene, _, lights = make_multi_mesh_scene()
+    args = shape, intrinsics, pose, scene, lights, (0.1, 10.0), (1, 1), 1024
     masks = paz.graphics.render_masks(*args)
     assert masks.shape == (2, 24, 24, 1)
     assert_snapshot(masks, "mesh_multi_masks.npy", 1e-3)
 
 
 def test_multi_mesh_gradient_matches_snapshot():
-    shape, y_FOV, pose, _, _, lights = make_multi_mesh_scene((12, 12))
+    shape, intrinsics, pose, _, _, lights = make_multi_mesh_scene((12, 12))
     cube, sphere = build_cube_mesh(), build_sphere_mesh()
 
     def loss_fn(vertices):
         moved = cube._replace(vertices=vertices)
         scene, mask = build_scene(moved, sphere)
-        args = shape, y_FOV, pose, scene, mask, lights
+        args = shape, intrinsics, pose, scene, mask, lights
         return jp.sum(render(*args, (1, 1), 1024)[0])
 
     gradient = jax.grad(loss_fn)(cube.vertices)
@@ -236,7 +241,8 @@ def make_textured_quad_scene(image_shape=(24, 24)):
     )
     lights = [PointLight(jp.full((3,), 0.7), camera_origin)]
     scene, mask = build_scene(build_textured_quad_mesh())
-    return image_shape, jp.pi / 4.0, camera_pose, scene, mask, lights
+    intrinsics = build_intrinsics(jp.pi / 4.0, image_shape)
+    return image_shape, intrinsics, camera_pose, scene, mask, lights
 
 
 def test_textured_quad_render_matches_snapshot():
@@ -252,7 +258,7 @@ def test_textured_quad_samples_texture_not_vertex_colors():
 
 def make_tile_scene(image_shape=(20, 20), tiles=(2, 2), chunk_size=1024):
     camera_origin = jp.array([0.0, 1.0, -1.5])
-    y_FOV = jp.pi / 4.0
+    intrinsics = build_intrinsics(jp.pi / 4.0, image_shape)
     camera_pose = SE3.view_transform(
         camera_origin, jp.zeros(3), jp.array([0.0, 0.0, 1.0])
     )
@@ -264,7 +270,7 @@ def make_tile_scene(image_shape=(20, 20), tiles=(2, 2), chunk_size=1024):
     material = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100)
     mesh = Mesh(vertices, vertex_colors, transform, material, faces, edges)
     scene, mask = build_scene(mesh)
-    args = image_shape, y_FOV, camera_pose, scene, mask, lights
+    args = image_shape, intrinsics, camera_pose, scene, mask, lights
     return args + (tiles, chunk_size)
 
 
@@ -323,7 +329,8 @@ def render_pose_soft_mask(transform):
     _, pose = make_pose_camera()
     mesh = make_ellipsoid_mesh(transform)
     bins = BinArgs(8, mesh.faces.shape[0])
-    args = (bins, jp.pi / 3.0, 32, 32, pose, mesh, POSE_FIT_SIGMA, 256)
+    intrinsics = build_intrinsics(jp.pi / 3.0, (32, 32))
+    args = (bins, intrinsics, 32, 32, pose, mesh, POSE_FIT_SIGMA, 256)
     return tile_render_binned_soft_mask(*args)
 
 
@@ -332,7 +339,8 @@ def render_pose_depth(transform):
     mesh = make_ellipsoid_mesh(transform)
     scene, mask = build_scene(mesh)
     lights = [PointLight(jp.full(3, 10.0), camera_origin)]
-    args = (32, 32), jp.pi / 3.0, pose, scene, mask, lights
+    intrinsics = build_intrinsics(jp.pi / 3.0, (32, 32))
+    args = (32, 32), intrinsics, pose, scene, mask, lights
     return render(*args, (1, 1), 1024)[1]
 
 
@@ -383,9 +391,9 @@ def test_depth_rotation_gradient_matches_finite_difference():
 
 
 def render_scene_meshes(image_shape=(24, 24), tiles=(1, 1), chunk_size=1024):
-    shape, y_FOV, pose, _, _, lights = make_multi_mesh_scene(image_shape)
+    shape, intrinsics, pose, _, _, lights = make_multi_mesh_scene(image_shape)
     scene = paz.graphics.Scene([build_cube_mesh(), build_sphere_mesh()])
-    args = shape, y_FOV, pose, scene, None, lights
+    args = shape, intrinsics, pose, scene, None, lights
     return paz.graphics.render(*args, tiles, chunk_size)
 
 
@@ -416,19 +424,19 @@ def test_scene_meshes_render_is_tile_invariant():
 
 
 def test_scene_meshes_respect_mask():
-    shape, y_FOV, pose, _, _, lights = make_multi_mesh_scene()
+    shape, intrinsics, pose, _, _, lights = make_multi_mesh_scene()
     scene = paz.graphics.Scene([build_cube_mesh(), build_sphere_mesh()])
     mask = jp.zeros(2, dtype=bool)
-    args = shape, y_FOV, pose, scene, mask, lights
+    args = shape, intrinsics, pose, scene, mask, lights
     _, depth = paz.graphics.render(*args, (1, 1), 1024)
     assert jp.allclose(depth, 0.0)
 
 
 def test_scene_mixes_meshes_and_shapes():
-    shape, y_FOV, pose, _, _, lights = make_multi_mesh_scene()
+    shape, intrinsics, pose, _, _, lights = make_multi_mesh_scene()
     sphere = paz.graphics.Sphere(SE3.translation(jp.array([0.0, 0.0, 2.0])))
     scene = paz.graphics.Scene([build_cube_mesh(), sphere])
-    args = shape, y_FOV, pose, scene, None, lights
+    args = shape, intrinsics, pose, scene, None, lights
     image, depth = paz.graphics.render(*args, (1, 1), 1024)
     assert image.shape == (24, 24, 3)
     assert jp.any(depth > 0)
@@ -443,10 +451,10 @@ def build_cube_mesh_with_material(material):
 
 
 def render_mesh_with_material(material):
-    shape, y_FOV, pose, _, _, lights = make_multi_mesh_scene()
+    shape, intrinsics, pose, _, _, lights = make_multi_mesh_scene()
     mesh = build_cube_mesh_with_material(material)
     scene = paz.graphics.Scene([mesh, build_sphere_mesh()])
-    args = shape, y_FOV, pose, scene, None, lights, (1, 1), 1024
+    args = shape, intrinsics, pose, scene, None, lights, (1, 1), 1024
     return paz.graphics.render(*args, False, None, 2)
 
 
@@ -482,7 +490,8 @@ def render_mesh_over_floor(shadows, shadow_mask=None):
     )
     lights = [PointLight(jp.ones(3), jp.array([0.0, 5.0, -1.0]))]
     scene = build_mesh_over_floor_scene()
-    args = (32, 32), jp.pi / 3.0, camera_pose, scene, None, lights
+    intrinsics = build_intrinsics(jp.pi / 3.0, (32, 32))
+    args = (32, 32), intrinsics, camera_pose, scene, None, lights
     return paz.graphics.render(*args, (1, 1), 1024, shadows, shadow_mask)
 
 
@@ -518,7 +527,8 @@ def render_mesh_only_shadow(shadows):
     )
     lights = [PointLight(jp.ones(3), jp.array([0.0, 6.0, -1.5]))]
     scene = build_mesh_only_shadow_scene()
-    args = (32, 32), jp.pi / 3.0, camera_pose, scene, None, lights
+    intrinsics = build_intrinsics(jp.pi / 3.0, (32, 32))
+    args = (32, 32), intrinsics, camera_pose, scene, None, lights
     return paz.graphics.render(*args, (1, 1), 1024, shadows)
 
 
@@ -548,9 +558,9 @@ def build_cook_torrance_mesh():
 
 
 def render_cook_torrance_scene(meshes):
-    shape, y_FOV, pose, _, _, lights = make_multi_mesh_scene()
+    shape, intrinsics, pose, _, _, lights = make_multi_mesh_scene()
     scene = paz.graphics.Scene(list(meshes))
-    args = shape, y_FOV, pose, scene, None, lights
+    args = shape, intrinsics, pose, scene, None, lights
     return paz.graphics.render(*args, (1, 1), 1024)
 
 

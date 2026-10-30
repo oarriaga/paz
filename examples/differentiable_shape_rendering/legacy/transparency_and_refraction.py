@@ -225,7 +225,8 @@ lights = [
 
 H, W = 512, 512  # Good resolution for verification
 y_FOV = jp.pi / 3.0
-rays = paz.graphics.camera.build_rays((H, W), y_FOV, camera_pose)
+intrinsics = paz.graphics.camera.compute_intrinsics(y_FOV, H, W)
+rays = paz.graphics.camera.build_rays((H, W), intrinsics, camera_pose)
 
 render = jax.jit(
     paz.partial(

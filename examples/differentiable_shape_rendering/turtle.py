@@ -126,9 +126,9 @@ camera_pose = paz.SE3.view_transform(
 lights = [paz.graphics.PointLight(jp.ones(3) * 0.8, jp.array([5.0, 8.0, 5.0]))]
 
 H, W = 1024 // 2, 1024 // 2
-y_FOV = jp.pi / 4.0
+intrinsics = paz.graphics.camera.compute_intrinsics(jp.pi / 4.0, H, W)
 
-render_args = (H, W), y_FOV, camera_pose
+render_args = (H, W), intrinsics, camera_pose
 render_kwargs = dict(lights=lights, tiles=(1, 1), chunk_size=1024)
 render = paz.partial(paz.graphics.render, *render_args, **render_kwargs)
 render = jax.jit(paz.partial(render, shadows=True))

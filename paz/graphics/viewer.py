@@ -1,4 +1,5 @@
 import math
+from collections import namedtuple
 import jax.numpy as jp
 import cv2
 import jax
@@ -8,8 +9,10 @@ import time
 import json
 import datetime
 
-VIEWER_NAMES = "camera_pose shadows light H W y_FOV chunk_size tiles".split()
-VIEWER_DEFAULTS = None, False, None, 480, 640, 0.78, 1024, (1, 1)
+OPTION_NAMES = "camera_pose shadows light H W intrinsics chunk_size tiles"
+ViewerOptions = namedtuple("ViewerOptions", OPTION_NAMES)
+VIEWER_NAMES = ViewerOptions._fields
+VIEWER_DEFAULTS = None, False, None, 480, 640, None, 1024, (1, 1)
 
 
 def clamp_tilt(tilt, limit=None):
@@ -38,7 +41,7 @@ def scene_renderer(
     scene,
     H,
     W,
-    y_FOV=0.78,
+    intrinsics,
     lights=None,
     shadows=False,
     chunk_size=1024,
@@ -51,7 +54,7 @@ def scene_renderer(
 
     @jax.jit
     def render_frame(pose_matrix):
-        args = (H, W), y_FOV, pose_matrix, scene, None, lights
+        args = (H, W), intrinsics, pose_matrix, scene, None, lights
         args = args + (tiles, chunk_size)
         image, _ = paz.graphics.render(*args, shadows, None, num_bounces)
         return _to_uint8(image)
@@ -61,17 +64,22 @@ def scene_renderer(
 
 def viewer(render_fn_or_scene, *args, **kwargs):
     # TODO take explicit values instead of args and kwargs: it is public.
-    parsed_args = parse_viewer_args(args, kwargs)
-    camera_pose, shadows, light, H, W, y_FOV, chunk_size, tiles = parsed_args
+    options = parse_viewer_args(args, kwargs)
     if callable(render_fn_or_scene):
         render_fn = render_fn_or_scene
     else:
-        if light is None:
-            light = _default_lights()
-        args = render_fn_or_scene, H, W, y_FOV, light, shadows
-        args = args + (chunk_size, tiles)
-        render_fn = scene_renderer(*args)
-    _run_viewer(render_fn, camera_pose, H, W)
+        render_fn = build_scene_render(render_fn_or_scene, options)
+    _run_viewer(render_fn, options.camera_pose, options.H, options.W)
+
+
+def build_scene_render(scene, options):
+    H, W = options.H, options.W
+    if options.intrinsics is None:
+        intrinsics = paz.graphics.camera.compute_intrinsics(0.78, H, W)
+    else:
+        intrinsics = options.intrinsics
+    args = scene, H, W, intrinsics, options.light, options.shadows
+    return scene_renderer(*args, options.chunk_size, options.tiles)
 
 
 def parse_viewer_args(args, kwargs):
@@ -86,7 +94,7 @@ def parse_viewer_args(args, kwargs):
     values = dict(zip(VIEWER_NAMES, VIEWER_DEFAULTS))
     values.update(zip(VIEWER_NAMES, args))
     values.update(kwargs)
-    return [values[name] for name in VIEWER_NAMES]
+    return ViewerOptions(**values)
 
 
 def _run_viewer(render_fn, camera_pose, H, W):

@@ -78,7 +78,8 @@ def build_renderer(mesh, image_size, distance, y_FOV=jp.pi / 4.0):
     H = W = image_size
     tiles = (2, 2)
     tile_rays = (H * W) // (tiles[0] * tiles[1])
-    args = scene, H, W, y_FOV, lights, False, tile_rays, tiles
+    intrinsics = paz.graphics.camera.compute_intrinsics(y_FOV, H, W)
+    args = scene, H, W, intrinsics, lights, False, tile_rays, tiles
     return scene_renderer(*args)
 
 
