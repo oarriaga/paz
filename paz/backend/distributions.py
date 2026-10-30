@@ -1433,6 +1433,36 @@ class Mixture(_MixtureDifferentFamilyBase, Distribution):
         return jp.broadcast_to(jp.reshape(draws, padded_shape), shape)
 
 
+
+_MaskedBase = namedtuple("Masked", ["distribution", "is_valid"])
+
+
+# Entries where is_valid is False contribute zero log probability, e.g. for
+# padded arrays. Their values must still give a finite log probability, or
+# gradients become NaN.
+class Masked(_MaskedBase, Distribution):
+    __slots__ = ()
+
+    @property
+    def dtype(self):
+        return self.distribution.dtype
+
+    @property
+    def batch_shape(self):
+        valid_shape = jp.shape(self.is_valid)
+        return jp.broadcast_shapes(self.distribution.batch_shape, valid_shape)
+
+    @property
+    def event_shape(self):
+        return self.distribution.event_shape
+
+    def log_prob(self, values):
+        log_prob = self.distribution.log_prob(values)
+        return jp.where(self.is_valid, log_prob, 0.0)
+
+    def sample(self, num_samples=1, seed=None):
+        return self.distribution.sample(num_samples, seed=seed)
+
 _QuantizedBase = namedtuple(
     "QuantizedDistribution", ["distribution", "low", "high"]
 )

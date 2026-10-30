@@ -346,3 +346,42 @@ def test_mixture_sample_frequencies_match_probs():
     assert mixture.batch_shape == (2,)
     negative_frequency = jp.mean(samples < 0.0, axis=0)
     assert jp.allclose(negative_frequency, probs[:, 0], atol=0.015)
+
+
+def test_masked_log_prob_matches_tfp():
+    key = jax.random.split(jax.random.fold_in(KEY, 4000), 3)
+    loc = sample(key[0], (50,), -1.0, 1.0)
+    values = sample(key[1], (50,), -3.0, 3.0)
+    is_valid = jax.random.bernoulli(key[2], 0.6, (50,))
+    ours = D.Masked(D.Normal(loc, 0.8), is_valid)
+    theirs = tfd.Masked(tfd.Normal(loc, 0.8), is_valid)
+    assert_parity("Masked.log_prob", ours.log_prob(values),
+                  theirs.log_prob(values))
+
+
+def test_masked_invalid_entries_are_zero_and_valid_unchanged():
+    distribution = D.Bernoulli(probs=jp.array([0.2, 0.7, 0.9]))
+    is_valid = jp.array([True, False, True])
+    log_prob = D.Masked(distribution, is_valid).log_prob(jp.ones(3))
+    expected = jp.array([jp.log(0.2), 0.0, jp.log(0.9)])
+    assert jp.allclose(log_prob, expected, rtol=1e-12)
+
+
+def test_masked_gradient_ignores_invalid_entries():
+    is_valid = jp.array([True, False])
+
+    def total_log_prob(loc):
+        masked = D.Masked(D.Normal(loc, 1.0), is_valid)
+        return masked.log_prob(jp.array([0.5, 3.0])).sum()
+
+    gradient = jax.grad(total_log_prob)(jp.zeros(2))
+    # d/dloc of log N(x; loc, 1) at loc 0 is x
+    assert jp.allclose(gradient, jp.array([0.5, 0.0]), rtol=1e-12)
+
+
+def test_masked_shapes_and_sample():
+    masked = D.Masked(D.Normal(jp.zeros(4), 1.0), jp.ones(4, bool))
+    assert masked.batch_shape == (4,)
+    assert masked.event_shape == ()
+    draws = masked.sample(10, seed=jax.random.PRNGKey(0))
+    assert draws.shape == (10, 4)
