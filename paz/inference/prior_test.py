@@ -3,6 +3,7 @@ import jax.numpy as jp
 import pytest
 from tensorflow_probability.substrates import jax as tfp
 
+from paz.backend import distributions as paz_distributions
 from paz.inference.prior import Prior
 
 
@@ -87,3 +88,10 @@ def test_prior_fit_bijector_updates_distribution():
         print=False,
     )
     assert fitted_prior.distribution is target
+
+
+def test_prior_accepts_paz_distribution():
+    distribution = paz_distributions.Normal(0.0, 1.0)
+    prior = Prior(distribution, name="x")
+    state = prior.log_prob(jp.array(0.5))
+    assert jp.isclose(state.log_prob_sum, distribution.log_prob(0.5))
