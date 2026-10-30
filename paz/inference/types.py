@@ -43,8 +43,10 @@ PGM = namedtuple(
         "infer",
         "fit",
         "inference_defaults",
+        "log_prob",
+        "log_prob_inverse",
     ],
-    defaults=[None] * 17,
+    defaults=[None] * 19,
 )
 Density = namedtuple(
     "Density",

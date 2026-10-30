@@ -25,6 +25,7 @@ from paz.inference.types import (
     PGM,
     SampleType,
 )
+from paz.inference.infer import build_log_density
 from paz.inference.pgm.ops import (
     build_configure,
     build_data_mapping,
@@ -313,6 +314,7 @@ def marginalize(pgm, names):
     )
     inference_defaults = {}
     fit = build_fit()
+    joint = build_log_density(prior_density, likelihood_density)
     def without_z(nodes):
         return [node for node in nodes if node.name != z_name]
 
@@ -337,6 +339,7 @@ def marginalize(pgm, names):
         infer,
         fit,
         inference_defaults,
+        *joint,
     )
     return pgm_marg
 

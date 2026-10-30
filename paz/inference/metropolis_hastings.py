@@ -29,7 +29,7 @@ def apply_gaussian_noise(key, position, mu=0.0, sigma=1.0):
 
 
 def choose_proposal(key, now_proposal, new_proposal):
-    acceptance_probability = jp.clip(jp.exp(new_proposal.weight), a_max=1)
+    acceptance_probability = jp.clip(jp.exp(new_proposal.weight), max=1)
     do_accept = jax.random.bernoulli(key, acceptance_probability)
     return jax.lax.cond(
         do_accept,

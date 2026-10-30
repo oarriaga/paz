@@ -160,3 +160,21 @@ def test_marginalize_discrete_non_identity_bijector_raises():
     pgm = PGM([z], [z], "bijected_bernoulli")
     with pytest.raises(NotImplementedError):
         marginalize(pgm, ["z"])
+
+
+def test_marginalize_joint_log_prob_matches_analytic():
+    mu0_value, mu1_value = 0.0, 2.0
+    sigma_value, p_value, y_value = 1.0, 0.3, 1.5
+    pgm, data = build_scalar_mixture_model(
+        mu0_value, mu1_value, sigma_value, p_value, y_value
+    )
+    pgm_marg = marginalize(pgm, ["z"])
+    theta = make_theta_inverse_samples(
+        mu0_value, mu1_value, sigma_value, p_value
+    )
+    state = pgm_marg.log_prob_inverse(theta, data)
+    expected = compute_analytic_log_marginal(
+        mu0_value, mu1_value, sigma_value, p_value, y_value
+    )
+    assert jp.allclose(state.log_prob_sum, expected)
+    assert jp.allclose(state.log_prob["_marginal"], expected)

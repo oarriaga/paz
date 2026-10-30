@@ -5,6 +5,7 @@ from paz.inference.metropolis_hastings import sample as mh_sample
 from paz.inference.posterior import MCMCPosterior
 from paz.inference.latent_space import as_latent_samples, to_inverse_samples
 from paz.inference.tuner import AdaptiveStepTuner, Tuner
+from paz.inference.types import NodeState
 from paz.inference.utils import validate_space
 
 
@@ -21,6 +22,40 @@ def infer(
     if method in ("smc", "vi", "hmc", "nuts"):
         raise NotImplementedError(f"Method '{method}' not implemented yet.")
     raise ValueError(f"Unknown inference method '{method}'.")
+
+
+def build_log_density(prior, likelihood):
+    """Builds the joint log density: log prior plus log likelihood.
+
+    # Arguments
+        prior: Density of the PGM priors.
+        likelihood: Likelihood of the PGM observables.
+
+    # Returns
+        log_prob(samples, data) and log_prob_inverse(samples, data), each
+        returning a NodeState with per-node log probabilities and their sum.
+    """
+
+    def log_prob(samples, data):
+        prior_state = prior.log_prob(samples)
+        likelihood_state = likelihood.log_prob(samples, data)
+        return _combine_states(prior_state, likelihood_state)
+
+    def log_prob_inverse(samples, data):
+        prior_state = prior.log_prob_inverse(samples)
+        likelihood_state = likelihood.log_prob_inverse(samples, data)
+        return _combine_states(prior_state, likelihood_state)
+
+    return log_prob, log_prob_inverse
+
+
+def _combine_states(prior_state, likelihood_state):
+    # nodes sharing a name (e.g. marginalized models) are summed
+    log_prob = dict(prior_state.log_prob)
+    for name, value in likelihood_state.log_prob.items():
+        log_prob[name] = log_prob.get(name, 0.0) + value
+    log_prob_sum = prior_state.log_prob_sum + likelihood_state.log_prob_sum
+    return NodeState(prior_state.sample, log_prob, log_prob_sum)
 
 
 def _infer_mh(key, data, prior, likelihood, sample_predictive, **kwargs):
@@ -42,12 +77,10 @@ def _infer_mh(key, data, prior, likelihood, sample_predictive, **kwargs):
     key_init, key_tune, key_sample = jax.random.split(key, 3)
     positions = _get_initial_positions(key_init, prior, init, num_chains, space)
 
+    _, log_prob_inverse = build_log_density(prior, likelihood)
+
     def log_density_fn(position):
-        log_prior = prior.log_prob_inverse(position).log_prob_sum
-        log_likelihood = likelihood.log_prob_inverse(
-            position, data
-        ).log_prob_sum
-        return log_prior + log_likelihood
+        return log_prob_inverse(position, data).log_prob_sum
 
     num_warmup = _resolve_num_warmup(num_samples, warmup)
     if sigma is None:
