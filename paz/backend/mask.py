@@ -1,3 +1,4 @@
+import jax
 import jax.numpy as jp
 
 
@@ -36,3 +37,22 @@ def to_rgb(image, mask):
 def to_RGB(image, mask):
     color = jp.clip(to_rgb(image, mask), 0.0, 1.0)
     return (255.0 * color).astype(jp.uint8)
+
+
+def erode(mask, num_pixels):
+    """Shrinks a boolean mask by num_pixels on every side.
+
+    Pixels outside the image count as inside the mask, so the image border
+    does not erode the mask.
+    """
+    size = (2 * num_pixels) + 1
+    window_args = (1.0, jax.lax.min, (size, size), (1, 1), "SAME")
+    minimum = jax.lax.reduce_window(mask.astype(jp.float32), *window_args)
+    return minimum > 0.5
+
+
+def compute_IOU(mask_A, mask_B):
+    """Intersection over union of two boolean masks."""
+    mask_A, mask_B = mask_A.astype(bool), mask_B.astype(bool)
+    intersection = jp.sum(mask_A & mask_B)
+    return intersection / jp.sum(mask_A | mask_B)
