@@ -1375,6 +1375,64 @@ class MixtureSameFamily(_MixtureBase, Distribution):
         return (component_samples * mask).sum(axis=axis)
 
 
+_MixtureDifferentFamilyBase = namedtuple("Mixture", ["probs", "components"])
+
+
+# Components may differ in family but must have scalar events.
+class Mixture(_MixtureDifferentFamilyBase, Distribution):
+    __slots__ = ()
+
+    @property
+    def dtype(self):
+        dtypes = [component.dtype for component in self.components]
+        return jp.result_type(*dtypes)
+
+    @property
+    def batch_shape(self):
+        shapes = [component.batch_shape for component in self.components]
+        return jp.broadcast_shapes(jp.shape(self.probs)[:-1], *shapes)
+
+    @property
+    def event_shape(self):
+        return ()
+
+    def log_prob(self, values):
+        values = to_float(values, self.dtype)
+        log_probs = [part.log_prob(values) for part in self.components]
+        log_probs = jp.stack(jp.broadcast_arrays(*log_probs), axis=-1)
+        log_weights = jp.log(to_float(self.probs, self.dtype))
+        return jsp_special.logsumexp(log_weights + log_probs, axis=-1)
+
+    def mean(self):
+        means = [component.mean() for component in self.components]
+        means = jp.stack(jp.broadcast_arrays(*means), axis=-1)
+        return jp.sum(self.probs * means, axis=-1)
+
+    def sample(self, num_samples=1, seed=None):
+        seed = _require_seed(seed)
+        keys = jax.random.split(seed, len(self.components) + 1)
+        sample_shape = build_sample_shape(num_samples)
+        shape = sample_shape + self.batch_shape
+        log_weights = jp.log(to_float(self.probs, self.dtype))
+        args = (keys[0], log_weights, -1, shape)
+        indices = jax.random.categorical(*args)
+        samples = []
+        for key, component in zip(keys[1:], self.components):
+            draws = component.sample(num_samples, seed=key)
+            samples.append(self._broadcast_draws(draws, sample_shape))
+        samples = jp.stack(samples, axis=-1)
+        indices = jp.expand_dims(indices, -1)
+        return jp.take_along_axis(samples, indices, axis=-1)[..., 0]
+
+    def _broadcast_draws(self, draws, sample_shape):
+        # Pad between sample and batch axes so batch axes stay right-aligned.
+        component_shape = draws.shape[len(sample_shape):]
+        num_padding = len(self.batch_shape) - len(component_shape)
+        padded_shape = sample_shape + ((1,) * num_padding) + component_shape
+        shape = sample_shape + self.batch_shape
+        return jp.broadcast_to(jp.reshape(draws, padded_shape), shape)
+
+
 _QuantizedBase = namedtuple(
     "QuantizedDistribution", ["distribution", "low", "high"]
 )

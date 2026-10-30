@@ -248,3 +248,101 @@ def test_extreme_masks_match_tfp():
     bounds = f([0.0, tiny, 1.0, jp.inf, jp.nan])
     assert_parity("LogNormal.log_prob", D.LogNormal(0.0, 1.0).log_prob(bounds),
                   tfd.LogNormal(f(0.0), f(1.0)).log_prob(bounds))
+
+
+def build_depth_mixture(key):
+    probs = sample(key[0], (50,), 0.05, 0.95)
+    probs = jp.stack([probs, 1.0 - probs], axis=-1)
+    loc = sample(key[1], (50,), 0.5, 4.5)
+    scale = sample(key[2], (50,), 0.01, 0.5)
+    values = sample(key[3], (50,), -1.0, 6.0)
+    return probs, loc, scale, values
+
+
+def test_mixture_log_prob_matches_tfp():
+    key = jax.random.split(jax.random.fold_in(KEY, 3000), 4)
+    probs, loc, scale, values = build_depth_mixture(key)
+    ours = D.Mixture(probs, [D.Laplace(loc, scale), D.Uniform(0.0, 5.0)])
+    theirs = tfd.Mixture(
+        tfd.Categorical(probs=probs),
+        [tfd.Laplace(loc, scale), tfd.Uniform(jp.zeros(50), 5.0 * jp.ones(50))],
+    )
+    assert_parity("Mixture.log_prob", ours.log_prob(values),
+                  theirs.log_prob(values))
+
+
+def test_mixture_three_families_match_tfp():
+    key = jax.random.split(jax.random.fold_in(KEY, 3001), 3)
+    logits = sample(key[0], (50, 3), -2, 2)
+    probs = jax.nn.softmax(logits, axis=-1)
+    values = sample(key[1], (50,), -4.0, 4.0)
+    loc = sample(key[2], (50,), -1.0, 1.0)
+    ours = D.Mixture(probs, [D.Normal(loc, 0.7), D.Laplace(-loc, 1.3),
+                             D.Uniform(-2.0, 3.0)])
+    low, high = -2.0 * jp.ones(50), 3.0 * jp.ones(50)
+    components = [tfd.Normal(loc, 0.7 * jp.ones(50)),
+                  tfd.Laplace(-loc, 1.3 * jp.ones(50)), tfd.Uniform(low, high)]
+    theirs = tfd.Mixture(tfd.Categorical(probs=probs), components)
+    assert_parity("Mixture3.log_prob", ours.log_prob(values),
+                  theirs.log_prob(values))
+
+
+def test_mixture_log_prob_by_hand():
+    # Laplace density at its location is 1 / (2 * scale) = 1 / 4.
+    # Uniform(0, 5) density is 1 / 5.
+    mixture = D.Mixture(jp.array([0.3, 0.7]),
+                        [D.Laplace(2.0, 2.0), D.Uniform(0.0, 5.0)])
+    expected = jp.log((0.3 / 4.0) + (0.7 / 5.0))
+    assert jp.allclose(mixture.log_prob(2.0), expected, rtol=1e-12)
+
+
+def test_mixture_outside_uniform_support_is_finite():
+    def log_prob(probability, loc, scale):
+        probs = jp.stack([probability, 1.0 - probability])
+        components = [D.Laplace(loc, scale), D.Uniform(0.0, 5.0)]
+        return D.Mixture(probs, components).log_prob(7.0)
+
+    value = log_prob(0.4, 6.0, 0.5)
+    expected = jp.log(0.4) - jp.abs((7.0 - 6.0) / 0.5) - jp.log(2.0 * 0.5)
+    assert jp.isfinite(value)
+    assert jp.allclose(value, expected, rtol=1e-12)
+    gradients = jax.grad(log_prob, (0, 1, 2))(0.4, 6.0, 0.5)
+    expected_gradients = (1.0 / 0.4, 1.0 / 0.5, (1.0 / 0.25) - (1.0 / 0.5))
+    for gradient, expected_gradient in zip(gradients, expected_gradients):
+        assert jp.isfinite(gradient)
+        assert jp.allclose(gradient, expected_gradient, rtol=1e-12)
+
+
+def test_mixture_jit_and_grad_match_tfp():
+    key = jax.random.split(jax.random.fold_in(KEY, 3002), 4)
+    probs, loc, scale, values = build_depth_mixture(key)
+
+    def our_loss(probability, loc, scale):
+        probs = jp.stack([probability, 1.0 - probability], axis=-1)
+        components = [D.Laplace(loc, scale), D.Uniform(0.0, 5.0)]
+        return jp.sum(D.Mixture(probs, components).log_prob(values))
+
+    def their_loss(probability, loc, scale):
+        probs = jp.stack([probability, 1.0 - probability], axis=-1)
+        uniform = tfd.Uniform(jp.zeros(50), 5.0 * jp.ones(50))
+        components = [tfd.Laplace(loc, scale), uniform]
+        mixture = tfd.Mixture(tfd.Categorical(probs=probs), components)
+        return jp.sum(mixture.log_prob(values))
+
+    params = (probs[:, 0], loc, scale)
+    ours = jax.jit(jax.grad(our_loss, (0, 1, 2)))(*params)
+    theirs = jax.grad(their_loss, (0, 1, 2))(*params)
+    for our_gradient, their_gradient in zip(ours, theirs):
+        assert_parity("Mixture.grad", our_gradient, their_gradient)
+    assert_parity("Mixture.jit", jax.jit(our_loss)(*params),
+                  their_loss(*params))
+
+
+def test_mixture_sample_frequencies_match_probs():
+    probs = jp.array([[0.2, 0.8], [0.7, 0.3]])
+    mixture = D.Mixture(probs, [D.Normal(-10.0, 1.0), D.Normal(10.0, 1.0)])
+    samples = mixture.sample(20000, seed=KEY)
+    assert samples.shape == (20000, 2)
+    assert mixture.batch_shape == (2,)
+    negative_frequency = jp.mean(samples < 0.0, axis=0)
+    assert jp.allclose(negative_frequency, probs[:, 0], atol=0.015)
