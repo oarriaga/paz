@@ -11,6 +11,8 @@ from paz.datasets import (
     hands,
     ycb_video,
     cityscapes,
+    ozfish,
+    oversampling,
 )
 from paz.datasets.hands import MPIIHandJoints, MANOHandJoints
 
