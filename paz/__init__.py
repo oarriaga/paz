@@ -53,6 +53,7 @@ from paz.backend.standard import (
 from paz import losses
 from paz.abstract import Model, Node, Input, Sequential, Tree
 from paz.models.decomposition import pca as PCA
+from paz.models.clustering import KMeans
 from paz.models import transformers
 from paz.models.foundation import dinov2
 from paz.models.foundation import depth_anything3
