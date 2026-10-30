@@ -773,30 +773,28 @@ def compute_standard_normal_log_pdf(value):
 def test_pgm_log_prob_matches_hand_computed_normal_normal():
     model = build_normal_normal_model()
     samples = model.latent_space.Sample(jp.array(0.5))
-    state = model.log_prob(samples, {"y": jp.array(1.0)})
+    log_density = model.log_prob(samples, {"y": jp.array(1.0)})
     prior = compute_standard_normal_log_pdf(0.5)
     likelihood = compute_standard_normal_log_pdf(1.0 - 0.5)
-    assert jp.isclose(state.log_prob_sum, prior + likelihood)
-    assert jp.isclose(state.log_prob["x"], prior)
-    assert jp.isclose(state.log_prob["y"], likelihood)
+    assert jp.isclose(log_density, prior + likelihood)
 
 
 def test_pgm_log_prob_inverse_equals_prior_plus_likelihood():
     model, data, _, _ = build_three_priors_one_observable_model()
     params = model.sample_inverse(jax.random.PRNGKey(0))
-    state = model.log_prob_inverse(params, data)
+    log_density = model.log_prob_inverse(params, data)
     expected = evaluate_joint(model, params, data)
-    assert jp.isclose(state.log_prob_sum, expected.log_prob_sum)
-    assert set(state.log_prob) == {"mean", "bias", "stdv", "y_pred"}
+    assert jp.isclose(log_density, expected.log_prob_sum)
 
 
 def test_pgm_log_prob_inverse_adds_jacobian_to_log_prob():
     model, data, bijector, _ = build_three_priors_one_observable_model()
     params = model.sample_inverse(jax.random.PRNGKey(1))
-    inverse_state = model.log_prob_inverse(params, data)
-    forward_state = model.log_prob(inverse_state.sample, data)
+    forward_params = model.prior.log_prob_inverse(params).sample
+    inverse_log_density = model.log_prob_inverse(params, data)
+    forward_log_density = model.log_prob(forward_params, data)
     jacobian = bijector.forward_log_det_jacobian(params.stdv)
-    difference = inverse_state.log_prob_sum - forward_state.log_prob_sum
+    difference = inverse_log_density - forward_log_density
     # forward path round-trips stdv through the sigmoid chain in float32
     assert jp.isclose(difference, jacobian, rtol=1e-4)
 
@@ -806,7 +804,7 @@ def test_pgm_log_prob_inverse_is_jittable_and_differentiable():
     params = model.sample_inverse(jax.random.PRNGKey(2))
 
     def compute_log_density(params):
-        return model.log_prob_inverse(params, data).log_prob_sum
+        return model.log_prob_inverse(params, data)
 
     value, gradients = jax.jit(jax.value_and_grad(compute_log_density))(params)
     assert jp.isfinite(value)

@@ -172,9 +172,8 @@ def test_marginalize_joint_log_prob_matches_analytic():
     theta = make_theta_inverse_samples(
         mu0_value, mu1_value, sigma_value, p_value
     )
-    state = pgm_marg.log_prob_inverse(theta, data)
+    log_density = pgm_marg.log_prob_inverse(theta, data)
     expected = compute_analytic_log_marginal(
         mu0_value, mu1_value, sigma_value, p_value, y_value
     )
-    assert jp.allclose(state.log_prob_sum, expected)
-    assert jp.allclose(state.log_prob["_marginal"], expected)
+    assert jp.allclose(log_density, expected)
