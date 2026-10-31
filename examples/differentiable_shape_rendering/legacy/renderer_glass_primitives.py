@@ -186,7 +186,8 @@ lights = [
 
 H, W = 1024, 1024
 y_FOV = jp.pi / 3.5
-rays = paz.graphics.camera.build_rays((H, W), y_FOV, camera_pose)
+intrinsics = paz.graphics.camera.compute_intrinsics(y_FOV, H, W)
+rays = paz.graphics.camera.build_rays((H, W), intrinsics, camera_pose)
 
 # --- Rendering ---
 

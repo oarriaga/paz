@@ -50,8 +50,9 @@ def compare_renderers(scene_name, shape_definitions, camera_pose, camera_name):
     pyrender_renderer = pyrender.OffscreenRenderer(W, H)
     true_image, true_depth = pyrender_renderer.render(pyrender_scene)
 
+    intrinsics = paz.graphics.camera.compute_intrinsics(y_FOV, H, W)
     paz_rays = paz.graphics.camera.build_rays(
-        (H, W), y_FOV, paz_world_to_camera
+        (H, W), intrinsics, paz_world_to_camera
     )
     pred_image, pred_depth = paz.graphics.render(
         (H, W),

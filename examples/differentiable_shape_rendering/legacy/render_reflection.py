@@ -74,7 +74,8 @@ lights = [
 ]
 
 H, W = 480, 640
-rays = camera.build_rays((H, W), jp.pi / 3.0, camera_pose)
+intrinsics = camera.compute_intrinsics(jp.pi / 3.0, H, W)
+rays = camera.build_rays((H, W), intrinsics, camera_pose)
 
 # Render
 image, depth = render(

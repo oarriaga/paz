@@ -8,6 +8,7 @@ import paz
 from paz.graphics.mesh.intersect import EPSILON
 from paz.graphics.mesh.tile import assemble
 from paz.graphics.mesh.tile import assert_exact_tile_side
+from paz.graphics.mesh.tile import build_tile_pixels
 from paz.graphics.mesh.tile import make_tile_coordinates
 
 
@@ -39,7 +40,9 @@ def unpack_bin_shape(bins):
     return H_bin, W_bin
 
 
-def tile_render_binned_soft_mask(bins, y_fov, H, W, pose, mesh, sigma, chunk):
+def tile_render_binned_soft_mask(
+    bins, intrinsics, H, W, pose, mesh, sigma, chunk
+):
     """Render a differentiable silhouette mask with spatial face bins.
 
     The image is split into bins. Each face is assigned only to bins touched
@@ -50,7 +53,8 @@ def tile_render_binned_soft_mask(bins, y_fov, H, W, pose, mesh, sigma, chunk):
     # Arguments
     - `bins`: `BinArgs` with `shape` and `max_faces` per bin.
     - `bins.shape`: Either `int` for square bins or `(H_bin, W_bin)`.
-    - `y_fov`: Python or JAX scalar camera vertical field of view in radians.
+    - `intrinsics`: JAX array with shape `(3, 3)`, OpenCV camera intrinsics
+      with pixel centers on integer coordinates.
     - `H`: Python int image height in pixels.
     - `W`: Python int image width in pixels.
     - `pose`: JAX array with shape `(4, 4)`, world-to-camera transform.
@@ -78,7 +82,7 @@ def tile_render_binned_soft_mask(bins, y_fov, H, W, pose, mesh, sigma, chunk):
     assert_exact_tile_side(H, H_bin)
     assert_exact_tile_side(W, W_bin)
     H_bins, W_bins = H // H_bin, W // W_bin
-    projection = project_mesh_vertices(mesh, pose, H, W, y_fov)
+    projection = project_mesh_vertices(mesh, pose, H, W, intrinsics)
     args = (projection, mesh.faces, H, W, sigma, bins)
     bin_faces, bin_valid = build_bin_faces(*args)
     args = (H, W, H_bins, W_bins, projection, sigma, chunk)
@@ -354,7 +358,7 @@ def build_empty_fragments(num_pixels):
     return Fragments(depths, distances, valid)
 
 
-def count_binned_faces(image_shape, pose, mesh, y_fov, sigma, bins):
+def count_binned_faces(image_shape, pose, mesh, intrinsics, sigma, bins):
     """Count how many projected faces overlap each image bin.
 
     This helper is used before rendering to choose or validate
@@ -365,7 +369,8 @@ def count_binned_faces(image_shape, pose, mesh, y_fov, sigma, bins):
     - `image_shape`: Python tuple `(H, W)` with image size in pixels.
     - `pose`: JAX array with shape `(4, 4)`, world-to-camera transform.
     - `mesh`: `Mesh` with `vertices` `(V, 3)` and `faces` `(F, 3)`.
-    - `y_fov`: Python or JAX scalar camera vertical field of view in radians.
+    - `intrinsics`: JAX array with shape `(3, 3)`, OpenCV camera intrinsics
+      with pixel centers on integer coordinates.
     - `sigma`: Python or JAX scalar controlling sigmoid mask softness.
     - `bins`: `BinArgs` with `shape` and `max_faces` per bin.
 
@@ -376,7 +381,7 @@ def count_binned_faces(image_shape, pose, mesh, y_fov, sigma, bins):
     - JAX int array with shape `(B,)`, overlapping face count per bin.
     """
     H, W = image_shape
-    projection = project_mesh_vertices(mesh, pose, H, W, y_fov)
+    projection = project_mesh_vertices(mesh, pose, H, W, intrinsics)
     face_points = projection.points[mesh.faces]
     face_depths = projection.depths[mesh.faces]
     overlap = compute_bin_overlaps(face_points, face_depths, H, W, sigma, bins)
@@ -546,7 +551,7 @@ def valid_faces(area, depths):
     return jp.logical_and(valid_area, valid_depth)
 
 
-def project_mesh_vertices(mesh, pose, H, W, y_fov):
+def project_mesh_vertices(mesh, pose, H, W, intrinsics):
     """Project mesh vertices to normalized image-plane coordinates.
 
     The mesh transform is applied first, then the camera pose. Camera-space
@@ -558,7 +563,8 @@ def project_mesh_vertices(mesh, pose, H, W, y_fov):
     - `pose`: JAX array with shape `(4, 4)`, world-to-camera transform.
     - `H`: Python int image height in pixels.
     - `W`: Python int image width in pixels.
-    - `y_fov`: Python or JAX scalar camera vertical field of view in radians.
+    - `intrinsics`: JAX array with shape `(3, 3)`, OpenCV camera intrinsics
+      with pixel centers on integer coordinates.
 
     `V` is the number of mesh vertices.
 
@@ -567,36 +573,72 @@ def project_mesh_vertices(mesh, pose, H, W, y_fov):
     """
     world_vertices = paz.algebra.transform_points(mesh.transform, mesh.vertices)
     camera_vertices = paz.algebra.transform_points(pose, world_vertices)
-    return project_camera_vertices(camera_vertices, H, W, y_fov)
+    return project_camera_vertices(camera_vertices, H, W, intrinsics)
 
 
-def project_camera_vertices(vertices, H, W, y_fov):
+def project_camera_vertices(vertices, H, W, intrinsics):
     """Project camera-space vertices to the normalized image plane.
 
-    Depth is positive in front of the camera because the camera looks along
-    negative z. The x and y coordinates are divided by depth and scaled by
-    the field of view and aspect ratio.
+    Vertices are projected through the intrinsics to pixel coordinates and
+    then mapped to the normalized coordinates shared by pixel centers and
+    bin boxes.
 
     # Arguments
     - `vertices`: JAX array with shape `(V, 3)`, camera-space vertices.
     - `H`: Python int image height in pixels.
     - `W`: Python int image width in pixels.
-    - `y_fov`: Python or JAX scalar camera vertical field of view in radians.
+    - `intrinsics`: JAX array with shape `(3, 3)`, OpenCV camera intrinsics
+      with pixel centers on integer coordinates.
 
     `V` is the number of vertices.
 
     # Returns
     - `Projection` with `points` `(V, 2)` and `depths` `(V,)`.
     """
-    aspect = paz.graphics.camera.compute_aspect_ratio(H, W)
-    H_world, W_world = paz.graphics.camera.compute_image_sizes(y_fov, aspect)
+    pixels, depth = project_to_pixels(vertices, intrinsics)
+    return Projection(normalize_pixels(H, W, pixels), depth)
+
+
+def project_to_pixels(vertices, intrinsics):
+    """Project camera-space vertices to OpenCV pixel coordinates.
+
+    Depth is positive in front of the camera because the camera looks along
+    negative z with y up, so y is flipped into the image's downward axis.
+    Vertices at zero depth are divided by one instead.
+
+    # Arguments
+    - `vertices`: JAX array with shape `(V, 3)`, camera-space vertices.
+    - `intrinsics`: JAX array with shape `(3, 3)`, OpenCV camera intrinsics.
+
+    # Returns
+    - `pixels`: JAX array with shape `(V, 2)`, `(u, v)` pixel coordinates.
+    - `depth`: JAX array with shape `(V,)`, positive in front of the camera.
+    """
     depth = -vertices[:, 2]
     safe_depth = jp.where(jp.abs(depth) > EPSILON, depth, 1.0)
-    plane_x = vertices[:, 0] / safe_depth
-    plane_y = vertices[:, 1] / safe_depth
-    scale = 2.0 / jp.minimum(H_world, W_world)
-    points = jp.stack([scale * plane_x, scale * plane_y], axis=-1)
-    return Projection(points, depth)
+    u = intrinsics[0, 0] * vertices[:, 0] / safe_depth + intrinsics[0, 2]
+    v = intrinsics[1, 1] * -vertices[:, 1] / safe_depth + intrinsics[1, 2]
+    return jp.stack([u, v], axis=-1), depth
+
+
+def normalize_pixels(H, W, pixels):
+    """Map OpenCV pixel coordinates to the normalized image plane.
+
+    The image center maps to the origin, x increases rightward, y increases
+    upward, and one pixel spans `2 / min(H, W)`.
+
+    # Arguments
+    - `H`: Python int image height in pixels.
+    - `W`: Python int image width in pixels.
+    - `pixels`: JAX array with shape `(..., 2)`, `(u, v)` pixel coordinates.
+
+    # Returns
+    - JAX array with shape `(..., 2)`, normalized coordinates.
+    """
+    scale = 2.0 / jp.minimum(H, W)
+    x = (pixels[..., 0] - (W - 1) / 2.0) * scale
+    y = ((H - 1) / 2.0 - pixels[..., 1]) * scale
+    return jp.stack([x, y], axis=-1)
 
 
 def compute_blur_radius(sigma):
@@ -617,9 +659,9 @@ def compute_blur_radius(sigma):
 def build_bin_boxes(H, W, bin_shape):
     """Build normalized image-plane bounds for all bins.
 
-    Pixel-space bin edges are converted into the same normalized coordinates
-    used by projected mesh vertices. The returned arrays are flattened in
-    row-major bin order.
+    The first and last pixel centers of every bin are mapped to the same
+    normalized coordinates used by projected mesh vertices. The returned
+    arrays are flattened in row-major bin order.
 
     # Arguments
     - `H`: Python int image height in pixels.
@@ -635,55 +677,11 @@ def build_bin_boxes(H, W, bin_shape):
     - `y_max`: JAX array with shape `(B,)`.
     """
     H_bin, W_bin = bin_shape
-    x_min, x_max = build_x_bin_bounds(H, W, W_bin)
-    y_min, y_max = build_y_bin_bounds(H, W, H_bin)
-    x_min, y_min = jp.meshgrid(x_min, y_min)
-    x_max, y_max = jp.meshgrid(x_max, y_max)
-    return jp.ravel(x_min), jp.ravel(x_max), jp.ravel(y_min), jp.ravel(y_max)
-
-
-def build_x_bin_bounds(H, W, W_bin):
-    """Build normalized horizontal bounds for each bin column.
-
-    The left and right pixel centers of every bin column are mapped to the
-    renderer's normalized image-plane x coordinate.
-
-    # Arguments
-    - `H`: Python int image height in pixels.
-    - `W`: Python int image width in pixels.
-    - `W_bin`: Python int bin width in pixels.
-
-    # Returns
-    - `x_min`: JAX array with shape `(W // W_bin,)`.
-    - `x_max`: JAX array with shape `(W // W_bin,)`.
-    """
-    base = jp.minimum(H, W)
-    cols = jp.arange(W // W_bin)
-    low = cols * W_bin + 0.5
-    high = (cols + 1) * W_bin - 0.5
-    return (low - W / 2.0) * 2.0 / base, (high - W / 2.0) * 2.0 / base
-
-
-def build_y_bin_bounds(H, W, H_bin):
-    """Build normalized vertical bounds for each bin row.
-
-    Pixel rows increase downward, while normalized image-plane y increases
-    upward. The returned `y_min` and `y_max` follow normalized coordinates.
-
-    # Arguments
-    - `H`: Python int image height in pixels.
-    - `W`: Python int image width in pixels.
-    - `H_bin`: Python int bin height in pixels.
-
-    # Returns
-    - `y_min`: JAX array with shape `(H // H_bin,)`.
-    - `y_max`: JAX array with shape `(H // H_bin,)`.
-    """
-    base = jp.minimum(H, W)
-    rows = jp.arange(H // H_bin)
-    high = rows * H_bin + 0.5
-    low = (rows + 1) * H_bin - 0.5
-    return (H / 2.0 - low) * 2.0 / base, (H / 2.0 - high) * 2.0 / base
+    bins = make_tile_coordinates(H // H_bin, W // W_bin)
+    side = jp.array([W_bin, H_bin])
+    first = normalize_pixels(H, W, bins * side)
+    last = normalize_pixels(H, W, (bins + 1) * side - 1)
+    return first[:, 0], last[:, 0], last[:, 1], first[:, 1]
 
 
 def bin_side(image_size, num_bins):
@@ -717,40 +715,8 @@ def build_tile_pixel_coordinates(H, W, H_tiles, W_tiles, tile_arg):
     # Returns
     - JAX array with shape `(Hb * Wb, 2)`, normalized pixel centers.
     """
-    W_tile_arg, H_tile_arg = tile_arg
-    tile_H = H // H_tiles
-    tile_W = W // W_tiles
-    H_start = tile_H * H_tile_arg
-    W_start = tile_W * W_tile_arg
-    cols = jp.arange(tile_W) + W_start + 0.5
-    rows = jp.arange(tile_H) + H_start + 0.5
-    return build_coordinates(H, W, rows, cols)
-
-
-def build_coordinates(H, W, rows, cols):
-    """Build normalized image-plane coordinates for pixel centers.
-
-    Pixel columns and rows are converted to the same normalized coordinates
-    as projected vertices. X increases rightward and y increases upward.
-
-    # Arguments
-    - `H`: Python int full image height in pixels.
-    - `W`: Python int full image width in pixels.
-    - `rows`: JAX array with shape `(R,)`, pixel center row coordinates.
-    - `cols`: JAX array with shape `(C,)`, pixel center column coordinates.
-
-    `R` is the number of selected rows and `C` is the number of selected
-    columns.
-
-    # Returns
-    - JAX array with shape `(R * C, 2)`, normalized pixel centers.
-    """
-    col_grid, row_grid = jp.meshgrid(cols, rows)
-    base = jp.minimum(H, W)
-    x_grid = (col_grid - W / 2.0) * 2.0 / base
-    y_grid = (H / 2.0 - row_grid) * 2.0 / base
-    coords = [jp.ravel(x_grid), jp.ravel(y_grid)]
-    return jp.stack(coords, axis=-1)
+    pixels = build_tile_pixels(H // H_tiles, W // W_tiles, tile_arg)
+    return normalize_pixels(H, W, pixels)
 
 
 def compute_barycentric_coordinates(A, B, C, pixels):

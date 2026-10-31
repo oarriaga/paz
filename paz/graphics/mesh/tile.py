@@ -8,52 +8,17 @@ def assert_exact_tile_side(image_size, tile_size):
         raise ValueError("tile size must divide image size without a residual")
 
 
-def build_tile_rays(H, W, H_tiles, W_tiles, y_FOV, camera_to_world, tile_arg):
-    aspect_ratio = paz.graphics.camera.compute_aspect_ratio(H, W)
-    sizes = paz.graphics.camera.compute_image_sizes(y_FOV, aspect_ratio)
-    H_world, W_world = sizes
-    half_W = W_world / 2
-    half_H = H_world / 2
-    pixel_size = paz.graphics.camera.compute_pixel_size(W_world, W)
+def build_tile_rays(H, W, H_tiles, W_tiles, intrinsics, pose, tile_arg):
     tile_H = H // H_tiles
     tile_W = W // W_tiles
-    args = (tile_H, tile_W, pixel_size, half_W, half_H, tile_arg)
-    ray_targets = make_ray_targets(*args)
-    ray_origins = make_ray_origins(tile_H, tile_W)
-    return transform_tile_rays(camera_to_world, ray_origins, ray_targets)
+    pixels = build_tile_pixels(tile_H, tile_W, tile_arg)
+    return paz.graphics.camera.build_pixel_rays(intrinsics, pixels, pose)
 
 
-def make_ray_targets(tile_H, tile_W, pixel_size, half_W, half_H, tile_arg):
+def build_tile_pixels(tile_H, tile_W, tile_arg):
     W_tile_arg, H_tile_arg = tile_arg
-    W_start = tile_W * W_tile_arg
-    H_start = tile_H * H_tile_arg
-    x_offset = (jp.arange(tile_W) + W_start + 0.5) * pixel_size
-    y_offset = (jp.arange(tile_H) + H_start + 0.5) * pixel_size
-    x = x_offset - half_W
-    y = half_H - y_offset
-    x_grid, y_grid = jp.meshgrid(x, y)
-    num_pixels = tile_W * tile_H
-    x_grid = jp.reshape(x_grid, [num_pixels, 1])
-    y_grid = jp.reshape(y_grid, [num_pixels, 1])
-    z_grid = jp.reshape(jp.repeat(-1.0, num_pixels), [num_pixels, 1])
-    ones = jp.ones([num_pixels, 1])
-    ray_targets = jp.concatenate([x_grid, y_grid, z_grid, ones], axis=1)
-    return ray_targets
-
-
-def make_ray_origins(tile_H, tile_W):
-    num_pixels = tile_H * tile_W
-    ray_origins = jp.array([[0.0, 0.0, 0.0, 1.0]])
-    ray_origins = jp.repeat(ray_origins, repeats=num_pixels, axis=0)
-    return ray_origins
-
-
-def transform_tile_rays(camera_to_world, ray_origins, ray_targets):
-    origins = jp.matmul(camera_to_world, ray_origins.T).T
-    targets = jp.matmul(camera_to_world, ray_targets.T).T
-    directions = targets[:, :3] - origins[:, :3]
-    directions = paz.algebra.normalize(directions)
-    return origins[:, :3], directions
+    start = jp.array([tile_W * W_tile_arg, tile_H * H_tile_arg])
+    return paz.graphics.camera.build_pixel_grid(tile_H, tile_W) + start
 
 
 def make_tile_coordinates(H_tiles, W_tiles):

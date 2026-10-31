@@ -15,4 +15,5 @@ camera_pose = paz.SE3.view_transform(
     world_up=jp.array([0.0, 1.0, 0.0]),
 )
 lights = [paz.graphics.PointLight(jp.ones(3), jp.array([0.0, 3.0, 3.0]))]
-paz.graphics.viewer(scene, camera_pose, True, lights, 240, 320, jp.pi / 3.0)
+intrinsics = paz.graphics.camera.compute_intrinsics(jp.pi / 3.0, 240, 320)
+paz.graphics.viewer(scene, camera_pose, True, lights, 240, 320, intrinsics)

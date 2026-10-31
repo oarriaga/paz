@@ -7,6 +7,7 @@ import jax
 import jax.numpy as jp
 
 # from termcolor import colored  # Optional: makes output easier to read
+import paz
 from paz import SE3
 from paz.graphics import renderer
 from paz.graphics import (
@@ -153,14 +154,14 @@ def test_benchmark_jit_renderer(
         scene, lights, camera_pose = complex_scene_data
 
     H, W = resolution
-    y_FOV = jp.pi / 4.0
+    intrinsics = paz.graphics.camera.compute_intrinsics(jp.pi / 4.0, H, W)
 
     # 2. JIT Compile
     @jax.jit
     def run_render():
         return renderer.render(
             (H, W),
-            y_FOV,
+            intrinsics,
             camera_pose,
             scene,
             None,

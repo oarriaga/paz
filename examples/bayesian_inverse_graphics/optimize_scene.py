@@ -71,7 +71,7 @@ MATERIAL_VARIABLE = namedtuple("MATERIAL_VARIABLE", MATERIAL_FIELDS)
 VARIABLE_STATE = namedtuple("VARIABLE_STATE", ["optimizer_state", "variable"])
 
 
-def build_render(camera_origin, size, y_FOV, shadows):
+def build_render(camera_origin, size, intrinsics, shadows):
     origin = jp.array(camera_origin)
     target = jp.array([0.0, 0.0, 0.0])
     upward = jp.array([0.0, 1.0, 0.0])
@@ -79,7 +79,7 @@ def build_render(camera_origin, size, y_FOV, shadows):
     return paz.partial(
         paz.graphics.render,
         shape=size,
-        y_FOV=y_FOV,
+        intrinsics=intrinsics,
         pose=transform,
         tiles=(1, 1),
         chunk_size=1024,
@@ -110,8 +110,8 @@ def SceneLoss(render):
     return apply
 
 
-def Scene(size, y_FOV, camera_origin, shadows):
-    render = build_render(camera_origin, size, y_FOV, shadows)
+def Scene(size, intrinsics, camera_origin, shadows):
+    render = build_render(camera_origin, size, intrinsics, shadows)
 
     def render_scene(shape, scene):
         floor = build_floor(scene.floor)
@@ -239,7 +239,8 @@ y_FOV = dataset_metadata["y_FOV"]
 image_shape = [int(H * args.viewport_factor), int(W * args.viewport_factor)]
 dataset = paz.datasets.fsclvr.load(args.dataset_name, args.split, image_shape)
 images, depths, labels = paz.datasets.fsclvr.flatten(dataset)
-render = Scene(image_shape, y_FOV, camera_origin, args.shadow)
+intrinsics = paz.graphics.camera.compute_intrinsics(y_FOV, *image_shape)
+render = Scene(image_shape, intrinsics, camera_origin, args.shadow)
 scene_loss = SceneLoss(render)
 landscape_grad = jax.jit(jax.value_and_grad(scene_loss, argnums=(0)))
 materials_grad = jax.jit(jax.value_and_grad(scene_loss, argnums=(1)))

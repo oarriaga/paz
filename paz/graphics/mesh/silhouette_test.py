@@ -1,6 +1,9 @@
+from pathlib import Path
+
 import jax
 import jax.numpy as jp
 
+import paz
 from paz.graphics.types import Material, Mesh
 from paz.graphics.mesh.silhouette import BinArgs
 from paz.graphics.mesh.silhouette import Projection
@@ -10,7 +13,16 @@ from paz.graphics.mesh.silhouette import compute_face_fragments
 from paz.graphics.mesh.silhouette import count_binned_faces
 from paz.graphics.mesh.silhouette import fragment_chunk_or_empty_step
 from paz.graphics.mesh.silhouette import merge_fragments
+from paz.graphics.mesh.silhouette import project_to_pixels
 from paz.graphics.mesh.silhouette import tile_render_binned_soft_mask
+
+
+def build_intrinsics(H, W):
+    return paz.graphics.camera.compute_intrinsics(jp.pi / 3.0, H, W)
+
+
+def snapshot_path(filename):
+    return str(Path(__file__).parent.parent / "snapshots" / filename)
 
 
 def make_soft_square_mesh(shift=0.0):
@@ -32,7 +44,7 @@ def render_binned_soft_shift(shift, image_shape=16, bin_shape=8, chunk=2):
     H, W = unpack_soft_shape(image_shape)
     mesh = make_soft_square_mesh(shift)
     bins = BinArgs(bin_shape, mesh.faces.shape[0])
-    args = (bins, jp.pi / 3.0, H, W, jp.eye(4), mesh)
+    args = (bins, build_intrinsics(H, W), H, W, jp.eye(4), mesh)
     args = args + (1e-4, chunk)
     return tile_render_binned_soft_mask(*args)
 
@@ -96,14 +108,15 @@ def test_empty_fragment_chunk_keeps_fragments():
 
 def test_count_binned_faces_counts_overlaps():
     mesh = make_soft_square_mesh()
-    args = ((16, 16), jp.eye(4), mesh, jp.pi / 3.0, 1e-4, BinArgs(8, 2))
+    intrinsics = build_intrinsics(16, 16)
+    args = ((16, 16), jp.eye(4), mesh, intrinsics, 1e-4, BinArgs(8, 2))
     counts = count_binned_faces(*args)
     assert jp.max(counts) == 2
 
 
 def test_count_binned_faces_counts_rect_overlaps():
     mesh = make_soft_square_mesh()
-    args = ((16, 24), jp.eye(4), mesh, jp.pi / 3.0, 1e-4)
+    args = ((16, 24), jp.eye(4), mesh, build_intrinsics(16, 24), 1e-4)
     counts = count_binned_faces(*(args + (BinArgs((8, 6), 2),)))
     assert jp.max(counts) == 2
 
@@ -163,3 +176,36 @@ def test_tile_render_binned_shift_gradient_matches_finite_difference():
     cosine = gradient[0] * finite / (jp.abs(gradient[0] * finite) + 1e-8)
     assert jp.abs(gradient[0]) > 1e-5
     assert cosine > 0.9
+
+
+def test_project_to_pixels_inverts_pixel_rays():
+    rows = [[611.1, 0.0, 315.5], [0.0, 610.0, 237.7], [0.0, 0.0, 1.0]]
+    intrinsics = jp.array(rows)
+    pixels = jp.array([[0.0, 0.0], [100.0, 37.0], [639.0, 479.0]])
+    args = intrinsics, pixels, jp.eye(4)
+    _, directions = paz.graphics.camera.build_pixel_rays(*args)
+    vertices = directions * (2.5 / -directions[:, 2:])
+    recovered, depth = project_to_pixels(vertices, intrinsics)
+    assert jp.allclose(recovered, pixels, atol=1e-3)
+    assert jp.allclose(depth, 2.5, atol=1e-5)
+
+
+def soft_square_loss(vertices, target):
+    mesh = make_soft_square_mesh()._replace(vertices=vertices)
+    bins = BinArgs(8, mesh.faces.shape[0])
+    args = (bins, build_intrinsics(16, 16), 16, 16, jp.eye(4), mesh, 1e-4, 2)
+    return jp.mean((tile_render_binned_soft_mask(*args) - target) ** 2)
+
+
+def test_tile_render_binned_soft_mask_matches_snapshot():
+    mask = render_binned_soft_shift(0.0)
+    path = snapshot_path("silhouette_soft_mask.npy")
+    paz.assert_snapshot(mask, path, atol=1e-5)
+
+
+def test_tile_render_binned_vertex_gradient_matches_snapshot():
+    target = render_binned_soft_shift(0.25)
+    vertices = make_soft_square_mesh().vertices
+    gradient = jax.grad(soft_square_loss)(vertices, target)
+    path = snapshot_path("silhouette_soft_mask_gradient.npy")
+    paz.assert_snapshot(gradient, path, atol=1e-6)

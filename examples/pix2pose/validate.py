@@ -33,20 +33,19 @@ parser.add_argument("--output", default="pix2pose_validation.png")
 args = parser.parse_args()
 
 size = (args.image_size, args.image_size)
+intrinsics = paz.graphics.camera.compute_intrinsics(args.y_FOV, *size)
 H, W = size
 mesh = scenes.build_mesh(scenes.download_power_drill(), args.target_faces)
 extents = np.asarray(scenes.object_extents(mesh))
 render_image = scenes.build_image_renderer(
-    mesh, size, np.mean(args.distance), args.y_FOV, args.chunk_size, tuple(args.tiles))  # fmt: skip
+    mesh, size, np.mean(args.distance), intrinsics, args.chunk_size, tuple(args.tiles))  # fmt: skip
 render_coordinates = scenes.build_coordinate_renderer(
-    mesh, size, args.y_FOV)
+    mesh, size, intrinsics)
 
 model = paz.models.UNET_VGG16(3, (*size, 3))
 model.load_weights(args.weights)
 
-focal = (1.0 / np.tan(args.y_FOV / 2.0)) * (H / 2.0)
-intrinsics = np.array([[focal, 0, W / 2.0], [0, focal, H / 2.0], [0, 0, 1.0]])
-camera = Camera(intrinsics, np.zeros((4, 1)))
+camera = Camera(np.asarray(intrinsics), np.zeros((4, 1)))
 randomize = jax.jit(jax.vmap(paz.image.randomize_rendered_image,
                              in_axes=(0, 0, 0, None)))
 backgrounds = jp.asarray(pipeline.load_backgrounds(os.path.expanduser(

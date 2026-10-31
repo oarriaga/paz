@@ -89,8 +89,8 @@ phong_lights = [
 ]
 
 H, W = 2**10, 2**10
-y_FOV = jp.pi / 4.0
-render_args = (H, W), y_FOV, camera_pose
+intrinsics = paz.graphics.camera.compute_intrinsics(jp.pi / 4.0, H, W)
+render_args = (H, W), intrinsics, camera_pose
 
 
 def build_render(lights):

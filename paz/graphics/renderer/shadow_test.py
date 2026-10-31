@@ -45,7 +45,8 @@ def build_shadow_scene():
 
 def compute_selected_shadow_depths(camera_pose, image_shape=(120, 160)):
     scene, lights = build_shadow_scene()
-    rays = paz.graphics.camera.build_rays(image_shape, jp.pi / 3.0, camera_pose)
+    intrinsics = paz.graphics.camera.compute_intrinsics(jp.pi / 3, *image_shape)
+    rays = paz.graphics.camera.build_rays(image_shape, intrinsics, camera_pose)
     compiled = paz.graphics.scene.compile(scene, lights, None)
     shapes, mask, lights = compiled.shapes, compiled.mask, compiled.lights
     candidates = intersect.build_candidates(compiled, rays, None)

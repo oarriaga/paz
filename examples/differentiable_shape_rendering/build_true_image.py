@@ -18,7 +18,9 @@ lights = paz.graphics.PointLight(jp.full(3, 1.32), light_position)
 camera_shift = 1.8 * jp.array([-1.0, 1.0, -2.0])
 world_to_camera = paz.SE3.view_transform(camera_shift, jp.zeros(3), world_up)
 
-H, W, y_FOV, resize_factor = image_size = 2 * 1024, 2 * 1024, jp.pi / 5.0, 2
+H, W, y_FOV, resize_factor = 2 * 1024, 2 * 1024, jp.pi / 5.0, 2
+image_size = (H, W)
+intrinsics = paz.graphics.camera.compute_intrinsics(y_FOV, H, W)
 render_kwargs = {
     "mask": None,
     "shadows": True,
@@ -26,9 +28,9 @@ render_kwargs = {
     "tiles": (1, 1),
     "chunk_size": 2**10,
 }
-rays = paz.graphics.camera.build_rays(image_size, y_FOV, world_to_camera)
+rays = paz.graphics.camera.build_rays(image_size, intrinsics, world_to_camera)
 # render_args = ((H, W), world_to_camera, rays)
-render_args = ((H, W), y_FOV, world_to_camera)
+render_args = ((H, W), intrinsics, world_to_camera)
 
 
 def make_uv_grid(height, width):
@@ -168,7 +170,7 @@ cone = paz.graphics.Cone(cone_shift @ cone_scale, cone_material, cone_pattern)
 
 shapes = [floor, sphere, cone]
 scene = paz.graphics.Scene(shapes)
-# paz.graphics.render(shape, y_FOV, pose, scene)
+# paz.graphics.render(shape, intrinsics, pose, scene)
 render = jax.jit(partial(paz.graphics.render, *render_args, **render_kwargs))
 image, _ = render(scene=scene)
 image = paz.image.denormalize(image)

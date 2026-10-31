@@ -28,11 +28,12 @@ parser.add_argument("--seed", default=1, type=int)
 args = parser.parse_args()
 
 size = (args.image_size, args.image_size)
+intrinsics = paz.graphics.camera.compute_intrinsics(args.y_FOV, *size)
 mesh = scenes.build_mesh(scenes.download_power_drill(), args.target_faces)
 render_image = scenes.build_image_renderer(
-    mesh, size, np.mean(args.distance), args.y_FOV, args.chunk_size, tuple(args.tiles))  # fmt: skip
+    mesh, size, np.mean(args.distance), intrinsics, args.chunk_size, tuple(args.tiles))  # fmt: skip
 render_coordinates = scenes.build_coordinate_renderer(
-    mesh, size, args.y_FOV)
+    mesh, size, intrinsics)
 backgrounds = jp.asarray(pipeline.load_backgrounds(
     args.backgrounds, args.image_size, args.num_backgrounds))
 randomize = jax.jit(paz.image.randomize_rendered_image)

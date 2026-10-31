@@ -13,16 +13,16 @@ import scenes
 import pipeline
 
 
-def render_dataset(mesh, num_views, size, distance, y_FOV, chunk_size, tiles,
-                   root, seed):
+def render_dataset(mesh, num_views, size, distance, intrinsics, chunk_size,
+                   tiles, root, seed):
     cache = os.path.join(root, "views.npz")
     if os.path.exists(cache):
         data = np.load(cache)
         return data["images"], data["coordinates"], data["masks"]
     render_image = scenes.build_image_renderer(
-        mesh, size, np.mean(distance), y_FOV, chunk_size, tiles)
+        mesh, size, np.mean(distance), intrinsics, chunk_size, tiles)
     render_coordinates = scenes.build_coordinate_renderer(
-        mesh, size, y_FOV)
+        mesh, size, intrinsics)
     H, W = size
     images = np.empty((num_views, H, W, 3), "uint8")
     coordinates = np.empty((num_views, H, W, 3), "uint8")
@@ -37,12 +37,12 @@ def render_dataset(mesh, num_views, size, distance, y_FOV, chunk_size, tiles,
     return images, coordinates, masks
 
 
-def build_evaluation(mesh, size, distance, y_FOV, chunk_size, tiles, camera,
-                     extents, num_samples, num_points, seed):
+def build_evaluation(mesh, size, distance, intrinsics, chunk_size, tiles,
+                     camera, extents, num_samples, num_points, seed):
     render_image = scenes.build_image_renderer(
-        mesh, size, np.mean(distance), y_FOV, chunk_size, tiles)
+        mesh, size, np.mean(distance), intrinsics, chunk_size, tiles)
     render_coordinates = scenes.build_coordinate_renderer(
-        mesh, size, y_FOV)
+        mesh, size, intrinsics)
     randomize = jax.jit(paz.image.randomize_rendered_image)
     keys = jax.random.split(jax.random.PRNGKey(seed), num_samples)
     inputs, poses_true = [], []
@@ -86,11 +86,12 @@ if __name__ == "__main__":
 
     os.makedirs(args.root, exist_ok=True)
     size = (args.image_size, args.image_size)
+    intrinsics = paz.graphics.camera.compute_intrinsics(args.y_FOV, *size)
     mesh_path = args.mesh or scenes.download_power_drill()
     mesh = scenes.build_mesh(mesh_path, args.target_faces)
     extents = np.asarray(scenes.object_extents(mesh))
     images, coordinates, masks = render_dataset(
-        mesh, args.num_views, size, args.distance, args.y_FOV,
+        mesh, args.num_views, size, args.distance, intrinsics,
         args.chunk_size, tuple(args.tiles), args.root, seed=0)
 
     backgrounds = pipeline.load_backgrounds(
@@ -98,9 +99,9 @@ if __name__ == "__main__":
     sequence = pipeline.Pix2PoseSequence(
         images, coordinates, masks, args.batch_size, backgrounds)
 
-    camera = pipeline.build_camera(args.y_FOV, size)
+    camera = pipeline.build_camera(intrinsics)
     eval_inputs, eval_poses, eval_points = build_evaluation(
-        mesh, size, args.distance, args.y_FOV, args.chunk_size,
+        mesh, size, args.distance, intrinsics, args.chunk_size,
         tuple(args.tiles), camera, extents, args.eval_samples, 512, seed=999)
     diameter = paz.evaluation.compute_object_diameter(eval_points)
 

@@ -236,12 +236,12 @@ camera_pose = SE3.view_transform(
 lights = PointLight(jp.array([1.0, 1.0, 1.0]), jp.array([5.0, 4.0, 8.0]))
 
 H, W = 1024 // 2, 1024 // 2
-y_FOV = jp.pi / 4.0
+intrinsics = paz.graphics.camera.compute_intrinsics(jp.pi / 4.0, H, W)
 render = jax.jit(
     paz.partial(
         paz.graphics.render,
         shape=(H, W),
-        y_FOV=y_FOV,
+        intrinsics=intrinsics,
         pose=camera_pose,
         lights=lights,
         shadows=False,

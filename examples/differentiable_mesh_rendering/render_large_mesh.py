@@ -6,7 +6,7 @@ from paz.graphics.mesh import Mesh, build_sphere
 from paz.graphics.types import PointLight, Material
 
 H, W = 2**8, 2**8
-y_FOV = jp.pi / 3.0
+intrinsics = paz.graphics.camera.compute_intrinsics(jp.pi / 3.0, H, W)
 
 camera_origin = jp.array([0.0, 2.0, -4.0])
 camera_pose = paz.SE3.view_transform(
@@ -29,7 +29,7 @@ mesh = Mesh(vertices, vertex_colors, transform, material, faces, edges)
 scene = Scene([mesh])
 
 shape = (H, W)
-base_args = shape, y_FOV, camera_pose, scene, None, lights
+base_args = shape, intrinsics, camera_pose, scene, None, lights
 render_fn = jax.jit(render, static_argnums=(0, 6, 7))
 num_rays = H * W
 image, depth = render_fn(*base_args, (1, 1), num_rays)
@@ -50,7 +50,7 @@ print("Computing gradient through vertex positions...")
 def loss_fn(verts):
     mesh = Mesh(verts, vertex_colors, transform, material, faces, edges)
     scene = Scene([mesh])
-    args = shape, y_FOV, camera_pose, scene, None, lights
+    args = shape, intrinsics, camera_pose, scene, None, lights
     _, depth = render_fn(*args, (1, 1), num_rays)
     return jp.sum(depth)
 

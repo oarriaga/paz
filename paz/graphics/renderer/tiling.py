@@ -15,11 +15,10 @@ def scan(shape, tiles, tile_step):
     return jax.lax.scan(tile_step, None, coordinates)[1]
 
 
-def render_step(carry, tile_arg, shape, y_FOV, pose, tiles, render_rays):
+def render_step(carry, tile_arg, shape, intrinsics, pose, tiles, render_rays):
     H, W = shape
     H_tiles, W_tiles = tiles
-    camera_to_world = jp.linalg.inv(pose)
-    tile_args = H, W, H_tiles, W_tiles, y_FOV, camera_to_world
+    tile_args = H, W, H_tiles, W_tiles, intrinsics, pose
     rays = paz.graphics.mesh.build_tile_rays(*tile_args, tile_arg)
     hit_mask, depth, color = render_rays(rays)
     tile_H, tile_W = H // H_tiles, W // W_tiles

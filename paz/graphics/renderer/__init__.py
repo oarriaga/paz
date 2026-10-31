@@ -11,14 +11,21 @@ FACE_CHUNK_SIZE = 128
 
 
 def render(
-    shape, y_FOV, pose, scene, mask, lights, tiles, chunk_size,
+    shape, intrinsics, pose, scene, mask, lights, tiles, chunk_size,
     shadows=False, shadow_mask=None, num_bounces=1,
     face_chunk_size=FACE_CHUNK_SIZE,
 ):
+    """Render `scene` into an `(H, W, 3)` image and an `(H, W)` depth map.
+
+    `intrinsics` is a 3x3 OpenCV matrix with pixel centers on integer
+    coordinates (see `paz.graphics.camera.build_rays`). The returned depth
+    is z-depth along the camera -z axis, while the tracer itself works with
+    distances along unit rays.
+    """
     compiled = paz.graphics.scene.compile(scene, lights, mask, shadow_mask)
     ray_args = compiled, shadows, num_bounces, face_chunk_size, chunk_size
     render_rays = paz.lock(rays.render_chunks, *ray_args)
-    step_args = shape, y_FOV, pose, tiles, render_rays
+    step_args = shape, intrinsics, pose, tiles, render_rays
     tile_step = paz.lock(tiling.render_step, *step_args)
     images, depths = tiling.scan(shape, tiles, tile_step)
     image = tiling.assemble(shape, tiles, images)
@@ -27,15 +34,19 @@ def render(
 
 
 def render_masks(
-    shape, y_FOV, pose, scene, lights, depth, tiles, chunk_size,
+    shape, intrinsics, pose, scene, lights, depth, tiles, chunk_size,
     num_objects=None, shadows=False, shadow_mask=None, num_bounces=1,
     face_chunk_size=FACE_CHUNK_SIZE,
 ):
+    """Render one soft `(H, W, 1)` mask per scene node from its z-depth.
+
+    `intrinsics` follows the same OpenCV convention as `render`.
+    """
     if num_objects is None:
         num_objects = len(scene.nodes)
     min_depth, max_depth = depth
     object_masks = jp.eye(len(scene.nodes), dtype=bool)[:num_objects]
-    args = shape, y_FOV, pose, scene, lights, tiles, chunk_size
+    args = shape, intrinsics, pose, scene, lights, tiles, chunk_size
     args += shadows, shadow_mask, num_bounces, face_chunk_size
     depths = jax.vmap(paz.lock(render_object_depth, *args))(object_masks)
     masks = paz.depth.to_soft_mask(depths, min_depth, max_depth)
@@ -43,9 +54,9 @@ def render_masks(
 
 
 def render_object_depth(
-    mask, shape, y_FOV, pose, scene, lights, tiles, chunk_size,
+    mask, shape, intrinsics, pose, scene, lights, tiles, chunk_size,
     shadows, shadow_mask, num_bounces, face_chunk_size,
 ):
-    args = shape, y_FOV, pose, scene, mask, lights, tiles, chunk_size
+    args = shape, intrinsics, pose, scene, mask, lights, tiles, chunk_size
     args += shadows, shadow_mask, num_bounces, face_chunk_size
     return render(*args)[1]

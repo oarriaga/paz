@@ -14,14 +14,14 @@ import keras
 import paz
 
 
-def build_render(image_shape, y_FOV, camera_origin, shadows):
+def build_render(image_shape, intrinsics, camera_origin, shadows):
     target = jp.array([0.0, 0.0, 0.0])
     upward = jp.array([0.0, 1.0, 0.0])
     pose = paz.SE3.view_transform(jp.array(camera_origin), target, upward)
     return paz.partial(
         paz.graphics.render,
         shape=image_shape,
-        y_FOV=y_FOV,
+        intrinsics=intrinsics,
         pose=pose,
         tiles=(1, 1),
         chunk_size=1024,
@@ -186,7 +186,8 @@ def compute_image_shape(dataset_name, viewport_factor):
     image_shape = [int(H * viewport_factor), int(W * viewport_factor)]
     camera_origin = jp.array(dataset_metadata["camera_origin"])
     y_FOV = dataset_metadata["y_FOV"]
-    return image_shape, camera_origin, y_FOV
+    intrinsics = paz.graphics.camera.compute_intrinsics(y_FOV, *image_shape)
+    return image_shape, camera_origin, intrinsics
 
 
 def load_shapes(shapes_directory):
@@ -250,7 +251,7 @@ metadata, opt_dir = load_optimization_metadata(wildcard, params_file)
 
 factor = metadata["viewport_factor"]
 params = compute_image_shape(name, factor)
-image_shape, camera_origin, y_FOV = params
+image_shape, camera_origin, intrinsics = params
 
 split = metadata["split"]
 dataset = paz.datasets.fsclvr.load(name, split, image_shape)
@@ -266,7 +267,7 @@ if args.num_samples is not None:
 floor = load_scene_element(opt_dir, "floor.pkl")
 lights = load_scene_element(opt_dir, "lights.pkl")
 
-render = build_render(image_shape, y_FOV, camera_origin, args.shadows)
+render = build_render(image_shape, intrinsics, camera_origin, args.shadows)
 render = jax.jit(render)
 pred_images = render_dataset(render, shapes, floor, lights)
 

@@ -29,14 +29,15 @@ parser.add_argument("--output", default="pix2pose_pose.png")
 args = parser.parse_args()
 
 size = (args.image_size, args.image_size)
+intrinsics = paz.graphics.camera.compute_intrinsics(args.y_FOV, *size)
 H, W = size
 mesh = scenes.build_mesh(scenes.download_power_drill(), args.target_faces)
 extents = np.asarray(scenes.object_extents(mesh))
 
 render_image = scenes.build_image_renderer(
-    mesh, size, np.mean(args.distance), args.y_FOV, args.chunk_size, tuple(args.tiles))  # fmt: skip
+    mesh, size, np.mean(args.distance), intrinsics, args.chunk_size, tuple(args.tiles))  # fmt: skip
 render_coordinates = scenes.build_coordinate_renderer(
-    mesh, size, args.y_FOV)
+    mesh, size, intrinsics)
 
 pose = scenes.sample_pose(jax.random.PRNGKey(args.seed), args.distance)
 image = np.asarray(render_image(pose))
@@ -50,10 +51,7 @@ if args.weights is not None:
     nocs = np.asarray(jp.squeeze(prediction, 0))
     mask = (nocs.sum(-1) > 0.05).astype("float32")
 
-# Camera intrinsics matching the renderer's y_FOV pinhole projection.
-focal = (1.0 / np.tan(args.y_FOV / 2.0)) * (H / 2.0)
-intrinsics = np.array([[focal, 0, W / 2.0], [0, focal, H / 2.0], [0, 0, 1.0]])
-camera = Camera(intrinsics, np.zeros((4, 1)))
+camera = Camera(np.asarray(intrinsics), np.zeros((4, 1)))
 
 rows, cols = np.nonzero(mask > 0.5)
 points2D = np.stack([cols, rows], axis=1).astype("float64")

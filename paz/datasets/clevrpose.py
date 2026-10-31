@@ -21,13 +21,9 @@ def download():
     return path / filename
 
 
-def get_y_FOV():
-    return 0.742
-
-
 def get_intrinsics():
     return jp.array(
-        [[616.94434, 0.0, 320.0], [0.0, 616.94434, 240.0], [0.0, 0.0, 1.0]]
+        [[616.94434, 0.0, 319.5], [0.0, 616.94434, 239.5], [0.0, 0.0, 1.0]]
     )
 
 

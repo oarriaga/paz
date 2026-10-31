@@ -14,14 +14,14 @@ def orbit_pose(camera_origin, angle):
 
 
 def render_orbit(
-    image_shape, y_FOV, scene, lights, shadows, camera_origin, num_views
+    image_shape, intrinsics, scene, lights, shadows, camera_origin, num_views
 ):
     shapes = paz.graphics.scene.flatten_scene(scene)
     num_bounces = paz.graphics.scene.compute_bounces(shapes)
 
     @jax.jit
     def render_frame(pose):
-        args = image_shape, y_FOV, pose, scene, None, lights, (1, 1), 1024
+        args = image_shape, intrinsics, pose, scene, None, lights, (1, 1), 1024
         image, _ = paz.graphics.render(*args, shadows, None, num_bounces)
         return jp.clip(image, 0.0, 1.0)
 

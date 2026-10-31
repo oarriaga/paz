@@ -59,12 +59,13 @@ camera_origin = jp.array([0.0, 2.5, 5.0])
 camera_target = jp.array([-0.12, 2.25, 0.0])
 world_up = jp.array([0.0, 1.0, 0.0])
 world_to_camera = SE3.view_transform(camera_origin, camera_target, world_up)
-H, W, y_FOV = 1024 // 2, 1024 // 2, jp.pi / 3.0
+H, W = 1024 // 2, 1024 // 2
+intrinsics = paz.graphics.camera.compute_intrinsics(jp.pi / 3.0, H, W)
 lights = paz.graphics.PointLight(jp.full(3, 0.8), jp.array([5.0, 8.0, 5.0]))
 render_kwargs = dict(
     lights=lights, mask=None, shadows=False, tiles=(1, 1), chunk_size=1024
 )
-render_args = (H, W), y_FOV, world_to_camera
+render_args = (H, W), intrinsics, world_to_camera
 render = jax.jit(partial(paz.graphics.render, *render_args, **render_kwargs))
 
 color_0 = jp.array([0.90, 0.15, 0.25])  # RED

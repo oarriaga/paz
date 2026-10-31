@@ -59,7 +59,9 @@ shape_2 = paz.graphics.Shape(
     material,
 )
 scene_tamayo = paz.graphics.shapes.merge(shape_1, shape_2)
-rays = paz.graphics.camera.build_rays((H, W), y_FOV, world_to_camera_tamayo)
+intrinsics = paz.graphics.camera.compute_intrinsics(y_FOV, H, W)
+camera_args = (H, W), intrinsics, world_to_camera_tamayo
+rays = paz.graphics.camera.build_rays(*camera_args)
 pred_image, pred_depth = paz.graphics.render(
     (H, W), world_to_camera_tamayo, rays, [shape_1, shape_2], light
 )

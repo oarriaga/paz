@@ -68,11 +68,8 @@ class Pix2PoseSequence(keras.utils.PyDataset):
         return np.asarray(inputs) / 255.0, labels
 
 
-def build_camera(y_FOV, size):
-    H, W = size
-    focal = (1.0 / np.tan(y_FOV / 2.0)) * (H / 2.0)
-    intrinsics = np.array([[focal, 0, W / 2.0], [0, focal, H / 2.0], [0, 0, 1.0]])  # fmt: skip
-    return Camera(intrinsics, np.zeros((4, 1)))
+def build_camera(intrinsics):
+    return Camera(np.asarray(intrinsics), np.zeros((4, 1)))
 
 
 def solve_pose_from_nocs(nocs, mask, extents, camera, max_points=1500, seed=0):

@@ -12,7 +12,8 @@ lights = paz.graphics.PointLight(jp.full(3, 1.0), jp.array([3.0, 3.0, 5.0]))
 camera_pose = paz.SE3.view_transform(camera_origin, camera_target, world_up)
 H, W, y_FOV = image_size = 1024, 1024, jp.pi / 4.0
 render_kwargs = {"lights": lights, "mask": None, "shadows": False, "num_bounces": 3}  # fmt: skip
-rays = paz.graphics.camera.build_rays(image_size, y_FOV, camera_pose)
+intrinsics = paz.graphics.camera.compute_intrinsics(y_FOV, H, W)
+rays = paz.graphics.camera.build_rays(image_size, intrinsics, camera_pose)
 render_args = ((H, W), camera_pose, rays)
 
 glass_material = paz.graphics.Material(

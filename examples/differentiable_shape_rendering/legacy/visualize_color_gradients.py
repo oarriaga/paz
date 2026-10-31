@@ -60,7 +60,8 @@ shape_pose = paz.SE3.translation(jp.array([0.1, 0.0, -0.25]))
 plane = paz.graphics.Plane(plane_pose, material=plane_material)
 shape = paz.graphics.Sphere(shape_pose, shape_material)
 scene = paz.graphics.Scene([shape, plane])
-rays = paz.graphics.camera.build_rays(image_shape, y_FOV, camera_pose)
+intrinsics = paz.graphics.camera.compute_intrinsics(y_FOV, *image_shape)
+rays = paz.graphics.camera.build_rays(image_shape, intrinsics, camera_pose)
 light_position = jp.array([8.0, 18.0, -2.0])
 lights = [
     paz.graphics.PointLight(jp.full(3, 0.9), light_position),

@@ -49,7 +49,8 @@ paz.graphics.viewer(scene, camera_pose)
 
 H, W = 480, 640
 y_FOV = jp.pi / 4.0
-rays = paz.graphics.camera.build_rays((H, W), y_FOV, camera_pose)
+intrinsics = paz.graphics.camera.compute_intrinsics(y_FOV, H, W)
+rays = paz.graphics.camera.build_rays((H, W), intrinsics, camera_pose)
 render = jax.jit(paz.graphics.render, static_argnums=(0,))
 image, depth = render((H, W), camera_pose, rays, scene, light)
 paz.image.show(paz.image.denormalize(image))

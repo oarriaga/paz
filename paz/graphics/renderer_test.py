@@ -35,6 +35,10 @@ def camera_pose():
     )
 
 
+def build_intrinsics(image_shape):
+    return paz.graphics.camera.compute_intrinsics(jp.pi / 3.0, *image_shape)
+
+
 def snapshot_path(filename):
     return str(Path(__file__).parent / "snapshots" / filename)
 
@@ -46,7 +50,8 @@ def assert_snapshot(array, filename, atol=1e-4):
 def render_scene(image_shape, camera_pose, scene, lights, mask=None,
                  shadows=False, tiles=(1, 1), chunk_size=1024,
                  shadow_mask=None, num_bounces=1):
-    args = image_shape, jp.pi / 3.0, camera_pose, scene, mask, lights
+    args = image_shape, build_intrinsics(image_shape), camera_pose, scene
+    args += mask, lights
     args += tiles, chunk_size
     return renderer.render(*args, shadows, shadow_mask, num_bounces)
 
@@ -466,10 +471,32 @@ def test_render_masked_objects(small_image_shape, camera_pose):
 def test_render_masks_returns_shape_masks(small_image_shape, camera_pose):
     scene, lights = build_material_scene()
     depth = 0.1, 10.0
-    args = small_image_shape, jp.pi / 3.0, camera_pose, scene, lights
+    intrinsics = build_intrinsics(small_image_shape)
+    args = small_image_shape, intrinsics, camera_pose, scene, lights
     masks = renderer.render_masks(*args, depth, (2, 2), 16, num_objects=2)
     assert masks.shape == (2, small_image_shape[0], small_image_shape[1], 1)
     assert jp.any(masks > 0.0)
+
+
+def render_shifted_sphere(camera_pose, shift):
+    shape = 32, 48
+    intrinsics = build_intrinsics(shape).at[0, 2].add(shift)
+    scene, lights = build_shaded_sphere_scene()
+    args = shape, intrinsics, camera_pose, scene, None, lights, (1, 1), 1024
+    image, depth = renderer.render(*args)
+    mask_args = shape, intrinsics, camera_pose, scene, lights, (0.1, 10.0)
+    masks = renderer.render_masks(*mask_args, (1, 1), 1024)
+    return image, depth, masks
+
+
+def test_render_shifted_principal_point_moves_image(camera_pose):
+    image, depth, masks = render_shifted_sphere(camera_pose, 0.0)
+    moved = render_shifted_sphere(camera_pose, 10.0)
+    moved_image, moved_depth, moved_masks = moved
+    assert jp.any(depth[:, :-10] > 0.0)
+    assert jp.allclose(moved_image[:, 10:], image[:, :-10], atol=1e-6)
+    assert jp.allclose(moved_depth[:, 10:], depth[:, :-10], atol=1e-6)
+    assert jp.allclose(moved_masks[:, :, 10:], masks[:, :, :-10], atol=1e-6)
 
 
 def test_max_bounces_effect(small_image_shape, camera_pose):
@@ -519,7 +546,7 @@ def test_scene_renderer_returns_uint8_frame(small_image_shape, camera_pose):
         scene,
         small_image_shape[0],
         small_image_shape[1],
-        jp.pi / 3.0,
+        build_intrinsics(small_image_shape),
         shadows=True,
     )
     image = render_frame(camera_pose)

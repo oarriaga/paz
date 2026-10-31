@@ -7,7 +7,7 @@ from matplotlib.image import imread
 import paz
 from paz import SE3
 from paz.graphics import PointLight, Material, Pattern, Shape
-from paz.graphics.camera import build_rays
+from paz.graphics.camera import build_rays, compute_intrinsics
 from paz.graphics import render
 from paz.graphics import (
     SPHERE,
@@ -37,7 +37,8 @@ camera_pose = SE3.view_transform(
     jp.array([0.0, 1.0, 0.0]),
 )
 H, W = image_size = 480, 640
-rays = build_rays(image_size, jp.pi / 3, camera_pose)
+intrinsics = compute_intrinsics(jp.pi / 3, H, W)
+rays = build_rays(image_size, intrinsics, camera_pose)
 
 rotate = SE3.rotation_y(-jp.pi / 3)
 

@@ -101,9 +101,10 @@ def plot_metrics(metrics, directory, filename, step_arg=None, stride=1):
 
 
 def export_orbit(root, round_path, video_name, fps, orbit, camera_origin):
-    img_shape, y_FOV, scene, lights, shadows, num_views = orbit
+    img_shape, intrinsics, scene, lights, shadows, num_views = orbit
     directory = paz.directory.make(Path(root) / round_path)
-    args = (img_shape, y_FOV, scene, lights, shadows, camera_origin, num_views)
+    args = (img_shape, intrinsics, scene, lights, shadows)
+    args = args + (camera_origin, num_views)
     frames = paz.graphics.render_orbit(*args)
     write_frames(directory, frames)
     video_path = Path(root) / f"{video_name}.mp4"
@@ -111,11 +112,11 @@ def export_orbit(root, round_path, video_name, fps, orbit, camera_origin):
 
 
 def export_mesh_orbit(root, round_path, video_name, fps, orbit, camera_origin):
-    meshes, image_shape, y_FOV, lights, num_views, chunk_size = orbit
+    meshes, image_shape, intrinsics, lights, num_views, chunk_size = orbit
     H, W = image_shape
     directory = paz.directory.make(Path(root) / round_path)
     scene = paz.graphics.Scene(list(meshes))
-    render_args = scene, H, W, y_FOV, lights, False, chunk_size
+    render_args = scene, H, W, intrinsics, lights, False, chunk_size
     render_frame = paz.graphics.scene_renderer(*render_args)
     angles = jp.linspace(1.5 * jp.pi, 3.5 * jp.pi, num_views)
     frames = []

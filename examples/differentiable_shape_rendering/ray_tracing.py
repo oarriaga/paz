@@ -20,12 +20,12 @@ camera_to_world = camera_shift @ camera_to_world
 world_to_camera = jp.linalg.inv(camera_to_world)
 
 H, W = 2**12, 2**12
-y_FOV = jp.pi / 4.0
 resize_factor = 2
 image_size = (H, W)
+intrinsics = paz.graphics.camera.compute_intrinsics(jp.pi / 4.0, H, W)
 render_kwargs = dict(mask=None, shadows=True, lights=lights)
 render_kwargs.update(tiles=(1, 1), chunk_size=1024)
-render_args = image_size, y_FOV, world_to_camera
+render_args = image_size, intrinsics, world_to_camera
 
 
 def get_point_on_sphere(transform, theta, phi):
