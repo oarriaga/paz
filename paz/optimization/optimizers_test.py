@@ -1,4 +1,6 @@
 import jax.numpy as jp
+import keras
+
 import paz
 
 
@@ -36,3 +38,29 @@ def test_LBFGS_runs_callbacks():
         callbacks=[callback],
     )
     assert calls[-1] == history.stop_step
+
+
+def apply_one_step(optimizer, name="w"):
+    """Change one gradient step makes, so scaled rates can be compared."""
+    variable = keras.Variable(jp.ones(3), name=name)
+    optimizer.apply_gradients([(jp.ones(3), variable)])
+    return 1.0 - jp.asarray(variable)
+
+
+def test_LayerwiseAdamW_scales_the_step_of_a_named_variable():
+    plain = keras.optimizers.AdamW(0.1, weight_decay=0.0)
+    scaled = paz.optimizers.LayerwiseAdamW({"w": 0.5}, 0.1, weight_decay=0.0)
+    assert jp.allclose(apply_one_step(scaled), 0.5 * apply_one_step(plain))
+
+
+def test_LayerwiseAdamW_freezes_a_zero_scale():
+    kwargs = dict(weight_decay=0.0)
+    optimizer = paz.optimizers.LayerwiseAdamW({"w": 0.0}, 0.1, **kwargs)
+    assert jp.allclose(apply_one_step(optimizer), 0.0)
+
+
+def test_LayerwiseAdamW_leaves_unlisted_variables_alone():
+    plain = keras.optimizers.AdamW(0.1, weight_decay=0.0)
+    scaled = paz.optimizers.LayerwiseAdamW({"w": 0.5}, 0.1, weight_decay=0.0)
+    step = apply_one_step(scaled, "other")
+    assert jp.allclose(step, apply_one_step(plain, "other"))

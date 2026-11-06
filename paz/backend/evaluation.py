@@ -1,9 +1,16 @@
+from collections import namedtuple
+
 import jax
 import jax.numpy as jp
 import numpy as np
 
 import paz
 import paz.utils.progressbar as progressbar
+
+COCO_IOU_THRESHOLDS = (0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80, 0.85, 0.90,
+                       0.95)
+Sample = namedtuple("Sample", ["boxes", "labels", "scores", "true_boxes",
+                               "true_labels", "difficult"])
 
 
 def compute_mAP(
@@ -21,31 +28,91 @@ def compute_mAP(
     if difficulties is None:
         difficulties = empty_difficulties(ground_truths)
     positives = count_positives(ground_truths, difficulties, num_classes)
-    matches = match_dataset(detector, images, ground_truths, difficulties,
-                            max_detections, max_objects, iou_thresh, verbose)
+    args = detector, images, ground_truths, difficulties
+    samples = collect_samples(*args, max_detections, max_objects, verbose)
+    widened = [widen_corners(sample) for sample in samples]
+    matches = match_samples(widened, iou_thresh)
     return reduce_average_precisions(*matches, positives, num_classes,
                                      use_07_metric)
 
 
-def match_dataset(detector, images, ground_truths, difficulties,
-                  max_detections, max_objects, iou_thresh, verbose):
-    match = jax.jit(paz.lock(match_predictions, iou_thresh))
-    scores, classes, true_positives, ignored = [], [], [], []
+def compute_COCO_mAP(
+    detector,
+    images,
+    ground_truths,
+    num_classes,
+    difficulties=None,
+    max_detections=200,
+    max_objects=64,
+    verbose=False,
+):
+    """Averages precision over the ten COCO IOU thresholds, 0.50 to 0.95.
+
+    Reports that average as ``mAP``, beside the ``mAP_50`` and ``mAP_75``
+    thresholds. The detector runs once and its predictions are rematched at
+    every threshold. Two things differ from ``pycocotools``: precision is
+    interpolated over all recall points rather than a 101 point grid, and
+    boxes are scored as given instead of widened by the pixel the VOC metric
+    adds.
+    """
+    if difficulties is None:
+        difficulties = empty_difficulties(ground_truths)
+    positives = count_positives(ground_truths, difficulties, num_classes)
+    args = detector, images, ground_truths, difficulties
+    samples = collect_samples(*args, max_detections, max_objects, verbose)
+    results = []
+    for iou_thresh in COCO_IOU_THRESHOLDS:
+        matches = match_samples(samples, iou_thresh)
+        args = matches + (positives, num_classes, False)
+        results.append(reduce_average_precisions(*args))
+    return summarize_COCO_results(results)
+
+
+def summarize_COCO_results(results):
+    """Per class and mean AP over the thresholds, plus AP50 and AP75."""
+    average_precisions = np.nanmean([result["ap"] for result in results], 0)
+    loose = results[COCO_IOU_THRESHOLDS.index(0.50)]
+    tight = results[COCO_IOU_THRESHOLDS.index(0.75)]
+    return {"ap": average_precisions,
+            "mAP": float(np.nanmean(average_precisions)),
+            "mAP_50": loose["mAP"],
+            "mAP_75": tight["mAP"]}
+
+
+def collect_samples(detector, images, ground_truths, difficulties,
+                    max_detections, max_objects, verbose):
+    """Runs the detector once per image, padded to fixed shapes."""
+    samples = []
     start = progressbar.start()
     for index, image_path in enumerate(images):
         image = paz.image.load(image_path)
-        boxes, labels, score = pad_predictions(*detector(image), max_detections)
+        predictions = pad_predictions(*detector(image), max_detections)
         truth = pad_ground_truth(ground_truths[index], difficulties[index],
                                  max_objects)
-        is_true, is_ignored = match(boxes, labels, score, *truth)
-        scores.append(score)
-        classes.append(labels)
-        true_positives.append(is_true)
-        ignored.append(is_ignored)
+        samples.append(Sample(*predictions, *truth))
         if verbose:
             progressbar.print_bar(index + 1, len(images), start, "evaluating")
     if verbose:
         print()
+    return samples
+
+
+def widen_corners(sample):
+    """VOC scores IOU on integer boxes, so it widens every far corner."""
+    boxes = expand_corners(sample.boxes)
+    true_boxes = expand_corners(sample.true_boxes)
+    return sample._replace(boxes=boxes, true_boxes=true_boxes)
+
+
+def match_samples(samples, iou_thresh):
+    match = jax.jit(paz.lock(match_predictions, iou_thresh))
+    scores, classes, true_positives, ignored = [], [], [], []
+    for sample in samples:
+        is_true, is_ignored = match(*sample)
+        scores.append(sample.scores)
+        classes.append(sample.labels)
+        true_positives.append(is_true)
+        ignored.append(is_ignored)
     columns = (scores, classes, true_positives, ignored)
     return tuple(jp.concatenate(column) for column in columns)
 
@@ -102,8 +169,7 @@ def average_precision_07(recall, precision):
 
 def match_predictions(pred_boxes, pred_classes, pred_scores,
                       true_boxes, true_classes, true_difficult, iou_thresh):
-    ious = paz.boxes.compute_IOUs(
-        expand_corners(pred_boxes), expand_corners(true_boxes))
+    ious = paz.boxes.compute_IOUs(pred_boxes, true_boxes)
     same_class = pred_classes[:, None] == true_classes[None, :]
     ious = jp.where(same_class, ious, 0.0)
     best_true = jp.argmax(ious, axis=1)
@@ -133,7 +199,6 @@ def assign_matches(best_true, is_match, true_difficult, order, num_true):
 
 
 def expand_corners(boxes):
-    # VOC scores IoU on integer boxes, so widen the far corner by one pixel.
     return boxes + jp.array([0.0, 0.0, 1.0, 1.0])
 
 
