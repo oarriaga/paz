@@ -9,13 +9,8 @@ tfd = tfp.distributions
 
 def fit_least_squares(pointcloud):
     """Fit plane using least squares SVD method."""
-    centroid = jp.mean(pointcloud, axis=0)
-    centered = pointcloud - centroid
-    U, S, Vt = jp.linalg.svd(centered, full_matrices=False)
-    normal = Vt[-1]
-    normal = jp.where(normal[1] < 0, -normal, normal)
-    offset = -jp.dot(normal, centroid)
-    return normal, offset, centroid
+    weights = jp.ones(len(pointcloud), dtype=pointcloud.dtype)
+    return fit_weighted_least_squares(pointcloud, weights)
 
 
 def fit_RANSAC(key, pointcloud, state=None, steps=100, threshold=0.02):
@@ -64,19 +59,35 @@ def fit_RANSAC(key, pointcloud, state=None, steps=100, threshold=0.02):
         return normal, offset, mask
 
     def refine():
-        return fit_least_squares(inlier_points)
+        return fit_weighted_least_squares(pointcloud, weights)
 
     def keep():
-        return (normal, offset, inlier_points.mean(axis=0))
+        return (normal, offset, compute_weighted_mean(pointcloud, weights))
 
     state = initialize_state(pointcloud) if state is None else state
     keys = jax.random.split(key, steps)
     final_state, _ = jax.lax.scan(step, state, keys)
     normal, offset, inliers = find_best_parameters(final_state)
-    inlier_points = pointcloud[inliers]
-    has_enough_inliers = len(inlier_points) > 3
+    weights = inliers.astype(pointcloud.dtype)
+    has_enough_inliers = jp.sum(inliers) > 3
     normal, offset, _ = jax.lax.cond(has_enough_inliers, refine, keep)
     return normal, offset, inliers
+
+
+def fit_weighted_least_squares(pointcloud, weights):
+    """Fit plane by least squares SVD with one weight per point."""
+    centroid = compute_weighted_mean(pointcloud, weights)
+    centered = jp.sqrt(weights)[:, None] * (pointcloud - centroid)
+    _, _, Vt = jp.linalg.svd(centered, full_matrices=False)
+    normal = Vt[-1]
+    normal = jp.where(normal[1] < 0, -normal, normal)
+    offset = -jp.dot(normal, centroid)
+    return normal, offset, centroid
+
+
+def compute_weighted_mean(pointcloud, weights):
+    weighted_sum = jp.sum(weights[:, None] * pointcloud, axis=0)
+    return weighted_sum / jp.sum(weights)
 
 
 def optimize(parameters, optimizer, compute_loss, steps):
