@@ -15,8 +15,12 @@ def restart_on_stall(optimizer, patience=5, min_delta=1e-3):
     inner optimizer state is re-initialized at the current parameters. For
     LBFGS this clears its memory, which recovers from a failed line search
     that would otherwise repeat the same rejected step forever.
-    The loss is read from the `value` keyword passed to `update`, as
-    `paz.minimize` does.
+    A step that climbs the gradient (`grad . updates > 0`) is dropped and
+    restarts the inner optimizer at once: LBFGS proposes one after tiny
+    line-search steps have corrupted its curvature memory, and the zoom
+    line search then accepts it, since its bounds assume a descent
+    direction. The loss and gradient are read from the `value` and `grad`
+    keywords passed to `update`, as `paz.minimize` does.
     """
 
     def init(params):
@@ -35,10 +39,27 @@ def restart_on_stall(optimizer, patience=5, min_delta=1e-3):
         num_restarts = state.num_restarts + is_stalled.astype(jp.int32)
         update_args = (updates, inner_state, params)
         updates, inner_state = optimizer.update(*update_args, **extra_args)
+        is_uphill = climbs_gradient(updates, extra_args.get("grad"))
+        updates = drop_updates(updates, is_uphill)
+        inner_args = (is_uphill, optimizer.init(params), inner_state)
+        inner_state = select_state(*inner_args)
+        num_restarts = num_restarts + is_uphill.astype(jp.int32)
         counts = (num_waiting, num_restarts)
         return updates, RestartState(inner_state, best_loss, *counts)
 
     return optax.GradientTransformationExtraArgs(init, update)
+
+
+def climbs_gradient(updates, gradients):
+    if gradients is None:
+        is_uphill = jp.array(False)
+    else:
+        is_uphill = optax.tree.vdot(gradients, updates) > 0.0
+    return is_uphill
+
+
+def drop_updates(updates, is_dropped):
+    return jax.tree.map(lambda step: jp.where(is_dropped, 0.0, step), updates)
 
 
 def select_state(is_stalled, fresh_state, state):

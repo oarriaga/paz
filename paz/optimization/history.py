@@ -10,6 +10,7 @@ class Trace(NamedTuple):
     losses: object
     metrics: object
     stop_step: object
+    best_step: object
 
 
 class Metrics(NamedTuple):
@@ -113,7 +114,7 @@ def trim_trace(trace):
         trace.metrics.step,
     )
     metrics_state = Metrics(*args)
-    return Trace(losses, metrics_state, trace.stop_step)
+    return Trace(losses, metrics_state, trace.stop_step, trace.best_step)
 
 
 def _count_metric_steps(trace):
