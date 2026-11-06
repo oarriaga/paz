@@ -1,3 +1,4 @@
+import keras
 import optax
 
 from paz.optimization.linesearch import LineSearch
@@ -14,3 +15,35 @@ def LBFGS(parameters, loss_fn, learning_rate, max_steps, tolerance, memory_size,
     _, parameters, history = minimize(*args)
     history = trim_trace(history)
     return parameters, history
+
+
+class LayerwiseAdamW(keras.optimizers.AdamW):
+    """AdamW with a per-variable learning-rate scale.
+
+    Fine-tuning wants a smaller rate deep inside a pretrained backbone than
+    on a fresh head, and Keras keeps a single rate per optimizer. Scales are
+    keyed by ``variable.path`` and default to one. Weight decay stays global:
+    only the learning rate is scaled. The EMA momentum ramps up to
+    ``ema_momentum`` with a time constant of 100 updates, as upstream does.
+    """
+
+    def __init__(self, scales, learning_rate, **kwargs):
+        super().__init__(learning_rate=learning_rate, **kwargs)
+        self.scales = dict(scales)
+
+    def update_step(self, gradient, variable, learning_rate):
+        scale = self.scales.get(variable.path, 1.0)
+        super().update_step(gradient, variable, scale * learning_rate)
+
+    def _update_model_variables_moving_average(self, trainable_variables):
+        # Keras has no public hook to vary the EMA momentum inside the step.
+        momentum = self.ema_momentum
+        updates = keras.ops.cast(self.iterations, "float32") + 1.0
+        self.ema_momentum = momentum * (1.0 - keras.ops.exp(-updates / 100.0))
+        super()._update_model_variables_moving_average(trainable_variables)
+        self.ema_momentum = momentum
+
+    def get_config(self):
+        config = super().get_config()
+        config["scales"] = self.scales
+        return config
