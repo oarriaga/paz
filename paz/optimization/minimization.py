@@ -28,6 +28,7 @@ def minimize(parameters, loss_fn, optimizer, max_steps, stop_fn=None, metrics=No
     with the lowest loss the loop evaluated, not the last one: a step
     the line search accepted uphill, a run that diverged to `nan`, or a
     stop that fires after the loss rose cannot spoil the result.
+    The point from the final update is never scored, so it is never returned.
     `history.best_step` says which step they come from.
     """
     _validate_metrics(metrics, metrics_every)
