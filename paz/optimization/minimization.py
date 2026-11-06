@@ -105,6 +105,15 @@ class _Minimizer(NamedTuple):
     stop_fn: object
 
 
+def _gradient_step(params, state, minimizer):
+    optimizer = minimizer.optimizer
+    loss, gradients = minimizer.value_grad_fn(params, state)
+    kwargs = {"value": loss, "grad": gradients, "value_fn": minimizer.loss_fn}
+    delta, state = optimizer.update(gradients, state, params, **kwargs)
+    params = optax.apply_updates(params, delta)
+    return loss, gradients, params, state
+
+
 class _Best(NamedTuple):
     loss: object
     params: object
@@ -122,15 +131,6 @@ def _keep_best(best, loss, params, step_arg):
     best_params = jax.tree.map(select, best.params, params)
     best_step = jp.where(is_better, step_arg, best.step)
     return _Best(best_loss, best_params, best_step)
-
-
-def _gradient_step(params, state, minimizer):
-    optimizer = minimizer.optimizer
-    loss, gradients = minimizer.value_grad_fn(params, state)
-    kwargs = {"value": loss, "grad": gradients, "value_fn": minimizer.loss_fn}
-    delta, state = optimizer.update(gradients, state, params, **kwargs)
-    params = optax.apply_updates(params, delta)
-    return loss, gradients, params, state
 
 
 def _build_progress_args(step_arg, loss, metrics, state, has_to_stop):
