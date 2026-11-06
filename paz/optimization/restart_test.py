@@ -67,3 +67,27 @@ def test_restart_works_inside_jit():
     _, params, history = minimize(jp.array([0.5, -0.5]))
     assert jp.all(jp.isfinite(params))
     assert loss_fn(params) < loss_fn(jp.array([0.5, -0.5]))
+
+
+def run_one_update(optimizer, params, gradients):
+    state = optimizer.init(params)
+    args = (gradients, state, params)
+    return optimizer.update(*args, value=jp.array(1.0), grad=gradients)
+
+
+def test_restart_drops_a_step_that_climbs_the_gradient():
+    # a negative learning rate walks up the gradient: the step is zeroed
+    # and counts as a restart
+    optimizer = restart_on_stall(optax.sgd(-0.1))
+    params, gradients = jp.zeros(2), jp.ones(2)
+    updates, state = run_one_update(optimizer, params, gradients)
+    assert jp.all(updates == 0.0)
+    assert int(state.num_restarts) == 1
+
+
+def test_restart_keeps_a_step_that_descends():
+    optimizer = restart_on_stall(optax.sgd(0.1))
+    params, gradients = jp.zeros(2), jp.ones(2)
+    updates, state = run_one_update(optimizer, params, gradients)
+    assert jp.allclose(updates, -0.1)
+    assert int(state.num_restarts) == 0

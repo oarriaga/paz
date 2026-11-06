@@ -423,6 +423,35 @@ def test_minimize_with_callbacks_is_jittable():
     assert jp.allclose(fitted, jp.array([3.0, 3.0]), atol=5e-2)
 
 
+def test_minimize_returns_the_lowest_loss_point_it_saw():
+    # gradient descent with a step of 1.2 overshoots the quadratic and
+    # diverges, so the first point is the best one
+    parameters = jp.array([8.0, -2.0])
+    args = (parameters, quadratic_loss, optax.sgd(1.2), 10)
+    status, fitted, history = minimize(*args)
+    losses = trim_trace(history).losses
+    assert status == MAX_STEPS_REACHED
+    assert losses[-1] > losses[0]
+    assert int(history.best_step) == int(jp.argmin(losses))
+    assert jp.allclose(quadratic_loss(fitted), jp.min(losses))
+    assert jp.allclose(fitted, parameters)
+
+
+def test_minimize_skips_points_whose_loss_is_nan():
+    # the square root turns nan once the overshoot crosses zero
+    def loss(parameters):
+        return quadratic_loss(parameters) + jp.sqrt(parameters[0])
+
+    parameters = jp.array([8.0, -2.0])
+    optimizer = optax.sgd(1.2)
+    status, fitted, history = minimize(parameters, loss, optimizer, 10)
+    losses = trim_trace(history).losses
+    assert jp.any(jp.isnan(losses))
+    assert jp.all(jp.isfinite(fitted))
+    assert int(history.best_step) == 0
+    assert jp.allclose(loss(fitted), losses[0])
+
+
 def test_minimize_rejects_invalid_metrics_every():
     parameters = jp.array([8.0, -2.0])
     optimizer = build_lbfgs()

@@ -22,6 +22,14 @@ from paz.optimization.stopping import _never_stop
 from paz.optimization.stopping import _run_stop_fn
 
 def minimize(parameters, loss_fn, optimizer, max_steps, stop_fn=None, metrics=None, metrics_every=1, callbacks=None, verbose=False):  # fmt: skip
+    """Minimize `loss_fn` from `parameters` with an optax `optimizer`.
+
+    Returns `(status, parameters, history)`. The parameters are the point
+    with the lowest loss the loop evaluated, not the last one: a step
+    the line search accepted uphill, a run that diverged to `nan`, or a
+    stop that fires after the loss rose cannot spoil the result.
+    `history.best_step` says which step they come from.
+    """
     _validate_metrics(metrics, metrics_every)
     callbacks = _build_callbacks(callbacks)
     stop_fn = _never_stop if stop_fn is None else stop_fn
@@ -52,9 +60,10 @@ def _minimize(params, state, metrics_state, stop_state, minimizer, max_steps, me
     def step(carry):
         args = carry
         params_now, state, step_arg = args[:3]
-        has_to_stop, losses, metrics_state, stop_state = args[3:]
+        has_to_stop, losses, metrics_state, stop_state, best = args[3:]
         args = (params_now, state, minimizer)
         loss, grads, params_new, state_new = _gradient_step(*args)
+        best = _keep_best(best, loss, params_now, step_arg)
         metrics_state = update_metrics(metrics_state, params_now, step_arg)
         losses = losses.at[step_arg].set(loss)
         step_num = step_arg + 1
@@ -69,7 +78,7 @@ def _minimize(params, state, metrics_state, stop_state, minimizer, max_steps, me
         args = (has_to_stop, params_now, state, params_new, state_new)
         params, state = _select_state(*args)
         args = (params, state, step_num, has_to_stop)
-        return (*args, losses, metrics_state, stop_state)
+        return (*args, losses, metrics_state, stop_state, best)
 
     def cond(carry):
         _, _, step_arg, has_to_stop = carry[:4]
@@ -77,14 +86,16 @@ def _minimize(params, state, metrics_state, stop_state, minimizer, max_steps, me
         return has_steps_remaining & jp.logical_not(has_to_stop)
 
     losses = jp.zeros((max_steps,))
-    args = (params, state, 0, False, losses, metrics_state, stop_state)
+    best = _Best(jp.array(jp.inf), params, jp.array(0, dtype=jp.int32))
+    args = (params, state, 0, False, losses, metrics_state, stop_state, best)
     carry = args
     carry = jax.lax.while_loop(cond, step, carry)
-    params, _, step_arg, has_to_stop = carry[:4]
+    _, _, step_arg, has_to_stop = carry[:4]
     losses, metrics_state = carry[4:6]
+    best = carry[7]
     status = _build_status(has_to_stop)
-    history = Trace(losses, metrics_state, step_arg)
-    return status, params, history
+    history = Trace(losses, metrics_state, step_arg, best.step)
+    return status, best.params, history
 
 
 class _Minimizer(NamedTuple):
@@ -92,6 +103,25 @@ class _Minimizer(NamedTuple):
     loss_fn: object
     value_grad_fn: object
     stop_fn: object
+
+
+class _Best(NamedTuple):
+    loss: object
+    params: object
+    step: object
+
+
+def _keep_best(best, loss, params, step_arg):
+    # a nan loss compares false and so never replaces a finite best
+    is_better = loss < best.loss
+    best_loss = jp.where(is_better, loss, best.loss).astype(best.loss.dtype)
+
+    def select(best_leaf, leaf):
+        return jp.where(is_better, leaf, best_leaf)
+
+    best_params = jax.tree.map(select, best.params, params)
+    best_step = jp.where(is_better, step_arg, best.step)
+    return _Best(best_loss, best_params, best_step)
 
 
 def _gradient_step(params, state, minimizer):
