@@ -81,18 +81,18 @@ def compute_specular_color(material, reflectance, cosines):
     return reflectance * factor
 
 
-def compute_diffuse_color(material, base_color, reflectance):
-    base = base_color / jp.pi
+def compute_diffuse_color(material, albedo, reflectance):
+    base = albedo / jp.pi
     energy = (1.0 - reflectance) * (1.0 - material.metallic)
     return base * energy
 
 
-def compute_direct_lighting(material, base_color, points, normals, eye, light):
+def compute_direct_lighting(material, albedo, points, normals, eye, light):
     cosines = compute_directional_cosines(eye, normals, light, points)
     base_reflectance = compute_base_reflectance(material)
     fresnel_args = cosines.view_dot_half, base_reflectance
     reflectance = compute_fresnel_reflectance(*fresnel_args)
-    diffuse = compute_diffuse_color(material, base_color, reflectance)
+    diffuse = compute_diffuse_color(material, albedo, reflectance)
     specular = compute_specular_color(material, reflectance, cosines)
     visible = cosines.normal_dot_light
     return (diffuse + specular) * visible * light.intensity
@@ -103,9 +103,8 @@ def compute_ambient(albedo, material, light):
 
 
 def compute_colors(albedo, material, points, normals, eye, light):
-    base_color = albedo * light.intensity
-    ambient = base_color * material.ambient
-    args = material, base_color, points, normals, eye, light
+    ambient = compute_ambient(albedo, material, light)
+    args = material, albedo, points, normals, eye, light
     return ambient + compute_direct_lighting(*args)
 
 

@@ -128,10 +128,10 @@ def test_dielectric_base_reflectance_is_constant(dielectric_material):
 
 
 def test_diffuse_color_vanishes_for_metallic_surfaces(metallic_material):
-    base_color = jp.array([[0.5, 0.5, 0.5]])
+    albedo = jp.array([[0.5, 0.5, 0.5]])
     reflectance = jp.array([[0.04, 0.04, 0.04]])
     diffuse = cook_torrance.compute_diffuse_color(
-        metallic_material, base_color, reflectance
+        metallic_material, albedo, reflectance
     )
     assert jp.allclose(diffuse, jp.zeros_like(diffuse))
 
@@ -205,3 +205,32 @@ def test_compute_colors_with_shadow_uses_ambient(
         shape_albedo, dielectric_material, simple_light
     )
     assert jp.allclose(colors, expected)
+
+
+@pytest.mark.parametrize("metallic", [0.0, 1.0])
+def test_compute_colors_scales_linearly_with_intensity(metallic):
+    material = CookTorranceMaterial(jp.full(3, 0.5), 0.0, 0.04, 0.9, metallic)
+    intensities = [0.5, 1.0, 2.0]
+    colors = [compute_head_on_colors(material, value) for value in intensities]
+    assert jp.allclose(colors[1] / colors[0], 2.0, atol=1e-6)
+    assert jp.allclose(colors[2] / colors[1], 2.0, atol=1e-6)
+
+
+def compute_head_on_colors(material, intensity):
+    points = jp.zeros((1, 3))
+    normals = jp.array([[0.0, 1.0, 0.0]])
+    eye = jp.array([[0.0, 1.0, 0.0]])
+    position = jp.array([0.0, 1.0, 0.0])
+    light = PointLight(jp.full(3, intensity), position)
+    args = material.color[None], material, points, normals, eye, light
+    return cook_torrance.compute_colors(*args)
+
+
+def test_diffuse_matches_lambertian_by_hand():
+    material = CookTorranceMaterial(jp.full(3, 0.5), 0.0, 0.04, 1.0, 0.0)
+    black_material = material._replace(color=jp.zeros(3))
+    intensity = 2.0
+    colors = compute_head_on_colors(material, intensity)
+    specular = compute_head_on_colors(black_material, intensity)
+    expected = 0.5 / jp.pi * (1.0 - 0.04) * (1.0 - 0.0) * 1.0 * intensity
+    assert jp.allclose(colors - specular, expected, atol=1e-6)
