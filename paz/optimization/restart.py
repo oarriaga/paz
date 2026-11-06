@@ -52,8 +52,10 @@ def restart_on_stall(optimizer, patience=5, min_delta=1e-3):
 
 def climbs_gradient(updates, gradients):
     if gradients is None:
-        return jp.array(False)
-    return optax.tree.vdot(gradients, updates) > 0.0
+        is_uphill = jp.array(False)
+    else:
+        is_uphill = optax.tree.vdot(gradients, updates) > 0.0
+    return is_uphill
 
 
 def drop_updates(updates, is_dropped):
