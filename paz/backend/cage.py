@@ -3,61 +3,109 @@ from functools import partial
 import jax
 import jax.numpy as jp
 
+# Ju, Schaefer and Warren 2005, "Mean Value Coordinates for Closed
+# Triangular Meshes". Degenerate cases are masked, never shifted by a
+# constant: the weight denominators are signed, and a constant added to a
+# signed value near zero flips it.
+TOLERANCE = 1e-6
+
 
 def compute_mean_value_coordinate(cage_vertices, cage_faces, query):
-    cage_vectors = cage_vertices - query
-    cage_distances = jp.linalg.norm(cage_vectors, axis=1, keepdims=True)
-    unit_vectors = cage_vectors / (cage_distances + 1e-5)
-    unit_triangles = unit_vectors[cage_faces]
-    u1 = unit_triangles[:, 0]
-    u2 = unit_triangles[:, 1]
-    u3 = unit_triangles[:, 2]
-    l1 = jp.linalg.norm(u2 - u3, axis=1)
-    l2 = jp.linalg.norm(u3 - u1, axis=1)
-    l3 = jp.linalg.norm(u1 - u2, axis=1)
-    theta_1 = 2.0 * jp.arcsin(jp.clip(l1 / 2.0, -1.0, 1.0))
-    theta_2 = 2.0 * jp.arcsin(jp.clip(l2 / 2.0, -1.0, 1.0))
-    theta_3 = 2.0 * jp.arcsin(jp.clip(l3 / 2.0, -1.0, 1.0))
-    h = (theta_1 + theta_2 + theta_3) / 2.0
-    c1_num = 2.0 * jp.sin(h) * jp.sin(h - theta_1)
-    c2_num = 2.0 * jp.sin(h) * jp.sin(h - theta_2)
-    c3_num = 2.0 * jp.sin(h) * jp.sin(h - theta_3)
-    c1_den = jp.sin(theta_2) * jp.sin(theta_3) + 1e-8
-    c2_den = jp.sin(theta_3) * jp.sin(theta_1) + 1e-8
-    c3_den = jp.sin(theta_1) * jp.sin(theta_2) + 1e-8
-    c1 = c1_num / c1_den - 1.0
-    c2 = c2_num / c2_den - 1.0
-    c3 = c3_num / c3_den - 1.0
-    signs = jp.sign(jp.linalg.det(unit_triangles))
-    s1 = signs * jp.sqrt(jp.clip(1 - c1**2, 0.0, None))
-    s2 = signs * jp.sqrt(jp.clip(1 - c2**2, 0.0, None))
-    s3 = signs * jp.sqrt(jp.clip(1 - c3**2, 0.0, None))
-    w1_num = theta_1 - c2 * theta_3 - c3 * theta_2
-    w2_num = theta_2 - c3 * theta_1 - c1 * theta_3
-    w3_num = theta_3 - c1 * theta_2 - c2 * theta_1
-    face_distances = cage_distances[cage_faces]
-    d1 = face_distances[:, 0, 0]
-    d2 = face_distances[:, 1, 0]
-    d3 = face_distances[:, 2, 0]
-    w1_den = 2.0 * d1 * jp.sin(theta_2) * s3 + 1e-8
-    w2_den = 2.0 * d2 * jp.sin(theta_3) * s1 + 1e-8
-    w3_den = 2.0 * d3 * jp.sin(theta_1) * s2 + 1e-8
-    w1 = w1_num / w1_den
-    w2 = w2_num / w2_den
-    w3 = w3_num / w3_den
-    weights_per_face = jp.stack((w1, w2, w3), axis=1)
+    vectors = cage_vertices - query
+    distances = jp.linalg.norm(vectors, axis=1)
+    is_at_vertex = distances < TOLERANCE
+    safe_distances = jp.where(is_at_vertex, 1.0, distances)
+    units = (vectors / jp.expand_dims(safe_distances, 1))[cage_faces]
+    face_args = (units, safe_distances[cage_faces])
+    face_weights = compute_face_weights(*face_args)
+    weights = sum_face_weights(face_weights, cage_faces, len(cage_vertices))
+    vertex_weights = jax.nn.one_hot(jp.argmin(distances), len(cage_vertices))
+    return jp.where(jp.any(is_at_vertex), vertex_weights, weights)
+
+
+def compute_face_weights(units, face_distances):
+    # a point on a triangle takes its barycentric weights there alone
+    angles = compute_corner_angles(units)
+    is_on_face = jp.pi - (jp.sum(angles, axis=1) / 2.0) < TOLERANCE
+    barycentric = compute_barycentric_weights(angles, face_distances)
+    barycentric = jp.where(jp.expand_dims(is_on_face, 1), barycentric, 0.0)
+    mean_value = compute_mean_value_weights(units, angles, face_distances)
+    return jp.where(jp.any(is_on_face), barycentric, mean_value)
+
+
+def compute_corner_angles(units):
+    # the angle each triangle edge spans as seen from the point
+    angles = []
+    for corner in range(3):
+        next_units = units[:, (corner + 1) % 3]
+        last_units = units[:, (corner + 2) % 3]
+        sines = jp.linalg.norm(jp.cross(next_units, last_units), axis=1)
+        cosines = jp.sum(next_units * last_units, axis=1)
+        angles.append(jp.arctan2(sines, cosines))
+    return jp.stack(angles, axis=1)
+
+
+def compute_barycentric_weights(angles, face_distances):
     weights = []
-    for arg in range(len(cage_vertices)):
-        cage_vertex_mask = cage_faces == arg
-        cage_vertex_weight = jp.sum(weights_per_face[cage_vertex_mask])
-        weights.append(cage_vertex_weight)
-    return jp.array(weights)
+    for corner in range(3):
+        next_distances = face_distances[:, (corner + 1) % 3]
+        last_distances = face_distances[:, (corner + 2) % 3]
+        area = jp.sin(angles[:, corner]) * next_distances * last_distances
+        weights.append(area)
+    return jp.stack(weights, axis=1)
 
 
-def compute_mesh_weights(mesh_vertices, cage_vertices, cage_faces):
-    cage_args = (cage_vertices, cage_faces)
-    compute_mvc = jax.vmap(partial(compute_mean_value_coordinate, *cage_args))
-    return compute_mvc(mesh_vertices)
+def compute_mean_value_weights(units, angles, face_distances):
+    # a triangle in a plane through the point adds nothing
+    cosines, sines = compute_wedge_terms(units, angles)
+    is_skipped = jp.any(jp.abs(sines) <= TOLERANCE, axis=1)
+    weights = []
+    for corner in range(3):
+        weight_args = (cosines, sines, angles, face_distances, corner)
+        numerator, denominator = compute_weight_terms(*weight_args)
+        safe_denominator = jp.where(is_skipped, 1.0, denominator)
+        weights.append(jp.where(is_skipped, 0.0, numerator / safe_denominator))
+    return jp.stack(weights, axis=1)
+
+
+def compute_wedge_terms(units, angles):
+    # cosines and signed sines of the dihedral angles of each triangle's
+    # spherical wedge; a zero sine product leaves the sines at zero
+    half_sum = jp.sum(angles, axis=1) / 2.0
+    cosines = []
+    for corner in range(3):
+        next_sine = jp.sin(angles[:, (corner + 1) % 3])
+        last_sine = jp.sin(angles[:, (corner + 2) % 3])
+        wedge = jp.sin(half_sum) * jp.sin(half_sum - angles[:, corner])
+        denominator = next_sine * last_sine
+        is_flat = denominator == 0.0
+        safe_denominator = jp.where(is_flat, 1.0, denominator)
+        cosine = (2.0 * wedge / safe_denominator) - 1.0
+        cosines.append(jp.where(is_flat, 1.0, cosine))
+    cosines = jp.stack(cosines, axis=1)
+    signs = jp.expand_dims(jp.sign(jp.linalg.det(units)), 1)
+    return cosines, signs * jp.sqrt(jp.clip(1.0 - (cosines**2), 0.0, None))
+
+
+def compute_weight_terms(cosines, sines, angles, face_distances, corner):
+    next_corner, last_corner = (corner + 1) % 3, (corner + 2) % 3
+    spread = cosines[:, next_corner] * angles[:, last_corner]
+    spread = spread + cosines[:, last_corner] * angles[:, next_corner]
+    numerator = angles[:, corner] - spread
+    denominator = jp.sin(angles[:, next_corner]) * sines[:, last_corner]
+    denominator = 2.0 * face_distances[:, corner] * denominator
+    return numerator, denominator
+
+
+def sum_face_weights(face_weights, cage_faces, num_cage_vertices):
+    sum_args = (face_weights.ravel(), cage_faces.ravel(), num_cage_vertices)
+    return jax.ops.segment_sum(*sum_args)
+
+
+def compute_mesh_weights(mesh_vertices, cage_vertices, cage_faces, batch_size=256):  # fmt: skip
+    # a fixed batch keeps memory at batch_size rows of per-face terms
+    compute = partial(compute_mean_value_coordinate, cage_vertices, cage_faces)
+    return jax.lax.map(compute, mesh_vertices, batch_size=batch_size)
 
 
 def control_mesh(mesh_weights, deformed_cage_vertices):
