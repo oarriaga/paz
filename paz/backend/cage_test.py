@@ -96,7 +96,6 @@ def test_control_mesh_recovers_points_on_cage_triangles():
 
 
 def test_jit_compute_mesh_weights_matches_unjitted():
-    # unnormalized weights reach about 100, so compare them normalized
     cage_vertices, cage_faces = build_torus_cage(1.0)
     points = build_torus_points(1.0)
     args = (points, cage_vertices, cage_faces)

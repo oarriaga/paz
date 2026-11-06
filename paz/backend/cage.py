@@ -3,10 +3,6 @@ from functools import partial
 import jax
 import jax.numpy as jp
 
-# Ju, Schaefer and Warren 2005, "Mean Value Coordinates for Closed
-# Triangular Meshes". Degenerate cases are masked, never shifted by a
-# constant: the weight denominators are signed, and a constant added to a
-# signed value near zero flips it.
 TOLERANCE = 1e-6
 
 
@@ -24,7 +20,6 @@ def compute_mean_value_coordinate(cage_vertices, cage_faces, query):
 
 
 def compute_face_weights(units, face_distances):
-    # a point on a triangle takes its barycentric weights there alone
     angles = compute_corner_angles(units)
     is_on_face = jp.pi - (jp.sum(angles, axis=1) / 2.0) < TOLERANCE
     barycentric = compute_barycentric_weights(angles, face_distances)
@@ -34,7 +29,6 @@ def compute_face_weights(units, face_distances):
 
 
 def compute_corner_angles(units):
-    # the angle each triangle edge spans as seen from the point
     angles = []
     for corner in range(3):
         next_units = units[:, (corner + 1) % 3]
@@ -56,7 +50,6 @@ def compute_barycentric_weights(angles, face_distances):
 
 
 def compute_mean_value_weights(units, angles, face_distances):
-    # a triangle in a plane through the point adds nothing
     cosines, sines = compute_wedge_terms(units, angles)
     is_skipped = jp.any(jp.abs(sines) <= TOLERANCE, axis=1)
     weights = []
@@ -69,8 +62,6 @@ def compute_mean_value_weights(units, angles, face_distances):
 
 
 def compute_wedge_terms(units, angles):
-    # cosines and signed sines of the dihedral angles of each triangle's
-    # spherical wedge; a zero sine product leaves the sines at zero
     half_sum = jp.sum(angles, axis=1) / 2.0
     cosines = []
     for corner in range(3):
@@ -103,7 +94,6 @@ def sum_face_weights(face_weights, cage_faces, num_cage_vertices):
 
 
 def compute_mesh_weights(mesh_vertices, cage_vertices, cage_faces, batch_size=256):  # fmt: skip
-    # a fixed batch keeps memory at batch_size rows of per-face terms
     compute = partial(compute_mean_value_coordinate, cage_vertices, cage_faces)
     return jax.lax.map(compute, mesh_vertices, batch_size=batch_size)
 
