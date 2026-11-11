@@ -20,11 +20,13 @@ from paz.models.detection.rf_detr.decoder import flatten_levels, read_grids
 
 def PFRPN(image_shape=(640, 640, 3), name="pf_rpn"):
     args = 128, (2, 2, 18, 2), (4, 8, 16, 32), 12, 6, 6, 900
-    return build_pf_rpn(image_shape, *args, name)
+    return build_model(image_shape, *args, name)
 
 
-def build_pf_rpn(image_shape, embed_dim, depths, num_heads, window_size,
-                 num_encoder_layers, num_decoder_layers, num_queries, name):
+def build_model(image_shape, embed_dim, depths, num_heads, window_size,
+                num_encoder_layers, num_decoder_layers, num_queries, name):
+    if image_shape[0] % 32 or image_shape[1] % 32:
+        raise ValueError(f"Image sides must be multiples of 32: {image_shape}")
     images = Input(image_shape)
     features = swin.build(images, embed_dim, depths, num_heads, window_size)
     features = build_neck(features, 256)

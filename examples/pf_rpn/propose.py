@@ -6,8 +6,11 @@ proposals drawn on it. Every image is resized to the model's fixed input, so
 the model compiles once however the image sizes vary.
 """
 import argparse
+import os
 import time
 import urllib.request
+
+os.environ.setdefault("KERAS_BACKEND", "jax")
 
 import jax
 

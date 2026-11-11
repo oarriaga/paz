@@ -63,10 +63,11 @@ def test_points_match_boxes_sized_to_one_level():
     query, value = Input((5, 8)), Input((4 * 6, 8))
     boxes = Input((5, 4))
     args = (grid,), 2, num_points, "cross_attn"
-    by_boxes = Model([query, value, boxes], deformable.attend(
-        query, value, boxes, *args))
-    by_points = Model([query, value, boxes], deformable.attend_points(
-        query, value, boxes[..., :2], *args))
+    inputs = [query, value, boxes]
+    by_boxes = Model(inputs, deformable.attend(query, value, boxes, *args))
+    points = boxes[..., :2]
+    attended = deformable.attend_points(query, value, points, *args)
+    by_points = Model(inputs, attended)
     by_points.set_weights(by_boxes.get_weights())
     query, value, boxes = make_inputs()
     boxes[..., 2:] = 2 * num_points / np.array([grid[1], grid[0]])

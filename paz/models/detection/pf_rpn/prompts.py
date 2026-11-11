@@ -21,7 +21,9 @@ def build(memory, grids, num_tokens=3, num_selected=2, threshold=0.3,
     context_decoder = build_context_decoder(hidden_size, 4, 3)
     args = memory, num_tokens, hidden_size, "learnable_text_embedding"
     queries = build_table(*args)
-    # The published table holds 30000 positions, the most cells a level has.
+    # The published table holds one position per cell, up to 30000 cells.
+    if grids[0][0] * grids[0][1] > 30000:
+        raise ValueError(f"A level holds at most 30000 cells: {grids[0]}")
     args = memory, 30001, hidden_size, "vis_proj_positional_embedding"
     positions = build_table(*args)
     summaries, proposals = [], []

@@ -5,17 +5,17 @@ from keras import Model
 
 from paz.applications.detectors import PFRPN
 from paz.models.detection.pf_rpn import decoder, swin
-from paz.models.detection.pf_rpn.models import build_pf_rpn
+from paz.models.detection.pf_rpn.models import build_model
 
 IMAGE_SHAPE = (192, 256, 3)
 NUM_QUERIES = 20
 
 
-def build_model():
+def build_small_model():
     """A narrow, shallow model so the tests stay quick; seeded to repeat."""
     keras.utils.set_random_seed(0)
     args = 32, (2, 2, 2, 2), (1, 2, 4, 8), 4, 1, 2, NUM_QUERIES
-    return build_pf_rpn(IMAGE_SHAPE, *args, "pf_rpn_test")
+    return build_model(IMAGE_SHAPE, *args, "pf_rpn_test")
 
 
 def make_input(batch=2):
@@ -24,7 +24,7 @@ def make_input(batch=2):
 
 
 def test_returns_scores_and_boxes():
-    scores, boxes = build_model()(make_input())
+    scores, boxes = build_small_model()(make_input())
     assert tuple(scores.shape) == (2, NUM_QUERIES)
     assert tuple(boxes.shape) == (2, NUM_QUERIES, 4)
     assert np.all(np.isfinite(scores)) and np.all(np.isfinite(boxes))
@@ -33,7 +33,7 @@ def test_returns_scores_and_boxes():
 def test_neck_jit_matches_eager():
     """Compares up to the neck: untrained scores are near tied, so a float32
     difference can reorder the selected queries and every later tensor."""
-    model = build_model()
+    model = build_small_model()
     neck = Model(model.input, model.get_layer("neck_extra_convs_0_gn").output)
     eager = np.array(neck(make_input()))
     jitted = np.array(jax.jit(lambda x: neck(x))(make_input()))
@@ -41,7 +41,7 @@ def test_neck_jit_matches_eager():
 
 
 def test_compiles_once_for_any_image_size():
-    model = build_model()
+    model = build_small_model()
     forward = jax.jit(lambda x: model(x))
     propose = PFRPN(forward, IMAGE_SHAPE[:2], 0.5, 10, None)
     random = np.random.RandomState(0)

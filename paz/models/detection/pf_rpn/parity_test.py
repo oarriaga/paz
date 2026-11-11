@@ -20,14 +20,9 @@ import numpy as np
 import pytest
 from keras import Model
 
-# Reduced-precision float32 matmuls are the default on some CPUs and drift far
-# enough over the backbone to fail the tolerances below.
-jax.config.update("jax_default_matmul_precision", "highest")
-
 REFERENCE = os.environ.get("PFRPN_REFERENCE")
-
-pytestmark = pytest.mark.skipif(
-    REFERENCE is None, reason="set PFRPN_REFERENCE to run parity checks")
+reason = "set PFRPN_REFERENCE to run parity checks"
+pytestmark = pytest.mark.skipif(REFERENCE is None, reason=reason)
 
 
 def sigmoid(x):
@@ -46,7 +41,10 @@ def test_matches_reference():
     taps = [model.get_layer(name).output for name in names]
     tapped = Model(model.input, taps + model.outputs)
     # Jitted, because an eager call keeps every intermediate tensor in memory.
-    outputs = jax.jit(lambda x: tapped(x))(images)
+    # Reduced-precision float32 matmuls are the default on some CPUs and
+    # drift far enough over the backbone to fail the tolerances below.
+    with jax.default_matmul_precision("highest"):
+        outputs = jax.jit(lambda x: tapped(x))(images)
     neck, memory, scores, boxes = [np.array(output) for output in outputs]
     similarity = sigmoid(reference["class_logits"]).max(axis=-1)
     # Upstream squashes the confidence once more when it ranks the boxes.

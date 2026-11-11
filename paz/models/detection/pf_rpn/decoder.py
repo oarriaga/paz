@@ -22,24 +22,22 @@ def build(memory, texts, grids, num_layers, num_queries):
     boxes = select_boxes(memory, texts, grids, num_layers, num_queries)
     args = memory, num_queries, hidden_size
     query = build_table(*args, "query_embedding_weight")
-    embed = build_reference_head(hidden_size)
-    args = memory, texts, grids
-    for layer in range(num_layers - 1):
-        query_pos = embed(embed_boxes(boxes, hidden_size // 2))
-        name = f"decoder_layers_{layer}"
-        query = apply_layer(query, query_pos, boxes, *args, name)
+    args = build_reference_head(hidden_size), memory, texts, grids
+    last = num_layers - 1
+    for layer in range(last):
+        query = apply_layer(query, boxes, *args, f"decoder_layers_{layer}")
         deltas = apply_box_head(query, f"bbox_head_reg_branches_{layer}")
         boxes = refine(deltas, boxes, 1e-3)
-    last = num_layers - 1
-    query_pos = embed(embed_boxes(boxes, hidden_size // 2))
-    name = f"decoder_layers_{last}"
-    query = apply_layer(query, query_pos, boxes, *args, name)
+    query = apply_layer(query, boxes, *args, f"decoder_layers_{last}")
     tokens = normalize(query, "decoder_norm")
     deltas = apply_box_head(tokens, f"bbox_head_reg_branches_{last}")
     return score(tokens, texts, last), refine(deltas, boxes, 1e-5)
 
 
 def select_boxes(memory, texts, grids, stage, num_queries):
+    if memory.shape[1] < num_queries:
+        message = f"Need at least {num_queries} cells, got {memory.shape[1]}"
+        raise ValueError(message)
     anchors, valid = build_anchor_boxes(grids)
     tokens = Dense(memory.shape[-1], name="memory_trans_fc")(memory * valid)
     tokens = normalize(tokens, "memory_trans_norm")
@@ -99,8 +97,9 @@ def build_reference_head(hidden_size):
     return Sequential([inner, Dense(hidden_size, name=f"{name}_1")])
 
 
-def apply_layer(query, query_pos, boxes, memory, texts, grids, name):
+def apply_layer(query, boxes, embed, memory, texts, grids, name):
     hidden_size = query.shape[-1]
+    query_pos = embed(embed_boxes(boxes, hidden_size // 2))
     attended = apply_self_attention(query, query_pos, 8, f"{name}_self_attn")
     query = normalize(query + attended, f"{name}_norms_0")
     args = texts, None, 8, hidden_size // 8, 0.0, f"{name}_cross_attn_text"
