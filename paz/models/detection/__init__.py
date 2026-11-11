@@ -13,6 +13,7 @@ from .rf_detr import RFDETRSmall
 from .rf_detr import RFDETRMedium
 from .rf_detr import RFDETRBase
 from .rf_detr import RFDETRLarge
+from .pf_rpn import PFRPN
 from .haar_cascade import HaarCascadeDetector
 from .haar_cascade import HaarCascadeEyeDetector
 from .haar_cascade import HaarCascadeFrontalFaceDetector
