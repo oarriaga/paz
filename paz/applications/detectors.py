@@ -294,6 +294,48 @@ def select_detections(logits, boxes, num_select):
     return jp.concatenate([boxes, scores[:, None], labels[:, None]], axis=1)
 
 
+def DetectPFRPN(IOU_thresh=0.5, top_k=100, draw=None):
+    """Proposes object boxes without class names or example images."""
+    model = paz.models.PFRPN()
+    model.load_weights(paz.models.detection.pf_rpn.download_weights(model))
+    forward = jax.jit(lambda x: model(x))
+    draw = draw_proposals if draw is None else draw
+    args = paz.image.get_input_size(model), IOU_thresh, top_k, draw
+    return PFRPN(forward, *args)
+
+
+def PFRPN(forward, input_size, IOU_thresh, top_k, draw):
+    select = jax.jit(paz.lock(select_proposals, IOU_thresh, top_k))
+    mean = jp.array([123.675, 116.28, 103.53])
+    stdv = jp.array([58.395, 57.12, 57.375])
+
+    def preprocess(image):
+        """Squeezes the image into the model's fixed input."""
+        image = paz.image.resize_opencv(paz.cast(image, "float32"), input_size)
+        return jp.expand_dims(paz.image.standardize(image, mean, stdv), axis=0)
+
+    def call(image):
+        image_size = paz.image.get_size(image)
+        proposals = select(*forward(preprocess(image)))
+        proposals = paz.detection.denormalize(proposals, *image_size)
+        proposals = paz.detection.clip(proposals, *image_size)
+        proposals = paz.detection.remove_invalid(proposals)
+        return proposals[:, :4].astype("int32"), proposals[:, 4]
+
+    return (lambda x: (y := call(x), draw(x, *y))) if callable(draw) else call
+
+
+def select_proposals(scores, boxes, IOU_thresh, top_k):
+    """Keeps the best non-overlapping boxes, in corners, with their score."""
+    boxes = paz.boxes.to_corner_form(boxes[0])
+    proposals = jp.concatenate([boxes, scores[0][:, None]], axis=1)
+    return paz.detection.apply_NMS(proposals, IOU_thresh, top_k)
+
+
+def draw_proposals(image, boxes, scores):
+    return paz.draw.boxes(image, boxes, paz.draw.lincolor(len(boxes)))
+
+
 def DetectMiniXceptionFER(box_scale=1.2, draw=None):
     # TODO add buffer window prediction
     classify = paz.applications.ClassifyMiniXceptionFER()
