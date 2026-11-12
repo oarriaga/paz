@@ -210,12 +210,29 @@ print(len(traces))
 """
 
 
+SCALE_SCRIPT = """import sys
+import jax.numpy as jp
+import paz
+
+
+def scale(x):
+    return {factor} * x
+
+
+print(paz.cache(scale, sys.argv[1])(jp.ones(2)))
+"""
+
+
 def run_script(script, cache_dir):
+    return int(read_script_output(script, cache_dir).split()[-1])
+
+
+def read_script_output(script, cache_dir):
     environment = {**os.environ, "JAX_PLATFORMS": "cpu"}
     command = [sys.executable, str(script), str(cache_dir)]
     run = subprocess.run(command, env=environment, capture_output=True)
     assert run.returncode == 0, run.stderr.decode()
-    return int(run.stdout.decode().split()[-1])
+    return run.stdout.decode().strip()
 
 
 def test_cache_source_edit_invalidates(tmp_path):
@@ -228,6 +245,16 @@ def test_cache_source_edit_invalidates(tmp_path):
     counts.append(run_script(script, cache_dir))
     assert counts == [1, 0, 1]
     assert len(list_programs(cache_dir)) == 2
+
+
+def test_cache_separates_scripts_in_one_directory(tmp_path):
+    cache_dir = tmp_path / "programs"
+    double = tmp_path / "double.py"
+    triple = tmp_path / "triple.py"
+    double.write_text(SCALE_SCRIPT.format(factor=2))
+    triple.write_text(SCALE_SCRIPT.format(factor=3))
+    assert read_script_output(double, cache_dir) == "[2. 2.]"
+    assert read_script_output(triple, cache_dir) == "[3. 3.]"
 
 
 def test_build_name_depends_on_x64():
@@ -306,13 +333,13 @@ def write_programs(directory, sizes):
 
 def test_evict_removes_oldest(tmp_path):
     oldest, middle, newest = write_programs(tmp_path, [10, 20, 30])
-    caching.evict(newest, 50)
+    caching.evict(newest, 30, 50)
     assert list_programs(tmp_path) == [middle, newest]
 
 
 def test_evict_keeps_newest_over_budget(tmp_path):
     newest = write_programs(tmp_path, [10, 20, 30])[-1]
-    caching.evict(newest, 5)
+    caching.evict(newest, 30, 5)
     assert list_programs(tmp_path) == [newest]
 
 

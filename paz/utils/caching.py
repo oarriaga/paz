@@ -133,7 +133,9 @@ def build_flat_function(function, signature, tree, statics):
 
 def build_name(function, memo, key):
     tree, types, encoded = memo
-    identity = [function.__module__, str(function.__code__.co_firstlineno)]
+    code = function.__code__
+    # scripts in one directory are all __main__; the file name separates them
+    identity = [Path(code.co_filename).name, str(code.co_firstlineno)]
     parts = [hash_code(function.__module__), *identity, key, str(tree)]
     parts.extend(str(leaf_type) for leaf_type in types)
     parts.extend([repr(encoded), jax.export.default_export_platform()])
@@ -218,13 +220,13 @@ def write(path, content):
         os.replace(temporary, path)
     finally:
         Path(temporary).unlink(missing_ok=True)
-    evict(path, 2 * 1024**3)
+    evict(path, len(content), 2 * 1024**3)
 
 
-def evict(kept_path, max_bytes):
+def evict(kept_path, kept_size, max_bytes):
     stats = stat_programs(kept_path.parent, kept_path)
     stats.sort(key=lambda item: item[1].st_mtime, reverse=True)
-    total = kept_path.stat().st_size
+    total = kept_size
     for path, stat in stats:
         total = total + stat.st_size
         if total > max_bytes:
