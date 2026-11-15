@@ -80,6 +80,15 @@ def test_cache_traces_once_and_writes_one_file(tmp_path):
     assert len(list_programs(tmp_path)) == 1
 
 
+def test_cache_repeated_call_skips_disk(tmp_path):
+    cached = paz.cache(scale_pair, tmp_path)
+    cached(build_pair(3), 2.0)
+    paz.clear_cache(tmp_path)
+    result = cached(build_pair(3), 3.0)
+    assert len(list_programs(tmp_path)) == 0
+    assert jp.allclose(result.first, jp.full(3, 3.0))
+
+
 def test_cache_loads_in_new_process(tmp_path):
     paz.cache(scale_pair, tmp_path)(build_pair(3), 2.0)
     restart()
@@ -259,11 +268,11 @@ def test_cache_separates_scripts_in_one_directory(tmp_path):
 
 def test_build_name_depends_on_x64():
     leaves, tree = jax.tree.flatten({"x": jp.ones(2)})
-    memo = (tree, tuple(jax.typeof(leaf) for leaf in leaves), ())
-    name = caching.build_name(scale_pair, memo, "")
+    program_key = (tree, tuple(jax.typeof(leaf) for leaf in leaves), ())
+    name = caching.build_name(scale_pair, program_key, "")
     try:
         jax.config.update("jax_enable_x64", True)
-        name_x64 = caching.build_name(scale_pair, memo, "")
+        name_x64 = caching.build_name(scale_pair, program_key, "")
     finally:
         jax.config.update("jax_enable_x64", False)
     assert name != name_x64

@@ -47,7 +47,6 @@ def cache(function, cache_dir=CACHE_DIR, static_argnums=(), static_argnames=(), 
     signature = inspect.signature(plain)
     static_args = (signature, static_argnums, static_argnames)
     static_names = select_static_names(*static_args)
-    programs = {}
 
     @functools.wraps(plain)
     def call(*args, **kwargs):
@@ -56,16 +55,15 @@ def cache(function, cache_dir=CACHE_DIR, static_argnums=(), static_argnames=(), 
         leaves, tree = jax.tree.flatten(dynamics)
         types = tuple(jax.typeof(leaf) for leaf in leaves)
         program_key = (tree, types, encode_statics(statics))
-        if program_key not in programs:
-            flat_args = (function, signature, tree, statics)
-            flat_function = build_flat_function(*flat_args)
-            name = build_name(plain, program_key, key)
-            path = Path(cache_dir).expanduser() / name
-            programs[program_key] = load(path, flat_function, leaves)
-        program, output_tree = programs[program_key]
-        return jax.tree.unflatten(output_tree, program(*leaves))
+        flat_args = (function, signature, tree, statics)
+        flat_function = build_flat_function(*flat_args)
+        name = build_name(plain, program_key, key)
+        path = Path(cache_dir).expanduser() / name
+        program, output_tree = load(path, flat_function, leaves)
+        return jax.tree.unflatten(output_tree, program.call(*leaves))
 
-    return call
+    # jit runs call only while tracing, so repeated calls skip the disk
+    return jax.jit(call, static_argnames=tuple(static_names))
 
 
 def unwrap_jit(function):
@@ -231,7 +229,7 @@ def unpack(path, content):
     except Exception as error:
         message = f"cannot load {path}; delete it to trace again"
         raise RuntimeError(message) from error
-    return jax.jit(program.call), output_tree
+    return program, output_tree
 
 
 def clear_cache(cache_dir=CACHE_DIR):
