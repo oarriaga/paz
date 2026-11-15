@@ -55,13 +55,14 @@ def cache(function, cache_dir=CACHE_DIR, static_argnums=(), static_argnames=(), 
         statics, dynamics = split_arguments(*split_args)
         leaves, tree = jax.tree.flatten(dynamics)
         types = tuple(jax.typeof(leaf) for leaf in leaves)
-        memo = (tree, types, encode_statics(statics))
-        if memo not in programs:
+        program_key = (tree, types, encode_statics(statics))
+        if program_key not in programs:
             flat_args = (function, signature, tree, statics)
             flat_function = build_flat_function(*flat_args)
-            path = Path(cache_dir).expanduser() / build_name(plain, memo, key)
-            programs[memo] = load(path, flat_function, leaves)
-        program, output_tree = programs[memo]
+            name = build_name(plain, program_key, key)
+            path = Path(cache_dir).expanduser() / name
+            programs[program_key] = load(path, flat_function, leaves)
+        program, output_tree = programs[program_key]
         return jax.tree.unflatten(output_tree, program(*leaves))
 
     return call
@@ -132,8 +133,8 @@ def build_flat_function(function, signature, tree, statics):
     return flat_function
 
 
-def build_name(function, memo, key):
-    tree, types, encoded = memo
+def build_name(function, program_key, key):
+    tree, types, encoded = program_key
     code = function.__code__
     # scripts in one directory are all __main__; the file name separates them
     identity = [Path(code.co_filename).name, str(code.co_firstlineno)]
