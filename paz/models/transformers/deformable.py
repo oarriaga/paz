@@ -4,6 +4,7 @@ Each query predicts a few sampling offsets around its reference box, plus the
 weights to mix the sampled features with, so attention costs ``num_points``
 lookups per head and level instead of one score against every key.
 """
+import numpy as np
 from keras import ops
 from keras.layers import Dense
 
@@ -16,12 +17,28 @@ def attend(query, value, boxes, grids, num_heads, num_points, name):
     ``value`` holds every level flattened and concatenated along the token
     axis, in the order given by ``grids``, a tuple of ``(height, width)``.
     """
+    offsets = project_offsets(query, num_heads, len(grids), num_points, name)
+    positions = compute_positions(boxes, offsets, num_points)
+    return attend_positions(query, value, positions, grids, num_heads, name)
+
+
+def attend_points(query, value, points, grids, num_heads, num_points, name):
+    """Attends to ``value`` around normalized ``(x, y)`` ``points``.
+
+    Offsets are measured in cells of the level they sample, as in the
+    Deformable DETR encoder, where a point has no box to scale them by.
+    """
+    offsets = project_offsets(query, num_heads, len(grids), num_points, name)
+    sizes = np.array(grids, dtype="float32")[:, None, ::-1]
+    positions = offsets / sizes + points[:, :, None, None, None, :]
+    return attend_positions(query, value, positions, grids, num_heads, name)
+
+
+def attend_positions(query, value, positions, grids, num_heads, name):
     hidden_size = query.shape[-1]
-    args = num_heads, len(grids), num_points
-    offsets = project_offsets(query, *args, name)
+    args = num_heads, len(grids), positions.shape[-2]
     weights = project_weights(query, *args, name)
     values = project_values(value, hidden_size, num_heads, name)
-    positions = compute_positions(boxes, offsets, num_points)
     sampled = sample_levels(values, positions, grids)
     context = mix(sampled, weights, num_heads)
     return Dense(hidden_size, name=f"{name}_output")(context)

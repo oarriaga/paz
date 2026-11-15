@@ -8,6 +8,7 @@ from paz.applications.detectors import DetectRFDETRSmall
 from paz.applications.detectors import DetectRFDETRMedium
 from paz.applications.detectors import DetectRFDETRBase
 from paz.applications.detectors import DetectRFDETRLarge
+from paz.applications.detectors import DetectPFRPN
 from paz.applications.detectors import EFFICIENTDETD0COCO
 from paz.applications.detectors import EFFICIENTDETD1COCO
 from paz.applications.detectors import EFFICIENTDETD2COCO

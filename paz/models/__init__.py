@@ -13,6 +13,7 @@ from .detection import RFDETRSmall
 from .detection import RFDETRMedium
 from .detection import RFDETRBase
 from .detection import RFDETRLarge
+from .detection import PFRPN
 from .detection import HaarCascadeEyeDetector
 from .detection import HaarCascadeFrontalFaceDetector
 from .classification.xception import MiniXception
