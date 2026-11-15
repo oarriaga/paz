@@ -60,8 +60,8 @@ from paz.models.foundation import depth_anything3
 from paz import applications
 from paz import utils
 from paz.utils import pytree
-from paz.utils import assert_snapshot, cache, jit_and_cache, clear_cache
-from paz.utils import CACHE_PATH
+from paz.utils import assert_snapshot
+from paz.utils.caching import cache, clear_cache
 from paz.abstract import tree
 from paz import callbacks
 from paz import layers
