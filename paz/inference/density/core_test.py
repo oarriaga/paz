@@ -1,13 +1,13 @@
 import jax.numpy as jp
 
-from paz.backend import distributions
+import paz
 from paz.inference.density import core
 from paz.inference.latent_space import build_latent_space
 from paz.inference.prior import Prior
 
 
 def _build_latent_space():
-    prior = Prior(distributions.Normal(0.0, 1.0), name="x")
+    prior = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
     return build_latent_space([prior])
 
 

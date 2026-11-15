@@ -3,8 +3,6 @@ from collections import namedtuple
 import jax
 import jax.numpy as jp
 
-from paz.backend import distributions
-from paz.backend import bijectors
 import paz
 import paz.utils.plot as plot
 
@@ -17,16 +15,16 @@ TrueParameters = namedtuple("TrueParameters", ["mean", "bias", "stdv"])
 def build_model(inputs, low, high):
     def likelihood(inputs):
         def apply(mean, bias, stdv):
-            return distributions.Normal(mean * inputs + bias, stdv)
+            return paz.distributions.Normal(mean * inputs + bias, stdv)
 
         return apply
 
-    mean = paz.Prior(distributions.Normal(0.0, 1.0), name="mean")
-    bias = paz.Prior(distributions.Normal(0.0, 1.0), name="bias")
-    affine = [bijectors.Shift(low), bijectors.Scale(high - low)]
-    bijector = bijectors.Chain(affine + [bijectors.Sigmoid()])
+    mean = paz.Prior(paz.distributions.Normal(0.0, 1.0), name="mean")
+    bias = paz.Prior(paz.distributions.Normal(0.0, 1.0), name="bias")
+    affine = [paz.bijectors.Shift(low), paz.bijectors.Scale(high - low)]
+    bijector = paz.bijectors.Chain(affine + [paz.bijectors.Sigmoid()])
     stdv = paz.Prior(
-        distributions.Uniform(low, high), name="stdv", bijector=bijector
+        paz.distributions.Uniform(low, high), name="stdv", bijector=bijector
     )
     y_pred = paz.Observable(likelihood(inputs), name="y_pred")(
         mean, bias, stdv

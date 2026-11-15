@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jp
 
-from paz.backend import distributions
+import paz
 from paz.inference.gmm.model import GMM
 
 
@@ -9,9 +9,9 @@ def _sample_1d_mixture(key, num_samples):
     weights = jp.array([0.6, 0.4])
     means = jp.array([-2.0, 2.0])
     stdvs = jp.array([0.5, 0.3])
-    distribution = distributions.MixtureSameFamily(
-        distributions.Categorical(probs=weights),
-        distributions.Normal(loc=means, scale=stdvs),
+    distribution = paz.distributions.MixtureSameFamily(
+        paz.distributions.Categorical(probs=weights),
+        paz.distributions.Normal(loc=means, scale=stdvs),
     )
     samples = distribution.sample(num_samples, seed=key)[:, None]
     return samples, means
@@ -31,7 +31,7 @@ def test_gmm_fit_returns_distribution():
     sample_key, fit_key = jax.random.split(key)
     samples, _ = _sample_1d_mixture(sample_key, 200)
     fitted = model.fit(fit_key, samples, method="em", num_iters=10)
-    assert isinstance(fitted, distributions.MixtureSameFamily)
+    assert isinstance(fitted, paz.distributions.MixtureSameFamily)
 
 
 def test_gmm_pgm_fit_recovers_means():

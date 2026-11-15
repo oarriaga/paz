@@ -1,8 +1,7 @@
 import jax
 import jax.numpy as jp
 
-from paz.backend import distributions
-from paz.backend import bijectors
+import paz
 from paz.inference.latent_space import build_latent_space
 from paz.inference.prior import Prior
 from paz.inference.serialize.spec import (
@@ -71,7 +70,7 @@ def test_encode_decode_kwargs():
 
 
 def test_samples_to_dict_roundtrip():
-    prior = Prior(distributions.Normal(0.0, 1.0), name="x")
+    prior = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
     latent_space = build_latent_space([prior])
     sample = latent_space.Sample(x=jp.array([0.2]))
     samples, kind = _samples_to_dict(sample)
@@ -86,7 +85,7 @@ def test_samples_to_dict_dict_kind():
 
 
 def test_sample_spec_and_dummy_sample():
-    prior = Prior(distributions.Normal(0.0, 1.0), name="x")
+    prior = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
     latent_space = build_latent_space([prior])
     sample = latent_space.Sample(x=jp.array([0.2, 0.3]))
     spec = _sample_spec(sample)
@@ -102,27 +101,28 @@ def test_clean_config_filters_keys():
 
 
 def test_latent_space_spec_roundtrip():
-    normal = distributions.Normal(0.0, 1.0)
-    prior = Prior(normal, name="x", bijector=bijectors.Exp())
+    normal = paz.distributions.Normal(0.0, 1.0)
+    prior = Prior(normal, name="x", bijector=paz.bijectors.Exp())
     latent_space = build_latent_space([prior])
     arrays = {}
     spec = _latent_space_spec(latent_space, arrays, "latent")
     rebuilt = _build_latent_space(spec, arrays)
     assert rebuilt.names == latent_space.names
-    assert isinstance(rebuilt.bijectors["x"], bijectors.Exp)
+    assert isinstance(rebuilt.bijectors["x"], paz.bijectors.Exp)
 
 
 def test_bijector_roundtrip():
+    affine = [paz.bijectors.Shift(1.0), paz.bijectors.Scale(2.0)]
     cases = [
-        bijectors.Identity(),
-        bijectors.Shift(1.0),
-        bijectors.Scale(2.0),
-        bijectors.Sigmoid(low=-1.0, high=1.0),
-        bijectors.Softplus(hinge_softness=0.3),
-        bijectors.Exp(),
-        bijectors.SoftmaxCentered(),
-        bijectors.Invert(bijectors.Scale(3.0)),
-        bijectors.Chain([bijectors.Shift(1.0), bijectors.Scale(2.0)]),
+        paz.bijectors.Identity(),
+        paz.bijectors.Shift(1.0),
+        paz.bijectors.Scale(2.0),
+        paz.bijectors.Sigmoid(low=-1.0, high=1.0),
+        paz.bijectors.Softplus(hinge_softness=0.3),
+        paz.bijectors.Exp(),
+        paz.bijectors.SoftmaxCentered(),
+        paz.bijectors.Invert(paz.bijectors.Scale(3.0)),
+        paz.bijectors.Chain(affine),
     ]
     for bijector in cases:
         arrays = {}
@@ -133,16 +133,16 @@ def test_bijector_roundtrip():
 
 def test_get_probs_from_logits():
     logits = jp.array([0.1, 0.2, 0.3])
-    probs = _get_probs(distributions.Categorical(logits=logits))
+    probs = _get_probs(paz.distributions.Categorical(logits=logits))
     assert jp.allclose(probs, jax.nn.softmax(logits))
 
 
 def test_serialize_deserialize_density_distribution():
     arrays = {}
-    dist = distributions.MultivariateNormalDiag(jp.zeros(2), jp.ones(2))
+    dist = paz.distributions.MultivariateNormalDiag(jp.zeros(2), jp.ones(2))
     spec = _serialize_distribution(_DummyDensity(dist), arrays)
     restored = _deserialize_distribution(spec, arrays)
-    assert isinstance(restored, distributions.MultivariateNormalDiag)
+    assert isinstance(restored, paz.distributions.MultivariateNormalDiag)
 
 
 def test_serialize_deserialize_gmm_distribution():
@@ -150,53 +150,55 @@ def test_serialize_deserialize_gmm_distribution():
     weights = jp.array([0.3, 0.7])
     means = jp.array([[0.0, 0.0], [1.0, 1.0]])
     scales = jp.array([[1.0, 1.0], [0.5, 0.5]])
-    components = distributions.MultivariateNormalDiag(means, scales)
-    mixture = distributions.Categorical(probs=weights)
-    dist = distributions.MixtureSameFamily(mixture, components)
+    components = paz.distributions.MultivariateNormalDiag(means, scales)
+    mixture = paz.distributions.Categorical(probs=weights)
+    dist = paz.distributions.MixtureSameFamily(mixture, components)
     spec = _serialize_distribution(_DummyDensity(dist), arrays)
     restored = _deserialize_distribution(spec, arrays)
-    assert isinstance(restored, distributions.MixtureSameFamily)
+    assert isinstance(restored, paz.distributions.MixtureSameFamily)
 
 
 def test_serialize_deserialize_distribution_obj_roundtrip():
-    normal = distributions.Normal(0.0, 1.0)
-    vector_normal = distributions.Normal(jp.zeros(2), 1.0)
-    independent = distributions.Independent(vector_normal, 1)
+    normal = paz.distributions.Normal(0.0, 1.0)
+    vector_normal = paz.distributions.Normal(jp.zeros(2), 1.0)
+    independent = paz.distributions.Independent(vector_normal, 1)
+    probs, logits = jp.array([0.2, 0.8]), jp.array([0.1, 0.2])
+    categorical_probs = paz.distributions.Categorical(probs=probs)
+    categorical_logits = paz.distributions.Categorical(logits=logits)
+    exp = paz.bijectors.Exp()
+    log_normal = paz.distributions.TransformedDistribution(normal, exp)
     cases = [
         (normal, jp.array(0.2)),
-        (distributions.Deterministic(0.25), jp.array(0.25)),
-        (distributions.Laplace(0.0, 0.5), jp.array(0.2)),
-        (distributions.StudentT(5.0, 0.0, 0.7), jp.array(0.1)),
-        (distributions.LogNormal(0.0, 0.4), jp.array(1.2)),
-        (distributions.Uniform(-1.0, 1.0), jp.array(0.2)),
-        (distributions.Beta(2.0, 3.0), jp.array(0.4)),
-        (distributions.Poisson(rate=3.0), jp.array(2.0)),
-        (distributions.Poisson(log_rate=jp.log(3.0)), jp.array(2.0)),
-        (distributions.Bernoulli(probs=0.7), jp.array(1.0)),
-        (distributions.Bernoulli(logits=jp.array(0.2)), jp.array(0.0)),
-        (distributions.Categorical(probs=jp.array([0.2, 0.8])), jp.array(1.0)),
-        (distributions.Categorical(logits=jp.array([0.1, 0.2])), jp.array(0.0)),
+        (paz.distributions.Deterministic(0.25), jp.array(0.25)),
+        (paz.distributions.Laplace(0.0, 0.5), jp.array(0.2)),
+        (paz.distributions.StudentT(5.0, 0.0, 0.7), jp.array(0.1)),
+        (paz.distributions.LogNormal(0.0, 0.4), jp.array(1.2)),
+        (paz.distributions.Uniform(-1.0, 1.0), jp.array(0.2)),
+        (paz.distributions.Beta(2.0, 3.0), jp.array(0.4)),
+        (paz.distributions.Poisson(rate=3.0), jp.array(2.0)),
+        (paz.distributions.Poisson(log_rate=jp.log(3.0)), jp.array(2.0)),
+        (paz.distributions.Bernoulli(probs=0.7), jp.array(1.0)),
+        (paz.distributions.Bernoulli(logits=jp.array(0.2)), jp.array(0.0)),
+        (categorical_probs, jp.array(1.0)),
+        (categorical_logits, jp.array(0.0)),
         (
-            distributions.RelaxedOneHotCategorical(
+            paz.distributions.RelaxedOneHotCategorical(
                 0.5, probs=jp.array([0.2, 0.3, 0.5])
             ),
             jp.array([0.8, 0.1, 0.1]),
         ),
         (
-            distributions.RelaxedOneHotCategorical(
+            paz.distributions.RelaxedOneHotCategorical(
                 0.5, logits=jp.array([0.1, 0.2, 0.3])
             ),
             jp.array([0.1, 0.2, 0.7]),
         ),
-        (distributions.VonMises(0.0, 2.0), jp.array(0.1)),
-        (distributions.TruncatedNormal(0.0, 1.0, -1.0, 1.0), jp.array(0.2)),
+        (paz.distributions.VonMises(0.0, 2.0), jp.array(0.1)),
+        (paz.distributions.TruncatedNormal(0.0, 1.0, -1.0, 1.0), jp.array(0.2)),
+        (log_normal, jp.array(1.1)),
         (
-            distributions.TransformedDistribution(normal, bijectors.Exp()),
-            jp.array(1.1),
-        ),
-        (
-            distributions.QuantizedDistribution(
-                distributions.Normal(0.0, 1.0), low=-2.0, high=2.0
+            paz.distributions.QuantizedDistribution(
+                paz.distributions.Normal(0.0, 1.0), low=-2.0, high=2.0
             ),
             jp.array(0.0),
         ),

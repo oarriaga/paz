@@ -2,7 +2,6 @@ import jax
 import jax.numpy as jp
 import pytest
 
-from paz.backend import distributions
 import paz
 from paz.inference.observable import Observable
 from paz.inference.pgm import PGM
@@ -10,10 +9,10 @@ from paz.inference.prior import Prior
 
 
 def build_simple_model():
-    x = Prior(distributions.Normal(0.0, 1.0), name="x")
+    x = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
 
     def likelihood(x_value):
-        return distributions.Normal(x_value, 1.0)
+        return paz.distributions.Normal(x_value, 1.0)
 
     y = Observable(likelihood, name="y")(x)
     data = {"y": jp.array(0.25)}

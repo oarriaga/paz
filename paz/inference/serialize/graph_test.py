@@ -1,6 +1,6 @@
 import jax.numpy as jp
 
-from paz.backend import distributions
+import paz
 from paz.inference.latent import Latent
 from paz.inference.observable import Observable
 from paz.inference.prior import Prior
@@ -18,7 +18,7 @@ from paz.inference.serialize.serializable import serializable
 @serializable("graph_likelihood")
 def graph_likelihood(scale):
     def apply(x):
-        return distributions.Normal(x, scale)
+        return paz.distributions.Normal(x, scale)
     return apply
 
 
@@ -28,12 +28,12 @@ def test_serialize_deserialize_distribution_fn():
     spec = _serialize_distribution_fn(fn, arrays, "node")
     restored = _deserialize_distribution_fn(spec, arrays)
     dist = restored(jp.array(0.1))
-    assert isinstance(dist, distributions.Normal)
+    assert isinstance(dist, paz.distributions.Normal)
     assert jp.allclose(dist.scale, 0.3)
 
 
 def test_serialize_build_prior_node():
-    prior = Prior(distributions.Normal(0.0, 1.0), name="x")
+    prior = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
     arrays = {}
     spec = _serialize_node(prior, arrays)
     rebuilt = _build_node(spec, {}, arrays)
@@ -42,7 +42,7 @@ def test_serialize_build_prior_node():
 
 
 def test_serialize_build_latent_node():
-    prior = Prior(distributions.Normal(0.0, 1.0), name="x")
+    prior = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
     latent = Latent(graph_likelihood(0.2), name="z")(prior)
     arrays = {}
     spec = _serialize_node(latent, arrays)
@@ -53,7 +53,7 @@ def test_serialize_build_latent_node():
 
 
 def test_serialize_build_observable_node():
-    prior = Prior(distributions.Normal(0.0, 1.0), name="x")
+    prior = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
     obs = Observable(graph_likelihood(0.2), name="y")(prior)
     arrays = {}
     spec = _serialize_node(obs, arrays)
@@ -64,7 +64,7 @@ def test_serialize_build_observable_node():
 
 
 def test_serialize_build_graph():
-    prior = Prior(distributions.Normal(0.0, 1.0), name="x")
+    prior = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
     obs = Observable(graph_likelihood(0.2), name="y")(prior)
     arrays = {}
     spec = _serialize_graph([obs], arrays)

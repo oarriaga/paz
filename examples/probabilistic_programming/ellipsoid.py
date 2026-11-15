@@ -4,8 +4,6 @@ import jax.numpy as jp
 import numpy as np
 import trimesh
 
-from paz.backend import distributions
-from paz.backend import bijectors
 import paz
 from paz.inference.latent_space import to_forward_samples, to_inverse_samples
 from optimizers import optimize
@@ -47,14 +45,15 @@ def build_mean_priors(statistics):
     scales = [0.10 * s for s in stdvs]  # try 0.25*s if too tight
     priors = []
     for mean, scale, name in zip(means, scales, names):
-        priors.append(paz.Prior(distributions.Laplace(mean, scale), name=name))
+        laplace = paz.distributions.Laplace(mean, scale)
+        priors.append(paz.Prior(laplace, name=name))
     return priors
 
 
 # def build_bounded_axis_prior(stdv, name):
 #     upper = 3.0 * stdv
-#     bijector = bijectors.Chain([bijectors.Shift(0.0), bijectors.Scale(upper), bijectors.Sigmoid()])
-#     distribution = distributions.TruncatedNormal(2.0 * stdv, 0.1, 0.0, upper)
+#     bijector = paz.bijectors.Chain([paz.bijectors.Shift(0.0), paz.bijectors.Scale(upper), paz.bijectors.Sigmoid()])
+#     distribution = paz.distributions.TruncatedNormal(2.0 * stdv, 0.1, 0.0, upper)
 #     return paz.Prior(distribution, bijector=bijector, name=name)
 
 
@@ -99,15 +98,16 @@ def build_bounded_axis_prior(axis_standard_deviation, axis_name):
     axis_low = epsilon_relative_to_mean * axis_mean
     axis_high = axis_upper_factor * axis_mean
 
-    truncated_normal_distribution = distributions.TruncatedNormal( loc=axis_mean, scale=axis_scale, low=axis_low, high=axis_high)  # fmt: skip
+    truncated_normal_distribution = paz.distributions.TruncatedNormal( loc=axis_mean, scale=axis_scale, low=axis_low, high=axis_high)  # fmt: skip
     return paz.Prior(truncated_normal_distribution, name=axis_name)
 
 
 def build_back_axis_prior(stdv, name):
     upper = 6.0 * stdv
-    affine = [bijectors.Shift(0.0), bijectors.Scale(upper)]
-    bijector = bijectors.Chain(affine + [bijectors.Sigmoid()])
-    distribution = distributions.TruncatedNormal(2.0 * stdv, 1.0, 0.0, upper)
+    affine = [paz.bijectors.Shift(0.0), paz.bijectors.Scale(upper)]
+    bijector = paz.bijectors.Chain(affine + [paz.bijectors.Sigmoid()])
+    args = (2.0 * stdv, 1.0, 0.0, upper)
+    distribution = paz.distributions.TruncatedNormal(*args)
     return paz.Prior(distribution, bijector=bijector, name=name)
 
 
@@ -126,8 +126,8 @@ def build_surface_likelihood(observations):
     def distribution_fn(x_mean, y_mean, z_mean, x_axis, y_axis, z_axis):
         args = (x, y, z, x_mean, y_mean, z_mean, x_axis, y_axis, z_axis)
         residuals = compute_surface_equation(*args)
-        # return distributions.Laplace(residuals, scale=0.01)
-        return distributions.Normal(residuals, scale=0.01)
+        # return paz.distributions.Laplace(residuals, scale=0.01)
+        return paz.distributions.Normal(residuals, scale=0.01)
 
     return distribution_fn
 

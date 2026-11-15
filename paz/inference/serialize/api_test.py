@@ -3,14 +3,13 @@ import os
 
 import jax.numpy as jp
 
-from paz.backend import distributions
 import paz
 from paz.inference.prior import Prior
 from paz.inference.serialize.api import _infer_format
 
 
 def test_save_load_prior_roundtrip(tmp_path):
-    prior = Prior(distributions.Normal(0.0, 1.0), name="x")
+    prior = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
     path = tmp_path / "prior"
     paz.inference.save(prior, path)
     loaded = paz.inference.load(path)
@@ -22,7 +21,7 @@ def test_save_load_prior_roundtrip(tmp_path):
 
 def test_load_ignores_unknown_manifest_keys(tmp_path):
     # Files written by earlier versions carry manifest keys no longer written.
-    prior = Prior(distributions.Normal(0.0, 1.0), name="x")
+    prior = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
     path = tmp_path / "prior"
     paz.inference.save(prior, path)
     manifest_path = path / "manifest.json"

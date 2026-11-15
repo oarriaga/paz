@@ -5,23 +5,22 @@ Fit a bijector so a base distribution matches a target distribution.
 import jax
 import jax.numpy as jp
 
-from paz.backend import distributions
-from paz.backend import bijectors
 import paz
 import paz.utils.plot as plot
 
 
 def build_transformed(source, bijector):
-    return distributions.TransformedDistribution(
+    return paz.distributions.TransformedDistribution(
         distribution=source,
         bijector=bijector,
     )
 
 
 key = jax.random.PRNGKey(7)
-source = distributions.Normal(0.0, 1.0)
-target = distributions.LogNormal(0.4, 0.6)
-initial_bijector = bijectors.Chain([bijectors.Shift(0.0), bijectors.Scale(1.0)])
+source = paz.distributions.Normal(0.0, 1.0)
+target = paz.distributions.LogNormal(0.4, 0.6)
+affine = [paz.bijectors.Shift(0.0), paz.bijectors.Scale(1.0)]
+initial_bijector = paz.bijectors.Chain(affine)
 prior = paz.Prior(source, bijector=initial_bijector, name="z")
 
 fitted_prior, losses = prior.fit_bijector(

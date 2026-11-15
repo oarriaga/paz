@@ -2,31 +2,31 @@ import jax
 import jax.numpy as jp
 import numpy as np
 
-from paz.backend import distributions
+import paz
 import paz.utils.plot as plot
 from paz.inference.gmm.model import GMM
 
 
 def _build_gmm_distribution(weights, means, covariances, covariance):
     if covariance == "diag":
-        components = distributions.MultivariateNormalDiag(
+        components = paz.distributions.MultivariateNormalDiag(
             loc=means, scale_diag=jp.sqrt(covariances)
         )
     else:
-        components = distributions.MultivariateNormalFullCovariance(
+        components = paz.distributions.MultivariateNormalFullCovariance(
             loc=means, covariance_matrix=covariances
         )
-    mixture = distributions.Categorical(probs=weights)
-    return distributions.MixtureSameFamily(mixture, components)
+    mixture = paz.distributions.Categorical(probs=weights)
+    return paz.distributions.MixtureSameFamily(mixture, components)
 
 
 def _sample_1d_mixture(key, num_samples):
     weights = jp.array([0.7, 0.3])
     means = jp.array([-2.0, 2.5])
     stdvs = jp.array([0.5, 0.4])
-    distribution = distributions.MixtureSameFamily(
-        distributions.Categorical(probs=weights),
-        distributions.Normal(loc=means, scale=stdvs),
+    distribution = paz.distributions.MixtureSameFamily(
+        paz.distributions.Categorical(probs=weights),
+        paz.distributions.Normal(loc=means, scale=stdvs),
     )
     return distribution.sample(num_samples, seed=key)[:, None]
 
@@ -40,9 +40,9 @@ def _sample_2d_mixture(key, num_samples):
             [[0.5, -0.1], [-0.1, 0.3]],
         ]
     )
-    distribution = distributions.MixtureSameFamily(
-        distributions.Categorical(probs=weights),
-        distributions.MultivariateNormalFullCovariance(
+    distribution = paz.distributions.MixtureSameFamily(
+        paz.distributions.Categorical(probs=weights),
+        paz.distributions.MultivariateNormalFullCovariance(
             loc=means, covariance_matrix=covariances
         ),
     )
@@ -73,7 +73,7 @@ def _extract_parameters(distribution):
     weights = _get_mixture_probs(distribution.mixture_distribution)
     components = distribution.components_distribution
     means = components.loc
-    if isinstance(components, distributions.MultivariateNormalDiag):
+    if isinstance(components, paz.distributions.MultivariateNormalDiag):
         covariances = components.variance()
     else:
         covariances = components.covariance()

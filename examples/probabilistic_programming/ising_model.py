@@ -1,7 +1,6 @@
 import jax
 import jax.numpy as jp
 
-from paz.backend import distributions
 import paz
 import paz.utils.plot as plot
 
@@ -62,14 +61,15 @@ def IsingConditional(neighbor_sums):
     def apply(coupling):
         # Physics: Logit = 2 * J * sum(neighbors)
         # We model the probability of spin being +1
-        return distributions.Bernoulli(logits=2.0 * coupling * neighbor_sums)
+        logits = 2.0 * coupling * neighbor_sums
+        return paz.distributions.Bernoulli(logits=logits)
 
     return apply
 
 
 # Prior for Coupling Strength J
 # We expect ferromagnetic behavior (positive J), roughly around 0.3-0.6
-J_prior = paz.Prior(distributions.Normal(0.5, 0.5), name="coupling")
+J_prior = paz.Prior(paz.distributions.Normal(0.5, 0.5), name="coupling")
 
 # Likelihood connects J and Neighbor Sums to the actual Spin values
 spins = paz.Observable(IsingConditional(X_flat), name="spins")(J_prior)

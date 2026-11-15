@@ -1,8 +1,7 @@
 import jax.numpy as jp
 import pytest
 
-from paz.backend import distributions
-from paz.backend import bijectors
+import paz
 from paz.inference.latent import Latent
 from paz.inference.pgm import marginalize, recover_discrete_posterior
 from paz.inference.observable import Observable
@@ -14,19 +13,19 @@ from paz.inference.types import SampleType
 def build_scalar_mixture_model(
     mu0_value, mu1_value, sigma_value, p_value, y_value
 ):
-    mu0 = Prior(distributions.Deterministic(mu0_value), name="mu0")
-    mu1 = Prior(distributions.Deterministic(mu1_value), name="mu1")
-    sigma = Prior(distributions.Deterministic(sigma_value), name="sigma")
-    p = Prior(distributions.Deterministic(p_value), name="p")
+    mu0 = Prior(paz.distributions.Deterministic(mu0_value), name="mu0")
+    mu1 = Prior(paz.distributions.Deterministic(mu1_value), name="mu1")
+    sigma = Prior(paz.distributions.Deterministic(sigma_value), name="sigma")
+    p = Prior(paz.distributions.Deterministic(p_value), name="p")
 
     def z_distribution(p):
-        return distributions.Bernoulli(probs=p)
+        return paz.distributions.Bernoulli(probs=p)
 
     z = Latent(z_distribution, name="z")(p)
 
     def y_distribution(z, mu0, mu1, sigma):
         mean = jp.where(z == 1, mu1, mu0)
-        return distributions.Normal(mean, sigma)
+        return paz.distributions.Normal(mean, sigma)
 
     y_obs = Observable(y_distribution, name="y_obs")(
         z, mu0, mu1, sigma
@@ -145,22 +144,22 @@ def test_marginalize_multiple_names_raises():
 
 
 def test_marginalize_nonfinite_discrete_raises():
-    z = Prior(distributions.Poisson(1.0), name="z")
+    z = Prior(paz.distributions.Poisson(1.0), name="z")
     pgm = PGM([z], [z], "poisson")
     with pytest.raises(NotImplementedError):
         marginalize(pgm, ["z"])
 
 
 def test_marginalize_vector_discrete_raises():
-    z = Prior(distributions.Bernoulli(logits=jp.zeros((2,))), name="z")
+    z = Prior(paz.distributions.Bernoulli(logits=jp.zeros((2,))), name="z")
     pgm = PGM([z], [z], "vector_bernoulli")
     with pytest.raises(NotImplementedError):
         marginalize(pgm, ["z"])
 
 
 def test_marginalize_discrete_non_identity_bijector_raises():
-    bernoulli = distributions.Bernoulli(0.5)
-    z = Prior(bernoulli, name="z", bijector=bijectors.Sigmoid())
+    bernoulli = paz.distributions.Bernoulli(0.5)
+    z = Prior(bernoulli, name="z", bijector=paz.bijectors.Sigmoid())
     pgm = PGM([z], [z], "bijected_bernoulli")
     with pytest.raises(NotImplementedError):
         marginalize(pgm, ["z"])

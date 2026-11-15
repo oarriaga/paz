@@ -2,7 +2,6 @@ from functools import partial
 
 import jax.numpy as jp
 import optax
-from paz.backend import distributions
 import paz
 
 from . import plane
@@ -40,25 +39,25 @@ def negative_log_likelihood(x_scale, observations, parameters):
     x, y, z = paz.pointcloud.split(observations)
     x_mean, y_mean, z_mean = parameters[:3]
 
-    x_mean_prior = distributions.Laplace(x.mean(), 0.1).log_prob(x_mean)
-    y_mean_prior = distributions.Laplace(y.mean(), 0.1).log_prob(y_mean)
-    z_mean_prior = distributions.Laplace(z.mean(), 0.1).log_prob(z_mean)
+    x_mean_prior = paz.distributions.Laplace(x.mean(), 0.1).log_prob(x_mean)
+    y_mean_prior = paz.distributions.Laplace(y.mean(), 0.1).log_prob(y_mean)
+    z_mean_prior = paz.distributions.Laplace(z.mean(), 0.1).log_prob(z_mean)
     translation_prior_log_prob = x_mean_prior + y_mean_prior + z_mean_prior
 
     x_axis, y_axis, z_axis = parameters[3:]
     x_stdv, y_stdv, z_stdv = x.std(), y.std(), z.std()
     log_mean, log_scale = to_log_normal(x_scale * x_stdv, 0.1)
-    x_axis_prior = distributions.LogNormal(log_mean, log_scale)
+    x_axis_prior = paz.distributions.LogNormal(log_mean, log_scale)
     y_args = (2.0 * y_stdv, 0.1, 0.0, 3.0 * y_stdv)
     z_args = (2.0 * z_stdv, 0.1, 0.0, 3.0 * z_stdv)
-    y_axis_prior = distributions.TruncatedNormal(*y_args)
-    z_axis_prior = distributions.TruncatedNormal(*z_args)
+    y_axis_prior = paz.distributions.TruncatedNormal(*y_args)
+    z_axis_prior = paz.distributions.TruncatedNormal(*z_args)
     x_log_prob = x_axis_prior.log_prob(x_axis)
     y_log_prob = y_axis_prior.log_prob(y_axis)
     z_log_prob = z_axis_prior.log_prob(z_axis)
     axis_prior_log_prob = x_log_prob + y_log_prob + z_log_prob
     zeros_pred = compute_surface_equation(x, y, z, parameters)
-    likelihood = distributions.Laplace(zeros_pred, scale=1.0)
+    likelihood = paz.distributions.Laplace(zeros_pred, scale=1.0)
     log_likelihood = likelihood.log_prob(jp.zeros_like(zeros_pred)).sum()
     return -(log_likelihood + axis_prior_log_prob + translation_prior_log_prob)
 
