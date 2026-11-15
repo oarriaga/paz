@@ -1,4 +1,3 @@
-from paz.backend import distributions
 import paz
 import jax
 import jax.numpy as jp
@@ -15,7 +14,8 @@ positions = jp.repeat(jp.expand_dims(jp.array([1.0, 1.0]), 0), num_chains, 0)
 
 
 def log_density(position):
-    return distributions.Normal(true_mean, true_stdv).log_prob(position).sum()
+    normal = paz.distributions.Normal(true_mean, true_stdv)
+    return normal.log_prob(position).sum()
 
 
 samples, states = paz.metropolis_hastings.sample(

@@ -1,7 +1,6 @@
 import jax.numpy as jp
 
-from paz.backend import distributions
-from paz.backend import bijectors
+import paz
 from paz.inference.prior import Prior
 from paz.inference.latent_space import (
     build_latent_space,
@@ -11,16 +10,16 @@ from paz.inference.latent_space import (
 
 
 def test_build_latent_space_preserves_names():
-    mu = Prior(distributions.Normal(0.0, 1.0), name="mu")
-    sigma = Prior(distributions.Normal(0.0, 1.0), name="sigma")
+    mu = Prior(paz.distributions.Normal(0.0, 1.0), name="mu")
+    sigma = Prior(paz.distributions.Normal(0.0, 1.0), name="sigma")
     latent_space = build_latent_space([mu, sigma])
     assert latent_space.names == ["mu", "sigma"]
 
 
 def test_latent_space_round_trip():
-    bijector = bijectors.Exp()
-    x = Prior(distributions.Normal(0.0, 1.0), name="x")
-    y = Prior(distributions.Normal(0.0, 1.0), bijector=bijector, name="y")
+    bijector = paz.bijectors.Exp()
+    x = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
+    y = Prior(paz.distributions.Normal(0.0, 1.0), bijector=bijector, name="y")
     latent_space = build_latent_space([x, y])
     inverse = latent_space.Sample(x=jp.array(0.5), y=jp.array(-1.0))
     forward = to_forward_samples(latent_space, inverse)
@@ -30,8 +29,8 @@ def test_latent_space_round_trip():
 
 
 def test_latent_space_accepts_dict_samples():
-    x = Prior(distributions.Normal(0.0, 1.0), name="x")
-    y = Prior(distributions.Normal(0.0, 1.0), name="y")
+    x = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
+    y = Prior(paz.distributions.Normal(0.0, 1.0), name="y")
     latent_space = build_latent_space([x, y])
     forward = to_forward_samples(
         latent_space, {"x": jp.array(0.1), "y": jp.array(0.2)}
@@ -40,8 +39,8 @@ def test_latent_space_accepts_dict_samples():
 
 
 def test_latent_space_ignores_extra_keys():
-    x = Prior(distributions.Normal(0.0, 1.0), name="x")
-    y = Prior(distributions.Normal(0.0, 1.0), name="y")
+    x = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
+    y = Prior(paz.distributions.Normal(0.0, 1.0), name="y")
     latent_space = build_latent_space([x, y])
     forward = to_forward_samples(
         latent_space,

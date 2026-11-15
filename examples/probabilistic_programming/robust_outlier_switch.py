@@ -18,8 +18,6 @@ import jax
 import jax.numpy as jp
 from matplotlib.patches import Rectangle
 
-from paz.backend import distributions
-from paz.backend import bijectors
 import paz
 import paz.utils.plot as plot
 from paz.inference.types import SampleType
@@ -40,20 +38,20 @@ CaseResult = namedtuple(
 
 
 def build_switch_model(x, sigma_in, sigma_out):
-    slope = paz.Prior(distributions.Normal(0.0, 1.0), name="slope")
-    bias = paz.Prior(distributions.Normal(0.0, 1.0), name="bias")
-    beta = distributions.Beta(2.0, 2.0)
-    p = paz.Prior(beta, name="p", bijector=bijectors.Sigmoid())
+    slope = paz.Prior(paz.distributions.Normal(0.0, 1.0), name="slope")
+    bias = paz.Prior(paz.distributions.Normal(0.0, 1.0), name="bias")
+    beta = paz.distributions.Beta(2.0, 2.0)
+    p = paz.Prior(beta, name="p", bijector=paz.bijectors.Sigmoid())
 
     def z_distribution(p):
-        return distributions.Bernoulli(probs=p, dtype=jp.float32)
+        return paz.distributions.Bernoulli(probs=p, dtype=jp.float32)
 
     z = paz.Latent(z_distribution, name="z")(p)
 
     def y_distribution(slope, bias, z):
         mean = slope * x + bias
         sigma = jp.where(z == 1.0, sigma_out, sigma_in)
-        return distributions.Normal(mean, sigma)
+        return paz.distributions.Normal(mean, sigma)
 
     y_obs = paz.Observable(y_distribution, name="y")(slope, bias, z)
     return paz.PGM([slope, bias, p], [y_obs], "robust_outlier_switch")

@@ -1,10 +1,10 @@
 
-from paz.backend import distributions
+import paz
 import paz.utils.plot as plot
 
 
-normal = distributions.Normal(loc=0.0, scale=1.0)
-skewed = distributions.LogNormal(loc=0.0, scale=0.6)
+normal = paz.distributions.Normal(loc=0.0, scale=1.0)
+skewed = paz.distributions.LogNormal(loc=0.0, scale=0.6)
 
 plot.configure(fontsize=12)
 figure, axes = plot.subplots(ncols=2, figsize=(12, 4))

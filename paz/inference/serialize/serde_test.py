@@ -1,7 +1,6 @@
 import jax
 import jax.numpy as jp
 
-from paz.backend import distributions
 import paz
 from paz.inference.density.gaussian import build_gaussian_density
 from paz.inference.latent import Latent
@@ -16,15 +15,15 @@ from paz.inference.serialize.serializable import serializable
 @serializable("serde_likelihood")
 def serde_likelihood(scale):
     def apply(x):
-        return distributions.Normal(x, scale)
+        return paz.distributions.Normal(x, scale)
     return apply
 
 
 def _build_posterior():
-    prior = Prior(distributions.Normal(0.0, 1.0), name="x")
+    prior = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
 
     def likelihood(x_value):
-        return distributions.Normal(x_value, 0.5)
+        return paz.distributions.Normal(x_value, 0.5)
 
     obs = Observable(likelihood, name="y")(prior)
     model = PGM([prior], [obs], "model")
@@ -43,7 +42,7 @@ def _build_posterior():
 
 
 def _build_density():
-    prior = Prior(distributions.Normal(0.0, 1.0), name="x")
+    prior = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
     latent_space = build_latent_space([prior])
     samples = latent_space.Sample(x=jp.linspace(-1.0, 1.0, 5))
     return build_gaussian_density(samples, latent_space)
@@ -70,7 +69,7 @@ def test_serde_for_known_type():
 
 
 def test_find_serde_for_prior():
-    prior = Prior(distributions.Normal(0.0, 1.0), name="x")
+    prior = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
     serde = _find_serde(prior)
     assert serde.type_id == "Prior"
 
@@ -101,7 +100,7 @@ def test_density_serde_roundtrip():
 
 
 def test_prior_serde_roundtrip():
-    prior = Prior(distributions.Normal(0.0, 1.0), name="x")
+    prior = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
     loaded = _roundtrip(prior)
     value = jp.array(0.1)
     log_prob = prior.log_prob(value).log_prob_sum
@@ -113,9 +112,9 @@ def test_prior_serde_roundtrip_mixture():
     weights = jp.array([0.4, 0.6])
     loc = jp.array([-1.0, 1.0])
     scale = jp.array([0.5, 0.2])
-    components = distributions.Normal(loc=loc, scale=scale)
-    mixture = distributions.MixtureSameFamily(
-        distributions.Categorical(probs=weights), components
+    components = paz.distributions.Normal(loc=loc, scale=scale)
+    mixture = paz.distributions.MixtureSameFamily(
+        paz.distributions.Categorical(probs=weights), components
     )
     prior = Prior(mixture, name="x")
     loaded = _roundtrip(prior)
@@ -126,7 +125,7 @@ def test_prior_serde_roundtrip_mixture():
 
 
 def test_latent_serde_roundtrip():
-    prior = Prior(distributions.Normal(0.0, 1.0), name="x")
+    prior = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
     latent = Latent(serde_likelihood(0.5), name="z")(prior)
     loaded = _roundtrip(latent)
     assert loaded.name == "z"
@@ -134,7 +133,7 @@ def test_latent_serde_roundtrip():
 
 
 def test_observable_serde_roundtrip():
-    prior = Prior(distributions.Normal(0.0, 1.0), name="x")
+    prior = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
     obs = Observable(serde_likelihood(0.5), name="y")(prior)
     loaded = _roundtrip(obs)
     assert loaded.name == "y"
@@ -142,7 +141,7 @@ def test_observable_serde_roundtrip():
 
 
 def test_pgm_serde_roundtrip():
-    prior = Prior(distributions.Normal(0.0, 1.0), name="x")
+    prior = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
     obs = Observable(serde_likelihood(0.5), name="y")(prior)
     model = PGM([prior], [obs], "model")
     loaded = _roundtrip(model)

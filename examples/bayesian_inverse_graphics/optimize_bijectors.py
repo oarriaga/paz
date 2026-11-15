@@ -10,8 +10,6 @@ import jax.numpy as jp
 import matplotlib.pyplot as plt
 import numpy as np
 
-from paz.backend import distributions
-from paz.backend import bijectors
 import paz
 import paz.utils.plot as plot
 from paz.backend import directory
@@ -161,7 +159,7 @@ def plot_prior(key, prior_node, output_directory, num_samples=10_000):
     key_0, key_1, key_2 = jax.random.split(key, 3)
     forward_samples = prior_node.sample(key_0, num_samples)
     inverse_samples = prior_node.sample_inverse(key_1, num_samples)
-    standard = distributions.Normal(0.0, 1.0)
+    standard = paz.distributions.Normal(0.0, 1.0)
     normals_samples = standard.sample(num_samples, seed=key_2)
     name = prior_node.name
 
@@ -234,21 +232,23 @@ def fit_gaussian_mixture(seed, samples, unidimensional=True):
 
 
 def build_affine_bijector(x):
-    return bijectors.Chain([bijectors.Shift(x.shift), bijectors.Scale(x.scale)])
+    affine = [paz.bijectors.Shift(x.shift), paz.bijectors.Scale(x.scale)]
+    return paz.bijectors.Chain(affine)
 
 
 def build_shift_prior(mean, scale):
     mean, scale = jp.array(mean), jp.array(scale)
     lower, upper = jp.array([-0.14, -0.14]), jp.array([0.14, 0.14])
-    distribution = distributions.TruncatedNormal(mean, scale, lower, upper)
-    bijector = bijectors.Chain([bijectors.Shift(mean), bijectors.Scale(scale)])
+    distribution = paz.distributions.TruncatedNormal(mean, scale, lower, upper)
+    affine = [paz.bijectors.Shift(mean), paz.bijectors.Scale(scale)]
+    bijector = paz.bijectors.Chain(affine)
     return paz.Prior(distribution, name="shift", bijector=bijector)
 
 
 def build_theta_prior(mean, concentration):
-    distribution = distributions.VonMises(mean, concentration)
-    members = [bijectors.Sigmoid(-jp.pi, jp.pi), bijectors.Scale(jp.pi / 2.0)]
-    bijector = bijectors.Chain(members)
+    distribution = paz.distributions.VonMises(mean, concentration)
+    sigmoid = paz.bijectors.Sigmoid(-jp.pi, jp.pi)
+    bijector = paz.bijectors.Chain([sigmoid, paz.bijectors.Scale(jp.pi / 2.0)])
     return paz.Prior(distribution, name="theta", bijector=bijector)
 
 
@@ -257,18 +257,18 @@ def build_scale_prior(mean, variance):
     variance = jp.log((variance / mean**2) + 1)
     mean = jp.log(mean) - (variance / 2)
     scale = jp.sqrt(variance)
-    distribution = distributions.LogNormal(mean, scale)
-    affine = [bijectors.Shift(mean), bijectors.Scale(scale)]
-    bijector = bijectors.Chain([bijectors.Softplus()] + affine)
+    distribution = paz.distributions.LogNormal(mean, scale)
+    affine = [paz.bijectors.Shift(mean), paz.bijectors.Scale(scale)]
+    bijector = paz.bijectors.Chain([paz.bijectors.Softplus()] + affine)
     return paz.Prior(distribution, name="scale", bijector=bijector)
 
 
 def build_classes_prior(probabilities, temperature):
-    distribution = distributions.RelaxedOneHotCategorical(
+    distribution = paz.distributions.RelaxedOneHotCategorical(
         temperature, probs=probabilities
     )
-    members = [bijectors.SoftmaxCentered(), bijectors.Scale(3.0)]
-    bijector = bijectors.Chain(members)
+    members = [paz.bijectors.SoftmaxCentered(), paz.bijectors.Scale(3.0)]
+    bijector = paz.bijectors.Chain(members)
     return paz.Prior(distribution, name="classes", bijector=bijector)
 
 
@@ -337,7 +337,7 @@ for name in ["ambient", "diffuse", "specular", "shininess", "color"]:
     shift_0 = 0.0 if name != "color" else jp.full(3, 0.0)
     scale_0 = 1.0 if name != "color" else jp.full(3, 1.0)
     x_0 = BijectorParams(shift_0, scale_0)
-    distribution = distributions.Normal(shift_0, scale_0)
+    distribution = paz.distributions.Normal(shift_0, scale_0)
     bijector = build_affine_bijector(x_0)
     prior = paz.Prior(distribution, name=name, bijector=bijector)
     fitted_prior, losses = prior.fit_bijector(

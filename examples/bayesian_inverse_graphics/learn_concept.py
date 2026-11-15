@@ -16,7 +16,6 @@ import jax.numpy as jp
 import numpy as np
 import keras
 
-from paz.backend import distributions
 import paz
 import paz.utils.plot as plot
 import paz.utils.pytree as pytree
@@ -374,7 +373,8 @@ if args.neuro_weight > 0.0 and args.num_branches > 0:
         args.neuro_weight, branch_model, preprocess
     )
 
-noise_model = distributions.TruncatedNormal(0.0, args.image_noise, -1.0, 1.0)
+noise_args = (0.0, args.image_noise, -1.0, 1.0)
+noise_model = paz.distributions.TruncatedNormal(*noise_args)
 distribution_fn = build_image_distribution(
     observation_model, noise_model, neuro_model
 )

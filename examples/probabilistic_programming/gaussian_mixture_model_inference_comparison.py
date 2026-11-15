@@ -45,7 +45,6 @@ import jax
 import jax.numpy as jp
 from jax.scipy.special import logsumexp
 
-from paz.backend import distributions
 import paz
 import paz.utils.plot as plot
 from paz.inference.types import SampleType
@@ -55,13 +54,13 @@ def build_mixture_model(prior_p, mean0, mean1, likelihood_stdv):
     p = paz.Prior(prior_p, name="p")
 
     def z_distribution(p):
-        return distributions.Bernoulli(probs=p, dtype=jp.float32)
+        return paz.distributions.Bernoulli(probs=p, dtype=jp.float32)
 
     z = paz.Latent(z_distribution, name="z")(p)
 
     def y_distribution(z):
         mean = jp.where(z == 1.0, mean1, mean0)
-        return distributions.Normal(mean, likelihood_stdv)
+        return paz.distributions.Normal(mean, likelihood_stdv)
 
     y_obs = paz.Observable(y_distribution, name="y")(z)
     return paz.PGM([p], [y_obs], "gaussian_mixture")
@@ -71,15 +70,13 @@ def compute_log_joint_over_grid(
     prior_p, mean0, mean1, likelihood_stdv, observations, p_grid
 ):
     log_prior = prior_p.log_prob(p_grid)
-    bernoulli = distributions.Bernoulli(probs=p_grid, dtype=jp.float32)
+    bernoulli = paz.distributions.Bernoulli(probs=p_grid, dtype=jp.float32)
     log_prob_z0 = bernoulli.log_prob(jp.array(0.0))
     log_prob_z1 = bernoulli.log_prob(jp.array(1.0))
-    log_likelihood_z0 = distributions.Normal(mean0, likelihood_stdv).log_prob(
-        observations
-    ).sum()
-    log_likelihood_z1 = distributions.Normal(mean1, likelihood_stdv).log_prob(
-        observations
-    ).sum()
+    normal_z0 = paz.distributions.Normal(mean0, likelihood_stdv)
+    normal_z1 = paz.distributions.Normal(mean1, likelihood_stdv)
+    log_likelihood_z0 = normal_z0.log_prob(observations).sum()
+    log_likelihood_z1 = normal_z1.log_prob(observations).sum()
     log_joint_z0 = log_prior + log_prob_z0 + log_likelihood_z0
     log_joint_z1 = log_prior + log_prob_z1 + log_likelihood_z1
     return log_joint_z0, log_joint_z1
@@ -203,7 +200,7 @@ mean0 = -0.2
 mean1 = 0.2
 likelihood_stdv = 1.0
 true_p = 0.4
-prior_p = distributions.Beta(2.0, 2.0)
+prior_p = paz.distributions.Beta(2.0, 2.0)
 
 key, z_key, y_key = jax.random.split(key, 3)
 z_true = jax.random.bernoulli(z_key, true_p)
