@@ -16,7 +16,6 @@ dependencies = [
     "opencv-python>=4.8",
     "keras>=3",
     "jax",
-    "tfp-nightly",
     "matplotlib",
     "optax",
     "scipy",

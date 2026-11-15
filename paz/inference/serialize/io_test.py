@@ -17,7 +17,6 @@ def test_build_manifest_fields():
     assert manifest["object_type"] == "Thing"
     assert manifest["schema_version"] == 2
     assert "jax_version" in manifest
-    assert "tfp_version" in manifest
     assert "python_version" in manifest
 
 

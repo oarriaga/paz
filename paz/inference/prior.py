@@ -1,12 +1,10 @@
 import jax.numpy as jp
 
+from paz.backend import bijectors
 from paz.inference.bijector_fitting import fit_bijector as fit_bijector_module
 from paz.inference.naming import build_prior_name
 from paz.inference.types import Distribution, NodeState, SampleType, Variable
 from paz.inference.utils import squeeze_pytree
-from tensorflow_probability.substrates import jax as tfp
-
-tfb = tfp.bijectors
 
 
 def Prior(distribution, bijector=None, name=None):
@@ -15,7 +13,7 @@ def Prior(distribution, bijector=None, name=None):
     node_name = name if name is not None else build_prior_name(distribution)
 
     Sample = SampleType([node_name])
-    bijector = tfb.Identity() if bijector is None else bijector
+    bijector = bijectors.Identity() if bijector is None else bijector
 
     def log_prob(forward_sample):
         log_prob = distribution.log_prob(forward_sample)

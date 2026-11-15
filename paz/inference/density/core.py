@@ -1,7 +1,6 @@
 import jax
 import jax.numpy as jp
 from jax import flatten_util
-from tensorflow_probability.substrates import jax as tfp
 
 from paz.inference.latent_space import (
     as_latent_samples,
@@ -10,8 +9,6 @@ from paz.inference.latent_space import (
 )
 from paz.inference.types import Density
 from paz.inference.utils import get_leading_batch_size, squeeze_pytree
-
-tfd = tfp.distributions
 
 
 def _build_distribution_density(distribution, latent_space, unravel):

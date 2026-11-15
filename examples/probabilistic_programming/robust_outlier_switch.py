@@ -17,14 +17,13 @@ from collections import namedtuple
 import jax
 import jax.numpy as jp
 from matplotlib.patches import Rectangle
-from tensorflow_probability.substrates import jax as tfp
 
+from paz.backend import distributions
+from paz.backend import bijectors
 import paz
 import paz.utils.plot as plot
 from paz.inference.types import SampleType
 
-tfd = tfp.distributions
-tfb = tfp.bijectors
 CaseResult = namedtuple(
     "CaseResult",
     [
@@ -41,19 +40,20 @@ CaseResult = namedtuple(
 
 
 def build_switch_model(x, sigma_in, sigma_out):
-    slope = paz.Prior(tfd.Normal(0.0, 1.0), name="slope")
-    bias = paz.Prior(tfd.Normal(0.0, 1.0), name="bias")
-    p = paz.Prior(tfd.Beta(2.0, 2.0), name="p", bijector=tfb.Sigmoid())
+    slope = paz.Prior(distributions.Normal(0.0, 1.0), name="slope")
+    bias = paz.Prior(distributions.Normal(0.0, 1.0), name="bias")
+    beta = distributions.Beta(2.0, 2.0)
+    p = paz.Prior(beta, name="p", bijector=bijectors.Sigmoid())
 
     def z_distribution(p):
-        return tfd.Bernoulli(probs=p, dtype=jp.float32)
+        return distributions.Bernoulli(probs=p, dtype=jp.float32)
 
     z = paz.Latent(z_distribution, name="z")(p)
 
     def y_distribution(slope, bias, z):
         mean = slope * x + bias
         sigma = jp.where(z == 1.0, sigma_out, sigma_in)
-        return tfd.Normal(mean, sigma)
+        return distributions.Normal(mean, sigma)
 
     y_obs = paz.Observable(y_distribution, name="y")(slope, bias, z)
     return paz.PGM([slope, bias, p], [y_obs], "robust_outlier_switch")

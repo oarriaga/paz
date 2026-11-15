@@ -1,7 +1,7 @@
 import numpy as np
 import jax.numpy as jp
-from tensorflow_probability.substrates import jax as tfp
 
+from paz.backend import distributions
 from paz.inference.gmm.em import fit_gmm_em
 from paz.inference.observable import Observable
 from paz.inference.pgm import PGM
@@ -9,23 +9,21 @@ from paz.inference.pgm.ops import build_data_mapping
 from paz.inference.prior import Prior
 
 
-tfd = tfp.distributions
-
-
 def GMM(weights, means=None, covariances=None, covariance="diag", name="gmm"):
     weights_value, means_value, covariances_value = _prepare_parameters(
         weights, means, covariances, covariance
     )
-    weights_dist = tfd.Deterministic(weights_value)
-    means_dist = tfd.Deterministic(means_value)
-    covariances_dist = tfd.Deterministic(covariances_value)
+    weights_dist = distributions.Deterministic(weights_value)
+    means_dist = distributions.Deterministic(means_value)
+    covariances_dist = distributions.Deterministic(covariances_value)
     weights = Prior(weights_dist, name="weights")
     means = Prior(means_dist, name="means")
     covariances = Prior(covariances_dist, name="covariances")
 
     def y_distribution(weights, means, covariances):
         components = _build_components(means, covariances, covariance)
-        return tfd.MixtureSameFamily(tfd.Categorical(probs=weights), components)
+        mixture = distributions.Categorical(probs=weights)
+        return distributions.MixtureSameFamily(mixture, components)
 
     y = Observable(y_distribution, name="y")(weights, means, covariances)
     model = PGM([weights, means, covariances], [y], name)
@@ -53,10 +51,10 @@ def GMM(weights, means=None, covariances=None, covariance="diag", name="gmm"):
 def _build_components(means, covariances, covariance):
     if covariance == "diag":
         parameters = dict(loc=means, scale_diag=jp.sqrt(covariances))
-        return tfd.MultivariateNormalDiag(**parameters)
+        return distributions.MultivariateNormalDiag(**parameters)
     if covariance == "full":
         parameters = dict(loc=means, covariance_matrix=covariances)
-        return tfd.MultivariateNormalFullCovariance(**parameters)
+        return distributions.MultivariateNormalFullCovariance(**parameters)
     raise ValueError("covariance must be 'diag' or 'full'")
 
 

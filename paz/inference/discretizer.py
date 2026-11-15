@@ -1,32 +1,29 @@
 import jax.numpy as jp
-from tensorflow_probability.substrates import jax as tfp
-
-
-tfd = tfp.distributions
-tfb = tfp.bijectors
+from paz.backend import distributions
+from paz.backend import bijectors
 
 
 def discretize(base_distribution, min_val, max_val, num_steps):
     step_count = float(num_steps - 1)
     scale = step_count / (max_val - min_val)
     shift = -min_val * scale
-    grid_bijector = tfb.Chain(
+    grid_bijector = bijectors.Chain(
         [
-            tfb.Shift(shift=-0.5),
-            tfb.Shift(shift=shift),
-            tfb.Scale(scale=scale),
+            bijectors.Shift(shift=-0.5),
+            bijectors.Shift(shift=shift),
+            bijectors.Scale(scale=scale),
         ]
     )
-    transformed_dist = tfd.TransformedDistribution(
+    transformed_dist = distributions.TransformedDistribution(
         distribution=base_distribution, bijector=grid_bijector
     )
-    quantizer = tfd.QuantizedDistribution(distribution=transformed_dist)
+    quantizer = distributions.QuantizedDistribution(transformed_dist)
     grid_indices = jp.arange(num_steps, dtype=jp.float32)
     unnormalized_logits = quantizer.log_prob(grid_indices)
     unnormalized_logits = jp.where(
         jp.isfinite(unnormalized_logits), unnormalized_logits, -jp.inf
     )
-    return tfd.Categorical(logits=unnormalized_logits)
+    return distributions.Categorical(logits=unnormalized_logits)
 
 
 def get_grid_values(min_val, max_val, num_steps):

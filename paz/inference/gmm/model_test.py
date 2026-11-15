@@ -1,20 +1,17 @@
 import jax
 import jax.numpy as jp
-from tensorflow_probability.substrates import jax as tfp
 
+from paz.backend import distributions
 from paz.inference.gmm.model import GMM
-
-
-tfd = tfp.distributions
 
 
 def _sample_1d_mixture(key, num_samples):
     weights = jp.array([0.6, 0.4])
     means = jp.array([-2.0, 2.0])
     stdvs = jp.array([0.5, 0.3])
-    distribution = tfd.MixtureSameFamily(
-        tfd.Categorical(probs=weights),
-        tfd.Normal(loc=means, scale=stdvs),
+    distribution = distributions.MixtureSameFamily(
+        distributions.Categorical(probs=weights),
+        distributions.Normal(loc=means, scale=stdvs),
     )
     samples = distribution.sample(num_samples, seed=key)[:, None]
     return samples, means
@@ -34,7 +31,7 @@ def test_gmm_fit_returns_distribution():
     sample_key, fit_key = jax.random.split(key)
     samples, _ = _sample_1d_mixture(sample_key, 200)
     fitted = model.fit(fit_key, samples, method="em", num_iters=10)
-    assert isinstance(fitted, tfd.MixtureSameFamily)
+    assert isinstance(fitted, distributions.MixtureSameFamily)
 
 
 def test_gmm_pgm_fit_recovers_means():

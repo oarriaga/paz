@@ -9,16 +9,15 @@ import jax
 import jax.numpy as jp
 import matplotlib.pyplot as plt
 import numpy as np
-from tensorflow_probability.substrates import jax as tfp
 
+from paz.backend import distributions
+from paz.backend import bijectors
 import paz
 import paz.utils.plot as plot
 from paz.backend import directory
 from paz.inference.gmm.model import GMM
 from observation_model import build_observation_model, build_render_function
 
-tfd = tfp.distributions
-tfb = tfp.bijectors
 
 parser = argparse.ArgumentParser(description="Optimize Bijectors")
 parser.add_argument("--root", default="experiments", type=str)
@@ -162,7 +161,8 @@ def plot_prior(key, prior_node, output_directory, num_samples=10_000):
     key_0, key_1, key_2 = jax.random.split(key, 3)
     forward_samples = prior_node.sample(key_0, num_samples)
     inverse_samples = prior_node.sample_inverse(key_1, num_samples)
-    normals_samples = tfd.Normal(0.0, 1.0).sample(num_samples, seed=key_2)
+    standard = distributions.Normal(0.0, 1.0)
+    normals_samples = standard.sample(num_samples, seed=key_2)
     name = prior_node.name
 
     if name == "shift":
@@ -234,20 +234,21 @@ def fit_gaussian_mixture(seed, samples, unidimensional=True):
 
 
 def build_affine_bijector(x):
-    return tfb.Chain([tfb.Shift(x.shift), tfb.Scale(x.scale)])
+    return bijectors.Chain([bijectors.Shift(x.shift), bijectors.Scale(x.scale)])
 
 
 def build_shift_prior(mean, scale):
     mean, scale = jp.array(mean), jp.array(scale)
     lower, upper = jp.array([-0.14, -0.14]), jp.array([0.14, 0.14])
-    distribution = tfd.TruncatedNormal(mean, scale, lower, upper)
-    bijector = tfb.Chain([tfb.Shift(mean), tfb.Scale(scale)])
+    distribution = distributions.TruncatedNormal(mean, scale, lower, upper)
+    bijector = bijectors.Chain([bijectors.Shift(mean), bijectors.Scale(scale)])
     return paz.Prior(distribution, name="shift", bijector=bijector)
 
 
 def build_theta_prior(mean, concentration):
-    distribution = tfd.VonMises(mean, concentration)
-    bijector = tfb.Chain([tfb.Sigmoid(-jp.pi, jp.pi), tfb.Scale(jp.pi / 2.0)])
+    distribution = distributions.VonMises(mean, concentration)
+    members = [bijectors.Sigmoid(-jp.pi, jp.pi), bijectors.Scale(jp.pi / 2.0)]
+    bijector = bijectors.Chain(members)
     return paz.Prior(distribution, name="theta", bijector=bijector)
 
 
@@ -256,16 +257,18 @@ def build_scale_prior(mean, variance):
     variance = jp.log((variance / mean**2) + 1)
     mean = jp.log(mean) - (variance / 2)
     scale = jp.sqrt(variance)
-    distribution = tfd.LogNormal(mean, scale)
-    bijector = tfb.Chain([tfb.Softplus(), tfb.Shift(mean), tfb.Scale(scale)])
+    distribution = distributions.LogNormal(mean, scale)
+    affine = [bijectors.Shift(mean), bijectors.Scale(scale)]
+    bijector = bijectors.Chain([bijectors.Softplus()] + affine)
     return paz.Prior(distribution, name="scale", bijector=bijector)
 
 
 def build_classes_prior(probabilities, temperature):
-    distribution = tfd.RelaxedOneHotCategorical(
+    distribution = distributions.RelaxedOneHotCategorical(
         temperature, probs=probabilities
     )
-    bijector = tfb.Chain([tfb.SoftmaxCentered(), tfb.Scale(3.0)])
+    members = [bijectors.SoftmaxCentered(), bijectors.Scale(3.0)]
+    bijector = bijectors.Chain(members)
     return paz.Prior(distribution, name="classes", bijector=bijector)
 
 
@@ -334,7 +337,7 @@ for name in ["ambient", "diffuse", "specular", "shininess", "color"]:
     shift_0 = 0.0 if name != "color" else jp.full(3, 0.0)
     scale_0 = 1.0 if name != "color" else jp.full(3, 1.0)
     x_0 = BijectorParams(shift_0, scale_0)
-    distribution = tfd.Normal(shift_0, scale_0)
+    distribution = distributions.Normal(shift_0, scale_0)
     bijector = build_affine_bijector(x_0)
     prior = paz.Prior(distribution, name=name, bijector=bijector)
     fitted_prior, losses = prior.fit_bijector(

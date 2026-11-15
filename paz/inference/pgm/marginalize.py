@@ -1,8 +1,9 @@
 import jax
 import jax.numpy as jp
 from jax.scipy.special import logsumexp
-from tensorflow_probability.substrates import jax as tfp
 
+from paz.backend import distributions
+from paz.backend import bijectors
 from paz.inference.metadata import (
     get_bijector,
     get_distribution_fn,
@@ -39,33 +40,23 @@ from paz.inference.utils import (
     slice_batch,
 )
 
-tfd = tfp.distributions
-tfb = tfp.bijectors
-DiscreteUniform = getattr(tfd, "DiscreteUniform", None)
+
 def finite_support(distribution):
     if len(distribution.batch_shape) != 0 or len(distribution.event_shape) != 0:
         raise NotImplementedError("Only scalar discrete variables are supported.")
     support_dtype = distribution.dtype
     if jp.issubdtype(support_dtype, jp.integer) or support_dtype == jp.bool_:
         support_dtype = jp.float32
-    if isinstance(distribution, tfd.Bernoulli):
+    if isinstance(distribution, distributions.Bernoulli):
         return jp.array([0, 1], dtype=support_dtype)
-    if isinstance(distribution, tfd.Categorical):
+    if isinstance(distribution, distributions.Categorical):
         logits = distribution.logits_parameter()
         probs = distribution.probs_parameter()
         if logits is None and probs is None:
             raise NotImplementedError("Categorical distribution needs logits or probs.")
         num_categories = probs.shape[-1] if logits is None else logits.shape[-1]
         return jp.arange(num_categories, dtype=support_dtype)
-    if DiscreteUniform is not None and isinstance(distribution, DiscreteUniform):
-        low = distribution.low
-        high = distribution.high
-        if hasattr(low, "shape") and low.shape != ():
-            raise NotImplementedError("Only scalar discrete variables are supported.")
-        if hasattr(high, "shape") and high.shape != ():
-            raise NotImplementedError("Only scalar discrete variables are supported.")
-        return jp.arange(low, high + 1, dtype=support_dtype)
-    raise NotImplementedError("Only Bernoulli, Categorical, DiscreteUniform supported.")
+    raise NotImplementedError("Only Bernoulli and Categorical are supported.")
 
 _MISSING = object()
 
@@ -176,20 +167,7 @@ def _validate_supports(pgm, node, inverse_samples):
         if num_batches is None
         else slice_batch(inverse_samples, 0)
     )
-    distribution = build_distribution(first_batch)
-    support = finite_support(distribution)
-    if num_batches is None:
-        return support
-    if DiscreteUniform is None or not isinstance(distribution, DiscreteUniform):
-        return support
-    for batch_index in range(1, num_batches):
-        batch_samples = slice_batch(inverse_samples, batch_index)
-        batch_support = finite_support(build_distribution(batch_samples))
-        if support.shape != batch_support.shape:
-            raise NotImplementedError("Discrete support must be consistent.")
-        if not bool(jp.all(batch_support == support)):
-            raise NotImplementedError("Discrete support must be consistent.")
-    return support
+    return finite_support(build_distribution(first_batch))
 
 
 def marginalize(pgm, names):
@@ -206,7 +184,7 @@ def marginalize(pgm, names):
     if z_node.sample_inverse is None:
         raise NotImplementedError("Only latent/prior nodes can be marginalized.")
     bijector = get_bijector(z_node)
-    if bijector is None or not isinstance(bijector, tfb.Identity):
+    if bijector is None or not isinstance(bijector, bijectors.Identity):
         raise NotImplementedError(
             "Discrete latent variables must use the identity bijector."
         )
@@ -215,9 +193,9 @@ def marginalize(pgm, names):
 
     base_latent_space = pgm.prior.latent_space
     names = [name for name in base_latent_space.names if name != z_name]
-    bijectors = {name: base_latent_space.bijectors[name] for name in names}
+    kept = {name: base_latent_space.bijectors[name] for name in names}
     Sample = SampleType(names)
-    latent_space = LatentSpace(names, bijectors, Sample)
+    latent_space = LatentSpace(names, kept, Sample)
     output_nodes = get_output_nodes(pgm)
 
     def select_latent(samples):

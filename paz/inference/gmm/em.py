@@ -3,12 +3,10 @@ from collections import namedtuple
 import jax
 import jax.numpy as jp
 from jax.scipy.special import logsumexp
-from tensorflow_probability.substrates import jax as tfp
 
+from paz.backend import distributions
 from paz.inference.density.core import _compute_covariance
 
-
-tfd = tfp.distributions
 
 GMMParameters = namedtuple("GMMParameters", ["weights", "means", "covariances"])
 
@@ -146,13 +144,13 @@ def _component_log_prob(flat_samples, means, covariances, covariance):
     if covariance == "diag":
         def log_prob(mean, variance):
             parameters = dict(loc=mean, scale_diag=jp.sqrt(variance))
-            distribution = tfd.MultivariateNormalDiag(**parameters)
+            distribution = distributions.MultivariateNormalDiag(**parameters)
             return distribution.log_prob(flat_samples)
         return jax.vmap(log_prob)(means, covariances)
 
     def log_prob(mean, cov):
-        parameters = dict(loc=mean, covariance_matrix=cov)
-        distribution = tfd.MultivariateNormalFullCovariance(**parameters)
+        args = (mean, cov)
+        distribution = distributions.MultivariateNormalFullCovariance(*args)
         return distribution.log_prob(flat_samples)
 
     return jax.vmap(log_prob)(means, covariances)

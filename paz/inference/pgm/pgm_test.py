@@ -1,16 +1,14 @@
 import jax
 import jax.numpy as jp
 import pytest
-from tensorflow_probability.substrates import jax as tfp
 
+from paz.backend import distributions
+from paz.backend import bijectors
 from paz.inference.prior import Prior
 from paz.inference.observable import Observable
 from paz.inference.latent import Latent
 from paz.inference.pgm import PGM
 from paz.inference.types import NodeState
-
-tfd = tfp.distributions
-tfb = tfp.bijectors
 
 
 # =============================================================================
@@ -20,15 +18,16 @@ tfb = tfp.bijectors
 
 def build_single_prior_model():
     """Model: x ~ Normal(0, 1)"""
-    x = Prior(tfd.Normal(0.0, 1.0), name="x")
+    x = Prior(distributions.Normal(0.0, 1.0), name="x")
     return PGM([x], [x], "single_prior")
 
 
 def build_single_prior_with_bijector_model():
     """Model: x ~ Uniform(0.1, 1.0) with sigmoid bijector"""
     low, high = 0.1, 1.0
-    bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
-    x = Prior(tfd.Uniform(low, high), bijector=bijector, name="x")
+    affine = [bijectors.Shift(low), bijectors.Scale(high - low)]
+    bijector = bijectors.Chain(affine + [bijectors.Sigmoid()])
+    x = Prior(distributions.Uniform(low, high), bijector=bijector, name="x")
     return PGM([x], [x], "single_prior_bijector"), bijector, (low, high)
 
 
@@ -44,14 +43,17 @@ def build_three_priors_one_observable_model():
 
     def Likelihood(X):
         def apply(mean, bias, stdv):
-            return tfd.Normal(jax.vmap(lambda x: mean * x + bias)(X), stdv)
+            prediction = jax.vmap(lambda x: mean * x + bias)(X)
+            return distributions.Normal(prediction, stdv)
         return apply
 
-    mean = Prior(tfd.Normal(0.0, 1.0), name="mean")
-    bias = Prior(tfd.Normal(0.0, 1.0), name="bias")
+    mean = Prior(distributions.Normal(0.0, 1.0), name="mean")
+    bias = Prior(distributions.Normal(0.0, 1.0), name="bias")
     low, high = 0.001, 0.3
-    bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
-    stdv = Prior(tfd.Uniform(low, high), bijector=bijector, name="stdv")
+    affine = [bijectors.Shift(low), bijectors.Scale(high - low)]
+    bijector = bijectors.Chain(affine + [bijectors.Sigmoid()])
+    uniform = distributions.Uniform(low, high)
+    stdv = Prior(uniform, bijector=bijector, name="stdv")
     y = Observable(Likelihood(X), name="y_pred")(mean, bias, stdv)
     data = {"y_pred": observations}
     return (
@@ -72,18 +74,20 @@ def build_hierarchical_model():
     observation = jp.array(1.5)
 
     low, high = 0.1, 2.0
-    bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
+    affine = [bijectors.Shift(low), bijectors.Scale(high - low)]
+    bijector = bijectors.Chain(affine + [bijectors.Sigmoid()])
 
-    mu = Prior(tfd.Normal(0.0, 1.0), name="mu")
-    sigma = Prior(tfd.Uniform(low, high), bijector=bijector, name="sigma")
+    mu = Prior(distributions.Normal(0.0, 1.0), name="mu")
+    uniform = distributions.Uniform(low, high)
+    sigma = Prior(uniform, bijector=bijector, name="sigma")
 
     def x_distribution(mu, sigma):
-        return tfd.Normal(mu, sigma)
+        return distributions.Normal(mu, sigma)
 
     x = Latent(x_distribution, name="x")(mu, sigma)
 
     def y_distribution(x):
-        return tfd.Normal(x, 0.1)
+        return distributions.Normal(x, 0.1)
 
     y = Observable(y_distribution, name="y")(x)
     data = {"y": observation}
@@ -101,16 +105,18 @@ def build_two_observables_model():
     obs2 = jp.array([1.5, 1.6, 1.7])
 
     low, high = 0.1, 1.0
-    bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
+    affine = [bijectors.Shift(low), bijectors.Scale(high - low)]
+    bijector = bijectors.Chain(affine + [bijectors.Sigmoid()])
 
-    mean = Prior(tfd.Normal(0.0, 1.0), name="mean")
-    stdv = Prior(tfd.Uniform(low, high), bijector=bijector, name="stdv")
+    mean = Prior(distributions.Normal(0.0, 1.0), name="mean")
+    uniform = distributions.Uniform(low, high)
+    stdv = Prior(uniform, bijector=bijector, name="stdv")
 
     def likelihood1(mean, stdv):
-        return tfd.Normal(mean, stdv)
+        return distributions.Normal(mean, stdv)
 
     def likelihood2(mean, stdv):
-        return tfd.Normal(mean + 1, stdv)
+        return distributions.Normal(mean + 1, stdv)
 
     y1 = Observable(likelihood1, name="y1")(mean, stdv)
     y2 = Observable(likelihood2, name="y2")(mean, stdv)
@@ -127,19 +133,19 @@ def build_vector_latent_model(num_groups):
     """Model: Vector latent depends on scalar parents."""
     observation = jp.zeros((num_groups,))
 
-    mu = Prior(tfd.Normal(0.0, 1.0), name="mu")
-    sigma = Prior(tfd.Normal(1.0, 0.2), name="sigma")
+    mu = Prior(distributions.Normal(0.0, 1.0), name="mu")
+    sigma = Prior(distributions.Normal(1.0, 0.2), name="sigma")
 
     def x_distribution(mu, sigma):
-        return tfd.Independent(
-            tfd.Normal(jp.full(num_groups, mu), sigma),
+        return distributions.Independent(
+            distributions.Normal(jp.full(num_groups, mu), sigma),
             reinterpreted_batch_ndims=1,
         )
 
     x = Latent(x_distribution, name="x")(mu, sigma)
 
     def y_distribution(x):
-        return tfd.Normal(x, 1.0)
+        return distributions.Normal(x, 1.0)
 
     y = Observable(y_distribution, name="y")(x)
     data = {"y": observation}
@@ -150,20 +156,20 @@ def build_multi_parent_observable_model():
     """Model: Observable depends on two latent parents."""
     observation = jp.array(0.0)
 
-    mu1 = Prior(tfd.Normal(0.0, 1.0), name="mu1")
-    mu2 = Prior(tfd.Normal(0.0, 1.0), name="mu2")
+    mu1 = Prior(distributions.Normal(0.0, 1.0), name="mu1")
+    mu2 = Prior(distributions.Normal(0.0, 1.0), name="mu2")
 
     def x_distribution(mu1):
-        return tfd.Normal(mu1, 1.0)
+        return distributions.Normal(mu1, 1.0)
 
     def z_distribution(mu2):
-        return tfd.Normal(mu2, 1.0)
+        return distributions.Normal(mu2, 1.0)
 
     x = Latent(x_distribution, name="x")(mu1)
     z = Latent(z_distribution, name="z")(mu2)
 
     def y_distribution(x, z):
-        return tfd.Normal(x + z, 1.0)
+        return distributions.Normal(x + z, 1.0)
 
     y = Observable(y_distribution, name="y")(x, z)
     data = {"y": observation}
@@ -520,8 +526,9 @@ def test_vmap_log_prob_hierarchical():
 def test_log_prob_inverse_includes_jacobian_correction():
     """Verify that log_prob includes the Jacobian correction from bijector."""
     low, high = 0.1, 1.0
-    bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
-    distribution = tfd.Uniform(low, high)
+    affine = [bijectors.Shift(low), bijectors.Scale(high - low)]
+    bijector = bijectors.Chain(affine + [bijectors.Sigmoid()])
+    distribution = distributions.Uniform(low, high)
     x = Prior(distribution, bijector=bijector, name="x")
     model = PGM([x], [x], "test")
 
@@ -553,12 +560,14 @@ def test_observable_receives_constrained_stdv():
 
     def Likelihood(X):
         def apply(stdv):
-            return tfd.Normal(X, stdv)
+            return distributions.Normal(X, stdv)
         return apply
 
     low, high = 0.1, 1.0
-    bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
-    stdv = Prior(tfd.Uniform(low, high), bijector=bijector, name="stdv")
+    affine = [bijectors.Shift(low), bijectors.Scale(high - low)]
+    bijector = bijectors.Chain(affine + [bijectors.Sigmoid()])
+    uniform = distributions.Uniform(low, high)
+    stdv = Prior(uniform, bijector=bijector, name="stdv")
     y = Observable(Likelihood(X), name="y")(stdv)
     data = {"y": observations}
     model = PGM([stdv], [y], "test")
@@ -580,12 +589,14 @@ def test_observable_scale_is_positive():
 
     def Likelihood(X):
         def apply(stdv):
-            return tfd.Normal(X, stdv)
+            return distributions.Normal(X, stdv)
         return apply
 
     low, high = 0.1, 1.0
-    bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
-    stdv = Prior(tfd.Uniform(low, high), bijector=bijector, name="stdv")
+    affine = [bijectors.Shift(low), bijectors.Scale(high - low)]
+    bijector = bijectors.Chain(affine + [bijectors.Sigmoid()])
+    uniform = distributions.Uniform(low, high)
+    stdv = Prior(uniform, bijector=bijector, name="stdv")
     y = Observable(Likelihood(X), name="y")(stdv)
     data = {"y": observations}
     model = PGM([stdv], [y], "test")
@@ -757,10 +768,10 @@ def test_log_prob_with_manual_params():
 
 def build_normal_normal_model():
     """Model: x ~ Normal(0, 1), y ~ Normal(x, 1)"""
-    x = Prior(tfd.Normal(0.0, 1.0), name="x")
+    x = Prior(distributions.Normal(0.0, 1.0), name="x")
 
     def y_distribution(x):
-        return tfd.Normal(x, 1.0)
+        return distributions.Normal(x, 1.0)
 
     y = Observable(y_distribution, name="y")(x)
     return PGM([x], [y], "normal_normal")

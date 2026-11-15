@@ -185,7 +185,8 @@ class Normal(_NormalBase, Distribution):
         return normal_log_cdf((values - self.loc) / self.scale)
 
     def survival_function(self, values):
-        return 1.0 - self.cdf(values)
+        values = to_float(values, self.dtype)
+        return normal_cdf(-(values - self.loc) / self.scale)
 
     def log_survival_function(self, values):
         values = to_float(values, self.dtype)
@@ -469,6 +470,20 @@ class LogNormal(_LogNormalBase, Distribution):
         base = Normal(self.loc, self.scale)
         log_cdf = base.log_cdf(jp.log(safe_values))
         return jp.where(values == 0.0, -jp.inf, log_cdf)
+
+    def survival_function(self, values):
+        values = to_float(values, self.dtype)
+        safe_values = jp.where(values == 0.0, 1.0, values)
+        base = Normal(self.loc, self.scale)
+        survival = base.survival_function(jp.log(safe_values))
+        return jp.where(values == 0.0, 1.0, survival)
+
+    def log_survival_function(self, values):
+        values = to_float(values, self.dtype)
+        safe_values = jp.where(values == 0.0, 1.0, values)
+        base = Normal(self.loc, self.scale)
+        log_survival = base.log_survival_function(jp.log(safe_values))
+        return jp.where(values == 0.0, 0.0, log_survival)
 
     def mean(self):
         mean = jp.exp(self.loc + 0.5 * jp.square(self.scale))
@@ -1497,13 +1512,23 @@ class QuantizedDistribution(_QuantizedBase, Distribution):
 
     def log_prob(self, values):
         values = jp.floor(to_float(values, self.dtype))
-        return logsum_expbig_minus_expsmall(
-            self.log_cdf(values), self.log_cdf(values - 1.0)
-        )
+        log_cdf = self.log_cdf(values)
+        log_survival = self.log_survival_function(values)
+        # The cdf rounds to 1 in the upper tail; the survival function
+        # keeps the difference there.
+        is_upper = log_survival < log_cdf
+        previous_log_survival = self.log_survival_function(values - 1.0)
+        big = jp.where(is_upper, previous_log_survival, log_cdf)
+        small = jp.where(is_upper, log_survival, self.log_cdf(values - 1.0))
+        return logsum_expbig_minus_expsmall(big, small)
 
     def prob(self, values):
         values = jp.floor(to_float(values, self.dtype))
-        return self.cdf(values) - self.cdf(values - 1.0)
+        cdf = self.cdf(values)
+        survival = self.survival_function(values)
+        lower_prob = cdf - self.cdf(values - 1.0)
+        upper_prob = self.survival_function(values - 1.0) - survival
+        return jp.where(survival < cdf, upper_prob, lower_prob)
 
     def cdf(self, values):
         values = jp.floor(to_float(values, self.dtype))
@@ -1522,6 +1547,24 @@ class QuantizedDistribution(_QuantizedBase, Distribution):
         if self.high is not None:
             log_cdf = jp.where(values < self.high, log_cdf, 0.0)
         return log_cdf
+
+    def survival_function(self, values):
+        values = jp.ceil(to_float(values, self.dtype))
+        survival = self.distribution.survival_function(values)
+        if self.low is not None:
+            survival = jp.where(values < self.low, 1.0, survival)
+        if self.high is not None:
+            survival = jp.where(values < self.high, survival, 0.0)
+        return survival
+
+    def log_survival_function(self, values):
+        values = jp.ceil(to_float(values, self.dtype))
+        log_survival = self.distribution.log_survival_function(values)
+        if self.low is not None:
+            log_survival = jp.where(values < self.low, 0.0, log_survival)
+        if self.high is not None:
+            log_survival = jp.where(values < self.high, log_survival, -jp.inf)
+        return log_survival
 
 
 _GammaBase = namedtuple("Gamma", ["concentration", "rate"])

@@ -1,4 +1,5 @@
 import jax.numpy as jp
+from paz.backend import distributions
 import paz
 from paz.abstract.dag import DAG
 from paz.inference.pgm import (
@@ -7,22 +8,19 @@ from paz.inference.pgm import (
     get_non_root_nodes,
     search_nodes,
 )
-from tensorflow_probability.substrates import jax as tfp
-
-tfd = tfp.distributions
 
 
 def test_latent_nodes_includes_priors():
-    mu = paz.Prior(tfd.Normal(0.0, 1.0), name="mu")
-    sigma = paz.Prior(tfd.Normal(0.0, 1.0), name="sigma")
+    mu = paz.Prior(distributions.Normal(0.0, 1.0), name="mu")
+    sigma = paz.Prior(distributions.Normal(0.0, 1.0), name="sigma")
 
     def latent_prior(mu_val, sigma_val):
-        return tfd.Normal(mu_val, jp.abs(sigma_val))
+        return distributions.Normal(mu_val, jp.abs(sigma_val))
 
     latent = paz.Latent(latent_prior, name="latent")(mu, sigma)
 
     def likelihood(latent_val):
-        return tfd.Normal(latent_val, 0.1)
+        return distributions.Normal(latent_val, 0.1)
 
     y_obs = paz.Observable(likelihood, name="y_obs")(latent)
     nodes = search_nodes([y_obs])
@@ -36,16 +34,16 @@ def test_latent_nodes_includes_priors():
 
 
 def test_non_priors_excludes_priors():
-    mu = paz.Prior(tfd.Normal(0.0, 1.0), name="mu")
-    sigma = paz.Prior(tfd.Normal(0.0, 1.0), name="sigma")
+    mu = paz.Prior(distributions.Normal(0.0, 1.0), name="mu")
+    sigma = paz.Prior(distributions.Normal(0.0, 1.0), name="sigma")
 
     def latent_prior(mu_val, sigma_val):
-        return tfd.Normal(mu_val, jp.abs(sigma_val))
+        return distributions.Normal(mu_val, jp.abs(sigma_val))
 
     latent = paz.Latent(latent_prior, name="latent")(mu, sigma)
 
     def likelihood(latent_val):
-        return tfd.Normal(latent_val, 0.1)
+        return distributions.Normal(latent_val, 0.1)
 
     y_obs = paz.Observable(likelihood, name="y_obs")(latent)
 

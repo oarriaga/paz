@@ -1,8 +1,9 @@
 import jax
 import jax.numpy as jp
+from paz.backend import distributions
+from paz.backend import bijectors
 import paz
 import pytest
-from tensorflow_probability.substrates import jax as tfp
 
 from paz.inference.latent_space import to_forward_samples
 from paz.inference.observable import Observable
@@ -10,25 +11,21 @@ from paz.inference.pgm import PGM
 from paz.inference.prior import Prior
 
 
-tfd = tfp.distributions
-tfb = tfp.bijectors
-
-
 def test_sample_inverse_no_double_sampling():
     num_groups = 3
 
     def group_prior(mu, sigma):
-        return tfd.Independent(
-            tfd.Normal(jp.full(num_groups, mu), jp.abs(sigma)),
+        return distributions.Independent(
+            distributions.Normal(jp.full(num_groups, mu), jp.abs(sigma)),
             reinterpreted_batch_ndims=1,
         )
 
-    mu = paz.Prior(tfd.Normal(0.0, 1.0), name="mu")
-    sigma = paz.Prior(tfd.Normal(0.0, 1.0), name="sigma")
+    mu = paz.Prior(distributions.Normal(0.0, 1.0), name="mu")
+    sigma = paz.Prior(distributions.Normal(0.0, 1.0), name="sigma")
     groups = paz.Latent(group_prior, name="groups")(mu, sigma)
 
     def likelihood(group_params):
-        return tfd.Normal(group_params, 0.1)
+        return distributions.Normal(group_params, 0.1)
 
     y_obs = paz.Observable(likelihood, name="y_obs")(groups)
     model = paz.PGM([mu, sigma], [y_obs], "test")
@@ -50,17 +47,17 @@ def test_sample_forward_all_nodes():
     num_groups = 3
 
     def group_prior(mu, sigma):
-        return tfd.Independent(
-            tfd.Normal(jp.full(num_groups, mu), jp.abs(sigma)),
+        return distributions.Independent(
+            distributions.Normal(jp.full(num_groups, mu), jp.abs(sigma)),
             reinterpreted_batch_ndims=1,
         )
 
-    mu = paz.Prior(tfd.Normal(0.0, 1.0), name="mu")
-    sigma = paz.Prior(tfd.Normal(0.0, 1.0), name="sigma")
+    mu = paz.Prior(distributions.Normal(0.0, 1.0), name="mu")
+    sigma = paz.Prior(distributions.Normal(0.0, 1.0), name="sigma")
     groups = paz.Latent(group_prior, name="groups")(mu, sigma)
 
     def likelihood(group_params):
-        return tfd.Normal(group_params, 0.1)
+        return distributions.Normal(group_params, 0.1)
 
     y_obs = paz.Observable(likelihood, name="y_obs")(groups)
     model = paz.PGM([mu, sigma], [y_obs], "test")
@@ -84,17 +81,17 @@ def test_filtering_consistency_batched():
     num_samples = 10
 
     def group_prior(mu, sigma):
-        return tfd.Independent(
-            tfd.Normal(jp.full(num_groups, mu), jp.abs(sigma)),
+        return distributions.Independent(
+            distributions.Normal(jp.full(num_groups, mu), jp.abs(sigma)),
             reinterpreted_batch_ndims=1,
         )
 
-    mu = paz.Prior(tfd.Normal(0.0, 1.0), name="mu")
-    sigma = paz.Prior(tfd.Normal(0.0, 1.0), name="sigma")
+    mu = paz.Prior(distributions.Normal(0.0, 1.0), name="mu")
+    sigma = paz.Prior(distributions.Normal(0.0, 1.0), name="sigma")
     groups = paz.Latent(group_prior, name="groups")(mu, sigma)
 
     def likelihood(group_params):
-        return tfd.Normal(group_params, 0.1)
+        return distributions.Normal(group_params, 0.1)
 
     y_obs = paz.Observable(likelihood, name="y_obs")(groups)
     model = paz.PGM([mu, sigma], [y_obs], "test")
@@ -118,21 +115,20 @@ def test_hierarchical_regression_filtering():
     num_groups = 5
 
     def slope_prior(mu_slope, sigma_slope):
-        return tfd.Independent(
-            tfd.Normal(jp.full(num_groups, mu_slope), jp.abs(sigma_slope)),
-            reinterpreted_batch_ndims=1,
-        )
+        loc = jp.full(num_groups, mu_slope)
+        normal = distributions.Normal(loc, jp.abs(sigma_slope))
+        return distributions.Independent(normal, 1)
 
     def intercept_prior(mu_intercept, sigma_intercept):
-        return tfd.Independent(
-            tfd.Normal(jp.full(num_groups, mu_intercept), jp.abs(sigma_intercept)),
-            reinterpreted_batch_ndims=1,
-        )
+        loc = jp.full(num_groups, mu_intercept)
+        normal = distributions.Normal(loc, jp.abs(sigma_intercept))
+        return distributions.Independent(normal, 1)
 
-    mu_slope = paz.Prior(tfd.Normal(0.0, 1.0), name="mu_slope")
-    mu_intercept = paz.Prior(tfd.Normal(0.0, 1.0), name="mu_intercept")
-    sigma_slope = paz.Prior(tfd.Normal(0.0, 1.0), name="sigma_slope")
-    sigma_intercept = paz.Prior(tfd.Normal(0.0, 1.0), name="sigma_intercept")
+    mu_slope = paz.Prior(distributions.Normal(0.0, 1.0), name="mu_slope")
+    standard = distributions.Normal(0.0, 1.0)
+    mu_intercept = paz.Prior(standard, name="mu_intercept")
+    sigma_slope = paz.Prior(distributions.Normal(0.0, 1.0), name="sigma_slope")
+    sigma_intercept = paz.Prior(standard, name="sigma_intercept")
 
     slopes = paz.Latent(slope_prior, name="slopes")(mu_slope, sigma_slope)
     intercepts = paz.Latent(intercept_prior, name="intercepts")(
@@ -144,7 +140,7 @@ def test_hierarchical_regression_filtering():
 
     def likelihood(slopes_val, intercepts_val):
         means = slopes_val[group_idx] * X + intercepts_val[group_idx]
-        return tfd.Normal(means, 0.1)
+        return distributions.Normal(means, 0.1)
 
     y_obs = paz.Observable(likelihood, name="y_obs")(slopes, intercepts)
     priors = [mu_slope, mu_intercept, sigma_slope, sigma_intercept]
@@ -161,11 +157,11 @@ def test_hierarchical_regression_filtering():
 
 
 def test_sample_forward_simple_model():
-    mean = paz.Prior(tfd.Normal(0.0, 1.0), name="mean")
-    stdv = paz.Prior(tfd.Normal(0.0, 1.0), name="stdv")
+    mean = paz.Prior(distributions.Normal(0.0, 1.0), name="mean")
+    stdv = paz.Prior(distributions.Normal(0.0, 1.0), name="stdv")
 
     def likelihood(mu, sigma):
-        return tfd.Normal(mu, jp.abs(sigma))
+        return distributions.Normal(mu, jp.abs(sigma))
 
     y_obs = paz.Observable(likelihood, name="y_obs")(mean, stdv)
     model = paz.PGM([mean, stdv], [y_obs], "simple")
@@ -182,11 +178,11 @@ def test_sample_forward_simple_model():
 
 
 def test_sample_forward_simple_model_batched():
-    mean = paz.Prior(tfd.Normal(0.0, 1.0), name="mean")
-    stdv = paz.Prior(tfd.Normal(0.0, 1.0), name="stdv")
+    mean = paz.Prior(distributions.Normal(0.0, 1.0), name="mean")
+    stdv = paz.Prior(distributions.Normal(0.0, 1.0), name="stdv")
 
     def likelihood(mu, sigma):
-        return tfd.Normal(mu, jp.abs(sigma))
+        return distributions.Normal(mu, jp.abs(sigma))
 
     y_obs = paz.Observable(likelihood, name="y_obs")(mean, stdv)
     model = paz.PGM([mean, stdv], [y_obs], "simple")
@@ -204,17 +200,17 @@ def test_sample_forward_hierarchical_single_sample():
     num_groups = 3
 
     def group_prior(mu, sigma):
-        return tfd.Independent(
-            tfd.Normal(jp.full(num_groups, mu), sigma),
+        return distributions.Independent(
+            distributions.Normal(jp.full(num_groups, mu), sigma),
             reinterpreted_batch_ndims=1,
         )
 
-    mu = paz.Prior(tfd.Normal(0.0, 1.0), name="mu")
-    sigma = paz.Prior(tfd.Normal(0.0, 1.0), name="sigma")
+    mu = paz.Prior(distributions.Normal(0.0, 1.0), name="mu")
+    sigma = paz.Prior(distributions.Normal(0.0, 1.0), name="sigma")
     groups = paz.Latent(group_prior, name="groups")(mu, sigma)
 
     def likelihood(group_params):
-        return tfd.Normal(group_params, 0.1)
+        return distributions.Normal(group_params, 0.1)
 
     y_obs = paz.Observable(likelihood, name="y_obs")(groups)
     model = paz.PGM([mu, sigma], [y_obs], "hierarchical")
@@ -233,17 +229,17 @@ def test_sample_forward_hierarchical_batched():
     num_samples = 10
 
     def group_prior(mu, sigma):
-        return tfd.Independent(
-            tfd.Normal(jp.full(num_groups, mu), sigma),
+        return distributions.Independent(
+            distributions.Normal(jp.full(num_groups, mu), sigma),
             reinterpreted_batch_ndims=1,
         )
 
-    mu = paz.Prior(tfd.Normal(0.0, 1.0), name="mu")
-    sigma = paz.Prior(tfd.Normal(0.0, 1.0), name="sigma")
+    mu = paz.Prior(distributions.Normal(0.0, 1.0), name="mu")
+    sigma = paz.Prior(distributions.Normal(0.0, 1.0), name="sigma")
     groups = paz.Latent(group_prior, name="groups")(mu, sigma)
 
     def likelihood(group_params):
-        return tfd.Normal(group_params, 0.1)
+        return distributions.Normal(group_params, 0.1)
 
     y_obs = paz.Observable(likelihood, name="y_obs")(groups)
     model = paz.PGM([mu, sigma], [y_obs], "hierarchical")
@@ -262,21 +258,21 @@ def test_sample_forward_hierarchical_regression():
     num_samples = 10
 
     def slope_prior(mu_slope, sigma_slope):
-        return tfd.Independent(
-            tfd.Normal(jp.full(num_groups, mu_slope), sigma_slope),
+        return distributions.Independent(
+            distributions.Normal(jp.full(num_groups, mu_slope), sigma_slope),
             reinterpreted_batch_ndims=1,
         )
 
     def intercept_prior(mu_intercept, sigma_intercept):
-        return tfd.Independent(
-            tfd.Normal(jp.full(num_groups, mu_intercept), sigma_intercept),
-            reinterpreted_batch_ndims=1,
-        )
+        loc = jp.full(num_groups, mu_intercept)
+        normal = distributions.Normal(loc, sigma_intercept)
+        return distributions.Independent(normal, 1)
 
-    mu_slope = paz.Prior(tfd.Normal(0.0, 1.0), name="mu_slope")
-    mu_intercept = paz.Prior(tfd.Normal(0.0, 1.0), name="mu_intercept")
-    sigma_slope = paz.Prior(tfd.Normal(0.0, 1.0), name="sigma_slope")
-    sigma_intercept = paz.Prior(tfd.Normal(0.0, 1.0), name="sigma_intercept")
+    mu_slope = paz.Prior(distributions.Normal(0.0, 1.0), name="mu_slope")
+    standard = distributions.Normal(0.0, 1.0)
+    mu_intercept = paz.Prior(standard, name="mu_intercept")
+    sigma_slope = paz.Prior(distributions.Normal(0.0, 1.0), name="sigma_slope")
+    sigma_intercept = paz.Prior(standard, name="sigma_intercept")
 
     slopes = paz.Latent(slope_prior, name="slopes")(mu_slope, sigma_slope)
     intercepts = paz.Latent(intercept_prior, name="intercepts")(
@@ -288,7 +284,7 @@ def test_sample_forward_hierarchical_regression():
 
     def likelihood(slopes, intercepts):
         means = slopes[group_idx] * X + intercepts[group_idx]
-        return tfd.Normal(means, 0.1)
+        return distributions.Normal(means, 0.1)
 
     y_obs = paz.Observable(likelihood, name="y_obs")(slopes, intercepts)
     priors = [mu_slope, mu_intercept, sigma_slope, sigma_intercept]
@@ -306,8 +302,9 @@ def test_sample_forward_hierarchical_regression():
 
 def build_bijected_prior_model():
     low, high = 0.1, 1.0
-    bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
-    x = Prior(tfd.Uniform(low, high), bijector=bijector, name="x")
+    affine = [bijectors.Shift(low), bijectors.Scale(high - low)]
+    bijector = bijectors.Chain(affine + [bijectors.Sigmoid()])
+    x = Prior(distributions.Uniform(low, high), bijector=bijector, name="x")
     return PGM([x], [x], "single_prior"), bijector, (low, high)
 
 
@@ -316,16 +313,18 @@ def build_two_observables_model():
     obs2 = jp.array([1.5, 1.6, 1.7])
 
     low, high = 0.1, 1.0
-    bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
+    affine = [bijectors.Shift(low), bijectors.Scale(high - low)]
+    bijector = bijectors.Chain(affine + [bijectors.Sigmoid()])
 
-    mean = Prior(tfd.Normal(0.0, 1.0), name="mean")
-    stdv = Prior(tfd.Uniform(low, high), bijector=bijector, name="stdv")
+    mean = Prior(distributions.Normal(0.0, 1.0), name="mean")
+    uniform = distributions.Uniform(low, high)
+    stdv = Prior(uniform, bijector=bijector, name="stdv")
 
     def likelihood1(mean, stdv):
-        return tfd.Normal(mean, stdv)
+        return distributions.Normal(mean, stdv)
 
     def likelihood2(mean, stdv):
-        return tfd.Normal(mean + 1, stdv)
+        return distributions.Normal(mean + 1, stdv)
 
     y1 = Observable(likelihood1, name="y1")(mean, stdv)
     y2 = Observable(likelihood2, name="y2")(mean, stdv)
@@ -335,10 +334,10 @@ def build_two_observables_model():
 
 def build_single_observable_model():
     observations = jp.array([0.5, 0.6, 0.7])
-    mean = Prior(tfd.Normal(0.0, 1.0), name="mean")
+    mean = Prior(distributions.Normal(0.0, 1.0), name="mean")
 
     def likelihood(mean):
-        return tfd.Normal(mean, 1.0)
+        return distributions.Normal(mean, 1.0)
 
     y = Observable(likelihood, name="y")(mean)
     return PGM([mean], [y], "single_observable"), observations
@@ -358,7 +357,7 @@ def test_prior_log_prob_fwd_matches_distribution():
     key = jax.random.PRNGKey(1)
     theta_inv = model.prior.sample_inverse(key)
     theta_fwd = to_forward_samples(model.prior.latent_space, theta_inv)
-    expected_fwd = tfd.Uniform(low, high).log_prob(theta_fwd.x)
+    expected_fwd = distributions.Uniform(low, high).log_prob(theta_fwd.x)
     actual_fwd = model.prior.log_prob(theta_fwd).log_prob_sum
     actual_inv = model.prior.log_prob_inverse(theta_inv).log_prob_sum
     expected_inv = expected_fwd + bijector.forward_log_det_jacobian(theta_inv.x)

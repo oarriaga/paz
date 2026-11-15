@@ -17,13 +17,12 @@ from collections import namedtuple
 import jax
 import jax.numpy as jp
 import numpy as np
-from tensorflow_probability.substrates import jax as tfp
 
+from paz.backend import distributions
 import paz
 import paz.utils.plot as plot
 from paz.inference.types import SampleType
 
-tfd = tfp.distributions
 
 LineParameters = namedtuple("LineParameters", ["slope", "bias"])
 LineSet = namedtuple("LineSet", ["left", "right"])
@@ -34,13 +33,13 @@ SwitchPlotArgs = namedtuple(
 
 
 def build_switch_model(x, sigma):
-    slope_left = paz.Prior(tfd.Normal(0.0, 1.0), name="slope_left")
-    bias_left = paz.Prior(tfd.Normal(0.0, 1.0), name="bias_left")
-    slope_right = paz.Prior(tfd.Normal(0.0, 1.0), name="slope_right")
-    bias_right = paz.Prior(tfd.Normal(0.0, 1.0), name="bias_right")
+    slope_left = paz.Prior(distributions.Normal(0.0, 1.0), name="slope_left")
+    bias_left = paz.Prior(distributions.Normal(0.0, 1.0), name="bias_left")
+    slope_right = paz.Prior(distributions.Normal(0.0, 1.0), name="slope_right")
+    bias_right = paz.Prior(distributions.Normal(0.0, 1.0), name="bias_right")
     num_switch_positions = x.shape[0] - 1
     switch_index = paz.Prior(
-        tfd.Categorical(
+        distributions.Categorical(
             logits=jp.zeros(num_switch_positions), dtype=jp.float32
         ),
         name="switch_index",
@@ -55,7 +54,7 @@ def build_switch_model(x, sigma):
         mean_left = slope_left * x + bias_left
         mean_right = slope_right * x + bias_right
         mean = jp.where(use_left, mean_left, mean_right)
-        return tfd.Normal(mean, sigma)
+        return distributions.Normal(mean, sigma)
 
     y_obs = paz.Observable(y_distribution, name="y")(
         slope_left, bias_left, slope_right, bias_right, switch_index

@@ -1,9 +1,5 @@
 import jax.numpy as jp
 import paz
-from tensorflow_probability.substrates import jax as tfp
-
-tfd = tfp.distributions
-tfb = tfp.bijectors
 
 
 def build_observation_model(render, floor):

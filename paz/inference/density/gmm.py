@@ -1,13 +1,11 @@
 import jax.numpy as jp
-from tensorflow_probability.substrates import jax as tfp
 
+from paz.backend import distributions
 from paz.inference.density.core import (
     _build_distribution_density,
     _flatten_samples,
 )
 from paz.inference.gmm.em import fit_gmm_em
-
-tfd = tfp.distributions
 
 
 def build_gmm_density(
@@ -31,14 +29,14 @@ def build_gmm_density(
         parameters.covariances,
     )
     if covariance == "diag":
-        components = tfd.MultivariateNormalDiag(
+        components = distributions.MultivariateNormalDiag(
             loc=means, scale_diag=jp.sqrt(covariances)
         )
     else:
-        components = tfd.MultivariateNormalFullCovariance(
+        components = distributions.MultivariateNormalFullCovariance(
             loc=means, covariance_matrix=covariances
         )
-    distribution = tfd.MixtureSameFamily(
-        tfd.Categorical(probs=weights), components
+    distribution = distributions.MixtureSameFamily(
+        distributions.Categorical(probs=weights), components
     )
     return _build_distribution_density(distribution, latent_space, unravel)

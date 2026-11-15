@@ -2,13 +2,12 @@ from collections import namedtuple
 
 import jax
 import jax.numpy as jp
-from tensorflow_probability.substrates import jax as tfp
 
+from paz.backend import distributions
+from paz.backend import bijectors
 import paz
 import paz.utils.plot as plot
 
-tfd = tfp.distributions
-tfb = tfp.bijectors
 PosteriorResult = namedtuple(
     "PosteriorResult", ["posterior", "acceptance_rate"]
 )
@@ -18,15 +17,16 @@ TrueParameters = namedtuple("TrueParameters", ["mean", "bias", "stdv"])
 def build_model(inputs, low, high):
     def likelihood(inputs):
         def apply(mean, bias, stdv):
-            return tfd.Normal(mean * inputs + bias, stdv)
+            return distributions.Normal(mean * inputs + bias, stdv)
 
         return apply
 
-    mean = paz.Prior(tfd.Normal(0.0, 1.0), name="mean")
-    bias = paz.Prior(tfd.Normal(0.0, 1.0), name="bias")
-    bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
+    mean = paz.Prior(distributions.Normal(0.0, 1.0), name="mean")
+    bias = paz.Prior(distributions.Normal(0.0, 1.0), name="bias")
+    affine = [bijectors.Shift(low), bijectors.Scale(high - low)]
+    bijector = bijectors.Chain(affine + [bijectors.Sigmoid()])
     stdv = paz.Prior(
-        tfd.Uniform(low, high), name="stdv", bijector=bijector
+        distributions.Uniform(low, high), name="stdv", bijector=bijector
     )
     y_pred = paz.Observable(likelihood(inputs), name="y_pred")(
         mean, bias, stdv
@@ -42,8 +42,6 @@ def compute_posterior(model, key, data, num_samples, **infer_kwargs):
 
 def setup_plot_style():
     plot.configure(fontsize=11)
-
-
 
 
 def plot_posterior(

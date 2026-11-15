@@ -1,17 +1,15 @@
 import jax
 import jax.numpy as jp
-from tensorflow_probability.substrates import jax as tfp
 
+from paz.backend import distributions
+from paz.backend import bijectors
 import paz
 import paz.utils.plot as plot
-
-tfd = tfp.distributions
-tfb = tfp.bijectors
 
 
 def Likelihood(X):
     def apply(mean, bias, stdv):
-        return tfd.Normal(mean * X + bias, stdv)
+        return distributions.Normal(mean * X + bias, stdv)
 
     return apply
 
@@ -21,11 +19,13 @@ X = jp.linspace(0, 1, 200)
 data = 0.5 * X + 0.1 + 0.05 * jp.sin(50 * X)
 
 # Model definition
-mean = paz.Prior(tfd.Normal(0.0, 1.0), name="mean")
-bias = paz.Prior(tfd.Normal(0.0, 1.0), name="bias")
+mean = paz.Prior(distributions.Normal(0.0, 1.0), name="mean")
+bias = paz.Prior(distributions.Normal(0.0, 1.0), name="bias")
 low, high = 0.001, 0.3
-bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
-stdv = paz.Prior(tfd.Uniform(low, high), name="stdv", bijector=bijector)
+affine = [bijectors.Shift(low), bijectors.Scale(high - low)]
+bijector = bijectors.Chain(affine + [bijectors.Sigmoid()])
+uniform = distributions.Uniform(low, high)
+stdv = paz.Prior(uniform, name="stdv", bijector=bijector)
 y = paz.Observable(Likelihood(X), name="y_pred")(mean, bias, stdv)
 model = paz.PGM([mean, bias, stdv], [y], "line")
 

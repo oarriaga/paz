@@ -1,14 +1,12 @@
 import jax.numpy as jp
-from tensorflow_probability.substrates import jax as tfp
 
+from paz.backend import distributions
 from paz.inference.density.core import (
     _build_distribution_density,
     _compute_covariance,
     _flatten_samples,
     _lowrank_covariance,
 )
-
-tfd = tfp.distributions
 
 
 def build_gaussian_density(
@@ -18,10 +16,10 @@ def build_gaussian_density(
     mean = jp.mean(flat_samples, axis=0)
     if covariance == "diag":
         var = jp.var(flat_samples, axis=0) + regularization
-        distribution = tfd.MultivariateNormalDiag(mean, jp.sqrt(var))
+        distribution = distributions.MultivariateNormalDiag(mean, jp.sqrt(var))
     else:
         cov = _compute_covariance(flat_samples, regularization)
         if covariance == "lowrank":
             cov = _lowrank_covariance(cov, rank, regularization)
-        distribution = tfd.MultivariateNormalFullCovariance(mean, cov)
+        distribution = distributions.MultivariateNormalFullCovariance(mean, cov)
     return _build_distribution_density(distribution, latent_space, unravel)

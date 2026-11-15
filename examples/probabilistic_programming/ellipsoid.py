@@ -3,14 +3,13 @@ import jax
 import jax.numpy as jp
 import numpy as np
 import trimesh
-from tensorflow_probability.substrates import jax as tfp
 
+from paz.backend import distributions
+from paz.backend import bijectors
 import paz
 from paz.inference.latent_space import to_forward_samples, to_inverse_samples
 from optimizers import optimize
 
-tfd = tfp.distributions
-tfb = tfp.bijectors
 
 PointcloudStatistics = namedtuple(
     "PointcloudStatistics",
@@ -46,14 +45,16 @@ def build_mean_priors(statistics):
     stdvs = [statistics.x_stdv, statistics.y_stdv, statistics.z_stdv]
     # center should not wander multiple cloud-stds without strong evidence
     scales = [0.10 * s for s in stdvs]  # try 0.25*s if too tight
-    iterator = zip(means, scales, names)
-    return [paz.Prior(tfd.Laplace(m, sc), name=n) for m, sc, n in iterator]
+    priors = []
+    for mean, scale, name in zip(means, scales, names):
+        priors.append(paz.Prior(distributions.Laplace(mean, scale), name=name))
+    return priors
 
 
 # def build_bounded_axis_prior(stdv, name):
 #     upper = 3.0 * stdv
-#     bijector = tfb.Chain([tfb.Shift(0.0), tfb.Scale(upper), tfb.Sigmoid()])
-#     distribution = tfd.TruncatedNormal(2.0 * stdv, 0.1, 0.0, upper)
+#     bijector = bijectors.Chain([bijectors.Shift(0.0), bijectors.Scale(upper), bijectors.Sigmoid()])
+#     distribution = distributions.TruncatedNormal(2.0 * stdv, 0.1, 0.0, upper)
 #     return paz.Prior(distribution, bijector=bijector, name=name)
 
 
@@ -98,14 +99,15 @@ def build_bounded_axis_prior(axis_standard_deviation, axis_name):
     axis_low = epsilon_relative_to_mean * axis_mean
     axis_high = axis_upper_factor * axis_mean
 
-    truncated_normal_distribution = tfd.TruncatedNormal( loc=axis_mean, scale=axis_scale, low=axis_low, high=axis_high)  # fmt: skip
+    truncated_normal_distribution = distributions.TruncatedNormal( loc=axis_mean, scale=axis_scale, low=axis_low, high=axis_high)  # fmt: skip
     return paz.Prior(truncated_normal_distribution, name=axis_name)
 
 
 def build_back_axis_prior(stdv, name):
     upper = 6.0 * stdv
-    bijector = tfb.Chain([tfb.Shift(0.0), tfb.Scale(upper), tfb.Sigmoid()])
-    distribution = tfd.TruncatedNormal(2.0 * stdv, 1.0, 0.0, upper)
+    affine = [bijectors.Shift(0.0), bijectors.Scale(upper)]
+    bijector = bijectors.Chain(affine + [bijectors.Sigmoid()])
+    distribution = distributions.TruncatedNormal(2.0 * stdv, 1.0, 0.0, upper)
     return paz.Prior(distribution, bijector=bijector, name=name)
 
 
@@ -124,8 +126,8 @@ def build_surface_likelihood(observations):
     def distribution_fn(x_mean, y_mean, z_mean, x_axis, y_axis, z_axis):
         args = (x, y, z, x_mean, y_mean, z_mean, x_axis, y_axis, z_axis)
         residuals = compute_surface_equation(*args)
-        # return tfd.Laplace(residuals, scale=0.01)
-        return tfd.Normal(residuals, scale=0.01)
+        # return distributions.Laplace(residuals, scale=0.01)
+        return distributions.Normal(residuals, scale=0.01)
 
     return distribution_fn
 
