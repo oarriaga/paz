@@ -1,10 +1,9 @@
 from collections import namedtuple
 
-from tensorflow_probability.substrates import jax as tfp
 
+from paz.backend import bijectors
 from paz.inference.types import SampleType
 
-tfb = tfp.bijectors
 
 LatentSpace = namedtuple("LatentSpace", ["names", "bijectors", "Sample"])
 
@@ -18,7 +17,7 @@ def build_latent_space(latent_nodes):
 
 def _get_latent_bijector(node):
     bijector = node.bijector
-    return tfb.Identity() if bijector is None else bijector
+    return bijectors.Identity() if bijector is None else bijector
 
 
 def as_latent_samples(latent_space, samples):

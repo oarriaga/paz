@@ -1,24 +1,23 @@
 import jax
 import jax.numpy as jp
-from tensorflow_probability.substrates import jax as tfp
 
+from paz.backend import distributions
+from paz.backend import bijectors
 import paz
 from paz.inference.observable import Observable
 from paz.inference.pgm import PGM
 from paz.inference.prior import Prior
 from paz.inference.latent_space import to_forward_samples
 
-tfd = tfp.distributions
-tfb = tfp.bijectors
-
 
 def build_bijected_model():
     low, high = 0.1, 1.0
-    bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
-    x = Prior(tfd.Uniform(low, high), bijector=bijector, name="x")
+    affine = [bijectors.Shift(low), bijectors.Scale(high - low)]
+    bijector = bijectors.Chain(affine + [bijectors.Sigmoid()])
+    x = Prior(distributions.Uniform(low, high), bijector=bijector, name="x")
 
     def likelihood(x_value):
-        return tfd.Normal(x_value, 0.5)
+        return distributions.Normal(x_value, 0.5)
 
     y = Observable(likelihood, name="y")(x)
     data = {"y": jp.array(0.2)}

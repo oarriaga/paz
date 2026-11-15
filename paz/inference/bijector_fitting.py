@@ -1,11 +1,9 @@
 import jax
 import jax.numpy as jp
 import optax
-from tensorflow_probability.substrates import jax as tfp
 
+from paz.backend import distributions
 import paz.utils.progressbar as progressbar
-
-tfd = tfp.distributions
 
 
 def fit_bijector(source_distribution, target_distribution, initial_bijector, key, num_samples=10_000, optimizer=None, num_steps=1000, verbose=True):  # fmt: skip
@@ -19,7 +17,7 @@ def fit_bijector(source_distribution, target_distribution, initial_bijector, key
     def loss_fn(parameters):
         bijector = jax.tree_util.tree_unflatten(treedef, parameters)
         kwargs = {"distribution": source_distribution, "bijector": bijector}
-        transformed = tfd.TransformedDistribution(**kwargs)
+        transformed = distributions.TransformedDistribution(**kwargs)
         return -jp.mean(transformed.log_prob(target_samples))
 
     @jax.jit

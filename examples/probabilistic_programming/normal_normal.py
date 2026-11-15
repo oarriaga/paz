@@ -19,12 +19,10 @@ import jax
 import jax.numpy as jp
 import numpy as np
 from collections import namedtuple
-from tensorflow_probability.substrates import jax as tfp
 
+from paz.backend import distributions
 import paz
 import paz.utils.plot as plot
-
-tfd = tfp.distributions
 
 
 AnalyticalPosterior = namedtuple("AnalyticalPosterior", ["mean", "stdv"])
@@ -58,13 +56,13 @@ def build_normal_normal_model(
 
     def Likelihood(likelihood_stdv, num_observations):
         def apply(mu):
-            return tfd.Normal(
+            return distributions.Normal(
                 loc=jp.full(num_observations, mu), scale=likelihood_stdv
             )
 
         return apply
 
-    mu = paz.Prior(tfd.Normal(prior_mean, prior_stdv), name="mu")
+    mu = paz.Prior(distributions.Normal(prior_mean, prior_stdv), name="mu")
     x = paz.Observable(Likelihood(likelihood_stdv, num_observations), name="x")(
         mu
     )
@@ -210,9 +208,9 @@ x_range = np.linspace(
     200,
 )
 analytical_pdf = np.array(
-    tfd.Normal(analytical.mean, analytical.stdv).prob(x_range)
+    distributions.Normal(analytical.mean, analytical.stdv).prob(x_range)
 )
-prior_pdf = np.array(tfd.Normal(prior_mean, prior_stdv).prob(x_range))
+prior_pdf = np.array(distributions.Normal(prior_mean, prior_stdv).prob(x_range))
 gaussian_fit_pdf = np.array(gaussian_density.prob({"mu": x_range}))
 
 fig, ax = plot.subplots()
@@ -251,7 +249,7 @@ fig, ax = plot.subplots()
 sorted_samples = np.sort(np.array(posterior_samples))
 n = len(sorted_samples)
 theoretical_quantiles = np.array(
-    tfd.Normal(analytical.mean, analytical.stdv).quantile(
+    distributions.Normal(analytical.mean, analytical.stdv).quantile(
         np.linspace(0.001, 0.999, n)
     )
 )

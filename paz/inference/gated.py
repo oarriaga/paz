@@ -1,9 +1,7 @@
 import jax.numpy as jp
 
+from paz.backend import distributions
 from paz.inference.latent import Latent
-from tensorflow_probability.substrates import jax as tfp
-
-tfd = tfp.distributions
 
 
 # A variable that exists only when its gate is on. Off, it collapses to a
@@ -14,8 +12,8 @@ def Gated(distribution_fn, name=None):
         raise ValueError(f"Input {distribution_fn} must be a callable")
 
     def build_gated(gate, *args):
-        weights = tfd.Categorical(probs=jp.stack([1.0 - gate, gate]))
-        components = [tfd.Deterministic(0.0), distribution_fn(*args)]
-        return tfd.Mixture(weights, components)
+        probs = jp.stack([1.0 - gate, gate])
+        components = [distributions.Deterministic(0.0), distribution_fn(*args)]
+        return distributions.Mixture(probs, components)
 
     return Latent(build_gated, name=name)

@@ -1,10 +1,8 @@
 import jax
+from paz.backend import distributions
 import paz
 import jax.numpy as jp
 import optax
-from tensorflow_probability.substrates import jax as tfp
-
-tfd = tfp.distributions
 
 
 def fit_least_squares(pointcloud):
@@ -115,7 +113,8 @@ def fit_student_t(
     def compute_student_t_loss(normal, centroid, scale, DOF, points):
         unit_normal = normal / jp.linalg.norm(normal)
         distances = jp.dot(points - centroid, unit_normal)
-        return -tfd.StudentT(DOF, 0.0, scale).log_prob(distances).sum()
+        student_t = distributions.StudentT(DOF, 0.0, scale)
+        return -student_t.log_prob(distances).sum()
 
     def initialize_state(pointcloud):
         return (jp.array([0.0, 1.0, 0.0]), jp.mean(pointcloud, axis=0))
@@ -133,7 +132,7 @@ def fit_laplace(pointcloud, state=None, optimizer=None, scale=0.01, steps=200):
     def compute_laplace_loss(normal, centroid, scale, points):
         unit_normal = normal / jp.linalg.norm(normal)
         distances = jp.dot(points - centroid, unit_normal)
-        return -tfd.Laplace(0.0, scale).log_prob(distances).sum()
+        return -distributions.Laplace(0.0, scale).log_prob(distances).sum()
 
     def initialize_state(pointcloud):
         return (jp.array([0.0, 1.0, 0.0]), jp.mean(pointcloud, axis=0))

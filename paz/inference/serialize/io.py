@@ -7,7 +7,6 @@ from datetime import datetime, timezone
 import jax
 import jax.numpy as jp
 import numpy as np
-from tensorflow_probability.substrates import jax as tfp
 
 PAZ_FORMAT_VERSION = "1.0"
 
@@ -20,7 +19,6 @@ def _build_manifest(object_type, schema_version):
         "created_at": datetime.now(timezone.utc).isoformat(),
         "paz_version": None,
         "jax_version": jax.__version__,
-        "tfp_version": tfp.__version__,
         "python_version": sys.version.split()[0],
     }
 

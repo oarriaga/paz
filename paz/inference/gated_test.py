@@ -1,18 +1,17 @@
 import jax
 import jax.numpy as jp
 import pytest
-from tensorflow_probability.substrates import jax as tfp
 
+from paz.backend import distributions
 import paz
 from paz.inference.gated import Gated
 
-tfd = tfp.distributions
 
 PROBS = jp.array([0.25, 0.5, 0.25])
 
 
 def build_choice():
-    return tfd.Categorical(probs=PROBS, dtype=jp.float32)
+    return distributions.Categorical(probs=PROBS, dtype=jp.float32)
 
 
 def test_gated_invalid_callable_raises():
@@ -36,7 +35,7 @@ def test_gated_on_matches_inner_distribution():
 
 
 def test_gated_inside_pgm_scores_both_branches():
-    include = paz.Prior(tfd.Bernoulli(probs=0.5, dtype=jp.float32),
+    include = paz.Prior(distributions.Bernoulli(probs=0.5, dtype=jp.float32),
                         name="include")
     choice = Gated(build_choice, name="choice")(include)
     model = paz.PGM([include], [include, choice], "gated")

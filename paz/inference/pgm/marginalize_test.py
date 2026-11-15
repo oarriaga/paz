@@ -1,7 +1,8 @@
 import jax.numpy as jp
 import pytest
-from tensorflow_probability.substrates import jax as tfp
 
+from paz.backend import distributions
+from paz.backend import bijectors
 from paz.inference.latent import Latent
 from paz.inference.pgm import marginalize, recover_discrete_posterior
 from paz.inference.observable import Observable
@@ -9,26 +10,23 @@ from paz.inference.pgm import PGM
 from paz.inference.prior import Prior
 from paz.inference.types import SampleType
 
-tfd = tfp.distributions
-tfb = tfp.bijectors
-
 
 def build_scalar_mixture_model(
     mu0_value, mu1_value, sigma_value, p_value, y_value
 ):
-    mu0 = Prior(tfd.Deterministic(mu0_value), name="mu0")
-    mu1 = Prior(tfd.Deterministic(mu1_value), name="mu1")
-    sigma = Prior(tfd.Deterministic(sigma_value), name="sigma")
-    p = Prior(tfd.Deterministic(p_value), name="p")
+    mu0 = Prior(distributions.Deterministic(mu0_value), name="mu0")
+    mu1 = Prior(distributions.Deterministic(mu1_value), name="mu1")
+    sigma = Prior(distributions.Deterministic(sigma_value), name="sigma")
+    p = Prior(distributions.Deterministic(p_value), name="p")
 
     def z_distribution(p):
-        return tfd.Bernoulli(probs=p)
+        return distributions.Bernoulli(probs=p)
 
     z = Latent(z_distribution, name="z")(p)
 
     def y_distribution(z, mu0, mu1, sigma):
         mean = jp.where(z == 1, mu1, mu0)
-        return tfd.Normal(mean, sigma)
+        return distributions.Normal(mean, sigma)
 
     y_obs = Observable(y_distribution, name="y_obs")(
         z, mu0, mu1, sigma
@@ -42,17 +40,22 @@ def make_theta_inverse_samples(mu0_value, mu1_value, sigma_value, p_value):
     return Sample(mu0_value, mu1_value, sigma_value, p_value)
 
 
+def compute_normal_log_pdf(mean, stdv, value):
+    z = (value - mean) / stdv
+    return -0.5 * z**2 - 0.5 * jp.log(2.0 * jp.pi) - jp.log(stdv)
+
+
 def compute_analytic_log_marginal(mu0_value, mu1_value, sigma_value, p_value, y_value):
-    log_prob0 = tfd.Normal(mu0_value, sigma_value).log_prob(y_value)
-    log_prob1 = tfd.Normal(mu1_value, sigma_value).log_prob(y_value)
+    log_prob0 = compute_normal_log_pdf(mu0_value, sigma_value, y_value)
+    log_prob1 = compute_normal_log_pdf(mu1_value, sigma_value, y_value)
     log_joint0 = jp.log1p(-p_value) + log_prob0
     log_joint1 = jp.log(p_value) + log_prob1
     return jp.logaddexp(log_joint0, log_joint1)
 
 
 def compute_analytic_posterior(mu0_value, mu1_value, sigma_value, p_value, y_value):
-    log_prob0 = tfd.Normal(mu0_value, sigma_value).log_prob(y_value)
-    log_prob1 = tfd.Normal(mu1_value, sigma_value).log_prob(y_value)
+    log_prob0 = compute_normal_log_pdf(mu0_value, sigma_value, y_value)
+    log_prob1 = compute_normal_log_pdf(mu1_value, sigma_value, y_value)
     logits = jp.stack([jp.log1p(-p_value) + log_prob0, jp.log(p_value) + log_prob1])
     return jp.exp(logits - jp.logaddexp(logits[0], logits[1]))
 
@@ -142,21 +145,22 @@ def test_marginalize_multiple_names_raises():
 
 
 def test_marginalize_nonfinite_discrete_raises():
-    z = Prior(tfd.Poisson(1.0), name="z")
+    z = Prior(distributions.Poisson(1.0), name="z")
     pgm = PGM([z], [z], "poisson")
     with pytest.raises(NotImplementedError):
         marginalize(pgm, ["z"])
 
 
 def test_marginalize_vector_discrete_raises():
-    z = Prior(tfd.Bernoulli(logits=jp.zeros((2,))), name="z")
+    z = Prior(distributions.Bernoulli(logits=jp.zeros((2,))), name="z")
     pgm = PGM([z], [z], "vector_bernoulli")
     with pytest.raises(NotImplementedError):
         marginalize(pgm, ["z"])
 
 
 def test_marginalize_discrete_non_identity_bijector_raises():
-    z = Prior(tfd.Bernoulli(0.5), name="z", bijector=tfb.Sigmoid())
+    bernoulli = distributions.Bernoulli(0.5)
+    z = Prior(bernoulli, name="z", bijector=bijectors.Sigmoid())
     pgm = PGM([z], [z], "bijected_bernoulli")
     with pytest.raises(NotImplementedError):
         marginalize(pgm, ["z"])

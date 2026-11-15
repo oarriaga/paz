@@ -1,16 +1,13 @@
 import jax.numpy as jp
-from tensorflow_probability.substrates import jax as tfp
 
+from paz.backend import distributions
 from paz.inference.density import core
 from paz.inference.latent_space import build_latent_space
 from paz.inference.prior import Prior
 
 
-tfd = tfp.distributions
-
-
 def _build_latent_space():
-    prior = Prior(tfd.Normal(0.0, 1.0), name="x")
+    prior = Prior(distributions.Normal(0.0, 1.0), name="x")
     return build_latent_space([prior])
 
 

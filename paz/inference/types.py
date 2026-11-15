@@ -1,12 +1,8 @@
 from collections import namedtuple
-from tensorflow_probability.substrates import jax as tfp
 
-from paz.backend import distributions as pzd
+from paz.backend import distributions
 
-tfd = tfp.distributions
-tfb = tfp.bijectors
-
-Distribution = (tfd.Distribution, pzd.Distribution)
+Distribution = distributions.Distribution
 NodeState = namedtuple("NodeState", ["sample", "log_prob", "log_prob_sum"])
 Variable = namedtuple(
     "Variable",
