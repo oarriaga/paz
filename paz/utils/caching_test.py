@@ -321,35 +321,11 @@ def test_cache_read_only_directory(tmp_path):
         tmp_path.chmod(0o755)
 
 
-def write_programs(directory, sizes):
-    paths = []
-    for index, size in enumerate(sizes):
-        path = directory / f"program_{index}.program"
-        path.write_bytes(bytes(size))
-        os.utime(path, (index, index))
-        paths.append(path)
-    return paths
-
-
-def test_evict_removes_oldest(tmp_path):
-    oldest, middle, newest = write_programs(tmp_path, [10, 20, 30])
-    caching.evict(newest, 30, 50)
-    assert list_programs(tmp_path) == [middle, newest]
-
-
-def test_evict_keeps_newest_over_budget(tmp_path):
-    newest = write_programs(tmp_path, [10, 20, 30])[-1]
-    caching.evict(newest, 30, 5)
-    assert list_programs(tmp_path) == [newest]
-
-
-def test_cache_hit_refreshes_mtime(tmp_path):
-    paz.cache(sum_squares, tmp_path)(jp.ones(3))
-    (path,) = list_programs(tmp_path)
-    os.utime(path, (0, 0))
-    restart()
-    paz.cache(sum_squares, tmp_path)(jp.ones(3))
-    assert path.stat().st_mtime > 0
+def test_cache_warns_over_budget(tmp_path):
+    (tmp_path / "old.program").write_bytes(bytes(100))
+    with pytest.warns(UserWarning, match="clear_cache"):
+        caching.warn_if_large(tmp_path, 50)
+    assert (tmp_path / "old.program").exists()
 
 
 def test_clear_cache_removes_programs_only(tmp_path):

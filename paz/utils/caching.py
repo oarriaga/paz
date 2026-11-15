@@ -5,8 +5,8 @@ import pickle
 import inspect
 import hashlib
 import tempfile
+import warnings
 import functools
-import contextlib
 import importlib.metadata
 from pathlib import Path
 
@@ -40,6 +40,7 @@ def cache(function, cache_dir=CACHE_DIR, static_argnums=(), static_argnames=(), 
     them. `jax.vmap` and `jax.grad` cannot be applied to the result; apply
     them inside `function`. Host callbacks (`jax.debug.print`) cannot be
     exported. Files are read with pickle: only use a trusted `cache_dir`.
+    Warns when `cache_dir` holds more than 2 GiB; nothing is deleted.
     """
     plain = unwrap_jit(function)
     validate(plain, key)
@@ -184,19 +185,11 @@ def describe_flags():
 
 def load(path, flat_function, leaves):
     try:
-        content = read(path)
+        content = path.read_bytes()
     except FileNotFoundError:
         content = trace(flat_function, leaves)
         write(path, content)
     return unpack(path, content)
-
-
-def read(path):
-    content = path.read_bytes()
-    # a read-only cache directory still serves hits
-    with contextlib.suppress(OSError):
-        os.utime(path)
-    return content
 
 
 def trace(flat_function, leaves):
@@ -220,26 +213,14 @@ def write(path, content):
         os.replace(temporary, path)
     finally:
         Path(temporary).unlink(missing_ok=True)
-    evict(path, len(content), 2 * 1024**3)
+    warn_if_large(path.parent, 2 * 1024**3)
 
 
-def evict(kept_path, kept_size, max_bytes):
-    stats = stat_programs(kept_path.parent, kept_path)
-    stats.sort(key=lambda item: item[1].st_mtime, reverse=True)
-    total = kept_size
-    for path, stat in stats:
-        total = total + stat.st_size
-        if total > max_bytes:
-            path.unlink(missing_ok=True)
-
-
-def stat_programs(directory, kept_path):
-    stats = []
-    for path in directory.glob("*.program"):
-        # another process may evict the same file meanwhile
-        with contextlib.suppress(FileNotFoundError):
-            stats.append((path, path.stat()))
-    return [item for item in stats if item[0] != kept_path]
+def warn_if_large(directory, max_bytes):
+    total = sum(path.stat().st_size for path in directory.glob("*.program"))
+    if total > max_bytes:
+        message = f"{directory} holds {total / 1024**3:.1f} GiB of programs"
+        warnings.warn(f"{message}; paz.clear_cache() deletes them")
 
 
 def unpack(path, content):
