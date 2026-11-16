@@ -584,7 +584,6 @@ def test_observable_receives_constrained_stdv():
 def test_observable_scale_is_positive():
     """Verify that Normal distribution in observable has positive scale."""
     X = jp.array([0.0, 1.0])
-    observations = jp.array([0.1, 0.6])
 
     def Likelihood(X):
         def apply(stdv):
