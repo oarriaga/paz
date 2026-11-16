@@ -78,10 +78,6 @@ def test_scalar_bijector_fuzz():
             assert_transforms(bijector, forward, domain, 0, log_det)
 
 
-def softmax_centered(x):
-    return jax.nn.softmax(jp.concatenate([x, jp.zeros(1)]))
-
-
 def build_vector_bijectors(key):
     scale = sample(key[1], (), 0.3, 4)
     scale_first = B.Chain([B.SoftmaxCentered(), B.Scale(scale)])
@@ -99,6 +95,10 @@ def build_vector_bijectors(key):
         (scale_last, lambda x: scale * softmax_centered(x),
          lambda x: softmax_log_det(x) + scale_log_det),
     ]
+
+
+def softmax_centered(x):
+    return jax.nn.softmax(jp.concatenate([x, jp.zeros(1)]))
 
 
 # SoftmaxCentered maps 4 numbers to 5, so its Jacobian J is not square and

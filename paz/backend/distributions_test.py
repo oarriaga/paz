@@ -1,3 +1,5 @@
+from collections import namedtuple
+
 import jax
 import jax.numpy as jp
 import pytest
@@ -8,6 +10,9 @@ from paz.backend import bijectors as B
 from paz.backend import distributions as D
 
 ROUNDS = 25
+Quantized = namedtuple("Quantized", [
+    "log_prob", "prob", "cdf", "log_cdf", "survival_function",
+    "log_survival_function"])
 KEY = jax.random.PRNGKey(0)
 
 
@@ -45,17 +50,23 @@ SCIPY_NAMES = {
     "log_prob": "logpdf", "prob": "pdf", "cdf": "cdf", "log_cdf": "logcdf",
     "survival_function": "sf", "log_survival_function": "logsf",
     "mean": "mean", "variance": "var", "stddev": "std", "entropy": "entropy"}
-SCALAR = ["log_prob", "prob", "cdf", "log_cdf", "survival_function",
-          "log_survival_function"]
+DISCRETE_NAMES = {**SCIPY_NAMES, "log_prob": "logpmf", "prob": "pmf"}
 DENSITY = ["log_prob", "prob"]
-CUMULATIVE = ["log_prob", "prob", "cdf"]
-MOMENTS = ["mean", "variance", "stddev", "entropy"]
+CUMULATIVE = DENSITY + ["cdf"]
+SURVIVAL = ["survival_function", "log_survival_function"]
+SCALAR = CUMULATIVE + ["log_cdf"] + SURVIVAL
+SPREAD = ["mean", "variance", "stddev"]
+MOMENTS = SPREAD + ["entropy"]
 
 
 def assert_methods(distribution, reference, values, methods):
+    assert_named_methods(distribution, reference, values, methods, SCIPY_NAMES)
+
+
+def assert_named_methods(distribution, reference, values, methods, names):
     for method in methods:
         actual = getattr(distribution, method)(values)
-        expected = getattr(reference, SCIPY_NAMES[method])(values)
+        expected = getattr(reference, names[method])(values)
         assert_close(actual, expected)
 
 
@@ -80,25 +91,25 @@ def build_continuous(key):
     bounds = ((low - loc) / scale, (high - loc) / scale)
     truncated = stats.truncnorm(*bounds, loc, scale)
     truncated_normal = D.TruncatedNormal(loc, scale, low, high)
-    with_survival = CUMULATIVE + SCALAR[4:]
-    # Gumbel log_cdf and TruncatedNormal log_survival_function are the log
-    # of a probability that rounds to zero in the far tail, so they are
-    # left out.
+    with_log_cdf = CUMULATIVE + ["log_cdf"]
+    # TruncatedNormal log_survival_function is the log of a probability
+    # that rounds to zero in the far tail, so it is left out.
+    without_log_survival = with_log_cdf + ["survival_function"]
     return [
         (D.Normal(loc, scale), stats.norm(loc, scale), real, SCALAR),
         (D.Laplace(loc, scale), stats.laplace(loc, scale), real, SCALAR),
         (D.StudentT(df, loc, scale), stats.t(df, loc, scale), real, DENSITY),
         (D.LogNormal(loc, scale), log_normal, positive, SCALAR),
         (D.Logistic(loc, scale), stats.logistic(loc, scale), real, SCALAR),
-        (D.Gumbel(loc, scale), stats.gumbel_r(loc, scale), real, CUMULATIVE),
+        (D.Gumbel(loc, scale), stats.gumbel_r(loc, scale), real, with_log_cdf),
         (D.Cauchy(loc, scale), stats.cauchy(loc, scale), real, CUMULATIVE),
         (D.Gamma(positive, scale), gamma, positive, CUMULATIVE),
         (D.Exponential(scale), stats.expon(0.0, 1.0 / scale), positive,
-         with_survival),
+         CUMULATIVE + SURVIVAL),
         (D.InverseGamma(positive, scale), inverse_gamma, positive, CUMULATIVE),
         (D.Chi2(df), stats.chi2(df), positive, CUMULATIVE),
         (D.HalfNormal(scale), stats.halfnorm(0.0, scale), positive, SCALAR),
-        (truncated_normal, truncated, real, SCALAR[:5]),
+        (truncated_normal, truncated, real, without_log_survival),
     ]
 
 
@@ -182,7 +193,6 @@ def test_categorical_fuzz():
 
 
 def test_bernoulli_and_poisson_fuzz():
-    names = {"log_prob": "logpmf", "prob": "pmf"}
     for round_index in range(ROUNDS):
         key = jax.random.split(jax.random.fold_in(KEY, round_index), 4)
         logits = sample(key[0], (4,), -5, 5)
@@ -192,17 +202,11 @@ def test_bernoulli_and_poisson_fuzz():
         bernoulli = stats.bernoulli(jax.nn.sigmoid(logits))
         poisson = stats.poisson(rate)
         cases = [(D.Bernoulli(logits=logits), bernoulli, binary, MOMENTS),
-                 (D.Poisson(rate=rate), poisson, counts, MOMENTS[:3])]
+                 (D.Poisson(rate=rate), poisson, counts, SPREAD)]
         for distribution, reference, values, moments in cases:
-            for method in DENSITY:
-                actual = getattr(distribution, method)(values)
-                expected = getattr(reference, names[method])(values)
-                assert_close(actual, expected)
+            args = (distribution, reference, values, DENSITY, DISCRETE_NAMES)
+            assert_named_methods(*args)
             assert_moments(distribution, reference, moments)
-
-
-def stack_rows(function, *arrays):
-    return jp.stack([function(*rows) for rows in zip(*arrays)])
 
 
 def test_multivariate_normal_diag_fuzz():
@@ -223,6 +227,10 @@ def test_multivariate_normal_diag_fuzz():
         assert_moment(normal.covariance(), stack_rows(jp.diag, scale**2))
 
 
+def stack_rows(function, *arrays):
+    return jp.stack([function(*rows) for rows in zip(*arrays)])
+
+
 def test_dirichlet_fuzz():
     for round_index in range(ROUNDS):
         key = jax.random.split(jax.random.fold_in(KEY, round_index), 2)
@@ -238,22 +246,6 @@ def test_dirichlet_fuzz():
             expected = stack_rows(compute, concentration)
             name = "variance" if method == "var" else method
             assert_moment(getattr(dirichlet, name)(), expected)
-
-
-def compute_kl_references(loc_a, loc_b, scale_a, scale_b, logits_a, logits_b):
-    normal = jp.log(scale_b / scale_a) - 0.5
-    normal += (scale_a**2 + (loc_a - loc_b)**2) / (2.0 * scale_b**2)
-    probs = jax.nn.sigmoid(loc_a)
-    log_ratio = jax.nn.log_sigmoid(loc_a) - jax.nn.log_sigmoid(loc_b)
-    log_ratio_off = jax.nn.log_sigmoid(-loc_a) - jax.nn.log_sigmoid(-loc_b)
-    bernoulli = probs * log_ratio + (1.0 - probs) * log_ratio_off
-    # Beta(a, b) against Beta(b, a).
-    difference = scale_a - scale_b
-    digammas = special.digamma(scale_a) - special.digamma(scale_b)
-    beta = difference * digammas
-    log_a, log_b = jax.nn.log_softmax(logits_a), jax.nn.log_softmax(logits_b)
-    categorical = jp.sum(jp.exp(log_a) * (log_a - log_b), axis=-1)
-    return [normal, bernoulli, beta, categorical]
 
 
 def test_kl_divergence_fuzz():
@@ -276,9 +268,20 @@ def test_kl_divergence_fuzz():
             assert_close(D.kl_divergence(*pair), expected)
 
 
-def build_covariance(key, shape):
-    factor = sample(key, shape + shape[-1:], -1, 1)
-    return factor @ jp.swapaxes(factor, -1, -2) + 0.5 * jp.eye(shape[-1])
+def compute_kl_references(loc_a, loc_b, scale_a, scale_b, logits_a, logits_b):
+    normal = jp.log(scale_b / scale_a) - 0.5
+    normal += (scale_a**2 + (loc_a - loc_b)**2) / (2.0 * scale_b**2)
+    probs = jax.nn.sigmoid(loc_a)
+    log_ratio = jax.nn.log_sigmoid(loc_a) - jax.nn.log_sigmoid(loc_b)
+    log_ratio_off = jax.nn.log_sigmoid(-loc_a) - jax.nn.log_sigmoid(-loc_b)
+    bernoulli = probs * log_ratio + (1.0 - probs) * log_ratio_off
+    # Beta(a, b) against Beta(b, a).
+    difference = scale_a - scale_b
+    digammas = special.digamma(scale_a) - special.digamma(scale_b)
+    beta = difference * digammas
+    log_a, log_b = jax.nn.log_softmax(logits_a), jax.nn.log_softmax(logits_b)
+    categorical = jp.sum(jp.exp(log_a) * (log_a - log_b), axis=-1)
+    return [normal, bernoulli, beta, categorical]
 
 
 def test_uniform_and_deterministic_fuzz():
@@ -296,14 +299,6 @@ def test_uniform_and_deterministic_fuzz():
         is_equal = jp.round(values) == jp.round(loc)
         expected = jp.where(is_equal, 0.0, -jp.inf)
         assert_close(deterministic.log_prob(jp.round(values)), expected)
-
-
-def compute_full_log_pdf(mean, covariance, values):
-    return stats.multivariate_normal(mean, covariance).logpdf(values)
-
-
-def compute_full_entropy(mean, covariance):
-    return stats.multivariate_normal(mean, covariance).entropy()
 
 
 def test_independent_and_full_covariance_fuzz():
@@ -328,6 +323,19 @@ def test_independent_and_full_covariance_fuzz():
         assert_moment(normal.entropy(), entropy)
         assert_moment(normal.mean(), loc)
         assert_moment(normal.covariance(), covariance)
+
+
+def build_covariance(key, shape):
+    factor = sample(key, shape + shape[-1:], -1, 1)
+    return factor @ jp.swapaxes(factor, -1, -2) + 0.5 * jp.eye(shape[-1])
+
+
+def compute_full_log_pdf(mean, covariance, values):
+    return stats.multivariate_normal(mean, covariance).logpdf(values)
+
+
+def compute_full_entropy(mean, covariance):
+    return stats.multivariate_normal(mean, covariance).entropy()
 
 
 def test_mixture_same_family_fuzz():
@@ -377,27 +385,6 @@ def test_relaxed_one_hot_categorical_fuzz():
         assert_close(relaxed.log_prob(simplex), expected)
 
 
-# A Normal pushed through low + width * sigmoid(x), written out by hand.
-class BoundedNormal:
-    def __init__(self, loc, scale, low, width):
-        self.normal, self.low, self.width = stats.norm(loc, scale), low, width
-
-    def logpdf(self, values):
-        unit = (values - self.low) / self.width
-        log_det = jp.log(self.width) + jp.log(unit) + jp.log1p(-unit)
-        return self.normal.logpdf(special.logit(unit)) - log_det
-
-    def pdf(self, values):
-        return jp.exp(self.logpdf(values))
-
-    def __getattr__(self, name):
-        def compute(values):
-            unit = (values - self.low) / self.width
-            return getattr(self.normal, name)(special.logit(unit))
-
-        return compute
-
-
 def test_transformed_value_fuzz():
     for round_index in range(ROUNDS):
         key = jax.random.split(jax.random.fold_in(KEY, 6000 + round_index), 6)
@@ -412,39 +399,18 @@ def test_transformed_value_fuzz():
         log_normal = stats.lognorm(scale, scale=jp.exp(loc))
         transformed = D.TransformedDistribution(base, B.Exp())
         assert_methods(transformed, log_normal, positive, SCALAR)
-        reference = BoundedNormal(loc, scale, low, width)
+        # A Normal pushed through low + width * sigmoid(x), by hand.
         transformed = D.TransformedDistribution(base, bounding)
-        assert_methods(transformed, reference, bounded, SCALAR)
-
-
-# Mass of the integer bin (grid - 1, grid], taken from the survival function
-# in the upper tail, where the cdf rounds to 1.
-def compute_quantized_reference(base, grid):
-    log_cdf, log_survival = base.logcdf(grid), base.logsf(grid)
-    lower = jp.stack([log_cdf, base.logcdf(grid - 1.0)])
-    upper = jp.stack([base.logsf(grid - 1.0), log_survival])
-    pair = jp.where(log_survival < log_cdf, upper, lower)
-    signs = jp.array([[1.0], [-1.0]])
-    log_prob = special.logsumexp(pair, axis=0, b=signs)
-    cdf, survival = base.cdf(grid), base.sf(grid)
-    return [log_prob, jp.exp(log_prob), cdf, log_cdf, survival, log_survival]
-
-
-# Outside (low, high) the log-probability is NaN, as in TensorFlow
-# Probability. The bin at high holds all the mass above high - 1.
-def bound_quantized_reference(reference, base, grid, low, high):
-    log_prob, prob, cdf, log_cdf, survival, log_survival = reference
-    below, above, at_high = grid < low, grid >= high, grid == high
-    log_prob = jp.where(below | above, jp.nan, log_prob)
-    log_prob = jp.where(at_high, base.logsf(high - 1.0), log_prob)
-    prob = jp.where(below | above, 0.0, prob)
-    prob = jp.where(at_high, base.sf(high - 1.0), prob)
-    cdf = jp.where(below, 0.0, jp.where(above, 1.0, cdf))
-    log_cdf = jp.where(below, -jp.inf, jp.where(above, 0.0, log_cdf))
-    survival = jp.where(below, 1.0, jp.where(above, 0.0, survival))
-    log_survival = jp.where(above, -jp.inf, log_survival)
-    log_survival = jp.where(below, 0.0, log_survival)
-    return [log_prob, prob, cdf, log_cdf, survival, log_survival]
+        normal = stats.norm(loc, scale)
+        unit = (bounded - low) / width
+        points = special.logit(unit)
+        log_det = jp.log(width) + jp.log(unit) + jp.log1p(-unit)
+        log_prob = normal.logpdf(points) - log_det
+        assert_close(transformed.log_prob(bounded), log_prob)
+        assert_close(transformed.prob(bounded), jp.exp(log_prob))
+        for method in ["cdf", "log_cdf"] + SURVIVAL:
+            expected = getattr(normal, SCIPY_NAMES[method])(points)
+            assert_close(getattr(transformed, method)(bounded), expected)
 
 
 def test_quantized_value_fuzz():
@@ -466,35 +432,46 @@ def test_quantized_value_fuzz():
         for base, reference, grid in cases:
             expected = compute_quantized_reference(reference, grid)
             quantized = D.QuantizedDistribution(base)
-            for method, values in zip(SCALAR, expected):
-                assert_close(getattr(quantized, method)(grid), values)
+            assert_quantized(quantized, grid, expected)
             args = (expected, reference, grid, low, high)
             expected = bound_quantized_reference(*args)
             quantized = D.QuantizedDistribution(base, low, high)
-            for method, values in zip(SCALAR, expected):
-                assert_close(getattr(quantized, method)(grid), values)
+            assert_quantized(quantized, grid, expected)
 
 
-def compute_gradients(build, params, values):
-    def loss(*raw):
-        return jp.sum(build(*raw).log_prob(values))
-
-    return jax.grad(loss, tuple(range(len(params))))(*params)
-
-
-def compute_numeric_gradient(loss, params, index, step=1e-5):
-    offsets = jp.eye(params[index].size).reshape((-1,) + params[index].shape)
-    gradient = []
-    for offset in offsets:
-        upper, lower = list(params), list(params)
-        upper[index] = params[index] + step * offset
-        lower[index] = params[index] - step * offset
-        gradient.append((loss(*upper) - loss(*lower)) / (2.0 * step))
-    return jp.reshape(jp.array(gradient), params[index].shape)
+# Mass of the integer bin (grid - 1, grid], taken from the survival function
+# in the upper tail, where the cdf rounds to 1.
+def compute_quantized_reference(base, grid):
+    log_cdf, log_survival = base.logcdf(grid), base.logsf(grid)
+    lower = jp.stack([log_cdf, base.logcdf(grid - 1.0)])
+    upper = jp.stack([base.logsf(grid - 1.0), log_survival])
+    pair = jp.where(log_survival < log_cdf, upper, lower)
+    signs = jp.array([[1.0], [-1.0]])
+    log_prob = special.logsumexp(pair, axis=0, b=signs)
+    values = (log_prob, jp.exp(log_prob), base.cdf(grid), log_cdf)
+    return Quantized(*values, base.sf(grid), log_survival)
 
 
-def build_scipy_gamma(concentration, rate):
-    return stats.gamma(concentration, scale=1.0 / rate)
+def assert_quantized(quantized, grid, expected):
+    for method, values in expected._asdict().items():
+        assert_close(getattr(quantized, method)(grid), values)
+
+
+# Outside (low, high) the log-probability is NaN, as in TensorFlow
+# Probability. The bin at high holds all the mass above high - 1.
+def bound_quantized_reference(reference, base, grid, low, high):
+    log_prob, prob, cdf, log_cdf, survival, log_survival = reference
+    below, above, at_high = grid < low, grid >= high, grid == high
+    log_prob = jp.where(below | above, jp.nan, log_prob)
+    log_prob = jp.where(at_high, base.logsf(high - 1.0), log_prob)
+    prob = jp.where(below | above, 0.0, prob)
+    prob = jp.where(at_high, base.sf(high - 1.0), prob)
+    cdf = jp.where(below, 0.0, jp.where(above, 1.0, cdf))
+    log_cdf = jp.where(below, -jp.inf, jp.where(above, 0.0, log_cdf))
+    survival = jp.where(below, 1.0, jp.where(above, 0.0, survival))
+    log_survival = jp.where(above, -jp.inf, log_survival)
+    log_survival = jp.where(below, 0.0, log_survival)
+    return Quantized(log_prob, prob, cdf, log_cdf, survival, log_survival)
 
 
 def test_log_prob_gradient_matches_finite_differences():
@@ -513,6 +490,28 @@ def test_log_prob_gradient_matches_finite_differences():
         for index, gradient in enumerate(gradients):
             expected = compute_numeric_gradient(loss, params, index)
             assert_close(gradient, expected, rtol=0.0, atol=1e-8)
+
+
+def build_scipy_gamma(concentration, rate):
+    return stats.gamma(concentration, scale=1.0 / rate)
+
+
+def compute_gradients(build, params, values):
+    def loss(*raw):
+        return jp.sum(build(*raw).log_prob(values))
+
+    return jax.grad(loss, tuple(range(len(params))))(*params)
+
+
+def compute_numeric_gradient(loss, params, index, step=1e-5):
+    offsets = jp.eye(params[index].size).reshape((-1,) + params[index].shape)
+    gradient = []
+    for offset in offsets:
+        upper, lower = list(params), list(params)
+        upper[index] = params[index] + step * offset
+        lower[index] = params[index] - step * offset
+        gradient.append((loss(*upper) - loss(*lower)) / (2.0 * step))
+    return jp.reshape(jp.array(gradient), params[index].shape)
 
 
 def test_extreme_values_match_scipy():
