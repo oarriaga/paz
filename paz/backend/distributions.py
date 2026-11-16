@@ -1422,8 +1422,8 @@ class Mixture(_MixtureDifferentFamilyBase, Distribution):
         values = to_float(values, self.dtype)
         log_probs = [part.log_prob(values) for part in self.components]
         log_probs = jp.stack(jp.broadcast_arrays(*log_probs), axis=-1)
-        log_weights = jp.log(to_float(self.probs, self.dtype))
-        return jsp_special.logsumexp(log_weights + log_probs, axis=-1)
+        probs = to_float(self.probs, self.dtype)
+        return compute_mixture_log_prob(probs, log_probs)
 
     def mean(self):
         means = [component.mean() for component in self.components]
@@ -1454,6 +1454,23 @@ class Mixture(_MixtureDifferentFamilyBase, Distribution):
         shape = sample_shape + self.batch_shape
         return jp.broadcast_to(jp.reshape(draws, padded_shape), shape)
 
+
+# Differentiating log(probs) gives inf * 0 = NaN when a weight is exactly
+# zero, so the derivatives are written in closed form.
+@jax.custom_jvp
+def compute_mixture_log_prob(probs, log_probs):
+    return jsp_special.logsumexp(jp.log(probs) + log_probs, axis=-1)
+
+
+@compute_mixture_log_prob.defjvp
+def _compute_mixture_log_prob_jvp(primals, tangents):
+    probs, log_probs = primals
+    probs_dot, log_probs_dot = tangents
+    value = compute_mixture_log_prob(probs, log_probs)
+    ratios = jp.exp(log_probs - value[..., None])
+    shares = jp.where(probs > 0, probs * ratios, 0.0)
+    grad = ratios * probs_dot + shares * log_probs_dot
+    return value, jp.sum(grad, axis=-1)
 
 
 _MaskedBase = namedtuple("Masked", ["distribution", "is_valid"])

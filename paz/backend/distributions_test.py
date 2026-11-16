@@ -399,6 +399,22 @@ def test_mixture_outside_uniform_support_is_finite():
         assert jp.allclose(gradient, expected_gradient, rtol=1e-12)
 
 
+def test_mixture_gradient_is_finite_at_zero_weight():
+    def log_prob(gate, value):
+        probs = jp.stack([1.0 - gate, gate])
+        components = [D.Deterministic(0.0), D.Normal(0.5, 1.2)]
+        return D.Mixture(probs, components).log_prob(value)
+
+    density = jp.exp(D.Normal(0.5, 1.2).log_prob(0.0))
+    gate_gradient = jax.jit(jax.grad(log_prob))
+    on_at_zero = (density - 1.0) / density
+    assert jp.allclose(gate_gradient(1.0, 0.7), 1.0, rtol=1e-12)
+    assert jp.allclose(gate_gradient(0.0, 0.0), density - 1.0, rtol=1e-12)
+    assert jp.allclose(gate_gradient(1.0, 0.0), on_at_zero, rtol=1e-12)
+    value_gradient = jax.grad(log_prob, 1)(1.0, 0.0)
+    assert jp.allclose(value_gradient, 0.5 / 1.2**2, rtol=1e-12)
+
+
 def test_mixture_jit_and_grad_match_snapshot():
     key = jax.random.split(jax.random.fold_in(KEY, 3002), 4)
     probs, loc, scale, values = build_depth_mixture(key)
