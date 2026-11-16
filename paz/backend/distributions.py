@@ -2108,6 +2108,11 @@ class Gumbel(_GumbelBase, Distribution):
         z = (values - self.loc) / self.scale
         return jp.exp(-jp.exp(-z))
 
+    def log_cdf(self, values):
+        values = to_float(values, self.dtype)
+        z = (values - self.loc) / self.scale
+        return -jp.exp(-z)
+
     def mean(self):
         mean = self.loc + self.scale * np.euler_gamma
         return _fill(mean, self.batch_shape, self.dtype)
