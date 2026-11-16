@@ -1,5 +1,4 @@
 import jax
-import jax.numpy as jp
 
 import paz
 from paz.inference.bijector_fitting import fit_bijector

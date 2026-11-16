@@ -1,5 +1,7 @@
 import jax
 
+from paz.inference.types import NodeState
+
 
 def validate_space(space):
     if space not in ("inv", "fwd"):
@@ -30,3 +32,13 @@ def squeeze_pytree(pytree):
         return leaf
 
     return jax.tree.map(squeeze_leaf, pytree)
+
+
+# The log-determinant is summed over the event of the distribution, so a
+# vector-event distribution gets one correction per sample.
+def compute_inverse_state(Sample, distribution, bijector, inverse_sample):
+    forward_sample = bijector(inverse_sample)
+    log_prob = distribution.log_prob(forward_sample)
+    log_det_args = (inverse_sample, len(distribution.event_shape))
+    log_prob = log_prob + bijector.forward_log_det_jacobian(*log_det_args)
+    return NodeState(Sample(forward_sample), log_prob, log_prob.sum())

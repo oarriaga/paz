@@ -1,4 +1,3 @@
-import jax
 import jax.numpy as jp
 
 from paz.backend import distributions
@@ -43,11 +42,11 @@ def _serialize_bijector(bijector, arrays, prefix):
     if isinstance(bijector, bijectors.Sigmoid):
         spec = {"kind": "Sigmoid"}
         kwargs = {}
-        if getattr(bijector, "low", None) is not None:
+        if bijector.low is not None:
             name = f"{prefix}_low"
             arrays[name] = bijector.low
             kwargs["low"] = _ref(name)
-        if getattr(bijector, "high", None) is not None:
+        if bijector.high is not None:
             name = f"{prefix}_high"
             arrays[name] = bijector.high
             kwargs["high"] = _ref(name)
@@ -57,7 +56,7 @@ def _serialize_bijector(bijector, arrays, prefix):
     if isinstance(bijector, bijectors.Softplus):
         spec = {"kind": "Softplus"}
         kwargs = {}
-        hinge_softness = getattr(bijector, "hinge_softness", None)
+        hinge_softness = bijector.hinge_softness
         if hinge_softness is not None:
             name = f"{prefix}_hinge_softness"
             arrays[name] = hinge_softness
@@ -152,7 +151,7 @@ def _serialize_distribution(density, arrays):
     if isinstance(distribution, distributions.MixtureSameFamily):
         mixture = distribution.mixture_distribution
         components = distribution.components_distribution
-        arrays["weights"] = _get_probs(mixture)
+        arrays["weights"] = mixture.probs_parameter()
         arrays["means"] = components.loc
         full_covariance = distributions.MultivariateNormalFullCovariance
         if isinstance(components, distributions.MultivariateNormalDiag):
@@ -271,9 +270,8 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
             "scale": _ref(f"{prefix}_scale"),
         }
     if isinstance(distribution, distributions.MixtureSameFamily):
-        arrays[f"{prefix}_weights"] = _get_probs(
-            distribution.mixture_distribution
-        )
+        mixture = distribution.mixture_distribution
+        arrays[f"{prefix}_weights"] = mixture.probs_parameter()
         components = _serialize_distribution_obj(
             distribution.components_distribution,
             arrays,
@@ -303,19 +301,19 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
         }
     if isinstance(distribution, distributions.Poisson):
         spec = {"kind": "Poisson", "force_probs": distribution.force_probs}
-        rate = getattr(distribution, "rate", None)
+        rate = distribution.rate
         if rate is not None:
             arrays[f"{prefix}_rate"] = rate
             spec["rate"] = _ref(f"{prefix}_rate")
             return spec
-        log_rate = getattr(distribution, "log_rate", None)
+        log_rate = distribution.log_rate
         arrays[f"{prefix}_log_rate"] = log_rate
         spec["log_rate"] = _ref(f"{prefix}_log_rate")
         return spec
     if isinstance(distribution, distributions.Bernoulli):
         spec = {"kind": "Bernoulli", "dtype": _dtype_name(distribution.dtype)}
-        probs = getattr(distribution, "probs", None)
-        logits = getattr(distribution, "logits", None)
+        probs = distribution.probs
+        logits = distribution.logits
         if probs is not None:
             arrays[f"{prefix}_probs"] = probs
             spec["probs"] = _ref(f"{prefix}_probs")
@@ -329,8 +327,8 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
             "dtype": _dtype_name(distribution.dtype),
             "force_probs": distribution.force_probs,
         }
-        probs = getattr(distribution, "probs", None)
-        logits = getattr(distribution, "logits", None)
+        probs = distribution.probs
+        logits = distribution.logits
         if probs is not None:
             arrays[f"{prefix}_probs"] = probs
             spec["probs"] = _ref(f"{prefix}_probs")
@@ -342,8 +340,8 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
         spec = {"kind": "RelaxedOneHotCategorical"}
         arrays[f"{prefix}_temperature"] = distribution.temperature
         spec["temperature"] = _ref(f"{prefix}_temperature")
-        probs = getattr(distribution, "probs", None)
-        logits = getattr(distribution, "logits", None)
+        probs = distribution.probs
+        logits = distribution.logits
         if probs is not None:
             arrays[f"{prefix}_probs"] = probs
             spec["probs"] = _ref(f"{prefix}_probs")
@@ -388,10 +386,10 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
             distribution.distribution, arrays, f"{prefix}_base"
         )
         spec = {"kind": "QuantizedDistribution", "base": base}
-        if getattr(distribution, "low", None) is not None:
+        if distribution.low is not None:
             arrays[f"{prefix}_low"] = distribution.low
             spec["low"] = _ref(f"{prefix}_low")
-        if getattr(distribution, "high", None) is not None:
+        if distribution.high is not None:
             arrays[f"{prefix}_high"] = distribution.high
             spec["high"] = _ref(f"{prefix}_high")
         return spec
@@ -618,16 +616,6 @@ def _decode_value(value, arrays):
 def _force_probs_kwargs(spec):
     force_probs = spec.get("force_probs", False)
     return dict(force_probs_to_zero_outside_support=force_probs)
-
-
-def _get_probs(mixture):
-    if hasattr(mixture, "probs_parameter"):
-        return mixture.probs_parameter()
-    if hasattr(mixture, "probs"):
-        return mixture.probs
-    if hasattr(mixture, "logits"):
-        return jax.nn.softmax(mixture.logits)
-    raise ValueError("Unable to extract mixture probabilities.")
 
 
 def _dtype_name(dtype):

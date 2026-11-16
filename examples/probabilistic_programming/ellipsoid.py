@@ -50,13 +50,6 @@ def build_mean_priors(statistics):
     return priors
 
 
-# def build_bounded_axis_prior(stdv, name):
-#     upper = 3.0 * stdv
-#     bijector = paz.bijectors.Chain([paz.bijectors.Shift(0.0), paz.bijectors.Scale(upper), paz.bijectors.Sigmoid()])
-#     distribution = paz.distributions.TruncatedNormal(2.0 * stdv, 0.1, 0.0, upper)
-#     return paz.Prior(distribution, bijector=bijector, name=name)
-
-
 def build_bounded_axis_prior(axis_standard_deviation, axis_name):
     """
     Scale-aware bounded prior for an ellipsoid axis length using a TruncatedNormal.

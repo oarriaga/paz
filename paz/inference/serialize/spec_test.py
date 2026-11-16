@@ -1,4 +1,3 @@
-import jax
 import jax.numpy as jp
 
 import paz
@@ -17,7 +16,6 @@ from paz.inference.serialize.spec import (
     _dummy_sample,
     _encode_kwargs,
     _encode_value,
-    _get_probs,
     _jsonify,
     _latent_space_spec,
     _ref,
@@ -129,12 +127,6 @@ def test_bijector_roundtrip():
         spec = _serialize_bijector(bijector, arrays, "b")
         restored = _deserialize_bijector(spec, arrays)
         assert isinstance(restored, type(bijector))
-
-
-def test_get_probs_from_logits():
-    logits = jp.array([0.1, 0.2, 0.3])
-    probs = _get_probs(paz.distributions.Categorical(logits=logits))
-    assert jp.allclose(probs, jax.nn.softmax(logits))
 
 
 def test_serialize_deserialize_density_distribution():

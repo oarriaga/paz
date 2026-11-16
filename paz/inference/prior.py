@@ -4,7 +4,7 @@ from paz.backend import bijectors
 from paz.inference.bijector_fitting import fit_bijector as fit_bijector_module
 from paz.inference.naming import build_prior_name
 from paz.inference.types import Distribution, NodeState, SampleType, Variable
-from paz.inference.utils import squeeze_pytree
+from paz.inference.utils import compute_inverse_state, squeeze_pytree
 
 
 def Prior(distribution, bijector=None, name=None):
@@ -21,13 +21,8 @@ def Prior(distribution, bijector=None, name=None):
         return NodeState(Sample(forward_sample), log_prob, log_prob_sum)
 
     def log_prob_inverse(inverse_sample):
-        forward_sample = bijector(inverse_sample)
-        log_prob = distribution.log_prob(forward_sample)
-        event_ndims = len(distribution.event_shape)
-        log_det_args = (inverse_sample, event_ndims)
-        log_prob = log_prob + bijector.forward_log_det_jacobian(*log_det_args)
-        log_prob_sum = log_prob.sum()
-        return NodeState(Sample(forward_sample), log_prob, log_prob_sum)
+        args = (Sample, distribution, bijector, inverse_sample)
+        return compute_inverse_state(*args)
 
     def sample_inverse(key, num_samples=1):
         forward_sample = distribution.sample(num_samples, seed=key)

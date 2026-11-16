@@ -50,11 +50,7 @@ def finite_support(distribution):
     if isinstance(distribution, distributions.Bernoulli):
         return jp.array([0, 1], dtype=support_dtype)
     if isinstance(distribution, distributions.Categorical):
-        logits = distribution.logits_parameter()
-        probs = distribution.probs_parameter()
-        if logits is None and probs is None:
-            raise NotImplementedError("Categorical distribution needs logits or probs.")
-        num_categories = probs.shape[-1] if logits is None else logits.shape[-1]
+        num_categories = distribution.probs_parameter().shape[-1]
         return jp.arange(num_categories, dtype=support_dtype)
     raise NotImplementedError("Only Bernoulli and Categorical are supported.")
 

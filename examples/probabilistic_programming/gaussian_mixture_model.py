@@ -61,16 +61,8 @@ def _sample_ring(key, num_samples):
     return jp.stack([x, y], axis=1)
 
 
-def _get_mixture_probs(mixture_distribution):
-    if hasattr(mixture_distribution, "probs_parameter"):
-        return mixture_distribution.probs_parameter()
-    if hasattr(mixture_distribution, "probs"):
-        return mixture_distribution.probs
-    return jax.nn.softmax(mixture_distribution.logits)
-
-
 def _extract_parameters(distribution):
-    weights = _get_mixture_probs(distribution.mixture_distribution)
+    weights = distribution.mixture_distribution.probs_parameter()
     components = distribution.components_distribution
     means = components.loc
     if isinstance(components, paz.distributions.MultivariateNormalDiag):

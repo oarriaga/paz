@@ -114,8 +114,6 @@ def plot_switch_results(
         + float(posterior_lines.right.bias)
     )
     piecewise_line = np.where(x_grid <= switch_map_x, left_line, right_line)
-    upper = piecewise_line + 2.0 * plot_args.sigma
-    lower = piecewise_line - 2.0 * plot_args.sigma
 
     true_left = true_lines.left.slope * x_grid + true_lines.left.bias
     true_right = true_lines.right.slope * x_grid + true_lines.right.bias

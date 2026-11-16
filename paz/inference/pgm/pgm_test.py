@@ -597,7 +597,6 @@ def test_observable_scale_is_positive():
     uniform = paz.distributions.Uniform(low, high)
     stdv = Prior(uniform, bijector=bijector, name="stdv")
     y = Observable(Likelihood(X), name="y")(stdv)
-    data = {"y": observations}
     model = PGM([stdv], [y], "test")
 
     key = jax.random.PRNGKey(42)
