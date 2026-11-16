@@ -7,12 +7,6 @@ from jax.scipy import special as jsp_special
 from paz.backend.standard import normal_cdf, normal_icdf, to_float
 
 
-def event_size(event_shape):
-    if len(event_shape) == 0:
-        return 1
-    return int(jp.prod(jp.asarray(event_shape)))
-
-
 def logit(values):
     values = to_float(values)
     return jp.log(values) - jp.log1p(-values)
@@ -116,19 +110,12 @@ class Scale(_ScaleBase, Bijector):
         return values / self.scale
 
     def forward_log_det_jacobian(self, values, event_ndims=0):
-        dtype = to_float(values).dtype
-        scale = jp.asarray(self.scale)
-        log_scale = jp.log(jp.abs(scale))
-        if event_ndims == 0:
-            zeros = jp.zeros(scale.shape, dtype=dtype)
-            return zeros + log_scale
-        if scale.ndim >= event_ndims:
-            zeros = jp.zeros(scale.shape, dtype=dtype)
-            return zeros[..., 0] + log_scale.sum(
-                axis=tuple(range(scale.ndim - event_ndims, scale.ndim))
-            )
-        multiplier = event_size(to_float(values).shape[-event_ndims:])
-        return multiplier * log_scale.sum()
+        values = to_float(values)
+        log_scale = jp.log(jp.abs(jp.asarray(self.scale)))
+        event_shape = values.shape[values.ndim - event_ndims:]
+        shape = jp.broadcast_shapes(log_scale.shape, event_shape)
+        log_det = jp.zeros(shape, dtype=values.dtype) + log_scale
+        return _sum_event(log_det, event_ndims)
 
     def is_increasing(self):
         return bool(jp.all(jp.asarray(self.scale) > 0))
@@ -441,6 +428,7 @@ class Cumsum(_CumsumBase, Bijector):
 
     def forward_log_det_jacobian(self, values, event_ndims=1):
         values = to_float(values)
+        event_ndims = max(event_ndims, self.min_event_ndims())
         batch_shape = values.shape[: values.ndim - event_ndims]
         return jp.zeros(batch_shape, values.dtype)
 
@@ -461,9 +449,11 @@ class Invert(_InvertBase, Bijector):
         return self.bijector(values)
 
     def forward_log_det_jacobian(self, values, event_ndims=0):
+        event_ndims = max(event_ndims, self.min_event_ndims())
         return self.bijector.inverse_log_det_jacobian(values, event_ndims)
 
     def inverse_log_det_jacobian(self, values, event_ndims=0):
+        event_ndims = max(event_ndims, self.min_event_ndims())
         return self.bijector.forward_log_det_jacobian(values, event_ndims)
 
     def forward_event_shape(self, event_shape):

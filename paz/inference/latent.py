@@ -24,7 +24,9 @@ def Latent(distribution_fn, bijector=None, name=None):
         forward_sample = bijector(inverse_sample)
         distribution = distribution_fn(*args)
         log_prob = distribution.log_prob(forward_sample)
-        log_prob = log_prob + bijector.forward_log_det_jacobian(inverse_sample)
+        event_ndims = len(distribution.event_shape)
+        log_det_args = (inverse_sample, event_ndims)
+        log_prob = log_prob + bijector.forward_log_det_jacobian(*log_det_args)
         log_prob_sum = log_prob.sum()
         return NodeState(Sample(forward_sample), log_prob, log_prob_sum)
 

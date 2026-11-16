@@ -62,6 +62,10 @@ def _serialize_bijector(bijector, arrays, prefix):
             name = f"{prefix}_hinge_softness"
             arrays[name] = hinge_softness
             kwargs["hinge_softness"] = _ref(name)
+        if bijector.low is not None:
+            name = f"{prefix}_low"
+            arrays[name] = bijector.low
+            kwargs["low"] = _ref(name)
         if kwargs:
             spec["kwargs"] = kwargs
         return spec
@@ -102,12 +106,9 @@ def _deserialize_bijector(spec, arrays):
         return bijectors.Sigmoid()
     if kind == "Softplus":
         kwargs = spec.get("kwargs", {})
-        if kwargs:
-            hinge_softness = _resolve_ref(
-                kwargs.get("hinge_softness"), arrays
-            )
-            return bijectors.Softplus(hinge_softness=hinge_softness)
-        return bijectors.Softplus()
+        hinge_softness = _resolve_ref(kwargs.get("hinge_softness"), arrays)
+        low = _resolve_ref(kwargs.get("low"), arrays)
+        return bijectors.Softplus(hinge_softness, low)
     if kind == "Exp":
         return bijectors.Exp()
     if kind == "SoftmaxCentered":
@@ -146,7 +147,7 @@ def _serialize_distribution(density, arrays):
             "density_kind": "gaussian",
             "covariance": "full",
             "loc": _ref("loc"),
-            "covariance": _ref("covariance"),
+            "covariance_matrix": _ref("covariance"),
         }
     if isinstance(distribution, distributions.MixtureSameFamily):
         mixture = distribution.mixture_distribution
@@ -171,7 +172,7 @@ def _serialize_distribution(density, arrays):
         if covariance == "diag":
             spec["scale_diag"] = _ref("scale_diag")
         else:
-            spec["covariance"] = _ref("covariance")
+            spec["covariance_matrix"] = _ref("covariance")
         return spec
     raise ValueError("Unsupported density distribution.")
 
@@ -185,7 +186,7 @@ def _deserialize_distribution(spec, arrays):
         return distributions.MultivariateNormalDiag(loc=loc, scale_diag=scale)
     if kind == "gaussian" and covariance == "full":
         loc = _resolve_ref(spec["loc"], arrays)
-        cov = _resolve_ref(spec["covariance"], arrays)
+        cov = _resolve_ref(spec["covariance_matrix"], arrays)
         return distributions.MultivariateNormalFullCovariance(
             loc=loc, covariance_matrix=cov
         )
@@ -202,7 +203,7 @@ def _deserialize_distribution(spec, arrays):
     if kind == "gmm" and covariance == "full":
         weights = _resolve_ref(spec["weights"], arrays)
         means = _resolve_ref(spec["means"], arrays)
-        cov = _resolve_ref(spec["covariance"], arrays)
+        cov = _resolve_ref(spec["covariance_matrix"], arrays)
         components = distributions.MultivariateNormalFullCovariance(
             loc=means, covariance_matrix=cov
         )
@@ -298,9 +299,10 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
             "kind": "Beta",
             "concentration1": _ref(f"{prefix}_a"),
             "concentration0": _ref(f"{prefix}_b"),
+            "force_probs": distribution.force_probs,
         }
     if isinstance(distribution, distributions.Poisson):
-        spec = {"kind": "Poisson"}
+        spec = {"kind": "Poisson", "force_probs": distribution.force_probs}
         rate = getattr(distribution, "rate", None)
         if rate is not None:
             arrays[f"{prefix}_rate"] = rate
@@ -325,6 +327,7 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
         spec = {
             "kind": "Categorical",
             "dtype": _dtype_name(distribution.dtype),
+            "force_probs": distribution.force_probs,
         }
         probs = getattr(distribution, "probs", None)
         logits = getattr(distribution, "logits", None)
@@ -455,13 +458,14 @@ def _deserialize_distribution_obj(spec, arrays):
     if kind == "Beta":
         a = _resolve_ref(spec["concentration1"], arrays)
         b = _resolve_ref(spec["concentration0"], arrays)
-        return distributions.Beta(concentration1=a, concentration0=b)
+        return distributions.Beta(a, b, **_force_probs_kwargs(spec))
     if kind == "Poisson":
+        kwargs = _force_probs_kwargs(spec)
         if "rate" in spec:
             rate = _resolve_ref(spec["rate"], arrays)
-            return distributions.Poisson(rate=rate)
+            return distributions.Poisson(rate=rate, **kwargs)
         log_rate = _resolve_ref(spec["log_rate"], arrays)
-        return distributions.Poisson(log_rate=log_rate)
+        return distributions.Poisson(log_rate=log_rate, **kwargs)
     if kind == "Bernoulli":
         dtype = jp.dtype(spec["dtype"])
         if "probs" in spec:
@@ -470,12 +474,13 @@ def _deserialize_distribution_obj(spec, arrays):
         logits = _resolve_ref(spec["logits"], arrays)
         return distributions.Bernoulli(logits=logits, dtype=dtype)
     if kind == "Categorical":
-        dtype = jp.dtype(spec["dtype"])
+        kwargs = _force_probs_kwargs(spec)
+        kwargs["dtype"] = jp.dtype(spec["dtype"])
         if "probs" in spec:
             probs = _resolve_ref(spec["probs"], arrays)
-            return distributions.Categorical(probs=probs, dtype=dtype)
+            return distributions.Categorical(probs=probs, **kwargs)
         logits = _resolve_ref(spec["logits"], arrays)
-        return distributions.Categorical(logits=logits, dtype=dtype)
+        return distributions.Categorical(logits=logits, **kwargs)
     if kind == "RelaxedOneHotCategorical":
         temperature = _resolve_ref(spec["temperature"], arrays)
         relaxed = distributions.RelaxedOneHotCategorical
@@ -607,6 +612,12 @@ def _decode_value(value, arrays):
     if isinstance(value, str) and value.startswith("arrays:"):
         return _resolve_ref(value, arrays)
     return value
+
+
+# Files written before the flag was stored have no "force_probs" entry.
+def _force_probs_kwargs(spec):
+    force_probs = spec.get("force_probs", False)
+    return dict(force_probs_to_zero_outside_support=force_probs)
 
 
 def _get_probs(mixture):

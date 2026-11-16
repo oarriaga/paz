@@ -58,7 +58,7 @@ def build_continuous(key):
     high = sample(key[6], (4,), 0.4, 6)
     return [
         (D.Normal(loc, scale), real, SCALAR),
-        (D.Laplace(loc, scale), real, ["log_prob", "prob", "cdf"]),
+        (D.Laplace(loc, scale), real, SCALAR),
         (D.StudentT(df, loc, scale), real, ["log_prob", "prob"]),
         (D.LogNormal(loc, scale), positive, SCALAR),
         (D.Logistic(loc, scale), real, SCALAR),
@@ -271,21 +271,26 @@ def build_quantized(key):
     f = lambda value: jp.asarray(value, jp.float64)
     loc = sample(key[0], (), -1, 1)
     scale = sample(key[1], (), 0.3, 2)
-    bases = [D.Normal(loc, scale), D.LogNormal(loc, scale)]
+    # The grids reach far into the tails and outside the (low, high) bounds.
+    # TensorFlow Probability gives NaN below zero for LogNormal, where paz
+    # gives zero mass, so that grid starts at 1.
+    cases = [
+        (D.Normal(loc, scale), jp.arange(-40.0, 60.0, 3.0)),
+        (D.LogNormal(loc, scale), jp.arange(1.0, 60.0, 3.0)),
+    ]
     quantized = []
-    for base in bases:
-        quantized.append(D.QuantizedDistribution(base))
-        quantized.append(D.QuantizedDistribution(base, f(-3.0), f(4.0)))
+    for base, grid in cases:
+        quantized.append((D.QuantizedDistribution(base), grid))
+        bounded = D.QuantizedDistribution(base, f(-3.0), f(4.0))
+        quantized.append((bounded, grid))
     return quantized
 
 
 def test_quantized_value_fuzz():
-    # The grid reaches far into both tails and outside the (low, high) bounds.
-    grid = jp.arange(-40.0, 60.0, 3.0)
     outputs = []
     for round_index in range(5):
         key = jax.random.split(jax.random.fold_in(KEY, 7000 + round_index), 2)
-        for distribution in build_quantized(key):
+        for distribution, grid in build_quantized(key):
             outputs += compute_methods(distribution, grid, SCALAR)
     assert_snapshot(outputs, "distributions_quantized_values.npy")
 
@@ -322,6 +327,17 @@ def test_extreme_masks_match_snapshot():
     log_normal_log_prob = D.LogNormal(f(0.0), f(1.0)).log_prob(bounds)
     outputs = [normal_log_prob, log_normal_log_prob]
     assert_snapshot(outputs, "distributions_extreme_masks.npy")
+
+
+def test_log_normal_has_no_mass_below_zero():
+    log_normal = D.LogNormal(0.0, 1.0)
+    values = jp.array([-1.0, 0.0])
+    assert jp.array_equal(log_normal.cdf(values), jp.zeros(2))
+    assert jp.array_equal(log_normal.survival_function(values), jp.ones(2))
+    assert jp.array_equal(log_normal.log_prob(values), jp.full(2, -jp.inf))
+    assert jp.array_equal(log_normal.log_cdf(values), jp.full(2, -jp.inf))
+    log_survival = log_normal.log_survival_function(values)
+    assert jp.array_equal(log_survival, jp.zeros(2))
 
 
 def build_depth_mixture(key):

@@ -107,6 +107,19 @@ def test_vector_chain_defaults_to_event_log_det():
     assert_snapshot(outputs, "bijectors_vector_chain_default.npy")
 
 
+def test_invert_defaults_to_event_log_det():
+    values = jp.ones((4, 3))
+    log_det = B.Invert(B.Cumsum()).forward_log_det_jacobian(values)
+    assert jp.array_equal(log_det, jp.zeros(4))
+    simplex = jp.full((4, 3), 1.0 / 3.0)
+    forward = B.SoftmaxCentered().inverse(simplex)
+    expected = B.SoftmaxCentered().inverse_log_det_jacobian(simplex)
+    inverted = B.Invert(B.SoftmaxCentered())
+    assert inverted(simplex).shape == forward.shape
+    log_det = inverted.forward_log_det_jacobian(simplex)
+    assert jp.allclose(log_det, expected, rtol=1e-12)
+
+
 def test_chain_round_trip():
     bijector = B.Chain([B.Shift(-2.0), B.Scale(4.0), B.Sigmoid()])
     inverse = jp.array([-3.0, 0.0, 2.0])

@@ -145,6 +145,59 @@ def test_serialize_deserialize_density_distribution():
     assert isinstance(restored, paz.distributions.MultivariateNormalDiag)
 
 
+def test_serialize_deserialize_full_covariance_density():
+    arrays = {}
+    covariance = jp.array([[2.0, 0.3], [0.3, 1.0]])
+    full = paz.distributions.MultivariateNormalFullCovariance
+    dist = full(jp.array([0.5, -1.0]), covariance)
+    spec = _serialize_distribution(_DummyDensity(dist), arrays)
+    restored = _deserialize_distribution(spec, arrays)
+    value = jp.array([0.1, 0.2])
+    assert jp.allclose(restored.log_prob(value), dist.log_prob(value))
+
+
+def test_serialize_deserialize_full_covariance_gmm():
+    arrays = {}
+    means = jp.array([[0.0, 0.0], [1.0, 1.0]])
+    covariances = jp.stack([jp.eye(2), jp.array([[2.0, 0.3], [0.3, 1.0]])])
+    full = paz.distributions.MultivariateNormalFullCovariance
+    mixture = paz.distributions.Categorical(probs=jp.array([0.3, 0.7]))
+    components = full(means, covariances)
+    dist = paz.distributions.MixtureSameFamily(mixture, components)
+    spec = _serialize_distribution(_DummyDensity(dist), arrays)
+    restored = _deserialize_distribution(spec, arrays)
+    value = jp.array([0.1, 0.2])
+    assert jp.allclose(restored.log_prob(value), dist.log_prob(value))
+
+
+def test_softplus_low_survives_roundtrip():
+    arrays = {}
+    bijector = paz.bijectors.Softplus(hinge_softness=0.5, low=2.0)
+    spec = _serialize_bijector(bijector, arrays, "b")
+    restored = _deserialize_bijector(spec, arrays)
+    assert jp.allclose(restored(jp.array(0.3)), bijector(jp.array(0.3)))
+
+
+def test_force_probs_survives_roundtrip():
+    force = dict(force_probs_to_zero_outside_support=True)
+    probs, logits = jp.array([0.2, 0.8]), jp.array([0.1, 0.2])
+    cases = [
+        (paz.distributions.Beta(2.0, 3.0, **force), 0.4),
+        (paz.distributions.Poisson(rate=3.0, **force), 2.0),
+        (paz.distributions.Poisson(log_rate=1.1, **force), 2.0),
+        (paz.distributions.Categorical(probs=probs, **force), 1.0),
+        (paz.distributions.Categorical(logits=logits, **force), 1.0),
+    ]
+    for distribution, value in cases:
+        arrays = {}
+        spec = _serialize_distribution_obj(distribution, arrays, "d")
+        restored = _deserialize_distribution_obj(spec, arrays)
+        assert restored.force_probs
+        assert restored.dtype == distribution.dtype
+        expected = distribution.log_prob(value)
+        assert jp.allclose(restored.log_prob(value), expected)
+
+
 def test_serialize_deserialize_gmm_distribution():
     arrays = {}
     weights = jp.array([0.3, 0.7])

@@ -47,6 +47,21 @@ def test_latent_log_prob_inverse_adds_jacobian():
     assert jp.isclose(state.log_prob_sum, expected)
 
 
+def test_latent_log_det_covers_vector_event():
+    def distribution_fn(mu):
+        normal = paz.distributions.Normal(mu * jp.ones(5), 1.0)
+        return paz.distributions.Independent(normal, 1)
+
+    latent = Latent(distribution_fn, bijector=paz.bijectors.Exp(), name="x")()
+    inverse_sample, mu = jp.linspace(-1.0, 1.0, 5), jp.array(0.1)
+    forward_sample = jp.exp(inverse_sample)
+    expected = distribution_fn(mu).log_prob(forward_sample)
+    expected = expected + inverse_sample.sum()
+    state = latent.log_prob_inverse(inverse_sample, mu)
+    assert state.log_prob.shape == ()
+    assert jp.isclose(state.log_prob_sum, expected)
+
+
 def test_latent_sample_inverse_batch_shape():
     def distribution_fn(mu):
         return paz.distributions.Normal(mu, 1.0)
