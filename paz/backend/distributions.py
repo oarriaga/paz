@@ -338,11 +338,18 @@ class Laplace(_LaplaceBase, Distribution):
         return -jp.abs(z) - jp.log(2.0) - jp.log(self.scale)
 
     def cdf(self, values):
+        return jp.exp(self.log_cdf(values))
+
+    def log_cdf(self, values):
         values = to_float(values, self.dtype)
-        z = (values - self.loc) / self.scale
-        lower = 0.5 * jp.exp(z)
-        upper = 1.0 - 0.5 * jp.exp(-z)
-        return jp.where(values < self.loc, lower, upper)
+        return _laplace_log_cdf((values - self.loc) / self.scale)
+
+    def survival_function(self, values):
+        return jp.exp(self.log_survival_function(values))
+
+    def log_survival_function(self, values):
+        values = to_float(values, self.dtype)
+        return _laplace_log_cdf((self.loc - values) / self.scale)
 
     def mean(self):
         return _fill(self.loc, self.batch_shape, self.dtype)
@@ -452,38 +459,38 @@ class LogNormal(_LogNormalBase, Distribution):
 
     def log_prob(self, values):
         values = to_float(values, self.dtype)
-        safe_values = jp.where(values == 0.0, 1.0, values)
+        safe_values = jp.where(values <= 0.0, 1.0, values)
         base = Normal(self.loc, self.scale)
         log_prob = base.log_prob(jp.log(safe_values)) - jp.log(safe_values)
-        return jp.where(values == 0.0, -jp.inf, log_prob)
+        return jp.where(values <= 0.0, -jp.inf, log_prob)
 
     def cdf(self, values):
         values = to_float(values, self.dtype)
-        safe_values = jp.where(values == 0.0, 1.0, values)
+        safe_values = jp.where(values <= 0.0, 1.0, values)
         base = Normal(self.loc, self.scale)
         cdf = base.cdf(jp.log(safe_values))
-        return jp.where(values == 0.0, 0.0, cdf)
+        return jp.where(values <= 0.0, 0.0, cdf)
 
     def log_cdf(self, values):
         values = to_float(values, self.dtype)
-        safe_values = jp.where(values == 0.0, 1.0, values)
+        safe_values = jp.where(values <= 0.0, 1.0, values)
         base = Normal(self.loc, self.scale)
         log_cdf = base.log_cdf(jp.log(safe_values))
-        return jp.where(values == 0.0, -jp.inf, log_cdf)
+        return jp.where(values <= 0.0, -jp.inf, log_cdf)
 
     def survival_function(self, values):
         values = to_float(values, self.dtype)
-        safe_values = jp.where(values == 0.0, 1.0, values)
+        safe_values = jp.where(values <= 0.0, 1.0, values)
         base = Normal(self.loc, self.scale)
         survival = base.survival_function(jp.log(safe_values))
-        return jp.where(values == 0.0, 1.0, survival)
+        return jp.where(values <= 0.0, 1.0, survival)
 
     def log_survival_function(self, values):
         values = to_float(values, self.dtype)
-        safe_values = jp.where(values == 0.0, 1.0, values)
+        safe_values = jp.where(values <= 0.0, 1.0, values)
         base = Normal(self.loc, self.scale)
         log_survival = base.log_survival_function(jp.log(safe_values))
-        return jp.where(values == 0.0, 0.0, log_survival)
+        return jp.where(values <= 0.0, 0.0, log_survival)
 
     def mean(self):
         mean = jp.exp(self.loc + 0.5 * jp.square(self.scale))
@@ -1415,8 +1422,8 @@ class Mixture(_MixtureDifferentFamilyBase, Distribution):
         values = to_float(values, self.dtype)
         log_probs = [part.log_prob(values) for part in self.components]
         log_probs = jp.stack(jp.broadcast_arrays(*log_probs), axis=-1)
-        log_weights = jp.log(to_float(self.probs, self.dtype))
-        return jsp_special.logsumexp(log_weights + log_probs, axis=-1)
+        probs = to_float(self.probs, self.dtype)
+        return compute_mixture_log_prob(probs, log_probs)
 
     def mean(self):
         means = [component.mean() for component in self.components]
@@ -1447,6 +1454,23 @@ class Mixture(_MixtureDifferentFamilyBase, Distribution):
         shape = sample_shape + self.batch_shape
         return jp.broadcast_to(jp.reshape(draws, padded_shape), shape)
 
+
+# Differentiating log(probs) gives inf * 0 = NaN when a weight is exactly
+# zero, so the derivatives are written in closed form.
+@jax.custom_jvp
+def compute_mixture_log_prob(probs, log_probs):
+    return jsp_special.logsumexp(jp.log(probs) + log_probs, axis=-1)
+
+
+@compute_mixture_log_prob.defjvp
+def _compute_mixture_log_prob_jvp(primals, tangents):
+    probs, log_probs = primals
+    probs_dot, log_probs_dot = tangents
+    value = compute_mixture_log_prob(probs, log_probs)
+    ratios = jp.exp(log_probs - value[..., None])
+    shares = jp.where(probs > 0, probs * ratios, 0.0)
+    grad = ratios * probs_dot + shares * log_probs_dot
+    return value, jp.sum(grad, axis=-1)
 
 
 _MaskedBase = namedtuple("Masked", ["distribution", "is_valid"])
@@ -2084,6 +2108,11 @@ class Gumbel(_GumbelBase, Distribution):
         z = (values - self.loc) / self.scale
         return jp.exp(-jp.exp(-z))
 
+    def log_cdf(self, values):
+        values = to_float(values, self.dtype)
+        z = (values - self.loc) / self.scale
+        return -jp.exp(-z)
+
     def mean(self):
         mean = self.loc + self.scale * np.euler_gamma
         return _fill(mean, self.batch_shape, self.dtype)
@@ -2369,6 +2398,12 @@ def _sample_laplace(shape, seed, dtype):
         seed, shape, dtype=dtype, minval=-1.0, maxval=1.0
     )
     return -jp.sign(uniforms) * jp.log1p(-jp.abs(uniforms))
+
+
+def _laplace_log_cdf(z):
+    lower = z - jp.log(2.0)
+    upper = jp.log1p(-0.5 * jp.exp(-jp.abs(z)))
+    return jp.where(z < 0, lower, upper)
 
 
 def _half_log_two_pi(dtype):

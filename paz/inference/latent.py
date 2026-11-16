@@ -3,6 +3,7 @@ import jax.numpy as jp
 from paz.backend import bijectors
 from paz.inference.naming import build_latent_name
 from paz.inference.types import NodeState, SampleType, Variable
+from paz.inference.utils import compute_inverse_state
 
 
 def Latent(distribution_fn, bijector=None, name=None):
@@ -21,12 +22,9 @@ def Latent(distribution_fn, bijector=None, name=None):
         return NodeState(Sample(forward_sample), log_prob, log_prob_sum)
 
     def log_prob_inverse(inverse_sample, *args):
-        forward_sample = bijector(inverse_sample)
         distribution = distribution_fn(*args)
-        log_prob = distribution.log_prob(forward_sample)
-        log_prob = log_prob + bijector.forward_log_det_jacobian(inverse_sample)
-        log_prob_sum = log_prob.sum()
-        return NodeState(Sample(forward_sample), log_prob, log_prob_sum)
+        state_args = (Sample, distribution, bijector, inverse_sample)
+        return compute_inverse_state(*state_args)
 
     def sample_inverse(key, num_samples, *args):
         distribution = distribution_fn(*args)
