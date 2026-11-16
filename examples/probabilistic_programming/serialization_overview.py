@@ -45,7 +45,7 @@ Example pattern:
     @paz.inference.serialize.serializable("my_custom_likelihood")
     def my_custom_likelihood(feature):
         def apply(param):
-            return tfd.Normal(param * feature, 1.0)
+            return paz.distributions.Normal(param * feature, 1.0)
         return apply
 
 Now you can use:
@@ -58,29 +58,27 @@ This example uses a registered likelihood so it can be serialized safely.
 
 import jax
 import jax.numpy as jp
-from tensorflow_probability.substrates import jax as tfp
 
 import paz
-
-tfd = tfp.distributions
-tfb = tfp.bijectors
 
 
 @paz.inference.serialize.serializable("local_linear_regression_likelihood")
 def local_linear_regression_likelihood(X):
     def apply(mean, bias, stdv):
-        return tfd.Normal(mean * X + bias, stdv)
+        return paz.distributions.Normal(mean * X + bias, stdv)
 
     return apply
 
 
 def build_model():
     x = jp.linspace(0.0, 1.0, 8)
-    mean = paz.Prior(tfd.Normal(0.0, 1.0), name="mean")
-    bias = paz.Prior(tfd.Normal(0.0, 1.0), name="bias")
+    mean = paz.Prior(paz.distributions.Normal(0.0, 1.0), name="mean")
+    bias = paz.Prior(paz.distributions.Normal(0.0, 1.0), name="bias")
     low, high = 0.01, 0.3
-    bijector = tfb.Chain([tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()])
-    stdv = paz.Prior(tfd.Uniform(low, high), name="stdv", bijector=bijector)
+    affine = [paz.bijectors.Shift(low), paz.bijectors.Scale(high - low)]
+    bijector = paz.bijectors.Chain(affine + [paz.bijectors.Sigmoid()])
+    uniform = paz.distributions.Uniform(low, high)
+    stdv = paz.Prior(uniform, name="stdv", bijector=bijector)
     y_obs = paz.Observable(local_linear_regression_likelihood(x), name="y")(
         mean, bias, stdv
     )

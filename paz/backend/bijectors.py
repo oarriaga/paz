@@ -65,6 +65,9 @@ class Bijector:
     def is_increasing(self):
         return True
 
+    def min_event_ndims(self):
+        return 0
+
 
 _IdentityBase = namedtuple("Identity", [])
 
@@ -305,6 +308,9 @@ class SoftmaxCentered(_SoftmaxCenteredBase, Bijector):
             return ()
         return event_shape[:-1] + (event_shape[-1] - 1,)
 
+    def min_event_ndims(self):
+        return 1
+
 
 _TanhBase = namedtuple("Tanh", [])
 
@@ -438,6 +444,9 @@ class Cumsum(_CumsumBase, Bijector):
         batch_shape = values.shape[: values.ndim - event_ndims]
         return jp.zeros(batch_shape, values.dtype)
 
+    def min_event_ndims(self):
+        return 1
+
 
 _InvertBase = namedtuple("Invert", ["bijector"])
 
@@ -466,6 +475,9 @@ class Invert(_InvertBase, Bijector):
     def is_increasing(self):
         return self.bijector.is_increasing()
 
+    def min_event_ndims(self):
+        return self.bijector.min_event_ndims()
+
 
 _ChainBase = namedtuple("Chain", ["bijectors"])
 
@@ -488,6 +500,7 @@ class Chain(_ChainBase, Bijector):
 
     def forward_log_det_jacobian(self, values, event_ndims=0):
         values = to_float(values)
+        event_ndims = max(event_ndims, self.min_event_ndims())
         log_det = jp.array(0.0, dtype=values.dtype)
         for bijector in reversed(self.bijectors):
             log_det = log_det + bijector.forward_log_det_jacobian(
@@ -498,6 +511,7 @@ class Chain(_ChainBase, Bijector):
 
     def inverse_log_det_jacobian(self, values, event_ndims=0):
         values = to_float(values)
+        event_ndims = max(event_ndims, self.min_event_ndims())
         log_det = jp.array(0.0, dtype=values.dtype)
         for bijector in self.bijectors:
             log_det = log_det + bijector.inverse_log_det_jacobian(
@@ -505,6 +519,10 @@ class Chain(_ChainBase, Bijector):
             )
             values = bijector.inverse(values)
         return log_det
+
+    def min_event_ndims(self):
+        ndims = [bijector.min_event_ndims() for bijector in self.bijectors]
+        return max(ndims, default=0)
 
     def forward_event_shape(self, event_shape):
         for bijector in reversed(self.bijectors):

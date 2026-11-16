@@ -1,21 +1,18 @@
 import jax
 import jax.numpy as jp
 import pytest
-from tensorflow_probability.substrates import jax as tfp
 
+import paz
 from paz.inference.gmm.em import fit_gmm_em
-
-
-tfd = tfp.distributions
 
 
 def _sample_1d_mixture(key, num_samples):
     weights = jp.array([0.6, 0.4])
     means = jp.array([-2.0, 2.0])
     stdvs = jp.array([0.5, 0.3])
-    distribution = tfd.MixtureSameFamily(
-        tfd.Categorical(probs=weights),
-        tfd.Normal(loc=means, scale=stdvs),
+    distribution = paz.distributions.MixtureSameFamily(
+        paz.distributions.Categorical(probs=weights),
+        paz.distributions.Normal(loc=means, scale=stdvs),
     )
     samples = distribution.sample(num_samples, seed=key)[:, None]
     return samples, weights, means
@@ -28,9 +25,9 @@ def _sample_2d_mixture(key, num_samples):
         [[0.6, 0.2], [0.2, 0.4]],
         [[0.5, -0.1], [-0.1, 0.3]],
     ])
-    distribution = tfd.MixtureSameFamily(
-        tfd.Categorical(probs=weights),
-        tfd.MultivariateNormalFullCovariance(
+    distribution = paz.distributions.MixtureSameFamily(
+        paz.distributions.Categorical(probs=weights),
+        paz.distributions.MultivariateNormalFullCovariance(
             loc=means, covariance_matrix=covariances
         ),
     )

@@ -10,13 +10,11 @@ import time
 
 import jax
 import jax.numpy as jp
-from tensorflow_probability.substrates import jax as tfp
 
 import paz
 import paz.utils.plot as plot
 from paz.inference.types import SampleType
 
-tfd = tfp.distributions
 
 RunResult = namedtuple(
     "RunResult",
@@ -160,19 +158,19 @@ def build_switch_model(x, sigma, switch_table, num_switches):
     for segment_index in range(num_segments):
         slope_priors.append(
             paz.Prior(
-                tfd.Normal(0.0, 1.0),
+                paz.distributions.Normal(0.0, 1.0),
                 name=f"slope_segment_{segment_index}",
             )
         )
         bias_priors.append(
             paz.Prior(
-                tfd.Normal(0.0, 1.0),
+                paz.distributions.Normal(0.0, 1.0),
                 name=f"bias_segment_{segment_index}",
             )
         )
 
     switch_index = paz.Prior(
-        tfd.Categorical(
+        paz.distributions.Categorical(
             logits=jp.zeros(switch_table.shape[0]), dtype=jp.float32
         ),
         name="switch_index",
@@ -184,7 +182,7 @@ def build_switch_model(x, sigma, switch_table, num_switches):
         index = jp.asarray(switch_index, dtype=jp.int32)
         switch_indices = switch_table[index]
         mean = compute_piecewise_mean(x, slopes, biases, switch_indices)
-        return tfd.Normal(mean, sigma)
+        return paz.distributions.Normal(mean, sigma)
 
     y_obs = paz.Observable(y_distribution, name="y")(
         switch_index, *slope_priors, *bias_priors

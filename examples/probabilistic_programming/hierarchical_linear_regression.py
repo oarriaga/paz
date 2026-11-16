@@ -33,13 +33,10 @@ import jax
 import jax.numpy as jp
 import numpy as np
 import matplotlib.pyplot as plt
-from tensorflow_probability.substrates import jax as tfp
 
 import paz
 import paz.utils.plot as plot
 
-tfd = tfp.distributions
-tfb = tfp.bijectors
 
 TrueParams = namedtuple(
     "TrueParams",
@@ -83,27 +80,25 @@ def generate_hierarchical_data(key, num_groups, num_per_group, true_params):
 def HierarchicalLikelihood(X, group_idx):
     def apply(slopes, intercepts, sigma_obs):
         means = slopes[group_idx] * X + intercepts[group_idx]
-        return tfd.Normal(means, sigma_obs)
+        return paz.distributions.Normal(means, sigma_obs)
 
     return apply
 
 
 def SlopePrior(num_groups):
     def apply(mu_slope, sigma_slope):
-        return tfd.Independent(
-            tfd.Normal(jp.full(num_groups, mu_slope), sigma_slope),
-            reinterpreted_batch_ndims=1,
-        )
+        loc = jp.full(num_groups, mu_slope)
+        normal = paz.distributions.Normal(loc, sigma_slope)
+        return paz.distributions.Independent(normal, 1)
 
     return apply
 
 
 def InterceptPrior(num_groups):
     def apply(mu_intercept, sigma_intercept):
-        return tfd.Independent(
-            tfd.Normal(jp.full(num_groups, mu_intercept), sigma_intercept),
-            reinterpreted_batch_ndims=1,
-        )
+        loc = jp.full(num_groups, mu_intercept)
+        normal = paz.distributions.Normal(loc, sigma_intercept)
+        return paz.distributions.Independent(normal, 1)
 
     return apply
 
@@ -116,14 +111,15 @@ def build_centered_model(
     slopes ~ Normal(mu_slope, sigma_slope)
     intercepts ~ Normal(mu_intercept, sigma_intercept)
     """
-    mu_slope = paz.Prior(tfd.Normal(0.0, 1.0), name="mu_slope")
-    mu_intercept = paz.Prior(tfd.Normal(0.0, 1.0), name="mu_intercept")
+    mu_slope = paz.Prior(paz.distributions.Normal(0.0, 1.0), name="mu_slope")
+    standard = paz.distributions.Normal(0.0, 1.0)
+    mu_intercept = paz.Prior(standard, name="mu_intercept")
 
-    sigma_slope = paz.Prior(
-        tfd.Uniform(0.01, 1.0), name="sigma_slope", bijector=sigma_bijector
-    )
+    uniform = paz.distributions.Uniform(0.01, 1.0)
+    kwargs = dict(name="sigma_slope", bijector=sigma_bijector)
+    sigma_slope = paz.Prior(uniform, **kwargs)
     sigma_intercept = paz.Prior(
-        tfd.Uniform(0.01, 1.0),
+        paz.distributions.Uniform(0.01, 1.0),
         name="sigma_intercept",
         bijector=sigma_bijector,
     )
@@ -135,9 +131,8 @@ def build_centered_model(
         mu_intercept, sigma_intercept
     )
 
-    sigma_obs = paz.Prior(
-        tfd.Uniform(0.01, 0.5), name="sigma_obs", bijector=obs_bijector
-    )
+    obs_uniform = paz.distributions.Uniform(0.01, 0.5)
+    sigma_obs = paz.Prior(obs_uniform, name="sigma_obs", bijector=obs_bijector)
 
     y_obs = paz.Observable(HierarchicalLikelihood(X, group_idx), name="y_obs")(
         slopes, intercepts, sigma_obs
@@ -157,35 +152,27 @@ def build_noncentered_model(
     z_intercepts ~ Normal(0, 1)
     intercepts = mu_intercept + sigma_intercept * z_intercepts
     """
-    mu_slope = paz.Prior(tfd.Normal(0.0, 1.0), name="mu_slope")
-    mu_intercept = paz.Prior(tfd.Normal(0.0, 1.0), name="mu_intercept")
+    mu_slope = paz.Prior(paz.distributions.Normal(0.0, 1.0), name="mu_slope")
+    standard = paz.distributions.Normal(0.0, 1.0)
+    mu_intercept = paz.Prior(standard, name="mu_intercept")
 
-    sigma_slope = paz.Prior(
-        tfd.Uniform(0.01, 1.0), name="sigma_slope", bijector=sigma_bijector
-    )
+    uniform = paz.distributions.Uniform(0.01, 1.0)
+    kwargs = dict(name="sigma_slope", bijector=sigma_bijector)
+    sigma_slope = paz.Prior(uniform, **kwargs)
     sigma_intercept = paz.Prior(
-        tfd.Uniform(0.01, 1.0),
+        paz.distributions.Uniform(0.01, 1.0),
         name="sigma_intercept",
         bijector=sigma_bijector,
     )
 
     # Non-centered: sample standard normal offsets
-    z_slopes = paz.Prior(
-        tfd.Independent(
-            tfd.Normal(jp.zeros(num_groups), 1.0), reinterpreted_batch_ndims=1
-        ),
-        name="z_slopes",
-    )
-    z_intercepts = paz.Prior(
-        tfd.Independent(
-            tfd.Normal(jp.zeros(num_groups), 1.0), reinterpreted_batch_ndims=1
-        ),
-        name="z_intercepts",
-    )
+    group_normal = paz.distributions.Normal(jp.zeros(num_groups), 1.0)
+    offsets = paz.distributions.Independent(group_normal, 1)
+    z_slopes = paz.Prior(offsets, name="z_slopes")
+    z_intercepts = paz.Prior(offsets, name="z_intercepts")
 
-    sigma_obs = paz.Prior(
-        tfd.Uniform(0.01, 0.5), name="sigma_obs", bijector=obs_bijector
-    )
+    obs_uniform = paz.distributions.Uniform(0.01, 0.5)
+    sigma_obs = paz.Prior(obs_uniform, name="sigma_obs", bijector=obs_bijector)
 
     # Reparameterization happens inside likelihood
     def likelihood_noncentered(
@@ -200,7 +187,7 @@ def build_noncentered_model(
         slopes = mu_slope + sigma_slope * z_slopes
         intercepts = mu_intercept + sigma_intercept * z_intercepts
         means = slopes[group_idx] * X + intercepts[group_idx]
-        return tfd.Normal(means, sigma_obs)
+        return paz.distributions.Normal(means, sigma_obs)
 
     y_obs = paz.Observable(likelihood_noncentered, name="y_obs")(
         z_slopes,
@@ -268,13 +255,12 @@ print(f"  true_intercepts: {true_intercepts}")
 
 # Define bijectors for constrained parameters
 low, high = 0.01, 1.0
-sigma_bijector = tfb.Chain(
-    [tfb.Shift(low), tfb.Scale(high - low), tfb.Sigmoid()]
-)
+affine = [paz.bijectors.Shift(low), paz.bijectors.Scale(high - low)]
+sigma_bijector = paz.bijectors.Chain(affine + [paz.bijectors.Sigmoid()])
 obs_low, obs_high = 0.01, 0.5
-obs_bijector = tfb.Chain(
-    [tfb.Shift(obs_low), tfb.Scale(obs_high - obs_low), tfb.Sigmoid()]
-)
+obs_shift = paz.bijectors.Shift(obs_low)
+obs_affine = [obs_shift, paz.bijectors.Scale(obs_high - obs_low)]
+obs_bijector = paz.bijectors.Chain(obs_affine + [paz.bijectors.Sigmoid()])
 
 # Build model based on parameterization flag
 if PARAMETERIZATION == "centered":

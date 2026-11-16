@@ -1,12 +1,10 @@
 import jax
 import jax.numpy as jp
-from tensorflow_probability.substrates import jax as tfp
 
+from paz.backend import distributions
+from paz.backend import bijectors
 from paz.inference.latent_space import LatentSpace
 from paz.inference.types import SampleType
-
-tfd = tfp.distributions
-tfb = tfp.bijectors
 
 
 def _latent_space_spec(latent_space, arrays, prefix):
@@ -32,17 +30,17 @@ def _build_latent_space(spec, arrays):
 def _serialize_bijector(bijector, arrays, prefix):
     if bijector is None:
         return {"kind": "Identity"}
-    if isinstance(bijector, tfb.Identity):
+    if isinstance(bijector, bijectors.Identity):
         return {"kind": "Identity"}
-    if isinstance(bijector, tfb.Shift):
+    if isinstance(bijector, bijectors.Shift):
         name = f"{prefix}_shift"
         arrays[name] = bijector.shift
         return {"kind": "Shift", "kwargs": {"shift": _ref(name)}}
-    if isinstance(bijector, tfb.Scale):
+    if isinstance(bijector, bijectors.Scale):
         name = f"{prefix}_scale"
         arrays[name] = bijector.scale
         return {"kind": "Scale", "kwargs": {"scale": _ref(name)}}
-    if isinstance(bijector, tfb.Sigmoid):
+    if isinstance(bijector, bijectors.Sigmoid):
         spec = {"kind": "Sigmoid"}
         kwargs = {}
         if getattr(bijector, "low", None) is not None:
@@ -56,7 +54,7 @@ def _serialize_bijector(bijector, arrays, prefix):
         if kwargs:
             spec["kwargs"] = kwargs
         return spec
-    if isinstance(bijector, tfb.Softplus):
+    if isinstance(bijector, bijectors.Softplus):
         spec = {"kind": "Softplus"}
         kwargs = {}
         hinge_softness = getattr(bijector, "hinge_softness", None)
@@ -67,61 +65,61 @@ def _serialize_bijector(bijector, arrays, prefix):
         if kwargs:
             spec["kwargs"] = kwargs
         return spec
-    if isinstance(bijector, tfb.Exp):
+    if isinstance(bijector, bijectors.Exp):
         return {"kind": "Exp"}
-    if isinstance(bijector, tfb.SoftmaxCentered):
+    if isinstance(bijector, bijectors.SoftmaxCentered):
         return {"kind": "SoftmaxCentered"}
-    if isinstance(bijector, tfb.Invert):
+    if isinstance(bijector, bijectors.Invert):
         inner = _serialize_bijector(
             bijector.bijector, arrays, f"{prefix}_invert"
         )
         return {"kind": "Invert", "bijector": inner}
-    if isinstance(bijector, tfb.Chain):
-        bijectors = [
+    if isinstance(bijector, bijectors.Chain):
+        members = [
             _serialize_bijector(b, arrays, f"{prefix}_{i}")
             for i, b in enumerate(bijector.bijectors)
         ]
-        return {"kind": "Chain", "bijectors": bijectors}
+        return {"kind": "Chain", "bijectors": members}
     raise ValueError("Unsupported bijector for safe serialization.")
 
 
 def _deserialize_bijector(spec, arrays):
     kind = spec["kind"]
     if kind == "Identity":
-        return tfb.Identity()
+        return bijectors.Identity()
     if kind == "Shift":
         shift = _resolve_ref(spec["kwargs"]["shift"], arrays)
-        return tfb.Shift(shift=shift)
+        return bijectors.Shift(shift=shift)
     if kind == "Scale":
         scale = _resolve_ref(spec["kwargs"]["scale"], arrays)
-        return tfb.Scale(scale=scale)
+        return bijectors.Scale(scale=scale)
     if kind == "Sigmoid":
         kwargs = spec.get("kwargs", {})
         if kwargs:
             low = _resolve_ref(kwargs.get("low"), arrays)
             high = _resolve_ref(kwargs.get("high"), arrays)
-            return tfb.Sigmoid(low=low, high=high)
-        return tfb.Sigmoid()
+            return bijectors.Sigmoid(low=low, high=high)
+        return bijectors.Sigmoid()
     if kind == "Softplus":
         kwargs = spec.get("kwargs", {})
         if kwargs:
             hinge_softness = _resolve_ref(
                 kwargs.get("hinge_softness"), arrays
             )
-            return tfb.Softplus(hinge_softness=hinge_softness)
-        return tfb.Softplus()
+            return bijectors.Softplus(hinge_softness=hinge_softness)
+        return bijectors.Softplus()
     if kind == "Exp":
-        return tfb.Exp()
+        return bijectors.Exp()
     if kind == "SoftmaxCentered":
-        return tfb.SoftmaxCentered()
+        return bijectors.SoftmaxCentered()
     if kind == "Invert":
         bijector = _deserialize_bijector(spec["bijector"], arrays)
-        return tfb.Invert(bijector)
+        return bijectors.Invert(bijector)
     if kind == "Chain":
-        bijectors = [
+        members = [
             _deserialize_bijector(b, arrays) for b in spec["bijectors"]
         ]
-        return tfb.Chain(bijectors)
+        return bijectors.Chain(members)
     raise ValueError(f"Unknown bijector kind '{kind}'.")
 
 
@@ -132,16 +130,16 @@ def _serialize_distribution(density, arrays):
         raise ValueError(
             "Density serialization requires a distribution metadata entry."
         )
-    if isinstance(distribution, tfd.MultivariateNormalDiag):
+    if isinstance(distribution, distributions.MultivariateNormalDiag):
         arrays["loc"] = distribution.loc
-        arrays["scale_diag"] = _get_scale_diag(distribution)
+        arrays["scale_diag"] = distribution.scale_diag
         return {
             "density_kind": "gaussian",
             "covariance": "diag",
             "loc": _ref("loc"),
             "scale_diag": _ref("scale_diag"),
         }
-    if isinstance(distribution, tfd.MultivariateNormalFullCovariance):
+    if isinstance(distribution, distributions.MultivariateNormalFullCovariance):
         arrays["loc"] = distribution.loc
         arrays["covariance"] = distribution.covariance()
         return {
@@ -150,15 +148,16 @@ def _serialize_distribution(density, arrays):
             "loc": _ref("loc"),
             "covariance": _ref("covariance"),
         }
-    if isinstance(distribution, tfd.MixtureSameFamily):
+    if isinstance(distribution, distributions.MixtureSameFamily):
         mixture = distribution.mixture_distribution
         components = distribution.components_distribution
         arrays["weights"] = _get_probs(mixture)
         arrays["means"] = components.loc
-        if isinstance(components, tfd.MultivariateNormalDiag):
-            arrays["scale_diag"] = _get_scale_diag(components)
+        full_covariance = distributions.MultivariateNormalFullCovariance
+        if isinstance(components, distributions.MultivariateNormalDiag):
+            arrays["scale_diag"] = components.scale_diag
             covariance = "diag"
-        elif isinstance(components, tfd.MultivariateNormalFullCovariance):
+        elif isinstance(components, full_covariance):
             arrays["covariance"] = components.covariance()
             covariance = "full"
         else:
@@ -183,38 +182,38 @@ def _deserialize_distribution(spec, arrays):
     if kind == "gaussian" and covariance == "diag":
         loc = _resolve_ref(spec["loc"], arrays)
         scale = _resolve_ref(spec["scale_diag"], arrays)
-        return tfd.MultivariateNormalDiag(loc=loc, scale_diag=scale)
+        return distributions.MultivariateNormalDiag(loc=loc, scale_diag=scale)
     if kind == "gaussian" and covariance == "full":
         loc = _resolve_ref(spec["loc"], arrays)
         cov = _resolve_ref(spec["covariance"], arrays)
-        return tfd.MultivariateNormalFullCovariance(
+        return distributions.MultivariateNormalFullCovariance(
             loc=loc, covariance_matrix=cov
         )
     if kind == "gmm" and covariance == "diag":
         weights = _resolve_ref(spec["weights"], arrays)
         means = _resolve_ref(spec["means"], arrays)
         scale = _resolve_ref(spec["scale_diag"], arrays)
-        components = tfd.MultivariateNormalDiag(
+        components = distributions.MultivariateNormalDiag(
             loc=means, scale_diag=scale
         )
-        return tfd.MixtureSameFamily(
-            tfd.Categorical(probs=weights), components
+        return distributions.MixtureSameFamily(
+            distributions.Categorical(probs=weights), components
         )
     if kind == "gmm" and covariance == "full":
         weights = _resolve_ref(spec["weights"], arrays)
         means = _resolve_ref(spec["means"], arrays)
         cov = _resolve_ref(spec["covariance"], arrays)
-        components = tfd.MultivariateNormalFullCovariance(
+        components = distributions.MultivariateNormalFullCovariance(
             loc=means, covariance_matrix=cov
         )
-        return tfd.MixtureSameFamily(
-            tfd.Categorical(probs=weights), components
+        return distributions.MixtureSameFamily(
+            distributions.Categorical(probs=weights), components
         )
     raise ValueError("Unsupported distribution specification.")
 
 
 def _serialize_distribution_obj(distribution, arrays, prefix):
-    if isinstance(distribution, tfd.Normal):
+    if isinstance(distribution, distributions.Normal):
         arrays[f"{prefix}_loc"] = distribution.loc
         arrays[f"{prefix}_scale"] = distribution.scale
         return {
@@ -222,15 +221,15 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
             "loc": _ref(f"{prefix}_loc"),
             "scale": _ref(f"{prefix}_scale"),
         }
-    if isinstance(distribution, tfd.MultivariateNormalDiag):
+    if isinstance(distribution, distributions.MultivariateNormalDiag):
         arrays[f"{prefix}_loc"] = distribution.loc
-        arrays[f"{prefix}_scale_diag"] = _get_scale_diag(distribution)
+        arrays[f"{prefix}_scale_diag"] = distribution.scale_diag
         return {
             "kind": "MultivariateNormalDiag",
             "loc": _ref(f"{prefix}_loc"),
             "scale_diag": _ref(f"{prefix}_scale_diag"),
         }
-    if isinstance(distribution, tfd.MultivariateNormalFullCovariance):
+    if isinstance(distribution, distributions.MultivariateNormalFullCovariance):
         arrays[f"{prefix}_loc"] = distribution.loc
         arrays[f"{prefix}_covariance"] = distribution.covariance()
         return {
@@ -238,13 +237,13 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
             "loc": _ref(f"{prefix}_loc"),
             "covariance": _ref(f"{prefix}_covariance"),
         }
-    if isinstance(distribution, tfd.Deterministic):
+    if isinstance(distribution, distributions.Deterministic):
         arrays[f"{prefix}_loc"] = distribution.loc
         return {
             "kind": "Deterministic",
             "loc": _ref(f"{prefix}_loc"),
         }
-    if isinstance(distribution, tfd.Laplace):
+    if isinstance(distribution, distributions.Laplace):
         arrays[f"{prefix}_loc"] = distribution.loc
         arrays[f"{prefix}_scale"] = distribution.scale
         return {
@@ -252,7 +251,7 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
             "loc": _ref(f"{prefix}_loc"),
             "scale": _ref(f"{prefix}_scale"),
         }
-    if isinstance(distribution, tfd.StudentT):
+    if isinstance(distribution, distributions.StudentT):
         arrays[f"{prefix}_df"] = distribution.df
         arrays[f"{prefix}_loc"] = distribution.loc
         arrays[f"{prefix}_scale"] = distribution.scale
@@ -262,7 +261,7 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
             "loc": _ref(f"{prefix}_loc"),
             "scale": _ref(f"{prefix}_scale"),
         }
-    if isinstance(distribution, tfd.LogNormal):
+    if isinstance(distribution, distributions.LogNormal):
         arrays[f"{prefix}_loc"] = distribution.loc
         arrays[f"{prefix}_scale"] = distribution.scale
         return {
@@ -270,7 +269,7 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
             "loc": _ref(f"{prefix}_loc"),
             "scale": _ref(f"{prefix}_scale"),
         }
-    if isinstance(distribution, tfd.MixtureSameFamily):
+    if isinstance(distribution, distributions.MixtureSameFamily):
         arrays[f"{prefix}_weights"] = _get_probs(
             distribution.mixture_distribution
         )
@@ -284,7 +283,7 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
             "weights": _ref(f"{prefix}_weights"),
             "components": components,
         }
-    if isinstance(distribution, tfd.Uniform):
+    if isinstance(distribution, distributions.Uniform):
         arrays[f"{prefix}_low"] = distribution.low
         arrays[f"{prefix}_high"] = distribution.high
         return {
@@ -292,7 +291,7 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
             "low": _ref(f"{prefix}_low"),
             "high": _ref(f"{prefix}_high"),
         }
-    if isinstance(distribution, tfd.Beta):
+    if isinstance(distribution, distributions.Beta):
         arrays[f"{prefix}_a"] = distribution.concentration1
         arrays[f"{prefix}_b"] = distribution.concentration0
         return {
@@ -300,7 +299,7 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
             "concentration1": _ref(f"{prefix}_a"),
             "concentration0": _ref(f"{prefix}_b"),
         }
-    if isinstance(distribution, tfd.Poisson):
+    if isinstance(distribution, distributions.Poisson):
         spec = {"kind": "Poisson"}
         rate = getattr(distribution, "rate", None)
         if rate is not None:
@@ -311,7 +310,7 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
         arrays[f"{prefix}_log_rate"] = log_rate
         spec["log_rate"] = _ref(f"{prefix}_log_rate")
         return spec
-    if isinstance(distribution, tfd.Bernoulli):
+    if isinstance(distribution, distributions.Bernoulli):
         spec = {"kind": "Bernoulli", "dtype": _dtype_name(distribution.dtype)}
         probs = getattr(distribution, "probs", None)
         logits = getattr(distribution, "logits", None)
@@ -322,7 +321,7 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
         arrays[f"{prefix}_logits"] = logits
         spec["logits"] = _ref(f"{prefix}_logits")
         return spec
-    if isinstance(distribution, tfd.Categorical):
+    if isinstance(distribution, distributions.Categorical):
         spec = {
             "kind": "Categorical",
             "dtype": _dtype_name(distribution.dtype),
@@ -336,7 +335,7 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
         arrays[f"{prefix}_logits"] = logits
         spec["logits"] = _ref(f"{prefix}_logits")
         return spec
-    if isinstance(distribution, tfd.RelaxedOneHotCategorical):
+    if isinstance(distribution, distributions.RelaxedOneHotCategorical):
         spec = {"kind": "RelaxedOneHotCategorical"}
         arrays[f"{prefix}_temperature"] = distribution.temperature
         spec["temperature"] = _ref(f"{prefix}_temperature")
@@ -349,7 +348,7 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
         arrays[f"{prefix}_logits"] = logits
         spec["logits"] = _ref(f"{prefix}_logits")
         return spec
-    if isinstance(distribution, tfd.VonMises):
+    if isinstance(distribution, distributions.VonMises):
         arrays[f"{prefix}_loc"] = distribution.loc
         arrays[f"{prefix}_concentration"] = distribution.concentration
         return {
@@ -357,7 +356,7 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
             "loc": _ref(f"{prefix}_loc"),
             "concentration": _ref(f"{prefix}_concentration"),
         }
-    if isinstance(distribution, tfd.TruncatedNormal):
+    if isinstance(distribution, distributions.TruncatedNormal):
         arrays[f"{prefix}_loc"] = distribution.loc
         arrays[f"{prefix}_scale"] = distribution.scale
         arrays[f"{prefix}_low"] = distribution.low
@@ -369,7 +368,7 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
             "low": _ref(f"{prefix}_low"),
             "high": _ref(f"{prefix}_high"),
         }
-    if isinstance(distribution, tfd.TransformedDistribution):
+    if isinstance(distribution, distributions.TransformedDistribution):
         base = _serialize_distribution_obj(
             distribution.distribution, arrays, f"{prefix}_base"
         )
@@ -381,7 +380,7 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
             "base": base,
             "bijector": bijector,
         }
-    if isinstance(distribution, tfd.QuantizedDistribution):
+    if isinstance(distribution, distributions.QuantizedDistribution):
         base = _serialize_distribution_obj(
             distribution.distribution, arrays, f"{prefix}_base"
         )
@@ -393,7 +392,7 @@ def _serialize_distribution_obj(distribution, arrays, prefix):
             arrays[f"{prefix}_high"] = distribution.high
             spec["high"] = _ref(f"{prefix}_high")
         return spec
-    if isinstance(distribution, tfd.Independent):
+    if isinstance(distribution, distributions.Independent):
         base = _serialize_distribution_obj(
             distribution.distribution, arrays, f"{prefix}_base"
         )
@@ -416,90 +415,91 @@ def _deserialize_distribution_obj(spec, arrays):
     if kind == "Normal":
         loc = _resolve_ref(spec["loc"], arrays)
         scale = _resolve_ref(spec["scale"], arrays)
-        return tfd.Normal(loc=loc, scale=scale)
+        return distributions.Normal(loc=loc, scale=scale)
     if kind == "MultivariateNormalDiag":
         loc = _resolve_ref(spec["loc"], arrays)
         scale = _resolve_ref(spec["scale_diag"], arrays)
-        return tfd.MultivariateNormalDiag(loc=loc, scale_diag=scale)
+        return distributions.MultivariateNormalDiag(loc=loc, scale_diag=scale)
     if kind == "MultivariateNormalFullCovariance":
         loc = _resolve_ref(spec["loc"], arrays)
         cov = _resolve_ref(spec["covariance"], arrays)
-        return tfd.MultivariateNormalFullCovariance(
+        return distributions.MultivariateNormalFullCovariance(
             loc=loc, covariance_matrix=cov
         )
     if kind == "Deterministic":
         loc = _resolve_ref(spec["loc"], arrays)
-        return tfd.Deterministic(loc=loc)
+        return distributions.Deterministic(loc=loc)
     if kind == "Laplace":
         loc = _resolve_ref(spec["loc"], arrays)
         scale = _resolve_ref(spec["scale"], arrays)
-        return tfd.Laplace(loc=loc, scale=scale)
+        return distributions.Laplace(loc=loc, scale=scale)
     if kind == "StudentT":
         df = _resolve_ref(spec["df"], arrays)
         loc = _resolve_ref(spec["loc"], arrays)
         scale = _resolve_ref(spec["scale"], arrays)
-        return tfd.StudentT(df=df, loc=loc, scale=scale)
+        return distributions.StudentT(df=df, loc=loc, scale=scale)
     if kind == "LogNormal":
         loc = _resolve_ref(spec["loc"], arrays)
         scale = _resolve_ref(spec["scale"], arrays)
-        return tfd.LogNormal(loc=loc, scale=scale)
+        return distributions.LogNormal(loc=loc, scale=scale)
     if kind == "MixtureSameFamily":
         weights = _resolve_ref(spec["weights"], arrays)
         components = _deserialize_distribution_obj(spec["components"], arrays)
-        return tfd.MixtureSameFamily(
-            tfd.Categorical(probs=weights), components
+        return distributions.MixtureSameFamily(
+            distributions.Categorical(probs=weights), components
         )
     if kind == "Uniform":
         low = _resolve_ref(spec["low"], arrays)
         high = _resolve_ref(spec["high"], arrays)
-        return tfd.Uniform(low=low, high=high)
+        return distributions.Uniform(low=low, high=high)
     if kind == "Beta":
         a = _resolve_ref(spec["concentration1"], arrays)
         b = _resolve_ref(spec["concentration0"], arrays)
-        return tfd.Beta(concentration1=a, concentration0=b)
+        return distributions.Beta(concentration1=a, concentration0=b)
     if kind == "Poisson":
         if "rate" in spec:
             rate = _resolve_ref(spec["rate"], arrays)
-            return tfd.Poisson(rate=rate)
+            return distributions.Poisson(rate=rate)
         log_rate = _resolve_ref(spec["log_rate"], arrays)
-        return tfd.Poisson(log_rate=log_rate)
+        return distributions.Poisson(log_rate=log_rate)
     if kind == "Bernoulli":
         dtype = jp.dtype(spec["dtype"])
         if "probs" in spec:
             probs = _resolve_ref(spec["probs"], arrays)
-            return tfd.Bernoulli(probs=probs, dtype=dtype)
+            return distributions.Bernoulli(probs=probs, dtype=dtype)
         logits = _resolve_ref(spec["logits"], arrays)
-        return tfd.Bernoulli(logits=logits, dtype=dtype)
+        return distributions.Bernoulli(logits=logits, dtype=dtype)
     if kind == "Categorical":
         dtype = jp.dtype(spec["dtype"])
         if "probs" in spec:
             probs = _resolve_ref(spec["probs"], arrays)
-            return tfd.Categorical(probs=probs, dtype=dtype)
+            return distributions.Categorical(probs=probs, dtype=dtype)
         logits = _resolve_ref(spec["logits"], arrays)
-        return tfd.Categorical(logits=logits, dtype=dtype)
+        return distributions.Categorical(logits=logits, dtype=dtype)
     if kind == "RelaxedOneHotCategorical":
         temperature = _resolve_ref(spec["temperature"], arrays)
+        relaxed = distributions.RelaxedOneHotCategorical
         if "probs" in spec:
             probs = _resolve_ref(spec["probs"], arrays)
-            return tfd.RelaxedOneHotCategorical(temperature, probs=probs)
+            return relaxed(temperature, probs=probs)
         logits = _resolve_ref(spec["logits"], arrays)
-        return tfd.RelaxedOneHotCategorical(temperature, logits=logits)
+        return relaxed(temperature, logits=logits)
     if kind == "VonMises":
         loc = _resolve_ref(spec["loc"], arrays)
         concentration = _resolve_ref(spec["concentration"], arrays)
-        return tfd.VonMises(loc=loc, concentration=concentration)
+        return distributions.VonMises(loc=loc, concentration=concentration)
     if kind == "TruncatedNormal":
         loc = _resolve_ref(spec["loc"], arrays)
         scale = _resolve_ref(spec["scale"], arrays)
         low = _resolve_ref(spec["low"], arrays)
         high = _resolve_ref(spec["high"], arrays)
-        return tfd.TruncatedNormal(
+        return distributions.TruncatedNormal(
             loc=loc, scale=scale, low=low, high=high
         )
     if kind == "TransformedDistribution":
         base = _deserialize_distribution_obj(spec["base"], arrays)
         bijector = _deserialize_bijector(spec["bijector"], arrays)
-        return tfd.TransformedDistribution(base, bijector)
+        return distributions.TransformedDistribution(base, bijector)
     if kind == "QuantizedDistribution":
         base = _deserialize_distribution_obj(spec["base"], arrays)
         kwargs = {}
@@ -507,10 +507,10 @@ def _deserialize_distribution_obj(spec, arrays):
             kwargs["low"] = _resolve_ref(spec["low"], arrays)
         if "high" in spec:
             kwargs["high"] = _resolve_ref(spec["high"], arrays)
-        return tfd.QuantizedDistribution(distribution=base, **kwargs)
+        return distributions.QuantizedDistribution(distribution=base, **kwargs)
     if kind == "Independent":
         base = _deserialize_distribution_obj(spec["base"], arrays)
-        return tfd.Independent(
+        return distributions.Independent(
             base, reinterpreted_batch_ndims=spec["reinterpreted_batch_ndims"]
         )
     raise ValueError("Unsupported distribution specification.")
@@ -617,20 +617,6 @@ def _get_probs(mixture):
     if hasattr(mixture, "logits"):
         return jax.nn.softmax(mixture.logits)
     raise ValueError("Unable to extract mixture probabilities.")
-
-
-def _get_scale_diag(distribution):
-    scale_diag = getattr(distribution, "scale_diag", None)
-    if scale_diag is not None:
-        return scale_diag
-    scale = getattr(distribution, "scale", None)
-    if scale is None:
-        raise ValueError("Unable to extract scale_diag.")
-    if hasattr(scale, "diag_part"):
-        return scale.diag_part()
-    if hasattr(scale, "diagonal"):
-        return scale.diagonal()
-    raise ValueError("Unable to extract scale_diag.")
 
 
 def _dtype_name(dtype):

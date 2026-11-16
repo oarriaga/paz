@@ -4,27 +4,23 @@ Fit a bijector so a base distribution matches a target distribution.
 
 import jax
 import jax.numpy as jp
-from tensorflow_probability.substrates import jax as tfp
 
 import paz
 import paz.utils.plot as plot
 
 
-tfd = tfp.distributions
-tfb = tfp.bijectors
-
-
 def build_transformed(source, bijector):
-    return tfd.TransformedDistribution(
+    return paz.distributions.TransformedDistribution(
         distribution=source,
         bijector=bijector,
     )
 
 
 key = jax.random.PRNGKey(7)
-source = tfd.Normal(0.0, 1.0)
-target = tfd.LogNormal(0.4, 0.6)
-initial_bijector = tfb.Chain([tfb.Shift(0.0), tfb.Scale(1.0)])
+source = paz.distributions.Normal(0.0, 1.0)
+target = paz.distributions.LogNormal(0.4, 0.6)
+affine = [paz.bijectors.Shift(0.0), paz.bijectors.Scale(1.0)]
+initial_bijector = paz.bijectors.Chain(affine)
 prior = paz.Prior(source, bijector=initial_bijector, name="z")
 
 fitted_prior, losses = prior.fit_bijector(

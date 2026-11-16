@@ -66,7 +66,7 @@ This project requires **Python 3.10+**. We rely on Keras 3 with JAX as the backe
 
 5. **Install other Dependencies: (neede by paz somewhere else e.g. (paz\backend\plane.py))**
     ```bash
-    pip install matplotlib opencv-python optax tensorflow_probability
+    pip install matplotlib opencv-python optax
     ```
 
 6. **Make the Keras Backend to jax**

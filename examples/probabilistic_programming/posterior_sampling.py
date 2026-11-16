@@ -3,9 +3,6 @@ import jax
 import jax.numpy as jp
 import paz.utils.plot as plot
 
-from tensorflow_probability.substrates import jax as tfp
-
-tfd = tfp.distributions
 
 true_mean = jp.array([1.5, 1.5])
 true_stdv = jp.array([[0.5, 1.0], [1.0, 0.5]])
@@ -17,7 +14,8 @@ positions = jp.repeat(jp.expand_dims(jp.array([1.0, 1.0]), 0), num_chains, 0)
 
 
 def log_density(position):
-    return tfd.Normal(true_mean, true_stdv).log_prob(position).sum()
+    normal = paz.distributions.Normal(true_mean, true_stdv)
+    return normal.log_prob(position).sum()
 
 
 samples, states = paz.metropolis_hastings.sample(

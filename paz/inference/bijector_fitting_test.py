@@ -1,19 +1,16 @@
 import jax
 import jax.numpy as jp
-from tensorflow_probability.substrates import jax as tfp
 
+import paz
 from paz.inference.bijector_fitting import fit_bijector
-
-
-tfd = tfp.distributions
-tfb = tfp.bijectors
 
 
 def test_fit_bijector_reduces_loss():
     key = jax.random.PRNGKey(0)
-    source = tfd.Normal(0.0, 1.0)
-    target = tfd.Normal(2.0, 0.5)
-    initial = tfb.Chain([tfb.Shift(0.0), tfb.Scale(1.0)])
+    source = paz.distributions.Normal(0.0, 1.0)
+    target = paz.distributions.Normal(2.0, 0.5)
+    affine = [paz.bijectors.Shift(0.0), paz.bijectors.Scale(1.0)]
+    initial = paz.bijectors.Chain(affine)
     _, losses = fit_bijector(
         source,
         target,
@@ -28,9 +25,10 @@ def test_fit_bijector_reduces_loss():
 
 def test_fit_bijector_returns_bijector():
     key = jax.random.PRNGKey(1)
-    source = tfd.Normal(0.0, 1.0)
-    target = tfd.Normal(-1.0, 2.0)
-    initial = tfb.Chain([tfb.Shift(0.0), tfb.Scale(1.0)])
+    source = paz.distributions.Normal(0.0, 1.0)
+    target = paz.distributions.Normal(-1.0, 2.0)
+    affine = [paz.bijectors.Shift(0.0), paz.bijectors.Scale(1.0)]
+    initial = paz.bijectors.Chain(affine)
     fitted, _ = fit_bijector(
         source,
         target,
@@ -40,4 +38,4 @@ def test_fit_bijector_returns_bijector():
         num_steps=5,
         verbose=False,
     )
-    assert isinstance(fitted, tfb.Bijector)
+    assert isinstance(fitted, paz.bijectors.Bijector)
