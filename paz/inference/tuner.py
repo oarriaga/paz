@@ -19,6 +19,7 @@ TunerInfo = namedtuple("TunerInfo", ["scale", "factor", "acceptance_rate"])
 TunerState = namedtuple("TunerState", ["kernel_state", "scale", "factor"])
 EpisodeState = namedtuple("EpisodeState", ["key", "tuner_state", "sigma"])
 Episode = namedtuple("Episode", ["infos", "sigma", "is_sigma_valid"])
+Chain = namedtuple("Chain", ["info", "positions"])
 result_fields = ["sigma", "positions", "infos", "is_sigma_valid"]
 TunerResult = namedtuple("TunerResult", result_fields)
 fields = ["sigma", "num_steps", "num_episodes", "progress", "compute_rate"]
@@ -128,79 +129,36 @@ def Tuner(
     if compute_sigma is None:
         compute_sigma = keep_sigma
 
-    def tune_episode(tuner_state, key, sigma, num_steps):
-        scale = tuner_state.factor * tuner_state.scale
-        propose = partial(propose_additively, sigma=scale * sigma)
-
-        def kernel_step(kernel_state, key):
-            key_propose, key_accept = jax.random.split(key)
-            new_position = propose(key_propose, kernel_state.position)
-            new_state = Samples(new_position, log_density_fn(new_position))
-            now_proposal = build_now_proposal(kernel_state)
-            new_proposal = build_new_proposal(kernel_state, new_state)
-            info = choose_proposal(key_accept, now_proposal, new_proposal)
-            return info.proposal.state, info
-
-        keys = jax.random.split(key, num_steps)
-        kernel_state, infos = jax.lax.scan(
-            kernel_step, tuner_state.kernel_state, keys
-        )
-        acceptance_rate = jp.mean(infos.is_accepted, axis=0)
-        rate = compute_rate(acceptance_rate)
-        new_state = TunerState(kernel_state, scale, rate)
-        positions = jax.vmap(flatten)(infos.proposal.state.position)
-        return new_state, (TunerInfo(scale, rate, acceptance_rate), positions)
-
     @partial(jax.jit, static_argnums=(1, 2))
     def tune(key, num_steps, num_episodes, initial_sigma):
-        if progress:
-            progress_callback = progressbar.show(
-                num_episodes, "tuning", width=30
-            )
-        else:
-            progress_callback = None
-
-        def one_episode(state, sample_arg):
-            if progress:
-                progress_callback(sample_arg + 1)
-            new_key, key = jax.random.split(state.key)
-            keys = jax.random.split(key, num_chains)
-            kwargs = {"sigma": state.sigma, "num_steps": num_steps}
-            tune_step = partial(tune_episode, **kwargs)
-            outputs = jax.vmap(tune_step)(state.tuner_state, keys)
-            tuner_state, (infos, positions) = outputs
-            covariance = compute_covariance(positions)
-            new_sigma = compute_sigma(initial_sigma, covariance)
-            # Chains that never moved, or a covariance that is singular in
-            # float32, give no usable sigma.
-            is_valid = jp.all(jp.isfinite(new_sigma)) & jp.any(new_sigma != 0)
-            new_sigma = jp.where(is_valid, new_sigma, state.sigma)
-            new_state = EpisodeState(new_key, tuner_state, new_sigma)
-            return new_state, Episode(infos, state.sigma, is_valid)
-
-        def build_kernel_state(position):
-            return Samples(position, log_density_fn(position))
-
-        kernel_state = jax.vmap(build_kernel_state)(samples)
-        ones = jp.ones(num_chains)
-        tuner_state = TunerState(kernel_state, ones, ones)
-        size = jax.vmap(flatten)(samples).shape[1]
         initial_sigma = jp.asarray(initial_sigma)
-        sigma = compute_sigma(initial_sigma, square_sigma(initial_sigma, size))
-        state = EpisodeState(key, tuner_state, sigma)
-        episode_args = jp.arange(num_episodes)
-        state, episodes = jax.lax.scan(one_episode, state, episode_args)
+        sigma = compute_first_sigma(compute_sigma, initial_sigma, samples)
+        state = build_episode_state(key, log_density_fn, samples, sigma)
+        tune_one_chain = partial(tune_chain, log_density_fn, compute_rate)
+        episode_args = (tune_one_chain, compute_sigma, initial_sigma, num_steps)
+        show_progress = build_progress_callback(progress, num_episodes)
+
+        def step(state, episode):
+            show_progress(episode + 1)
+            return run_episode(*episode_args, state)
+
+        indices = jp.arange(num_episodes)
+        state, episodes = jax.lax.scan(step, state, indices)
         if progress:
             progressbar.newline()
-        infos = episodes.infos
-        # The last factor was measured with the last sigma that was used.
-        tuned_scale = (infos.scale[-1] * infos.factor[-1]).mean()
-        tuned_sigma = tuned_scale * episodes.sigma[-1]
-        positions = state.tuner_state.kernel_state.position
-        is_sigma_valid = episodes.is_sigma_valid
-        return TunerResult(tuned_sigma, positions, infos, is_sigma_valid)
+        return build_result(state, episodes)
 
     return tune
+
+
+def AcceptanceToVariance(acceptance_rates, variance_factors):
+    coefficients = jp.polyfit(acceptance_rates, variance_factors, deg=5)
+    return lambda acceptance_rate: jp.polyval(coefficients, acceptance_rate)
+
+
+def compute_first_sigma(compute_sigma, initial_sigma, samples):
+    size = jax.vmap(flatten)(samples).shape[1]
+    return compute_sigma(initial_sigma, square_sigma(initial_sigma, size))
 
 
 def flatten(position):
@@ -213,6 +171,60 @@ def square_sigma(sigma, size):
     else:
         covariance = jp.diag(jp.broadcast_to(sigma**2, (size,)))
     return covariance
+
+
+def build_episode_state(key, log_density_fn, samples, sigma):
+    log_densities = jax.vmap(log_density_fn)(samples)
+    ones = jp.ones(log_densities.shape[0])
+    tuner_state = TunerState(Samples(samples, log_densities), ones, ones)
+    return EpisodeState(key, tuner_state, sigma)
+
+
+def build_progress_callback(progress, num_episodes):
+    if progress:
+        callback = progressbar.show(num_episodes, "tuning", width=30)
+    else:
+        callback = skip_progress
+    return callback
+
+
+def skip_progress(episode):
+    return None
+
+
+def run_episode(tune_one_chain, compute_sigma, initial_sigma, num_steps, state):
+    new_key, key = jax.random.split(state.key)
+    keys = jax.random.split(key, state.tuner_state.scale.shape[0])
+    tune_chains = jax.vmap(partial(tune_one_chain, num_steps, state.sigma))
+    tuner_state, chains = tune_chains(state.tuner_state, keys)
+    covariance = compute_covariance(chains.positions)
+    measured_sigma = compute_sigma(initial_sigma, covariance)
+    is_valid = is_valid_sigma(measured_sigma)
+    sigma = jp.where(is_valid, measured_sigma, state.sigma)
+    new_state = EpisodeState(new_key, tuner_state, sigma)
+    return new_state, Episode(chains.info, state.sigma, is_valid)
+
+
+def tune_chain(log_density_fn, compute_rate, num_steps, sigma, state, key):
+    scale = state.factor * state.scale
+    step = partial(step_kernel, log_density_fn, scale * sigma)
+    keys = jax.random.split(key, num_steps)
+    kernel_state, infos = jax.lax.scan(step, state.kernel_state, keys)
+    acceptance_rate = jp.mean(infos.is_accepted, axis=0)
+    factor = compute_rate(acceptance_rate)
+    positions = jax.vmap(flatten)(infos.proposal.state.position)
+    info = TunerInfo(scale, factor, acceptance_rate)
+    return TunerState(kernel_state, scale, factor), Chain(info, positions)
+
+
+def step_kernel(log_density_fn, sigma, kernel_state, key):
+    key_propose, key_accept = jax.random.split(key)
+    position = propose_additively(key_propose, kernel_state.position, sigma)
+    new_state = Samples(position, log_density_fn(position))
+    now_proposal = build_now_proposal(kernel_state)
+    new_proposal = build_new_proposal(kernel_state, new_state)
+    info = choose_proposal(key_accept, now_proposal, new_proposal)
+    return info.proposal.state, info
 
 
 def compute_covariance(positions):
@@ -228,6 +240,16 @@ def compute_covariance(positions):
     return weight * covariance + shrinkage * jp.eye(size)
 
 
-def AcceptanceToVariance(acceptance_rates, variance_factors):
-    coefficients = jp.polyfit(acceptance_rates, variance_factors, deg=5)
-    return lambda acceptance_rate: jp.polyval(coefficients, acceptance_rate)
+def is_valid_sigma(sigma):
+    # Chains that never moved, or a covariance that is singular in float32,
+    # give no usable sigma.
+    return jp.all(jp.isfinite(sigma)) & jp.any(sigma != 0)
+
+
+def build_result(state, episodes):
+    infos = episodes.infos
+    # The last factor was measured with the last sigma that was used.
+    scale = (infos.scale[-1] * infos.factor[-1]).mean()
+    positions = state.tuner_state.kernel_state.position
+    args = (scale * episodes.sigma[-1], positions, infos)
+    return TunerResult(*args, episodes.is_sigma_valid)
