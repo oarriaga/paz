@@ -2,8 +2,8 @@ import jax
 import jax.numpy as jp
 
 from paz.inference.tuner import AcceptanceToVariance, Tuner
-from paz.inference.tuner import compute_cholesky_shape, compute_covariance
-from paz.inference.tuner import compute_diagonal_shape
+from paz.inference.tuner import AdaptiveCovarianceTuner, AdaptiveDiagonalTuner
+from paz.inference.tuner import PROPOSAL_SHAPES
 
 
 def test_acceptance_to_variance_returns_finite():
@@ -48,23 +48,24 @@ def build_correlated_log_density(stdvs, correlation):
     return lambda position: -0.5 * position @ precision @ position
 
 
-def tune_correlated(compute_shape):
+def tune_correlated(tuner_type):
     log_density_fn = build_correlated_log_density(jp.array([1.0, 0.1]), 0.9)
     num_chains = 8
     positions = jp.zeros((num_chains, 2))
-    kwargs = {"progress": False, "compute_shape": compute_shape}
+    proposal_shape = PROPOSAL_SHAPES[tuner_type]
+    kwargs = {"progress": False, "proposal_shape": proposal_shape}
     tune = Tuner(log_density_fn, positions, num_chains, **kwargs)
     return tune(jax.random.PRNGKey(0), 500, 10, 0.1)
 
 
 def test_diagonal_tuner_recovers_scale_ratio():
-    sigma, _, _ = tune_correlated(compute_diagonal_shape)
+    sigma, _, _ = tune_correlated(AdaptiveDiagonalTuner)
     assert sigma.shape == (2,)
     assert 5.0 < sigma[0] / sigma[1] < 20.0
 
 
 def test_covariance_tuner_recovers_correlation():
-    sigma, _, _ = tune_correlated(compute_cholesky_shape)
+    sigma, _, _ = tune_correlated(AdaptiveCovarianceTuner)
     covariance = sigma @ sigma.T
     stdvs = jp.sqrt(jp.diagonal(covariance))
     correlation = covariance[0, 1] / (stdvs[0] * stdvs[1])
@@ -73,11 +74,19 @@ def test_covariance_tuner_recovers_correlation():
 
 
 def test_tuner_returns_last_positions():
-    _, positions, _ = tune_correlated(compute_cholesky_shape)
+    _, positions, _ = tune_correlated(AdaptiveCovarianceTuner)
     assert positions.shape == (8, 2)
     assert jp.all(positions != 0.0)
 
 
-def test_covariance_of_stuck_chains_is_positive_definite():
-    covariance = compute_covariance(jp.ones((4, 10, 3)))
-    assert jp.all(jp.isfinite(jp.linalg.cholesky(covariance)))
+def test_covariance_tuner_keeps_shape_when_chains_never_move():
+    def log_density_fn(position):
+        return jp.where(jp.all(position == 0.0), 0.0, -jp.inf)
+
+    positions = jp.zeros((4, 2))
+    proposal_shape = PROPOSAL_SHAPES[AdaptiveCovarianceTuner]
+    kwargs = {"progress": False, "proposal_shape": proposal_shape}
+    tune = Tuner(log_density_fn, positions, 4, **kwargs)
+    sigma, _, _ = tune(jax.random.PRNGKey(0), 20, 3, 0.1)
+    assert jp.all(jp.isfinite(sigma))
+    assert jp.all(jp.diagonal(sigma) > 0.0)

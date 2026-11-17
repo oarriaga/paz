@@ -15,8 +15,9 @@ from .metropolis_hastings import (
 )
 
 
-TunerInfo = namedtuple("TunerInfo", ["sigma", "factor", "acceptance_rate"])
-TunerState = namedtuple("TunerState", ["kernel_state", "sigma", "factor"])
+TunerInfo = namedtuple("TunerInfo", ["scale", "factor", "acceptance_rate"])
+TunerState = namedtuple("TunerState", ["kernel_state", "scale", "factor"])
+ProposalShape = namedtuple("ProposalShape", ["build", "update"])
 
 
 def build_tuner_type(name):
@@ -37,16 +38,16 @@ def Tuner(
     num_chains,
     compute_rate=None,
     progress=True,
-    compute_shape=None,
+    proposal_shape=None,
 ):
     if compute_rate is None:
         compute_rate = AcceptanceToVariance(ACCEPTANCE_RATES, VARIANCE_FACTORS)
-    if compute_shape is None:
-        compute_shape = keep_unit_shape
+    if proposal_shape is None:
+        proposal_shape = PROPOSAL_SHAPES[AdaptiveStepTuner]
 
     def tune_episode(tuner_state, key, shape, num_steps):
-        sigma = tuner_state.factor * tuner_state.sigma
-        propose = partial(propose_additively, sigma=sigma * shape)
+        scale = tuner_state.factor * tuner_state.scale
+        propose = partial(propose_additively, sigma=scale * shape)
 
         def kernel_step(kernel_state, key):
             key_propose, key_accept = jax.random.split(key)
@@ -63,9 +64,9 @@ def Tuner(
         )
         acceptance_rate = jp.mean(infos.is_accepted, axis=0)
         rate = compute_rate(acceptance_rate)
-        new_state = TunerState(kernel_state, sigma, rate)
+        new_state = TunerState(kernel_state, scale, rate)
         positions = jax.vmap(flatten)(infos.proposal.state.position)
-        return new_state, (TunerInfo(sigma, rate, acceptance_rate), positions)
+        return new_state, (TunerInfo(scale, rate, acceptance_rate), positions)
 
     @partial(jax.jit, static_argnums=(1, 2))
     def tune(key, num_steps, num_episodes, sigma):
@@ -85,30 +86,30 @@ def Tuner(
             tune_step = partial(tune_episode, shape=shape, num_steps=num_steps)
             outputs = jax.vmap(tune_step)(tune_states, keys)
             tune_states, (infos, positions) = outputs
-            new_shape = compute_shape(positions)
-            # A covariance that is singular in float32 has no Cholesky.
-            is_valid = jp.all(jp.isfinite(new_shape))
+            new_shape = proposal_shape.update(positions, shape)
+            # Chains that never moved, or a covariance that is singular in
+            # float32, give no usable shape.
+            is_valid = jp.all(jp.isfinite(new_shape)) & jp.any(new_shape != 0)
             new_shape = jp.where(is_valid, new_shape, shape)
             return (new_key, tune_states, new_shape), (infos, shape)
-
-        sigma = jp.full(num_chains, sigma)
-        rates = jp.ones(num_chains)
 
         def build_kernel_state(position):
             return Samples(position, log_density_fn(position))
 
         kernel_state = jax.vmap(build_kernel_state)(samples)
-        tuner_state = TunerState(kernel_state, sigma, rates)
+        ones = jp.ones(num_chains)
+        tuner_state = TunerState(kernel_state, ones, ones)
+        size = jax.vmap(flatten)(samples).shape[1]
+        episode_state = (key, tuner_state, proposal_shape.build(sigma, size))
         episode_args = jp.arange(num_episodes)
-        shape = compute_shape(jax.vmap(flatten)(samples)[:, None])
-        episode_state = (key, tuner_state, shape)
         outputs = jax.lax.scan(one_episode, episode_state, episode_args)
         (_, tuner_state, _), (infos, shapes) = outputs
         if progress:
             progressbar.newline()
         # The last factor was measured with the last shape that was used.
-        tuned_sigma = (infos.sigma[-1] * infos.factor[-1]).mean() * shapes[-1]
-        return tuned_sigma, tuner_state.kernel_state.position, infos
+        tuned_scale = (infos.scale[-1] * infos.factor[-1]).mean()
+        positions = tuner_state.kernel_state.position
+        return tuned_scale * shapes[-1], positions, infos
 
     return tune
 
@@ -117,18 +118,28 @@ def flatten(position):
     return flatten_util.ravel_pytree(position)[0]
 
 
-def keep_unit_shape(positions):
-    return jp.ones(())
+def build_scalar_shape(sigma, size):
+    return jp.asarray(sigma, dtype=float)
 
 
-def compute_diagonal_shape(positions):
-    stdv = jp.sqrt(jp.diagonal(compute_covariance(positions)))
-    return stdv / jp.exp(jp.mean(jp.log(stdv)))
+def keep_shape(positions, shape):
+    return shape
 
 
-def compute_cholesky_shape(positions):
-    cholesky = jp.linalg.cholesky(compute_covariance(positions))
-    return cholesky / jp.exp(jp.mean(jp.log(jp.diagonal(cholesky))))
+def build_diagonal_shape(sigma, size):
+    return jp.full(size, sigma, dtype=float)
+
+
+def update_diagonal_shape(positions, shape):
+    return jp.sqrt(jp.diagonal(compute_covariance(positions)))
+
+
+def build_cholesky_shape(sigma, size):
+    return sigma * jp.eye(size)
+
+
+def update_cholesky_shape(positions, shape):
+    return jp.linalg.cholesky(compute_covariance(positions))
 
 
 def compute_covariance(positions):
@@ -137,18 +148,20 @@ def compute_covariance(positions):
     centered = positions - positions.mean(axis=1, keepdims=True)
     covariance = jp.einsum("csi,csj->ij", centered, centered)
     covariance = covariance / (positions.shape[0] * num_steps)
-    variance = jp.mean(jp.diagonal(covariance))
-    variance = jp.where(variance > 0, variance, 1.0)
     # Stan's shrinkage keeps the matrix positive definite with few samples.
-    shrinkage = 1e-3 * 5 / (num_steps + 5)
+    # It is relative because posteriors here are often far narrower than 1.
+    shrinkage = 1e-3 * 5 / (num_steps + 5) * jp.mean(jp.diagonal(covariance))
     weight = num_steps / (num_steps + 5)
-    return weight * covariance + shrinkage * variance * jp.eye(size)
+    return weight * covariance + shrinkage * jp.eye(size)
 
 
-SHAPE_FUNCTIONS = {
-    AdaptiveStepTuner: keep_unit_shape,
-    AdaptiveDiagonalTuner: compute_diagonal_shape,
-    AdaptiveCovarianceTuner: compute_cholesky_shape,
+scalar_shape = ProposalShape(build_scalar_shape, keep_shape)
+diagonal_shape = ProposalShape(build_diagonal_shape, update_diagonal_shape)
+cholesky_shape = ProposalShape(build_cholesky_shape, update_cholesky_shape)
+PROPOSAL_SHAPES = {
+    AdaptiveStepTuner: scalar_shape,
+    AdaptiveDiagonalTuner: diagonal_shape,
+    AdaptiveCovarianceTuner: cholesky_shape,
 }
 
 
