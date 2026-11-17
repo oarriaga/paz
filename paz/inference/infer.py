@@ -4,7 +4,7 @@ import jax.numpy as jp
 from paz.inference.metropolis_hastings import sample as mh_sample
 from paz.inference.posterior import MCMCPosterior
 from paz.inference.latent_space import as_latent_samples, to_inverse_samples
-from paz.inference.tuner import PROPOSAL_SHAPES, Tuner
+from paz.inference.tuner import Tuner
 from paz.inference.utils import validate_space
 
 
@@ -75,7 +75,7 @@ def _infer_mh(key, data, prior, likelihood, sample_predictive, **kwargs):
 
     num_warmup = _resolve_num_warmup(num_samples, warmup)
     if sigma is None:
-        sigma = tuner.sigma if type(tuner) in PROPOSAL_SHAPES else 0.1
+        sigma = 0.1 if tuner is None else tuner.sigma
     run_tuner = _should_tune(tune, tuner)
     if run_tuner:
         tuner_args = (
@@ -180,12 +180,10 @@ def _should_tune(tune, tuner):
 
 
 def _run_tuner(tuner, key, log_density_fn, positions, num_chains, sigma):
-    if type(tuner) not in PROPOSAL_SHAPES:
-        raise NotImplementedError(f"Unknown tuner {type(tuner).__name__}.")
     tuner_config = {
         "compute_rate": tuner.compute_rate,
         "progress": tuner.progress,
-        "proposal_shape": PROPOSAL_SHAPES[type(tuner)],
+        "compute_shape": tuner.compute_shape,
     }
     tune = Tuner(log_density_fn, positions, num_chains, **tuner_config)
     tune_args = (key, tuner.num_steps, tuner.num_episodes, sigma)
