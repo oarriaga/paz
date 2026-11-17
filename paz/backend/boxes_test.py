@@ -1,4 +1,5 @@
 import pytest
+import jax
 import jax.numpy as jp
 import paz
 import numpy as np
@@ -151,11 +152,10 @@ def test_denormalize_box():
     assert jp.array_equal(denorm_box, jp.array(expected))
 
 
-@pytest.mark.skip(reason="changed implementation")
 def test_flip_left_right():
     boxes = jp.array([[10.0, 20.0, 30.0, 40.0]])
     width = 100
-    flipped = flip_left_right(boxes, width)
+    flipped = paz.boxes.flip_left_right(boxes, width)
     expected = jp.array([[70.0, 20.0, 90.0, 40.0]])
     assert jp.allclose(flipped, expected)
 
@@ -268,3 +268,74 @@ def test_pad_with_custom_value():
     )
     assert result.shape == (4, 4), "Output shape is incorrect"
     np.testing.assert_array_equal(result, expected_output)
+
+
+def sample_crops(seed, H, W):
+    keys = jax.random.split(jax.random.PRNGKey(seed), 300)
+    sample = paz.lock(paz.boxes.sample_crop, H, W, 384, 600)
+    return np.asarray(jax.vmap(sample)(keys))
+
+
+def sample_windows(seed, H, W):
+    keys = jax.random.split(jax.random.PRNGKey(seed), 256)
+    args = (H, W, (400, 500, 600), 384, 600)
+    sample = jax.jit(jax.vmap(paz.lock(paz.boxes.sample_resized_crop, *args)))
+    return np.asarray(sample(keys)), sample
+
+
+def fits_resized_crop(window, H_resized, W_resized):
+    scale = np.array([W_resized, H_resized, W_resized, H_resized])
+    pixels = window * scale
+    on_grid = np.allclose(pixels, np.round(pixels), atol=1e-2)
+    inside = np.all(pixels > -1e-2) and np.all(pixels < scale + 1e-2)
+    W_crop, H_crop = pixels[2:] - pixels[:2]
+    W_fits = 384 - 1e-2 < W_crop < min(W_resized, 600) + 1e-2
+    H_fits = 384 - 1e-2 < H_crop < min(H_resized, 600) + 1e-2
+    return on_grid and inside and W_fits and H_fits
+
+
+def test_clip_to_edges_and_has_area_match_reference_cleanup():
+    rows = [[-5.0, -10.0, 50.0, 40.0], [180.0, 140.0, 230.0, 170.0],
+            [60.0, 70.0, 60.0, 90.0], [10.0, 150.0, 40.0, 170.0]]
+    clipped = paz.boxes.clip_to_edges(jp.array(rows), 150, 200)
+    # rfdetr ConvertCoco: clamp to [0, W] x [0, H], keep w > 0 and h > 0
+    expected = [[0.0, 0.0, 50.0, 40.0], [180.0, 140.0, 200.0, 150.0],
+                [60.0, 70.0, 60.0, 90.0], [10.0, 150.0, 40.0, 150.0]]
+    assert clipped.tolist() == expected
+    keep = [True, True, False, False]
+    assert paz.boxes.has_area(clipped).tolist() == keep
+
+
+def test_sample_crop_draws_every_reference_value():
+    crops = sample_crops(0, 500, 700)
+    sizes = crops[:, 2:] - crops[:, :2]
+    assert crops.shape == (300, 4) and crops.dtype == np.int32
+    assert crops.min() >= 0 and sizes.min() >= 384
+    assert 585 <= sizes[:, 0].max() <= 600 and crops[:, 2].max() <= 700
+    assert 485 <= sizes[:, 1].max() <= 500 and crops[:, 3].max() <= 500
+    # random.randint and torch.randint(0, side - crop + 1) include both ends
+    crops = sample_crops(1, 385, 386)
+    assert set((crops[:, 2] - crops[:, 0]).tolist()) == {384, 385, 386}
+    assert set((crops[:, 3] - crops[:, 1]).tolist()) == {384, 385}
+    assert set(crops[:, 0].tolist()) == {0, 1, 2}
+    assert set(crops[:, 1].tolist()) == {0, 1}
+    crops = sample_crops(2, 700, 800)
+    assert not np.all(crops[:, 2] - crops[:, 0] == crops[:, 3] - crops[:, 1])
+
+
+def test_sample_resized_crop_lands_on_the_reference_grid():
+    # rfdetr RandomResize([400, 500, 600]), no max_size, then RandomSizeCrop
+    cases = [(100, 80, [(500, 400), (625, 500), (750, 600)]),
+             (100, 300, [(400, 1200), (500, 1500), (600, 1800)]),
+             (480, 640, [(400, 533), (500, 666), (600, 800)])]
+    for H, W, resized_sizes in cases:
+        windows, sample = sample_windows(0, H, W)
+        assert windows.shape == (256, 4) and windows.dtype == np.float32
+        hits = np.zeros((256, 3), bool)
+        for row, window in enumerate(windows):
+            for column, size in enumerate(resized_sizes):
+                hits[row, column] = fits_resized_crop(window, *size)
+        assert np.all(hits.any(axis=1))
+        only_one = hits & (hits.sum(axis=1, keepdims=True) == 1)
+        assert np.all(only_one.sum(axis=0) > 20)
+        assert sample._cache_size() == 1
