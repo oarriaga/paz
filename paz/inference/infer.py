@@ -4,7 +4,7 @@ import jax.numpy as jp
 from paz.inference.metropolis_hastings import sample as mh_sample
 from paz.inference.posterior import MCMCPosterior
 from paz.inference.latent_space import as_latent_samples, to_inverse_samples
-from paz.inference.tuner import AdaptiveStepTuner, Tuner
+from paz.inference.tuner import SHAPE_FUNCTIONS, Tuner
 from paz.inference.utils import validate_space
 
 
@@ -75,7 +75,7 @@ def _infer_mh(key, data, prior, likelihood, sample_predictive, **kwargs):
 
     num_warmup = _resolve_num_warmup(num_samples, warmup)
     if sigma is None:
-        sigma = tuner.sigma if isinstance(tuner, AdaptiveStepTuner) else 0.1
+        sigma = tuner.sigma if type(tuner) in SHAPE_FUNCTIONS else 0.1
     run_tuner = _should_tune(tune, tuner)
     if run_tuner:
         tuner_args = (
@@ -86,7 +86,7 @@ def _infer_mh(key, data, prior, likelihood, sample_predictive, **kwargs):
             num_chains,
             sigma,
         )
-        sigma = _run_tuner(*tuner_args)
+        sigma, positions = _run_tuner(*tuner_args)
 
     total_samples = num_samples + num_warmup
     states, infos = mh_sample(
@@ -180,12 +180,14 @@ def _should_tune(tune, tuner):
 
 
 def _run_tuner(tuner, key, log_density_fn, positions, num_chains, sigma):
-    if not isinstance(tuner, AdaptiveStepTuner):
-        raise NotImplementedError("Only AdaptiveStepTuner is supported.")
+    if type(tuner) not in SHAPE_FUNCTIONS:
+        raise NotImplementedError(f"Unknown tuner {type(tuner).__name__}.")
     tuner_config = {
         "compute_rate": tuner.compute_rate,
         "progress": tuner.progress,
+        "compute_shape": SHAPE_FUNCTIONS[type(tuner)],
     }
     tune = Tuner(log_density_fn, positions, num_chains, **tuner_config)
-    tuned_sigma, _ = tune(key, tuner.num_steps, tuner.num_episodes, sigma)
-    return tuned_sigma
+    tune_args = (key, tuner.num_steps, tuner.num_episodes, sigma)
+    tuned_sigma, positions, _ = tune(*tune_args)
+    return tuned_sigma, positions

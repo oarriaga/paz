@@ -109,3 +109,19 @@ def test_tune_updates_default_sigma():
         progress=False,
     )
     assert posterior.config["tune"] is True
+
+
+diagonal_case = (paz.AdaptiveDiagonalTuner, (1,))
+covariance_case = (paz.AdaptiveCovarianceTuner, (1, 1))
+
+
+@pytest.mark.parametrize("Tuner, shape", [diagonal_case, covariance_case])
+def test_infer_mh_with_shape_tuners(Tuner, shape):
+    model, data = build_simple_model()
+    tuner = Tuner(sigma=0.4, num_steps=50, num_episodes=4, progress=False)
+    model.configure(num_chains=4, warmup=0, tuner=tuner, progress=False)
+    posterior = model.infer(jax.random.PRNGKey(5), data, num_samples=2000)
+    samples = posterior.samples.x
+    assert posterior.config["sigma"].shape == shape
+    assert jp.abs(samples.mean() - 0.125) < 0.1
+    assert jp.abs(samples.std() - jp.sqrt(0.5)) < 0.1
