@@ -145,8 +145,8 @@ def test_infer_mh_shows_tuning_and_sampling_on_one_line(capsys):
     assert f"sample |{'█' * 20}| 5/5" in last_frame
 
 
-def test_infer_mh_keeps_sample_bar_without_tuner_progress(capsys):
+def test_infer_mh_shows_only_sampling_without_tuner_progress(capsys):
     output = infer_with_progress(False, capsys)
     assert output.count("\n") == 1
-    assert "sample: |" in output
+    assert "sample |" in output
     assert "tune" not in output

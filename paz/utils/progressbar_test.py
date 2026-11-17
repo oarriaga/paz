@@ -73,20 +73,33 @@ def test_show_builds_callback_for_scan(capsys):
     assert "scan" in captured.out
 
 
-def test_build_stage_draws_bar_and_count():
-    stage = utils_progressbar.build_stage("tune", 5, 10, 10)
-    assert stage == "tune |█████-----| 5/10"
-
-
-def test_build_timing_shows_percent():
-    start_time = utils_progressbar.start()
-    assert utils_progressbar.build_timing(5, 10, start_time).startswith("50% [")
-
-
-def test_show_text_rewrites_line_without_newline(capsys):
-    show = utils_progressbar.show_text(lambda count: f"count {count}")
-    show(3)
+def show_two_stages(capsys, counts):
+    stages = [("tune", 2, 4), ("sample", 4, 4)]
+    reports = utils_progressbar.show_stages(stages)
+    for index, count in counts:
+        reports[index](count)
     jax.effects_barrier()
-    captured = capsys.readouterr()
-    assert captured.out.startswith("\rcount 3")
-    assert "\n" not in captured.out
+    output = capsys.readouterr().out
+    return output, output.split("\r")[-1].rstrip()
+
+
+def test_show_stages_draws_waiting_stage_empty(capsys):
+    _, last_frame = show_two_stages(capsys, [(0, 1)])
+    assert last_frame.startswith("tune |██--| 1/2 50% [")
+    assert last_frame.endswith("sample |----| 0/4")
+
+
+def test_show_stages_keeps_finished_stage_with_its_time(capsys):
+    _, last_frame = show_two_stages(capsys, [(0, 2), (1, 2)])
+    tune, sample = last_frame.split("  ")
+    assert tune.startswith("tune |████| 2/2 ") and tune.endswith("s")
+    assert sample.startswith("sample |██--| 2/4 50% [")
+
+
+def test_show_stages_stays_on_one_line(capsys):
+    output, _ = show_two_stages(capsys, [(0, 1), (0, 2), (1, 4)])
+    assert "\n" not in output
+
+
+def test_skip_returns_none():
+    assert utils_progressbar.skip(3) is None

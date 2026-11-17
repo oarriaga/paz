@@ -22,7 +22,7 @@ def test_tuner_returns_infos_shape():
     def log_density_fn(position):
         return -jp.sum(position ** 2)
 
-    tune = Tuner(log_density_fn, positions, progress=False)
+    tune = Tuner(log_density_fn, positions)
     infos = tune(key, num_steps, num_episodes, 0.1).infos
     assert infos.acceptance_rate.shape[0] == num_episodes
 
@@ -34,7 +34,7 @@ def test_tuner_sigma_is_finite():
     def log_density_fn(position):
         return -jp.sum(position ** 2)
 
-    tune = Tuner(log_density_fn, positions, progress=False)
+    tune = Tuner(log_density_fn, positions)
     tuned_sigma = tune(key, 1, 1, 0.1).sigma
     assert jp.isfinite(tuned_sigma)
 
@@ -49,8 +49,7 @@ def build_correlated_log_density(stdvs, correlation):
 def tune_correlated(compute_sigma):
     log_density_fn = build_correlated_log_density(jp.array([1.0, 0.1]), 0.9)
     positions = jp.zeros((8, 2))
-    kwargs = {"progress": False, "compute_sigma": compute_sigma}
-    tune = Tuner(log_density_fn, positions, **kwargs)
+    tune = Tuner(log_density_fn, positions, compute_sigma=compute_sigma)
     return tune(jax.random.PRNGKey(0), 500, 10, 0.1)
 
 
@@ -80,7 +79,7 @@ def test_covariance_tuner_keeps_shape_when_chains_never_move():
         return jp.where(jp.all(position == 0.0), 0.0, -jp.inf)
 
     positions = jp.zeros((4, 2))
-    kwargs = {"progress": False, "compute_sigma": compute_cholesky_sigma}
+    kwargs = {"compute_sigma": compute_cholesky_sigma}
     tune = Tuner(log_density_fn, positions, **kwargs)
     result = tune(jax.random.PRNGKey(0), 20, 3, 0.1)
     assert jp.all(jp.isfinite(result.sigma))
@@ -96,8 +95,8 @@ def tune_one_episode(compute_sigma, initial_sigma):
     def log_density_fn(position):
         return -0.5 * jp.sum(position**2)
 
-    kwargs = {"progress": False, "compute_sigma": compute_sigma}
-    tune = Tuner(log_density_fn, jp.zeros((4, 2)), **kwargs)
+    positions = jp.zeros((4, 2))
+    tune = Tuner(log_density_fn, positions, compute_sigma=compute_sigma)
     return tune(jax.random.PRNGKey(0), 20, 1, initial_sigma).sigma
 
 

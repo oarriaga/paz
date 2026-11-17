@@ -120,12 +120,9 @@ def Tuner(
     log_density_fn,
     samples,
     compute_rate=None,
-    progress=True,
     compute_sigma=None,
-    show_progress=None,
+    show_progress=progressbar.skip,
 ):
-    # A caller that passes show_progress draws the line and ends it.
-    owns_line = progress and show_progress is None
     if compute_rate is None:
         compute_rate = AcceptanceToVariance(ACCEPTANCE_RATES, VARIANCE_FACTORS)
     if compute_sigma is None:
@@ -138,16 +135,13 @@ def Tuner(
         state = build_episode_state(key, log_density_fn, samples, sigma)
         tune_one_chain = partial(tune_chain, log_density_fn, compute_rate)
         episode_args = (tune_one_chain, compute_sigma, initial_sigma, num_steps)
-        show = build_progress_callback(owns_line, show_progress, num_episodes)
 
         def step(state, episode):
-            show(episode + 1)
+            show_progress(episode + 1)
             return run_episode(*episode_args, state)
 
         indices = jp.arange(num_episodes)
         state, episodes = jax.lax.scan(step, state, indices)
-        if owns_line:
-            progressbar.newline()
         return build_result(state, episodes)
 
     return tune
@@ -180,20 +174,6 @@ def build_episode_state(key, log_density_fn, samples, sigma):
     ones = jp.ones(log_densities.shape[0])
     tuner_state = TunerState(Samples(samples, log_densities), ones, ones)
     return EpisodeState(key, tuner_state, sigma)
-
-
-def build_progress_callback(owns_line, show_progress, num_episodes):
-    if owns_line:
-        callback = progressbar.show(num_episodes, "tuning", width=30)
-    elif show_progress is None:
-        callback = skip_progress
-    else:
-        callback = show_progress
-    return callback
-
-
-def skip_progress(episode):
-    return None
 
 
 def run_episode(tune_one_chain, compute_sigma, initial_sigma, num_steps, state):

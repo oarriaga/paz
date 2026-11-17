@@ -1,5 +1,3 @@
-import time
-
 import jax
 import jax.numpy as jp
 
@@ -83,22 +81,18 @@ def _infer_mh(key, data, prior, likelihood, sample_predictive, **kwargs):
         sigma = 0.1 if tuner is None else tuner.sigma
     run_tuner = _should_tune(tune, tuner)
     total_samples = num_samples + num_warmup
-    shares_line = run_tuner and tuner.progress and progress
-    show_sample = None
+    shows_tuning = run_tuner and tuner.progress
+    reports = _show_stages(shows_tuning, tuner, progress, total_samples)
     if run_tuner:
-        show_tune = _show_tuning(shares_line, tuner, total_samples)
+        show_tuning = reports.get("tune", progressbar.skip)
         tuner_args = (tuner, key_tune, log_density_fn, positions, sigma)
-        start_time = time.perf_counter()
-        sigma, positions = _run_tuner(*tuner_args, show_tune)
-        seconds = time.perf_counter() - start_time
-        show_args = (shares_line, tuner, seconds, total_samples)
-        show_sample = _show_sampling(*show_args)
+        sigma, positions = _run_tuner(*tuner_args, show_tuning)
 
+    show_sampling = reports.get("sample", progressbar.skip)
     sample_args = (key_sample, log_density_fn, positions, sigma)
-    sample_kwargs = {"progress": progress, "show_progress": show_sample}
-    sample_args = sample_args + (total_samples, num_chains)
-    states, infos = mh_sample(*sample_args, **sample_kwargs)
-    if shares_line:
+    sample_args = sample_args + (total_samples, num_chains, show_sampling)
+    states, infos = mh_sample(*sample_args)
+    if reports:
         progressbar.newline()
     if num_warmup > 0:
         states = jax.tree.map(lambda x: x[num_warmup:], states)
@@ -181,41 +175,19 @@ def _should_tune(tune, tuner):
     return tune
 
 
-def _show_tuning(shares_line, tuner, total_samples):
-    if shares_line:
-        waiting = progressbar.build_stage("sample", 0, total_samples, 20)
-
-        def build_text(episode):
-            stage_args = ("tune", episode, tuner.num_episodes, 10)
-            return f"{progressbar.build_stage(*stage_args)}  {waiting}"
-
-        show = progressbar.show_text(build_text)
-    else:
-        show = None
-    return show
-
-
-def _show_sampling(shares_line, tuner, seconds, total_samples):
-    if shares_line:
-        stage_args = ("tune", tuner.num_episodes, tuner.num_episodes, 10)
-        tuned = f"{progressbar.build_stage(*stage_args)} {seconds:.2f}s"
-        start_time = progressbar.start()
-
-        def build_text(step):
-            stage = progressbar.build_stage("sample", step, total_samples, 20)
-            timing = progressbar.build_timing(step, total_samples, start_time)
-            return f"{tuned}  {stage} {timing}"
-
-        show = progressbar.show_text(build_text)
-    else:
-        show = None
-    return show
+def _show_stages(shows_tuning, tuner, shows_sampling, total_samples):
+    stages = []
+    if shows_tuning:
+        stages.append(("tune", tuner.num_episodes, 10))
+    if shows_sampling:
+        stages.append(("sample", total_samples, 20))
+    names = [description for description, _, _ in stages]
+    return dict(zip(names, progressbar.show_stages(stages)))
 
 
 def _run_tuner(tuner, key, log_density_fn, positions, sigma, show_progress):
     tuner_config = {
         "compute_rate": tuner.compute_rate,
-        "progress": tuner.progress,
         "compute_sigma": tuner.compute_sigma,
         "show_progress": show_progress,
     }
