@@ -1,11 +1,8 @@
 """
 Hierarchical Bayesian Linear Regression
 
-Demonstrates hierarchical modeling with group-level varying slopes and intercepts.
-Supports both CENTERED and NON-CENTERED parameterizations.
-
-PARAMETERIZATION FLAG:
-  Set PARAMETERIZATION = "centered" or "non-centered" (line ~184)
+Demonstrates hierarchical modeling with group-level varying slopes and
+intercepts. Choose the model with `--parameterization`.
 
 CENTERED PARAMETERIZATION (standard):
   slopes[g] ~ Normal(mu_slope, sigma_slope)
@@ -27,541 +24,240 @@ NON-CENTERED PARAMETERIZATION (reparameterized):
 Reference: https://twiecki.io/blog/2017/02/08/bayesian-hierchical-non-centered/
 """
 
+import argparse
 from collections import namedtuple
 
 import jax
 import jax.numpy as jp
-import numpy as np
-import matplotlib.pyplot as plt
 
 import paz
 import paz.utils.plot as plot
 
-
-TrueParams = namedtuple(
-    "TrueParams",
-    ["mu_slope", "sigma_slope", "mu_intercept", "sigma_intercept", "sigma_obs"],
-)
-
-
-def generate_hierarchical_data(key, num_groups, num_per_group, true_params):
-    mu_slope, sigma_slope = true_params.mu_slope, true_params.sigma_slope
-    mu_intercept, sigma_intercept = (
-        true_params.mu_intercept,
-        true_params.sigma_intercept,
-    )
-    sigma_obs = true_params.sigma_obs
-
-    data_key, slopes_key, intercepts_key = jax.random.split(key, 3)
-    true_slopes = (
-        jax.random.normal(slopes_key, (num_groups,)) * sigma_slope + mu_slope
-    )
-    true_intercepts = (
-        jax.random.normal(intercepts_key, (num_groups,)) * sigma_intercept
-        + mu_intercept
-    )
-
-    X, y, group_idx = [], [], []
-    for j in range(num_groups):
-        data_key, x_key, noise_key = jax.random.split(data_key, 3)
-        x_j = jax.random.uniform(x_key, (num_per_group,), minval=0, maxval=1)
-        noise = jax.random.normal(noise_key, (num_per_group,)) * sigma_obs
-        y_j = true_slopes[j] * x_j + true_intercepts[j] + noise
-        X.append(x_j)
-        y.append(y_j)
-        group_idx.append(jp.full(num_per_group, j, dtype=jp.int32))
-
-    X = jp.concatenate(X)
-    y = jp.concatenate(y)
-    group_idx = jp.concatenate(group_idx)
-    return X, y, group_idx, true_slopes, true_intercepts
+fields = ["mu_slope", "mu_intercept", "sigma_slope", "sigma_intercept"]
+Hyperparameters = namedtuple("Hyperparameters", fields + ["sigma_obs"])
+fields = Hyperparameters._fields + ("z_slopes", "z_intercepts")
+Noncentered = namedtuple("Noncentered", fields)
 
 
-def HierarchicalLikelihood(X, group_idx):
+def sample_data(key, num_groups, num_per_group, truth):
+    keys = jax.random.split(key, 4)
+    shape = (num_groups, num_per_group)
+    slope_noise = jax.random.normal(keys[0], (num_groups,))
+    intercept_noise = jax.random.normal(keys[1], (num_groups,))
+    slopes = truth.mu_slope + truth.sigma_slope * slope_noise
+    intercepts = truth.mu_intercept + truth.sigma_intercept * intercept_noise
+    X = jax.random.uniform(keys[2], shape)
+    noise = truth.sigma_obs * jax.random.normal(keys[3], shape)
+    y = slopes[:, None] * X + intercepts[:, None] + noise
+    groups = jp.repeat(jp.arange(num_groups), num_per_group)
+    return X.ravel(), y.ravel(), groups, slopes, intercepts
+
+
+def build_centered_model(X, groups, num_groups):
+    priors = build_hyperpriors()
+    mu_slope, mu_intercept, sigma_slope, sigma_intercept, sigma_obs = priors
+    slopes = paz.Latent(GroupPrior(num_groups), name="slopes")
+    slopes = slopes(mu_slope, sigma_slope)
+    intercepts = paz.Latent(GroupPrior(num_groups), name="intercepts")
+    intercepts = intercepts(mu_intercept, sigma_intercept)
+    y = paz.Observable(Likelihood(X, groups), name="y_obs")
+    y = y(slopes, intercepts, sigma_obs)
+    return paz.PGM(priors, [y], "hierarchical_centered")
+
+
+def build_hyperpriors():
+    standard = paz.distributions.Normal(0.0, 1.0)
+    mu_slope = paz.Prior(standard, name="mu_slope")
+    mu_intercept = paz.Prior(standard, name="mu_intercept")
+    sigma_slope = build_bounded_prior("sigma_slope", 0.01, 1.0)
+    sigma_intercept = build_bounded_prior("sigma_intercept", 0.01, 1.0)
+    sigma_obs = build_bounded_prior("sigma_obs", 0.01, 0.5)
+    return [mu_slope, mu_intercept, sigma_slope, sigma_intercept, sigma_obs]
+
+
+def build_bounded_prior(name, low, high):
+    affine = [paz.bijectors.Shift(low), paz.bijectors.Scale(high - low)]
+    bijector = paz.bijectors.Chain(affine + [paz.bijectors.Sigmoid()])
+    return paz.Prior(paz.distributions.Uniform(low, high), bijector, name)
+
+
+def GroupPrior(num_groups):
+    def apply(mean, stdv):
+        normal = paz.distributions.Normal(jp.full(num_groups, mean), stdv)
+        return paz.distributions.Independent(normal, 1)
+
+    return apply
+
+
+def Likelihood(X, groups):
     def apply(slopes, intercepts, sigma_obs):
-        means = slopes[group_idx] * X + intercepts[group_idx]
+        means = slopes[groups] * X + intercepts[groups]
         return paz.distributions.Normal(means, sigma_obs)
 
     return apply
 
 
-def SlopePrior(num_groups):
-    def apply(mu_slope, sigma_slope):
-        loc = jp.full(num_groups, mu_slope)
-        normal = paz.distributions.Normal(loc, sigma_slope)
-        return paz.distributions.Independent(normal, 1)
-
-    return apply
+def unpack_group_lines(sample):
+    return sample.slopes, sample.intercepts
 
 
-def InterceptPrior(num_groups):
-    def apply(mu_intercept, sigma_intercept):
-        loc = jp.full(num_groups, mu_intercept)
-        normal = paz.distributions.Normal(loc, sigma_intercept)
-        return paz.distributions.Independent(normal, 1)
-
-    return apply
-
-
-def build_centered_model(
-    X, group_idx, num_groups, sigma_bijector, obs_bijector
-):
-    """
-    Centered parameterization (standard hierarchical model).
-    slopes ~ Normal(mu_slope, sigma_slope)
-    intercepts ~ Normal(mu_intercept, sigma_intercept)
-    """
-    mu_slope = paz.Prior(paz.distributions.Normal(0.0, 1.0), name="mu_slope")
-    standard = paz.distributions.Normal(0.0, 1.0)
-    mu_intercept = paz.Prior(standard, name="mu_intercept")
-
-    uniform = paz.distributions.Uniform(0.01, 1.0)
-    kwargs = dict(name="sigma_slope", bijector=sigma_bijector)
-    sigma_slope = paz.Prior(uniform, **kwargs)
-    sigma_intercept = paz.Prior(
-        paz.distributions.Uniform(0.01, 1.0),
-        name="sigma_intercept",
-        bijector=sigma_bijector,
-    )
-
-    slopes = paz.Latent(SlopePrior(num_groups), name="slopes")(
-        mu_slope, sigma_slope
-    )
-    intercepts = paz.Latent(InterceptPrior(num_groups), name="intercepts")(
-        mu_intercept, sigma_intercept
-    )
-
-    obs_uniform = paz.distributions.Uniform(0.01, 0.5)
-    sigma_obs = paz.Prior(obs_uniform, name="sigma_obs", bijector=obs_bijector)
-
-    y_obs = paz.Observable(HierarchicalLikelihood(X, group_idx), name="y_obs")(
-        slopes, intercepts, sigma_obs
-    )
-
-    priors = [mu_slope, mu_intercept, sigma_slope, sigma_intercept, sigma_obs]
-    return paz.PGM(priors, [y_obs], "hierarchical_centered")
-
-
-def build_noncentered_model(
-    X, group_idx, num_groups, sigma_bijector, obs_bijector
-):
-    """
-    Non-centered parameterization (avoids Neal's funnel).
-    z_slopes ~ Normal(0, 1)
-    slopes = mu_slope + sigma_slope * z_slopes
-    z_intercepts ~ Normal(0, 1)
-    intercepts = mu_intercept + sigma_intercept * z_intercepts
-    """
-    mu_slope = paz.Prior(paz.distributions.Normal(0.0, 1.0), name="mu_slope")
-    standard = paz.distributions.Normal(0.0, 1.0)
-    mu_intercept = paz.Prior(standard, name="mu_intercept")
-
-    uniform = paz.distributions.Uniform(0.01, 1.0)
-    kwargs = dict(name="sigma_slope", bijector=sigma_bijector)
-    sigma_slope = paz.Prior(uniform, **kwargs)
-    sigma_intercept = paz.Prior(
-        paz.distributions.Uniform(0.01, 1.0),
-        name="sigma_intercept",
-        bijector=sigma_bijector,
-    )
-
-    # Non-centered: sample standard normal offsets
-    group_normal = paz.distributions.Normal(jp.zeros(num_groups), 1.0)
-    offsets = paz.distributions.Independent(group_normal, 1)
+def build_noncentered_model(X, groups, num_groups):
+    normal = paz.distributions.Normal(jp.zeros(num_groups), 1.0)
+    offsets = paz.distributions.Independent(normal, 1)
     z_slopes = paz.Prior(offsets, name="z_slopes")
     z_intercepts = paz.Prior(offsets, name="z_intercepts")
-
-    obs_uniform = paz.distributions.Uniform(0.01, 0.5)
-    sigma_obs = paz.Prior(obs_uniform, name="sigma_obs", bijector=obs_bijector)
-
-    # Reparameterization happens inside likelihood
-    def likelihood_noncentered(
-        z_slopes,
-        z_intercepts,
-        mu_slope,
-        sigma_slope,
-        mu_intercept,
-        sigma_intercept,
-        sigma_obs,
-    ):
-        slopes = mu_slope + sigma_slope * z_slopes
-        intercepts = mu_intercept + sigma_intercept * z_intercepts
-        means = slopes[group_idx] * X + intercepts[group_idx]
-        return paz.distributions.Normal(means, sigma_obs)
-
-    y_obs = paz.Observable(likelihood_noncentered, name="y_obs")(
-        z_slopes,
-        z_intercepts,
-        mu_slope,
-        sigma_slope,
-        mu_intercept,
-        sigma_intercept,
-        sigma_obs,
-    )
-
-    priors = [
-        mu_slope,
-        mu_intercept,
-        sigma_slope,
-        sigma_intercept,
-        sigma_obs,
-        z_slopes,
-        z_intercepts,
-    ]
-    return paz.PGM(priors, [y_obs], "hierarchical_noncentered")
+    priors = build_hyperpriors() + [z_slopes, z_intercepts]
+    likelihood = NoncenteredLikelihood(X, groups)
+    y = paz.Observable(likelihood, name="y_obs")(*priors)
+    return paz.PGM(priors, [y], "hierarchical_noncentered")
 
 
-# Configure plotting
-plot.configure(fontsize=12, latex=False)
+def NoncenteredLikelihood(X, groups):
+    likelihood = Likelihood(X, groups)
 
-true_params = TrueParams(
-    mu_slope=0.8,
-    sigma_slope=0.3,
-    mu_intercept=0.2,
-    sigma_intercept=0.2,
-    sigma_obs=0.1,
-)
+    def apply(*values):
+        sample = Noncentered(*values)
+        slopes, intercepts = compute_group_lines(sample)
+        return likelihood(slopes, intercepts, sample.sigma_obs)
 
-num_groups = 5
-num_per_group = 50
-PLOT = True
-PARAMETERIZATION = "non-centered"  # "centered" or "non-centered"
+    return apply
 
-# Get group colors
-cmap = plt.get_cmap("tab10")
-colors = [cmap(i) for i in range(num_groups)]
 
-key = jax.random.PRNGKey(7)
-key, data_key = jax.random.split(key)
-X, y, group_idx, true_slopes, true_intercepts = generate_hierarchical_data(
-    data_key, num_groups, num_per_group, true_params
-)
-print("X.shape", X.shape)
-data = {"y_obs": y}
+def compute_group_lines(sample):
+    slope_offsets = sample.sigma_slope[..., None] * sample.z_slopes
+    intercept_offsets = sample.sigma_intercept[..., None] * sample.z_intercepts
+    slopes = sample.mu_slope[..., None] + slope_offsets
+    intercepts = sample.mu_intercept[..., None] + intercept_offsets
+    return slopes, intercepts
 
-print(f"Parameterization: {PARAMETERIZATION.upper()}")
-print("True parameters:")
-print(
-    f"  mu_slope: {true_params.mu_slope}, "
-    f"sigma_slope: {true_params.sigma_slope}"
-)
-print(
-    f"  mu_intercept: {true_params.mu_intercept}, "
-    f"sigma_intercept: {true_params.sigma_intercept}"
-)
-print(f"  sigma_obs: {true_params.sigma_obs}")
-print(f"  true_slopes: {true_slopes}")
-print(f"  true_intercepts: {true_intercepts}")
 
-# Define bijectors for constrained parameters
-low, high = 0.01, 1.0
-affine = [paz.bijectors.Shift(low), paz.bijectors.Scale(high - low)]
-sigma_bijector = paz.bijectors.Chain(affine + [paz.bijectors.Sigmoid()])
-obs_low, obs_high = 0.01, 0.5
-obs_shift = paz.bijectors.Shift(obs_low)
-obs_affine = [obs_shift, paz.bijectors.Scale(obs_high - obs_low)]
-obs_bijector = paz.bijectors.Chain(obs_affine + [paz.bijectors.Sigmoid()])
+def plot_lines(axis, slopes, intercepts, **kwargs):
+    grid = jp.linspace(0.0, 1.0, 2)
+    axis.plot(grid, slopes * grid[:, None] + intercepts, **kwargs)
 
-# Build model based on parameterization flag
-if PARAMETERIZATION == "centered":
-    model = build_centered_model(
-        X, group_idx, num_groups, sigma_bijector, obs_bijector
-    )
-elif PARAMETERIZATION == "non-centered":
-    model = build_noncentered_model(
-        X, group_idx, num_groups, sigma_bijector, obs_bijector
-    )
-else:
-    raise ValueError(f"Unknown parameterization: {PARAMETERIZATION}")
 
-print("\nSampling from prior predictive...")
-key, prior_key = jax.random.split(key)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Hierarchical regression")
+    choices = ["centered", "non-centered"]
+    kwargs = {"default": "centered", "choices": choices}
+    parser.add_argument("--parameterization", **kwargs)
+    parser.add_argument("--seed", type=int, default=7)
+    parser.add_argument("--num_groups", type=int, default=5)
+    parser.add_argument("--num_per_group", type=int, default=50)
+    parser.add_argument("--num_samples", type=int, default=70_000)
+    parser.add_argument("--num_chains", type=int, default=10)
+    parser.add_argument("--warmup", type=float, default=0.2)
+    parser.add_argument("--sigma", type=float, default=0.02)
+    parser.add_argument("--tune_steps", type=int, default=500)
+    parser.add_argument("--tune_episodes", type=int, default=20)
+    args = parser.parse_args()
 
-if PLOT:
-    fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+    means = {"mu_slope": 0.8, "mu_intercept": 0.2}
+    stdvs = {"sigma_slope": 0.3, "sigma_intercept": 0.2, "sigma_obs": 0.1}
+    truth = Hyperparameters(**means, **stdvs)
+    keys = jax.random.split(jax.random.PRNGKey(args.seed), 5)
+    data_args = (args.num_groups, args.num_per_group, truth)
+    data = sample_data(keys[0], *data_args)
+    X, y, groups, true_slopes, true_intercepts = data
+    centered = (build_centered_model, unpack_group_lines)
+    noncentered = (build_noncentered_model, compute_group_lines)
+    builders = {"centered": centered, "non-centered": noncentered}
+    build_model, get_group_lines = builders[args.parameterization]
+    model = build_model(X, groups, args.num_groups)
+    colors = [f"C{group}" for group in range(args.num_groups)]
+    plot.configure(fontsize=12)
 
-    # Prior predictive
-    for key_i in jax.random.split(prior_key, 20):
-        sample = model.sample(key_i)
-        if PARAMETERIZATION == "centered":
-            slopes_sample = sample.slopes
-            intercepts_sample = sample.intercepts
-        else:  # non-centered
-            slopes_sample = (
-                sample.mu_slope + sample.sigma_slope * sample.z_slopes
-            )
-            intercepts_sample = (
-                sample.mu_intercept
-                + sample.sigma_intercept * sample.z_intercepts
-            )
-
-        for j in range(num_groups):
-            mask = group_idx == j
-            x_j = X[mask]
-            sort_idx = jp.argsort(x_j)
-            y_pred = slopes_sample[j] * x_j + intercepts_sample[j]
-            axes[0].plot(
-                np.array(x_j[sort_idx]), np.array(y_pred[sort_idx]),
-                color=colors[j], alpha=0.1
-            )
-    axes[0].set_title("Prior predictive")
-    plot.set_labels(axes[0], x="X", y="y")
-    plot.clean(axes[0])
-
-    # Observed data with groups
-    for j in range(num_groups):
-        mask = group_idx == j
-        plot.scatter(np.array(X[mask]), np.array(y[mask]), axes[1],
-                     s=20, alpha=0.6, color=colors[j])
-    axes[1].set_title("Observed data")
-    plot.set_labels(axes[1], x="X", y="y")
-    plot.clean(axes[1])
-
-    plt.tight_layout()
+    prior_samples = model.sample(keys[1], num_samples=20)
+    prior_slopes, prior_intercepts = get_group_lines(prior_samples)
+    figure, axes = plot.subplots(ncols=2, figsize=(10, 4))
+    for group, color in enumerate(colors):
+        lines = (prior_slopes[:, group], prior_intercepts[:, group])
+        plot_lines(axes[0], *lines, color=color, alpha=0.1)
+    plot.group_scatter(X, y, groups, axes[1], colors)
+    for axis, title in zip(axes, ("Prior predictive", "Observed data")):
+        axis.set_title(title)
+        plot.set_labels(axis, x="X", y="y")
+        plot.clean(axis)
+    figure.tight_layout()
     plot.show()
 
-num_chains = 10
-num_samples = 70_000
-sigma = 0.02
-burn_in = 0.20
+    # One step size for all parameters leaves chains stuck at the upper
+    # bound of the group stdvs; a step per parameter lets them mix.
+    tuner_args = (args.sigma, args.tune_steps, args.tune_episodes)
+    tuner = paz.AdaptiveDiagonalTuner(*tuner_args)
+    kwargs = {"warmup": args.warmup, "sigma": args.sigma, "tuner": tuner}
+    model.configure(num_chains=args.num_chains, **kwargs)
+    posterior = model.infer(keys[2], y, num_samples=args.num_samples)
+    samples = posterior.samples
+    acceptance_rates = posterior.infos.acceptance_rate
+    slopes, intercepts = get_group_lines(samples)
+    slopes = slopes.reshape(-1, args.num_groups)
+    intercepts = intercepts.reshape(-1, args.num_groups)
+    draw = posterior.as_density(method="gaussian").sample(keys[3])
+    density_slopes, density_intercepts = get_group_lines(draw)
 
-print(f"\nRunning MCMC with {num_samples} samples, {num_chains} chains...")
-key, mcmc_key = jax.random.split(key, 2)
-model.configure(
-    num_chains=num_chains,
-    warmup=burn_in,
-    sigma=sigma,
-    tuner=paz.AdaptiveStepTuner(sigma=sigma),
-)
-posterior = model.infer(mcmc_key, data, num_samples=num_samples)
-samples, infos = posterior.inverse_samples, posterior.infos
-posterior_forward = posterior.samples
+    print(f"Parameterization: {args.parameterization}")
+    print(f"Mean acceptance rate: {acceptance_rates.mean():.3f}")
+    for name in truth._fields:
+        estimate = getattr(samples, name).mean()
+        print(f"  {name}: {estimate:.3f} (true: {getattr(truth, name)})")
+    # Few groups say little about the group stdvs: compare them with the
+    # stdv of the sampled group values, not only with the generating value.
+    print(f"  stdv of true group slopes: {true_slopes.std(ddof=1):.3f}")
+    print(f"  stdv of true group intercepts: {true_intercepts.std(ddof=1):.3f}")
+    print("  group slopes:", slopes.mean(axis=0), "true:", true_slopes)
+    group_intercepts = intercepts.mean(axis=0)
+    print("  group intercepts:", group_intercepts, "true:", true_intercepts)
 
-print(f"\nMean acceptance rate: {infos.acceptance_rate.mean():.3f}")
-
-print("\nPosterior estimates vs true values:")
-print(
-    f"  mu_slope: {samples.mu_slope.mean():.3f} "
-    f"(true: {true_params.mu_slope})"
-)
-print(
-    f"  mu_intercept: {samples.mu_intercept.mean():.3f} "
-    f"(true: {true_params.mu_intercept})"
-)
-print(
-    f"  sigma_slope: "
-    f"{posterior_forward.sigma_slope.mean():.3f} "
-    f"(true: {true_params.sigma_slope})"
-)
-print(
-    f"  sigma_intercept: "
-    f"{posterior_forward.sigma_intercept.mean():.3f} "
-    f"(true: {true_params.sigma_intercept})"
-)
-print(
-    f"  sigma_obs: {posterior_forward.sigma_obs.mean():.3f} "
-    f"(true: {true_params.sigma_obs})"
-)
-
-# Extract slopes and intercepts (handle both parameterizations)
-if PARAMETERIZATION == "centered":
-    posterior_slopes = samples.slopes.reshape(-1, num_groups)
-    posterior_intercepts = samples.intercepts.reshape(-1, num_groups)
-else:  # non-centered
-    mu_slope_expanded = samples.mu_slope.reshape(-1, 1)
-    sigma_slope_expanded = posterior_forward.sigma_slope.reshape(-1, 1)
-    z_slopes = samples.z_slopes.reshape(-1, num_groups)
-    posterior_slopes = mu_slope_expanded + sigma_slope_expanded * z_slopes
-
-    mu_intercept_expanded = samples.mu_intercept.reshape(-1, 1)
-    sigma_intercept_expanded = posterior_forward.sigma_intercept.reshape(-1, 1)
-    z_intercepts = samples.z_intercepts.reshape(-1, num_groups)
-    posterior_intercepts = (
-        mu_intercept_expanded + sigma_intercept_expanded * z_intercepts
-    )
-
-density = posterior.as_density(method="gaussian")
-key, density_key = jax.random.split(key)
-density_forward = density.sample(density_key, num_samples=1)
-if PARAMETERIZATION == "centered":
-    density_slopes = density_forward.slopes
-    density_intercepts = density_forward.intercepts
-else:
-    density_slopes = (
-        density_forward.mu_slope
-        + density_forward.sigma_slope * density_forward.z_slopes
-    )
-    density_intercepts = (
-        density_forward.mu_intercept
-        + density_forward.sigma_intercept * density_forward.z_intercepts
-    )
-
-print("\nGroup-level estimates:")
-for j in range(num_groups):
-    print(
-        f"  Group {j}: slope={posterior_slopes[:, j].mean():.3f} "
-        f"(true: {true_slopes[j]:.3f}), "
-        f"intercept={posterior_intercepts[:, j].mean():.3f} "
-        f"(true: {true_intercepts[j]:.3f})"
-    )
-
-if PLOT:
-    # Posterior panel for hyperparameters
-    fig, axes = plt.subplots(2, 3, figsize=(12, 8))
-
-    plot.histogram(np.array(samples.mu_slope.flatten()), axes[0, 0],
-                   bins=50, alpha=0.7, color=plot.BLUE_GREY.primary)
-    plot.vline(true_params.mu_slope, axes[0, 0], color=plot.EARTH.primary,
-               linestyle="--", label="True")
-    plot.set_labels(axes[0, 0], x="mu_slope", y="density")
-    axes[0, 0].legend()
-    plot.clean(axes[0, 0])
-
-    plot.histogram(np.array(samples.mu_intercept.flatten()), axes[0, 1],
-                   bins=50, alpha=0.7, color=plot.BLUE_GREY.primary)
-    plot.vline(true_params.mu_intercept, axes[0, 1], color=plot.EARTH.primary,
-               linestyle="--", label="True")
-    plot.set_labels(axes[0, 1], x="mu_intercept", y="density")
-    axes[0, 1].legend()
-    plot.clean(axes[0, 1])
-
-    plot.histogram(
-        np.array(posterior_forward.sigma_slope.flatten()),
-        axes[0, 2],
-        bins=50,
-        alpha=0.7,
-        color=plot.BLUE_GREY.primary,
-    )
-    plot.vline(true_params.sigma_slope, axes[0, 2], color=plot.EARTH.primary,
-               linestyle="--", label="True")
-    plot.set_labels(axes[0, 2], x="sigma_slope", y="density")
-    axes[0, 2].legend()
-    plot.clean(axes[0, 2])
-
-    plot.histogram(
-        np.array(posterior_forward.sigma_intercept.flatten()),
-        axes[1, 0],
-        bins=50,
-        alpha=0.7,
-        color=plot.BLUE_GREY.primary,
-    )
-    plot.vline(
-        true_params.sigma_intercept,
-        axes[1, 0],
-        color=plot.EARTH.primary,
-        linestyle="--",
-        label="True",
-    )
-    plot.set_labels(axes[1, 0], x="sigma_intercept", y="density")
-    axes[1, 0].legend()
-    plot.clean(axes[1, 0])
-
-    plot.histogram(np.array(posterior_forward.sigma_obs.flatten()), axes[1, 1],
-                   bins=50, alpha=0.7, color=plot.BLUE_GREY.primary)
-    plot.vline(true_params.sigma_obs, axes[1, 1], color=plot.EARTH.primary,
-               linestyle="--", label="True")
-    plot.set_labels(axes[1, 1], x="sigma_obs", y="density")
-    axes[1, 1].legend()
-    plot.clean(axes[1, 1])
-
-    # Group parameter scatter (slope vs intercept)
-    for j in range(num_groups):
-        axes[1, 2].scatter(
-            float(posterior_slopes[:, j].mean()),
-            float(posterior_intercepts[:, j].mean()),
-            color=colors[j], s=100, label=f"Group {j} (post)", zorder=3,
-        )
-        axes[1, 2].scatter(
-            float(true_slopes[j]), float(true_intercepts[j]),
-            color=colors[j], marker="x", s=100, zorder=3,
-        )
-        axes[1, 2].scatter(
-            float(density_slopes[j]), float(density_intercepts[j]),
-            color="tab:purple", marker="D", s=80, zorder=4,
-        )
-    axes[1, 2].scatter([], [], color="tab:purple", marker="D", s=80,
-                       label="gaussian approx")
-    plot.set_labels(axes[1, 2], x="slope", y="intercept")
-    axes[1, 2].set_title("Group parameters (circle=posterior, x=true)")
-    axes[1, 2].legend(loc="upper left", fontsize=8)
-    plot.clean(axes[1, 2])
-
-    plt.tight_layout()
+    draws = {name: getattr(samples, name) for name in truth._fields}
+    plot.posterior_panel(draws, truth._asdict())
     plot.show()
 
-    # Posterior predictive by group
-    fig, axes = plt.subplots(1, num_groups, figsize=(12, 4))
-    for j in range(num_groups):
-        mask = group_idx == j
-        plot.scatter(np.array(X[mask]), np.array(y[mask]), axes[j],
-                     s=20, alpha=0.6, color=colors[j])
-
-        x_plot = np.linspace(0, 1, 100)
-        for i in range(50):
-            idx = int(jax.random.randint(
-                jax.random.PRNGKey(i), (), 0, len(posterior_slopes)
-            ))
-            slope_i = float(posterior_slopes[idx, j])
-            intercept_i = float(posterior_intercepts[idx, j])
-            plot.line(x_plot, slope_i * x_plot + intercept_i, axes[j],
-                      color=colors[j], alpha=0.1)
-
-        plot.line(
-            x_plot,
-            float(true_slopes[j]) * x_plot + float(true_intercepts[j]),
-            axes[j],
-            color="black",
-            linestyle="--",
-            linewidth=2,
-            label="True",
-        )
-        axes[j].set_title(f"Group {j}")
-        plot.set_labels(axes[j], x="X", y="y" if j == 0 else None)
-        if j == 0:
-            axes[j].legend()
-        plot.clean(axes[j])
-
-    plt.suptitle("Posterior predictive by group", y=1.02)
-    plt.tight_layout()
+    figure, axis = plot.subplots()
+    kwargs = {"c": colors, "s": 100}
+    axis.scatter(slopes.mean(axis=0), group_intercepts, label="mean", **kwargs)
+    true_lines = (true_slopes, true_intercepts)
+    axis.scatter(*true_lines, marker="x", label="true", **kwargs)
+    kwargs = {"color": "tab:purple", "marker": "D", "label": "gaussian approx"}
+    axis.scatter(density_slopes, density_intercepts, s=80, **kwargs)
+    plot.set_labels(axis, x="slope", y="intercept")
+    plot.legend(axis, loc="upper left")
+    plot.clean(axis)
+    axis.set_title("Group parameters")
     plot.show()
 
-    # Diagnostics
-    fig, ax = plot.subplots()
-    plot.diagnostics(infos.acceptance_rate, ax, color=plot.DANDELION.primary)
-    ax.set_title("Acceptance rates per chain")
-    plot.clean(ax)
+    figure, axes = plot.subplots(ncols=args.num_groups, figsize=(12, 4))
+    indices = jax.random.choice(keys[4], len(slopes), (50,))
+    for group, (axis, color) in enumerate(zip(axes, colors)):
+        is_group = groups == group
+        plot.scatter(X[is_group], y[is_group], axis, 0.6, 20, color)
+        lines = (slopes[indices, group], intercepts[indices, group])
+        plot_lines(axis, *lines, color=color, alpha=0.1)
+        true_line = (true_slopes[group], true_intercepts[group])
+        plot_lines(axis, *true_line, color="black", linestyle="--")
+        axis.set_title(f"Group {group}")
+        plot.set_labels(axis, x="X")
+        plot.clean(axis)
+    axes[0].set_ylabel("y")
+    figure.suptitle("Posterior predictive by group (dashed: true line)")
+    figure.tight_layout()
     plot.show()
 
-    # Corner plot for hyperparameters
-    plot.corner({
-        "mu_slope": np.array(samples.mu_slope.flatten()),
-        "mu_intercept": np.array(samples.mu_intercept.flatten()),
-    }, true_values={
-        "mu_slope": true_params.mu_slope,
-        "mu_intercept": true_params.mu_intercept,
-    })
+    figure, axis = plot.subplots()
+    plot.diagnostics(acceptance_rates, axis, plot.DANDELION.primary)
+    axis.set_title("Acceptance rates per chain")
     plot.show()
 
-    # Forest plot for group slopes
-    group_names = [f"slope_{j}" for j in range(num_groups)]
-    group_means = [
-        float(posterior_slopes[:, j].mean()) for j in range(num_groups)
-    ]
-    group_errors = [
-        float(posterior_slopes[:, j].std()) for j in range(num_groups)
-    ]
-    group_true = [float(true_slopes[j]) for j in range(num_groups)]
-
-    fig, ax = plot.subplots(figsize=(8, 5))
-    plot.forest_plot(group_names, group_means, group_errors, ax,
-                     true_values=group_true, color=plot.BLUE_GREY.primary)
-    ax.set_title("Group slope estimates (with 1 std)")
-    plot.clean(ax, spines="box")
+    names = ("mu_slope", "mu_intercept")
+    corner_draws = {name: draws[name].flatten() for name in names}
+    plot.corner(corner_draws, {name: getattr(truth, name) for name in names})
     plot.show()
 
-print("\nShrinkage effect (group estimates pulled toward global mean):")
-pooled_slope = samples.mu_slope.mean()
-pooled_intercept = samples.mu_intercept.mean()
-print(f"  Pooled slope mean: {pooled_slope:.3f}")
-print(f"  Pooled intercept mean: {pooled_intercept:.3f}")
-
+    figure, axis = plot.subplots(figsize=(8, 5))
+    names = [f"slope_{group}" for group in range(args.num_groups)]
+    center, spread = slopes.mean(axis=0), slopes.std(axis=0)
+    interval = (center - spread, center + spread)
+    forest_args = (names, center, *interval, true_slopes, axis)
+    plot.forest_plot(*forest_args, plot.BLUE_GREY.primary)
+    axis.set_title("Group slope estimates (with 1 stdv)")
+    plot.show()

@@ -56,6 +56,8 @@ Example: safe serialization round-trip
 This example uses a registered likelihood so it can be serialized safely.
 """
 
+import argparse
+
 import jax
 import jax.numpy as jp
 
@@ -70,37 +72,34 @@ def local_linear_regression_likelihood(X):
     return apply
 
 
-def build_model():
-    x = jp.linspace(0.0, 1.0, 8)
-    mean = paz.Prior(paz.distributions.Normal(0.0, 1.0), name="mean")
-    bias = paz.Prior(paz.distributions.Normal(0.0, 1.0), name="bias")
-    low, high = 0.01, 0.3
+def build_model(x, low, high):
+    standard = paz.distributions.Normal(0.0, 1.0)
+    mean = paz.Prior(standard, name="mean")
+    bias = paz.Prior(standard, name="bias")
     affine = [paz.bijectors.Shift(low), paz.bijectors.Scale(high - low)]
     bijector = paz.bijectors.Chain(affine + [paz.bijectors.Sigmoid()])
     uniform = paz.distributions.Uniform(low, high)
-    stdv = paz.Prior(uniform, name="stdv", bijector=bijector)
-    y_obs = paz.Observable(local_linear_regression_likelihood(x), name="y")(
-        mean, bias, stdv
-    )
-    return paz.PGM([mean, bias, stdv], [y_obs], "serializable_linear")
+    stdv = paz.Prior(uniform, bijector, "stdv")
+    likelihood = local_linear_regression_likelihood(x)
+    y = paz.Observable(likelihood, name="y")(mean, bias, stdv)
+    return paz.PGM([mean, bias, stdv], [y], "serializable_linear")
 
 
-model = build_model()
-key = jax.random.PRNGKey(0)
-data_key, sample_key = jax.random.split(key)
-data = model.sample(data_key, num_samples=1)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Save and load a PGM")
+    parser.add_argument("--seed", type=int, default=0)
+    args = parser.parse_args()
 
-# Serialize the model.
-paz.inference.save(model, "linear_model", overwrite=True)
+    model = build_model(jp.linspace(0.0, 1.0, 8), 0.01, 0.3)
+    data_key, sample_key = jax.random.split(jax.random.PRNGKey(args.seed))
+    data = model.sample(data_key, num_samples=1)
 
-# Load it back.
-loaded = paz.inference.load("linear_model")
+    paz.inference.save(model, "linear_model", overwrite=True)
+    loaded = paz.inference.load("linear_model")
 
-# Quick check: likelihood log_prob should match.
-inv_sample = model.sample_inverse(sample_key, num_samples=1)
-log_prob = model.likelihood.log_prob_inverse(inv_sample, data).log_prob_sum
-log_prob_loaded = loaded.likelihood.log_prob_inverse(
-    inv_sample, data
-).log_prob_sum
-print("log_prob:", float(log_prob))
-print("log_prob (loaded):", float(log_prob_loaded))
+    # The loaded model must score the same sample with the same log_prob.
+    sample = model.sample_inverse(sample_key, num_samples=1)
+    log_prob = model.likelihood.log_prob_inverse(sample, data)
+    loaded_log_prob = loaded.likelihood.log_prob_inverse(sample, data)
+    print("log_prob:", float(log_prob.log_prob_sum))
+    print("log_prob (loaded):", float(loaded_log_prob.log_prob_sum))

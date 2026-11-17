@@ -1,3 +1,8 @@
+# Infer the coupling of an Ising lattice with a pseudolikelihood: each spin
+# is Bernoulli given the sum of its four neighbors.
+
+import argparse
+
 import jax
 import jax.numpy as jp
 
@@ -5,112 +10,86 @@ import paz
 import paz.utils.plot as plot
 
 
-def compute_neighbor_sums(grid):
-    return (
-        jp.roll(grid, 1, axis=0)
-        + jp.roll(grid, -1, axis=0)
-        + jp.roll(grid, 1, axis=1)
-        + jp.roll(grid, -1, axis=1)
-    )
+def sample_lattice(key, size, coupling, num_steps):
+    spins = jp.array([-1.0, 1.0])
+    lattice = jax.random.choice(key, spins, shape=(size, size))
+    parity = (jp.arange(size)[:, None] + jp.arange(size)) % 2
+
+    def step(step_arg, lattice):
+        neighbor_sums = compute_neighbor_sums(lattice)
+        energy_change = 2 * lattice * coupling * neighbor_sums
+        step_key = jax.random.fold_in(key, step_arg)
+        uniform = jax.random.uniform(step_key, lattice.shape)
+        is_accepted = uniform < jp.exp(-energy_change)
+        # Checkerboard update: neighbors never flip in the same step.
+        is_flipped = is_accepted & (parity == step_arg % 2)
+        return jp.where(is_flipped, -lattice, lattice)
+
+    return jax.lax.fori_loop(0, num_steps, step, lattice)
 
 
-# --- 1. Helper: Generate Synthetic Ising Data (Metropolis Step) ---
-def generate_ising_grid(key, size, J_true, steps=1000):
-    # Initialize random spins {-1, 1}
-    grid = jax.random.choice(key, jp.array([-1.0, 1.0]), shape=(size, size))
-
-    def step_fn(i, grid):
-        key_step = jax.random.fold_in(key, i)
-        # Calculate energy change dE = 2 * s_i * local_field
-        neighbor_sum = compute_neighbor_sums(grid)
-        dE = 2 * grid * J_true * neighbor_sum
-
-        # Metropolis acceptance probability
-        prob = jp.exp(-dE)
-        accept = jax.random.uniform(key_step, grid.shape) < prob
-
-        # Flip spins where accepted
-        new_grid = jp.where(accept, -grid, grid)
-        # Checkerboard update (simplified for demonstration)
-        mask = (jp.arange(size)[:, None] + jp.arange(size)) % 2 == (i % 2)
-        return jp.where(mask, new_grid, grid)
-
-    return jax.lax.fori_loop(0, steps, step_fn, grid)
+def compute_neighbor_sums(lattice):
+    vertical = jp.roll(lattice, 1, axis=0) + jp.roll(lattice, -1, axis=0)
+    horizontal = jp.roll(lattice, 1, axis=1) + jp.roll(lattice, -1, axis=1)
+    return vertical + horizontal
 
 
-# --- 2. Prepare Data ---
-SIZE = 30
-TRUE_J = 0.4  # Near critical temp
-
-key_data = jax.random.PRNGKey(42)
-ising_grid = generate_ising_grid(key_data, SIZE, TRUE_J)
-
-# Calculate features (Sum of neighbors) for every pixel
-neighbor_sums = compute_neighbor_sums(ising_grid)
-
-# Flatten for regression
-# X: Sum of neighbors (can be -4, -2, 0, 2, 4)
-# y: Target spin converted to {0, 1} for Bernoulli
-X_flat = neighbor_sums.flatten()
-y_flat = (ising_grid.flatten() + 1) / 2
-
-# --- 3. Define the Model (Pseudolikelihood) ---
-
-
-def IsingConditional(neighbor_sums):
+def Likelihood(neighbor_sums):
     def apply(coupling):
-        # Physics: Logit = 2 * J * sum(neighbors)
-        # We model the probability of spin being +1
+        # The logit of a spin being +1 is 2 * coupling * sum(neighbors).
         logits = 2.0 * coupling * neighbor_sums
         return paz.distributions.Bernoulli(logits=logits)
 
     return apply
 
 
-# Prior for Coupling Strength J
-# We expect ferromagnetic behavior (positive J), roughly around 0.3-0.6
-J_prior = paz.Prior(paz.distributions.Normal(0.5, 0.5), name="coupling")
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Ising coupling inference")
+    parser.add_argument("--data_seed", type=int, default=42)
+    parser.add_argument("--seed", type=int, default=101)
+    parser.add_argument("--size", type=int, default=64)
+    parser.add_argument("--coupling", type=float, default=0.4)
+    parser.add_argument("--num_lattice_steps", type=int, default=1000)
+    parser.add_argument("--num_samples", type=int, default=100_000)
+    parser.add_argument("--num_chains", type=int, default=5)
+    parser.add_argument("--warmup", type=float, default=0.2)
+    parser.add_argument("--sigma", type=float, default=0.01)
+    args = parser.parse_args()
 
-# Likelihood connects J and Neighbor Sums to the actual Spin values
-spins = paz.Observable(IsingConditional(X_flat), name="spins")(J_prior)
+    data_key = jax.random.PRNGKey(args.data_seed)
+    lattice_args = (args.size, args.coupling, args.num_lattice_steps)
+    lattice = sample_lattice(data_key, *lattice_args)
+    neighbor_sums = compute_neighbor_sums(lattice).flatten()
+    is_spin_up = (lattice.flatten() + 1) / 2
 
-# Build PGM
-model = paz.PGM([J_prior], [spins], "ising_pseudolikelihood")
+    normal = paz.distributions.Normal(0.5, 0.5)
+    coupling = paz.Prior(normal, name="coupling")
+    spins = paz.Observable(Likelihood(neighbor_sums), name="spins")(coupling)
+    model = paz.PGM([coupling], [spins], "ising_pseudolikelihood")
 
-# --- 4. Inference ---
-num_chains = 5
-num_samples = 100_000
-burn_in = 0.2
+    tuner = paz.AdaptiveStepTuner(args.sigma)
+    kwargs = {"warmup": args.warmup, "tuner": tuner}
+    model.configure(num_chains=args.num_chains, **kwargs)
+    key = jax.random.PRNGKey(args.seed)
+    posterior = model.infer(key, is_spin_up, num_samples=args.num_samples)
+    samples = posterior.samples.coupling
+    print(f"True coupling: {args.coupling}")
+    print(f"Inferred coupling (mean): {samples.mean():.4f}")
+    print(f"Acceptance rate: {posterior.infos.acceptance_rate.mean():.3f}")
 
-# Compile and Sample
-tuner = paz.AdaptiveStepTuner(0.01)
-model.configure(num_chains=num_chains, warmup=burn_in, tuner=tuner)
+    plot.configure(fontsize=12)
+    figure, axes = plot.subplots(ncols=2, figsize=(12, 5))
+    plot.imshow(lattice, axes[0], cmap="coolwarm", colorbar=False)
+    axes[0].axis("off")
+    axes[0].set_title(f"Observed Ising lattice (true J={args.coupling})")
 
-# Note: We pass y_flat (0s and 1s) as the observed data
-key_infer = jax.random.PRNGKey(101)
-posterior = model.infer(key_infer, y_flat, num_samples=num_samples)
-samples = posterior.samples
-
-# --- 5. Visualization ---
-print(f"True J: {TRUE_J}")
-print(f"Inferred J (Mean): {samples.coupling.mean():.4f}")
-print(f"Acceptance Rate: {posterior.infos.acceptance_rate.mean():.3f}")
-
-plot.configure(fontsize=12)
-figure, axes = plot.subplots(ncols=2, figsize=(12, 5))
-
-plot.imshow(ising_grid, axes[0], cmap="coolwarm", colorbar=False)
-axes[0].axis("off")
-axes[0].set_title(f"Observed Ising Lattice (True J={TRUE_J})")
-
-for chain in range(num_chains):
-    plot.histogram(samples.coupling[:, chain], axes[1], bins=30, alpha=0.3,
-                   label=f"Chain {chain}")
-plot.vline(TRUE_J, axes[1], color="red", linestyle="--", label="True J")
-plot.set_labels(axes[1], x="Coupling Strength J", y="Density")
-plot.legend(axes[1])
-plot.clean(axes[1])
-axes[1].set_title("Posterior Distribution of Parameter J")
-
-figure.tight_layout()
-plot.show()
+    for chain in range(args.num_chains):
+        kwargs = {"bins": 30, "alpha": 0.3, "label": f"Chain {chain}"}
+        plot.histogram(samples[:, chain], axes[1], **kwargs)
+    plot.vline(args.coupling, axes[1], color="red", label="True J")
+    plot.set_labels(axes[1], x="Coupling strength J", y="Density")
+    plot.legend(axes[1])
+    plot.clean(axes[1])
+    axes[1].set_title("Posterior distribution of J")
+    figure.tight_layout()
+    plot.show()
