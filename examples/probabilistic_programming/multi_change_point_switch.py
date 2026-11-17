@@ -4,192 +4,15 @@
 # variable that indexes a table of all ordered switch configurations.
 # The support size grows combinatorially, so keep the dataset small.
 
-from collections import namedtuple
+import argparse
+from functools import partial
 from itertools import combinations
-import time
 
 import jax
 import jax.numpy as jp
 
 import paz
 import paz.utils.plot as plot
-from paz.inference.types import SampleType
-
-
-RunResult = namedtuple(
-    "RunResult",
-    [
-        "slope_means",
-        "bias_means",
-        "posterior_configs",
-        "switch_table",
-        "density_sample",
-        "acceptance_rate",
-        "mcmc_seconds",
-        "posterior_seconds",
-    ],
-)
-
-
-def run_inference(
-    model_marg,
-    key,
-    num_switches,
-    switch_table,
-    data,
-    num_samples,
-    num_chains,
-    burn_in,
-    step_sigma,
-):
-    print("Running MCMC...")
-    start_time = time.perf_counter()
-    posterior = run_mcmc(
-        model_marg, key, data, num_samples, num_chains, step_sigma, burn_in
-    )
-    samples, infos = posterior.inverse_samples, posterior.infos
-    mcmc_seconds = time.perf_counter() - start_time
-    print(f"mcmc: {mcmc_seconds:.3f}s")
-
-    print("Extracting segment samples...")
-    start_time = time.perf_counter()
-    slope_samples, bias_samples = extract_segment_samples(
-        samples.position, num_switches
-    )
-    slope_means = jp.array([samples.mean() for samples in slope_samples])
-    bias_means = jp.array([samples.mean() for samples in bias_samples])
-    print(f"segment extraction: {time.perf_counter() - start_time:.3f}s")
-
-    print("Building theta samples...")
-    start_time = time.perf_counter()
-    theta_samples = build_theta_samples(
-        slope_samples, bias_samples, num_switches
-    )
-    print(f"theta samples build: {time.perf_counter() - start_time:.3f}s")
-
-    print("Recovering switch posterior...")
-    start_time = time.perf_counter()
-    posterior_configs = paz.recover_discrete_posterior(
-        model_marg, "switch_index", theta_samples, data
-    ).posterior.mean(axis=0)
-    posterior_seconds = time.perf_counter() - start_time
-    print(f"switch posterior: {posterior_seconds:.3f}s")
-
-    acceptance_rate = infos.acceptance_rate.mean()
-    density = posterior.as_density(method="gaussian")
-    key, density_key = jax.random.split(key)
-    density_sample = density.sample(density_key, num_samples=1)
-
-    return RunResult(
-        slope_means,
-        bias_means,
-        posterior_configs,
-        switch_table,
-        density_sample,
-        acceptance_rate,
-        mcmc_seconds,
-        posterior_seconds,
-    )
-
-
-def plot_results(
-    x,
-    observations,
-    posterior_mean,
-    density_mean,
-    true_mean,
-    switch_positions,
-    map_switch_indices,
-    true_switch_indices,
-    switch_position_posterior,
-):
-    num_switches = switch_position_posterior.shape[0]
-    plot.configure(fontsize=12)
-    figure, axes = plot.subplots(nrows=2, ncols=1, figsize=(11, 8))
-
-    plot.scatter(
-        x, observations, axes[0], color="tab:gray", alpha=0.8, label="data"
-    )
-    plot.line(x, posterior_mean, axes[0], color="black", label="posterior mean")
-    plot.line(x, density_mean, axes[0], color="tab:purple", linestyle="--",
-              label="gaussian approx")
-    plot.line(x, true_mean, axes[0], color="tab:green", linestyle="--",
-              label="true mean")
-    for position in switch_positions[map_switch_indices]:
-        plot.vline(position, axes[0], color="black", linewidth=1.5)
-    for position in switch_positions[true_switch_indices]:
-        plot.vline(position, axes[0], color="tab:green", linestyle="--",
-                   linewidth=1.2)
-    plot.legend(axes[0], loc="upper left")
-    plot.clean(axes[0])
-    axes[0].set_title("Piecewise regression with multiple switches")
-
-    extent = [
-        float(switch_positions[0]),
-        float(switch_positions[-1]),
-        0.5,
-        num_switches + 0.5,
-    ]
-    plot.imshow(switch_position_posterior, axes[1], cmap="viridis",
-                aspect="auto", origin="lower", extent=extent,
-                colorbar=True, colorbar_label="Posterior probability")
-    plot.set_labels(axes[1], x="Switch location (x)", y="Switch index")
-    axes[1].set_yticks(range(1, num_switches + 1))
-    axes[1].set_title("Posterior over switch locations")
-    figure.tight_layout()
-
-
-def run_mcmc(
-    model_marg, key, data, num_samples, num_chains, step_sigma, warmup
-):
-    model_marg.configure(
-        num_chains=num_chains,
-        warmup=warmup,
-        sigma=step_sigma,
-        tuner=paz.AdaptiveStepTuner(sigma=step_sigma),
-    )
-    return model_marg.infer(key, data, num_samples=num_samples)
-
-
-def build_switch_model(x, sigma, switch_table, num_switches):
-    num_segments = num_switches + 1
-    slope_priors = []
-    bias_priors = []
-    for segment_index in range(num_segments):
-        slope_priors.append(
-            paz.Prior(
-                paz.distributions.Normal(0.0, 1.0),
-                name=f"slope_segment_{segment_index}",
-            )
-        )
-        bias_priors.append(
-            paz.Prior(
-                paz.distributions.Normal(0.0, 1.0),
-                name=f"bias_segment_{segment_index}",
-            )
-        )
-
-    switch_index = paz.Prior(
-        paz.distributions.Categorical(
-            logits=jp.zeros(switch_table.shape[0]), dtype=jp.float32
-        ),
-        name="switch_index",
-    )
-
-    def y_distribution(switch_index, *segment_params):
-        slopes = jp.stack(segment_params[:num_segments])
-        biases = jp.stack(segment_params[num_segments:])
-        index = jp.asarray(switch_index, dtype=jp.int32)
-        switch_indices = switch_table[index]
-        mean = compute_piecewise_mean(x, slopes, biases, switch_indices)
-        return paz.distributions.Normal(mean, sigma)
-
-    y_obs = paz.Observable(y_distribution, name="y")(
-        switch_index, *slope_priors, *bias_priors
-    )
-
-    inputs = [switch_index] + slope_priors + bias_priors
-    return paz.PGM(inputs, [y_obs], "multi_change_point_switch")
 
 
 def build_switch_table(num_observations, num_switches):
@@ -198,192 +21,144 @@ def build_switch_table(num_observations, num_switches):
     return jp.array(table, dtype=jp.int32)
 
 
-def build_true_segments(num_switches):
-    num_segments = num_switches + 1
-    slopes = jp.linspace(1.1, -0.6, num_segments)
-    biases = jp.linspace(0.4, -0.2, num_segments)
-    return slopes, biases
+def build_switch_model(x, stdv, switch_table):
+    num_segments = switch_table.shape[1] + 1
+    logits = jp.zeros(len(switch_table))
+    switch = paz.distributions.Categorical(logits=logits, dtype=jp.float32)
+    priors = [paz.Prior(switch, name="switch_index")]
+    standard = paz.distributions.Normal(0.0, 1.0)
+    for prefix in ("slope", "bias"):
+        for segment in range(num_segments):
+            name = f"{prefix}_segment_{segment}"
+            priors.append(paz.Prior(standard, name=name))
+    likelihood = Likelihood(x, stdv, switch_table)
+    y = paz.Observable(likelihood, name="y")(*priors)
+    return paz.PGM(priors, [y], "multi_change_point_switch")
 
 
-def build_true_switch_indices(num_observations, num_switches):
-    max_index = num_observations - 2
-    positions = jp.linspace(1, max_index, num_switches)
-    positions = jp.round(positions).astype(jp.int32)
-    positions = jp.unique(positions)
-    if positions.shape[0] != num_switches:
-        positions = jp.arange(1, num_switches + 1, dtype=jp.int32)
-    return positions
+def Likelihood(x, stdv, switch_table):
+    def apply(switch_index, *lines):
+        slopes, biases = jp.split(jp.stack(lines), 2)
+        switch_indices = switch_table[switch_index.astype(jp.int32)]
+        mean = compute_piecewise_mean(x, slopes, biases, switch_indices)
+        return paz.distributions.Normal(mean, stdv)
+
+    return apply
+
+
+def unpack_lines(sample, num_segments):
+    lines = []
+    for prefix in ("slope", "bias"):
+        names = [f"{prefix}_segment_{arg}" for arg in range(num_segments)]
+        lines.append(jp.stack([getattr(sample, name) for name in names]))
+    return lines
 
 
 def compute_piecewise_mean(x, slopes, biases, switch_indices):
-    num_observations = x.shape[0]
-    segment_ids = compute_segment_ids(num_observations, switch_indices)
-    return slopes[segment_ids] * x + biases[segment_ids]
+    segments = compute_segments(len(x), switch_indices)
+    return slopes[segments] * x + biases[segments]
 
 
-def compute_segment_ids(num_observations, switch_indices):
+def compute_segments(num_observations, switch_indices):
     indices = jp.arange(num_observations)
-    switch_indices = jp.asarray(switch_indices, dtype=jp.int32)
-    switch_indices = jp.sort(switch_indices)
-    return (switch_indices[:, None] < indices[None, :]).sum(axis=0)
+    return (switch_indices[:, None] < indices).sum(axis=0)
 
 
-def extract_segment_samples(position, num_switches):
-    num_segments = num_switches + 1
-    slope_samples = []
-    bias_samples = []
-    for segment_index in range(num_segments):
-        slope_name = f"slope_segment_{segment_index}"
-        bias_name = f"bias_segment_{segment_index}"
-        slope_samples.append(getattr(position, slope_name).reshape(-1))
-        bias_samples.append(getattr(position, bias_name).reshape(-1))
-    return slope_samples, bias_samples
+def plot_fit(axis, x, observations, posterior_mean, density_mean, true_mean):
+    kwargs = {"color": "tab:gray", "alpha": 0.8, "label": "data"}
+    plot.scatter(x, observations, axis, **kwargs)
+    plot.line(x, posterior_mean, axis, "black", label="posterior mean")
+    kwargs = {"linestyle": "--", "label": "gaussian approx"}
+    plot.line(x, density_mean, axis, "tab:purple", **kwargs)
+    kwargs = {"linestyle": "--", "label": "true mean"}
+    plot.line(x, true_mean, axis, "tab:green", **kwargs)
+    plot.legend(axis, loc="upper left")
+    plot.clean(axis)
+    axis.set_title("Piecewise regression with multiple switches")
 
 
-def extract_segment_values(sample, num_switches):
-    num_segments = num_switches + 1
-    slopes = []
-    biases = []
-    for segment_index in range(num_segments):
-        slope_name = f"slope_segment_{segment_index}"
-        bias_name = f"bias_segment_{segment_index}"
-        slopes.append(getattr(sample, slope_name))
-        biases.append(getattr(sample, bias_name))
-    return jp.stack(slopes), jp.stack(biases)
+def plot_switches(axis, map_positions, true_positions):
+    for position in map_positions:
+        plot.vline(position, axis, color="black")
+    for position in true_positions:
+        plot.vline(position, axis, color="tab:green", linewidth=1.2)
 
 
-def build_theta_samples(slope_samples, bias_samples, num_switches):
-    num_segments = num_switches + 1
-    names = []
-    values = []
-    for segment_index in range(num_segments):
-        names.append(f"slope_segment_{segment_index}")
-        values.append(slope_samples[segment_index])
-    for segment_index in range(num_segments):
-        names.append(f"bias_segment_{segment_index}")
-        values.append(bias_samples[segment_index])
-    Theta = SampleType(names)
-    return Theta(*values)
+def plot_position_posterior(axis, posterior, switch_positions):
+    num_switches = len(posterior)
+    x_range = (switch_positions[0], switch_positions[-1])
+    extent = [*x_range, 0.5, num_switches + 0.5]
+    kwargs = {"extent": extent, "colorbar_label": "Posterior probability"}
+    plot.imshow(posterior, axis, **kwargs)
+    plot.set_labels(axis, x="Switch location (x)", y="Switch index")
+    axis.set_yticks(range(1, num_switches + 1))
+    axis.set_title("Posterior over switch locations")
 
 
-def compute_switch_position_posterior(
-    switch_table, posterior_configs, num_positions
-):
-    num_switches = switch_table.shape[1]
-    posterior = jp.zeros((num_switches, num_positions))
-    for switch_index in range(num_switches):
-        positions = switch_table[:, switch_index]
-        posterior = posterior.at[switch_index, positions].add(posterior_configs)
-    return posterior
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Multi change-point model")
+    parser.add_argument("--seed", type=int, default=777)
+    parser.add_argument("--num_switches", type=int, default=2)
+    parser.add_argument("--num_observations", type=int, default=30)
+    parser.add_argument("--stdv", type=float, default=0.15)
+    parser.add_argument("--num_samples", type=int, default=5000)
+    parser.add_argument("--num_chains", type=int, default=5)
+    parser.add_argument("--warmup", type=float, default=0.1)
+    parser.add_argument("--sigma", type=float, default=0.25)
+    args = parser.parse_args()
 
+    num_segments = args.num_switches + 1
+    true_slopes = jp.linspace(1.1, -0.6, num_segments)
+    true_biases = jp.linspace(0.8, -0.8, num_segments)
+    # Evenly spaced switches give every segment enough points to locate it.
+    last_index = args.num_observations - 1
+    true_switches = jp.linspace(0, last_index, num_segments + 1)[1:-1]
+    true_switches = jp.round(true_switches).astype(jp.int32)
+    x = jp.linspace(-1.0, 1.0, args.num_observations)
+    true_lines = (true_slopes, true_biases)
+    true_mean = compute_piecewise_mean(x, *true_lines, true_switches)
+    keys = jax.random.split(jax.random.PRNGKey(args.seed), 3)
+    noise_key, infer_key, density_key = keys
+    noise = args.stdv * jax.random.normal(noise_key, x.shape)
+    observations = true_mean + noise
 
-key = jax.random.PRNGKey(777)
-num_switches = 2
-num_observations = 30
-sigma = 0.15
-num_samples = 5_000
-num_chains = 5
-burn_in = 500
-step_sigma = 0.25
+    switch_table = build_switch_table(args.num_observations, args.num_switches)
+    model = build_switch_model(x, args.stdv, switch_table)
+    model = paz.marginalize(model, ["switch_index"])
+    tuner = paz.AdaptiveStepTuner(args.sigma)
+    kwargs = {"warmup": args.warmup, "sigma": args.sigma, "tuner": tuner}
+    model.configure(num_chains=args.num_chains, **kwargs)
+    kwargs = {"num_samples": args.num_samples}
+    posterior = model.infer(infer_key, observations, **kwargs)
+    draws = jax.tree.map(jp.ravel, posterior.inverse_samples)
+    switch_args = (model, "switch_index", draws, observations)
+    switch = paz.recover_discrete_posterior(*switch_args)
+    config_posterior = switch.posterior.mean(axis=0)
+    map_switches = switch_table[jp.argmax(config_posterior)]
 
-x = jp.linspace(-1.0, 1.0, num_observations)
-print("Building ground-truth segments...")
-start_time = time.perf_counter()
-true_slopes, true_biases = build_true_segments(num_switches)
-true_switch_indices = build_true_switch_indices(
-    num_observations, num_switches
-)
-print(f"ground-truth build: {time.perf_counter() - start_time:.3f}s")
+    num_positions = args.num_observations - 1
+    kwargs = {"weights": config_posterior, "length": num_positions}
+    count_positions = partial(jp.bincount, **kwargs)
+    position_posterior = jax.vmap(count_positions)(switch_table.T)
+    mean_lines = unpack_lines(jax.tree.map(jp.mean, draws), num_segments)
+    posterior_mean = compute_piecewise_mean(x, *mean_lines, map_switches)
+    draw = posterior.as_density(method="gaussian").sample(density_key)
+    density_lines = unpack_lines(draw, num_segments)
+    density_mean = compute_piecewise_mean(x, *density_lines, map_switches)
 
-key, noise_key = jax.random.split(key)
-print("Generating observations...")
-start_time = time.perf_counter()
-true_mean = compute_piecewise_mean(
-    x, true_slopes, true_biases, true_switch_indices
-)
-observations = true_mean + sigma * jax.random.normal(
-    noise_key, (num_observations,)
-)
-print(f"observations build: {time.perf_counter() - start_time:.3f}s")
+    print(f"num_configs={len(switch_table)}")
+    print(f"true switch indices={true_switches.tolist()}")
+    print(f"map switch indices={map_switches.tolist()}")
+    print(f"acceptance rate={posterior.infos.acceptance_rate.mean():.3f}")
 
-print("Building switch table...")
-start_time = time.perf_counter()
-switch_table = build_switch_table(num_observations, num_switches)
-print(
-    f"switch table build: {time.perf_counter() - start_time:.3f}s "
-    f"(configs={switch_table.shape[0]})"
-)
-
-print("Building model...")
-start_time = time.perf_counter()
-model = build_switch_model(x, sigma, switch_table, num_switches)
-model_marg = paz.marginalize(model, ["switch_index"])
-data = {"y": observations}
-print(f"model build: {time.perf_counter() - start_time:.3f}s")
-
-result = run_inference(
-    model_marg,
-    key,
-    num_switches,
-    switch_table,
-    data,
-    num_samples,
-    num_chains,
-    burn_in,
-    step_sigma,
-)
-
-print("Computing switch posterior summary...")
-start_time = time.perf_counter()
-num_positions = num_observations - 1
-switch_positions = 0.5 * (x[:-1] + x[1:])
-switch_position_posterior = compute_switch_position_posterior(
-    result.switch_table, result.posterior_configs, num_positions
-)
-map_config_index = int(jp.argmax(result.posterior_configs))
-map_switch_indices = result.switch_table[map_config_index]
-print(f"switch posterior summary: {time.perf_counter() - start_time:.3f}s")
-
-print("Computing posterior mean line...")
-start_time = time.perf_counter()
-posterior_mean = compute_piecewise_mean(
-    x, result.slope_means, result.bias_means, map_switch_indices
-)
-print(f"posterior mean build: {time.perf_counter() - start_time:.3f}s")
-
-print("Computing gaussian approximation line...")
-start_time = time.perf_counter()
-density_slopes, density_biases = extract_segment_values(
-    result.density_sample, num_switches
-)
-density_mean = compute_piecewise_mean(
-    x, density_slopes, density_biases, map_switch_indices
-)
-print(f"gaussian mean build: {time.perf_counter() - start_time:.3f}s")
-
-print("=" * 60)
-print("Multi change-point regression")
-print("=" * 60)
-print(f"num_switches={num_switches}")
-print(f"num_configs={result.switch_table.shape[0]}")
-print(f"true switch indices={true_switch_indices.tolist()}")
-print(f"map switch indices={map_switch_indices.tolist()}")
-print(f"acceptance rate={result.acceptance_rate:.3f}")
-print(f"mcmc seconds={result.mcmc_seconds:.2f}")
-print(f"posterior seconds={result.posterior_seconds:.2f}")
-
-print("Plotting...")
-start_time = time.perf_counter()
-plot_results(
-    x,
-    observations,
-    posterior_mean,
-    density_mean,
-    true_mean,
-    switch_positions,
-    map_switch_indices,
-    true_switch_indices,
-    switch_position_posterior,
-)
-print(f"plotting: {time.perf_counter() - start_time:.3f}s")
-plot.show()
+    plot.configure(fontsize=12)
+    figure, axes = plot.subplots(nrows=2, figsize=(11, 8))
+    means = (posterior_mean, density_mean, true_mean)
+    plot_fit(axes[0], x, observations, *means)
+    switch_positions = 0.5 * (x[:-1] + x[1:])
+    map_positions = switch_positions[map_switches]
+    true_positions = switch_positions[true_switches]
+    plot_switches(axes[0], map_positions, true_positions)
+    plot_position_posterior(axes[1], position_posterior, switch_positions)
+    figure.tight_layout()
+    plot.show()

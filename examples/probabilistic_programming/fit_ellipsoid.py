@@ -1,163 +1,149 @@
+# Fit an ellipsoid to the pointcloud of a FewSOL object by maximizing the
+# posterior of its center and axes.
+
 import os
 
+# pyrender needs these before it loads to render on the NVIDIA GPU.
 os.environ["__NV_PRIME_RENDER_OFFLOAD"] = "1"
 os.environ["__GLX_VENDOR_LIBRARY_NAME"] = "nvidia"
 
-import time
-import trimesh
-import pyrender
+import argparse
 
 import jax
-
-jax.config.update("jax_debug_nans", True)
-
 import jax.numpy as jp
-import matplotlib.pyplot as plt
 import numpy as np
+import pyrender
+import trimesh
 
 import paz
+import paz.utils.plot as plot
+from paz import distributions as pzd
 from paz.datasets import fewsol
-
-import ellipsoid
-
-# import ellipsoid_patched as ellipsoid
-from optimizers import LBFGS, LineSearch
-
-concept_arg = 19
-shot_arg = 0
-seed = 777
-max_depth = 1.5
-num_stdvs = 2.0
-back_axis = "z"
-back_scale = 1.0
-cv_to_gl = jp.diag(jp.array([1.0, -1.0, -1.0, 1.0]))
-min_height = 0.01
-
-shots = fewsol.load(concept_arg)
-shot = shots[shot_arg]
-camera_intrinsics = fewsol.get_intrinsics()
-
-key = jax.random.PRNGKey(seed)
-start = time.perf_counter()
-
-pointcloud = paz.pointcloud.from_depth(shot.depth, camera_intrinsics)
-scene_pointcloud = paz.pointcloud.bound(pointcloud, max_depth)
-object_pointcloud = paz.pointcloud.mask(pointcloud, shot.masks[0], max_depth)
-scene_pointcloud = paz.algebra.transform_points(cv_to_gl, scene_pointcloud)
-_pointcloud_ground, plane_to_camera = paz.pointcloud.to_ground_frame(
-    scene_pointcloud
-)
-# plane_to_camera maps the fitted ground frame into the GL camera frame.
-camera_to_plane = paz.SE3.invert(plane_to_camera)
-object_pointcloud = paz.pointcloud.transform(
-    paz.algebra.transform_points(cv_to_gl, object_pointcloud),
-    camera_to_plane,
-)
-object_pointcloud = paz.pointcloud.filter_above_height(
-    object_pointcloud, min_height
-)
-object_pointcloud = paz.pointcloud.remove_outliers(object_pointcloud, 2.0)
-
-optimizer = LBFGS(10.0, 10, LineSearch(50))
-
-statistics = ellipsoid.pointcloud_compute_statistics(object_pointcloud)
-model, data = ellipsoid.RobustEllipsoid(object_pointcloud, statistics)
-loss_fn = ellipsoid.build_map_objective(model, data)
-
-shift, axes, result = ellipsoid.fit(
-    model, object_pointcloud, num_stdvs, loss_fn, optimizer
-)
-elapsed = time.perf_counter() - start
-print(f"elapsed: {elapsed:.1f}s")
-
-points = object_pointcloud
-colors = np.array(paz.pointcloud.color(points, [255, 0, 0]))
+from paz.inference.latent_space import to_forward_samples, to_inverse_samples
 
 
-def build_forward_fit(model, shift, axes):
-    return model.latent_space.Sample(
-        x_mean=shift[0],
-        y_mean=shift[1],
-        z_mean=shift[2],
-        x_axis=axes[0],
-        y_axis=axes[1],
-        z_axis=axes[2],
-    )
+def load_object_pointcloud(shot, max_depth, min_height):
+    cv_to_gl = jp.diag(jp.array([1.0, -1.0, -1.0, 1.0]))
+    pointcloud = paz.pointcloud.from_depth(shot.depth, fewsol.get_intrinsics())
+    scene = paz.pointcloud.bound(pointcloud, max_depth)
+    scene = paz.algebra.transform_points(cv_to_gl, scene)
+    _, plane_to_camera = paz.pointcloud.to_ground_frame(scene)
+    camera_to_plane = paz.SE3.invert(plane_to_camera)
+    points = paz.pointcloud.mask(pointcloud, shot.masks[0], max_depth)
+    points = paz.algebra.transform_points(cv_to_gl, points)
+    points = paz.pointcloud.transform(points, camera_to_plane)
+    points = paz.pointcloud.filter_above_height(points, min_height)
+    return paz.pointcloud.remove_outliers(points, 2.0), camera_to_plane
 
 
-def plot_prior_predictive_samples(model, key, forward_fit, num_samples=10_000):
+def build_model(pointcloud, mean, stdv):
+    # The center should not leave the cloud without strong evidence.
+    center = paz.Prior(pzd.Laplace(mean, 0.1 * stdv), name="center")
+    axes = paz.Prior(build_axes_distribution(stdv), name="axes")
+    surface = paz.Observable(Likelihood(pointcloud), name="surface")
+    return paz.PGM([center, axes], [surface(center, axes)], "ellipsoid")
+
+
+def build_axes_distribution(stdv):
+    # Points spread evenly over a sphere have a stdv of radius / sqrt(3).
+    mean = jp.sqrt(3.0) * stdv
+    return pzd.TruncatedNormal(mean, 0.05 * mean, 1e-6 * mean, 2.0 * mean)
+
+
+def Likelihood(pointcloud):
+    def apply(center, axes):
+        residuals = compute_surface_residuals(pointcloud, center, axes)
+        return pzd.Normal(residuals, 0.01)
+
+    return apply
+
+
+def compute_surface_residuals(pointcloud, center, axes):
+    return (((pointcloud - center) / axes) ** 2).sum(axis=1) - 1.0
+
+
+def plot_prior(model, key, fit, num_samples):
     samples = model.prior.sample(key, num_samples)
-    names = model.latent_space.names
-    figure, axes = plt.subplots(2, 3, figsize=(10, 6))
-    for axis, name in zip(axes.flatten(), names):
-        values = np.array(getattr(samples, name))
-        axis.hist(values, bins=40, color="steelblue", alpha=0.7)
-        if forward_fit is not None:
-            axis.axvline(
-                float(getattr(forward_fit, name)),
-                color="crimson",
-                linewidth=2,
-            )
-        axis.set_title(name)
-    figure.suptitle("Prior predictive samples")
+    figure, axes = plot.subplots(nrows=2, ncols=3, figsize=(10, 6))
+    for row, name in enumerate(("center", "axes")):
+        for column, axis in enumerate(axes[row]):
+            values = getattr(samples, name)[:, column]
+            plot.histogram(values, axis, bins=40, color="steelblue")
+            fitted_value = getattr(fit, name)[column]
+            plot.vline(fitted_value, axis, "crimson", "-", 2)
+            axis.set_title(f"{name} {'xyz'[column]}")
+    figure.suptitle("Prior samples and fitted values")
     figure.tight_layout()
-    return figure
 
 
-def plot_loss_curve(losses, title):
-    figure, axis = plt.subplots(1, 1, figsize=(6, 4))
-    axis.plot(np.array(losses), color="black")
-    axis.set_title(title)
-    axis.set_xlabel("step")
-    axis.set_ylabel("loss")
-    axis.grid(True, alpha=0.3)
-    figure.tight_layout()
-    return figure
+def build_scene(points, camera_to_plane, center, axes):
+    scene = pyrender.Scene()
+    colors = paz.to_numpy(paz.pointcloud.color(points, [255, 0, 0]))
+    points = pyrender.Mesh.from_points(paz.to_numpy(points), colors=colors)
+    scene.add(points)
+    scene.add(build_frame((0, 255, 0)), pose=np.eye(4))
+    scene.add(build_frame((0, 0, 255)), pose=paz.to_numpy(camera_to_plane))
+    ellipsoid = trimesh.creation.uv_sphere(count=[10, 10])
+    ellipsoid.apply_scale(paz.to_numpy(axes))
+    pose = paz.to_numpy(paz.SE3.translation(center))
+    scene.add(pyrender.Mesh.from_trimesh(ellipsoid), pose=pose)
+    return scene
 
 
-def plot_surface_residuals(pointcloud, shift, axes, title):
-    x, y, z = paz.pointcloud.split(pointcloud)
-    residuals = ellipsoid.compute_surface_equation(
-        x, y, z, shift[0], shift[1], shift[2], axes[0], axes[1], axes[2]
-    )
-    figure, axis = plt.subplots(1, 1, figsize=(6, 4))
-    axis.hist(np.array(residuals), bins=50, color="gray", alpha=0.8)
-    axis.set_title(title)
-    axis.set_xlabel("residual")
-    axis.set_ylabel("count")
-    figure.tight_layout()
-    return figure
-
-
-def Axis(color=(0, 255, 0), origin_size=0.01):
-    mesh = trimesh.creation.axis(origin_color=color, origin_size=origin_size)
+def build_frame(color):
+    mesh = trimesh.creation.axis(origin_color=color, origin_size=0.01)
     return pyrender.Mesh.from_trimesh(mesh, smooth=False)
 
 
-scene = pyrender.Scene()
-scene.add(pyrender.Mesh.from_points(np.array(points), colors=colors))
-scene.add(Axis(color=(0, 255, 0)), pose=np.eye(4))
-scene.add(Axis(color=(0, 0, 255)), pose=np.array(camera_to_plane))
-mesh = ellipsoid.Mesh(*axes, 10, 10)
-scene.add(
-    pyrender.Mesh.from_trimesh(mesh),
-    pose=np.array(paz.SE3.translation(shift)),
-)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Fit an ellipsoid")
+    parser.add_argument("--seed", type=int, default=777)
+    parser.add_argument("--concept", type=int, default=19)
+    parser.add_argument("--shot", type=int, default=0)
+    parser.add_argument("--max_depth", type=float, default=1.5)
+    parser.add_argument("--min_height", type=float, default=0.01)
+    parser.add_argument("--num_stdvs", type=float, default=2.0)
+    parser.add_argument("--learning_rate", type=float, default=10.0)
+    parser.add_argument("--max_steps", type=int, default=150)
+    parser.add_argument("--tolerance", type=float, default=1e-2)
+    parser.add_argument("--num_prior_samples", type=int, default=200_000)
+    args = parser.parse_args()
+    jax.config.update("jax_debug_nans", True)
 
-key_prior = jax.random.split(key, 2)[1]
-forward_fit = build_forward_fit(model, shift, axes)
-plot_prior_predictive_samples(
-    model,
-    key_prior,
-    forward_fit,
-    num_samples=200_000,
-)
-plot_loss_curve(result.losses, "Loss curve")
-plot_surface_residuals(
-    object_pointcloud,
-    shift,
-    axes,
-    "Surface residuals",
-)
-plt.show()
-pyrender.Viewer(scene, use_raymond_lighting=True)
+    shot = fewsol.load(args.concept)[args.shot]
+    cloud_args = (shot, args.max_depth, args.min_height)
+    points, camera_to_plane = load_object_pointcloud(*cloud_args)
+    mean, stdv = paz.pointcloud.mean(points), paz.pointcloud.stdv(points)
+    model = build_model(points, mean, stdv)
+    data = jp.zeros(len(points))
+
+    def compute_loss(sample):
+        return -model.log_prob_inverse(sample, data)
+
+    Sample = model.latent_space.Sample
+    initial = Sample(center=mean, axes=args.num_stdvs * stdv)
+    initial = to_inverse_samples(model.latent_space, initial)
+    linesearch = paz.optimization.armijo_linesearch(50)
+    stop_args = (args.learning_rate, args.max_steps, args.tolerance)
+    optimizer_args = (initial, compute_loss, *stop_args, 10, linesearch)
+    parameters, history = paz.optimizers.LBFGS(*optimizer_args)
+    fit = to_forward_samples(model.latent_space, parameters)
+    print("center:", fit.center)
+    print("axes:", fit.axes)
+
+    key = jax.random.PRNGKey(args.seed)
+    plot_prior(model, key, fit, args.num_prior_samples)
+    figure, axes = plot.subplots(ncols=2, figsize=(12, 4))
+    steps = jp.arange(len(history.losses))
+    plot.line(steps, history.losses, axes[0], "black")
+    plot.set_labels(axes[0], x="step", y="loss")
+    axes[0].set_title("Loss curve")
+    residuals = compute_surface_residuals(points, fit.center, fit.axes)
+    plot.histogram(residuals, axes[1], density_norm=False, color="gray")
+    plot.set_labels(axes[1], x="residual", y="count")
+    axes[1].set_title("Surface residuals")
+    figure.tight_layout()
+    plot.show()
+
+    scene = build_scene(points, camera_to_plane, fit.center, fit.axes)
+    pyrender.Viewer(scene, use_raymond_lighting=True)

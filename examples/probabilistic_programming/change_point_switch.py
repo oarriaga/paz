@@ -12,307 +12,150 @@
 # right line. We marginalize the discrete switch and infer the continuous
 # line parameters with MCMC, then recover p(switch_index | y).
 
+import argparse
 from collections import namedtuple
 
 import jax
 import jax.numpy as jp
-import numpy as np
 
 import paz
 import paz.utils.plot as plot
-from paz.inference.types import SampleType
+
+Line = namedtuple("Line", ["slope", "bias"])
 
 
-LineParameters = namedtuple("LineParameters", ["slope", "bias"])
-LineSet = namedtuple("LineSet", ["left", "right"])
-SwitchPlotArgs = namedtuple(
-    "SwitchPlotArgs",
-    ["sigma", "switch_support", "switch_posterior", "switch_true_index"],
-)
-
-
-def build_switch_model(x, sigma):
+def build_switch_model(x, stdv):
     standard = paz.distributions.Normal(0.0, 1.0)
-    slope_left = paz.Prior(standard, name="slope_left")
-    bias_left = paz.Prior(standard, name="bias_left")
-    slope_right = paz.Prior(standard, name="slope_right")
-    bias_right = paz.Prior(standard, name="bias_right")
-    num_switch_positions = x.shape[0] - 1
-    switch_index = paz.Prior(
-        paz.distributions.Categorical(
-            logits=jp.zeros(num_switch_positions), dtype=jp.float32
-        ),
-        name="switch_index",
-    )
-
-    def y_distribution(
-        slope_left, bias_left, slope_right, bias_right, switch_index
-    ):
-        indices = jp.arange(x.shape[0])
-        switch_index = jp.asarray(switch_index, dtype=jp.int32)
-        use_left = indices <= switch_index
-        mean_left = slope_left * x + bias_left
-        mean_right = slope_right * x + bias_right
-        mean = jp.where(use_left, mean_left, mean_right)
-        return paz.distributions.Normal(mean, sigma)
-
-    y_obs = paz.Observable(y_distribution, name="y")(
-        slope_left, bias_left, slope_right, bias_right, switch_index
-    )
-    return paz.PGM(
-        [slope_left, bias_left, slope_right, bias_right, switch_index],
-        [y_obs],
-        "change_point_switch",
-    )
+    names = ["slope_left", "bias_left", "slope_right", "bias_right"]
+    priors = [paz.Prior(standard, name=name) for name in names]
+    logits = jp.zeros(len(x) - 1)
+    switch = paz.distributions.Categorical(logits=logits, dtype=jp.float32)
+    priors.append(paz.Prior(switch, name="switch_index"))
+    y = paz.Observable(Likelihood(x, stdv), name="y")(*priors)
+    return paz.PGM(priors, [y], "change_point_switch")
 
 
-def run_mcmc(
-    model_marg,
-    key,
-    data,
-    num_samples,
-    num_chains,
-    step_sigma,
-    warmup,
-):
-    model_marg.configure(
-        num_chains=num_chains,
-        warmup=warmup,
-        sigma=step_sigma,
-        tuner=paz.AdaptiveStepTuner(sigma=step_sigma),
-    )
-    return model_marg.infer(key, data, num_samples=num_samples)
+def Likelihood(x, stdv):
+    def apply(slope_left, bias_left, slope_right, bias_right, switch_index):
+        left, right = Line(slope_left, bias_left), Line(slope_right, bias_right)
+        is_left = jp.arange(len(x)) <= switch_index.astype(jp.int32)
+        mean = compute_piecewise(x, left, right, is_left)
+        return paz.distributions.Normal(mean, stdv)
+
+    return apply
 
 
-def plot_switch_results(
-    x,
-    observations,
-    posterior_lines,
-    true_lines,
-    plot_args,
-    density_lines=None,
-):
-    import matplotlib.pyplot as plt
+def compute_piecewise(x, left, right, is_left):
+    return jp.where(is_left, evaluate(left, x), evaluate(right, x))
 
-    fig, axes = plt.subplots(2, 1, figsize=(11, 8))
-    x_np = np.array(x)
-    obs_np = np.array(observations)
-    x_grid = np.linspace(float(x.min()), float(x.max()), 300)
-    switch_positions = 0.5 * (x_np[:-1] + x_np[1:])
-    switch_map_index = int(
-        plot_args.switch_support[jp.argmax(plot_args.switch_posterior)]
-    )
-    switch_map_x = switch_positions[switch_map_index]
-    switch_true_x = switch_positions[plot_args.switch_true_index]
 
-    left_line = (
-        float(posterior_lines.left.slope) * x_grid
-        + float(posterior_lines.left.bias)
-    )
-    right_line = (
-        float(posterior_lines.right.slope) * x_grid
-        + float(posterior_lines.right.bias)
-    )
-    piecewise_line = np.where(x_grid <= switch_map_x, left_line, right_line)
+def evaluate(line, x):
+    return line.slope * x + line.bias
 
-    true_left = true_lines.left.slope * x_grid + true_lines.left.bias
-    true_right = true_lines.right.slope * x_grid + true_lines.right.bias
-    true_piecewise = np.where(x_grid <= switch_true_x, true_left, true_right)
 
-    # Regression plot
-    plot.scatter(
-        x_np, obs_np, axes[0], s=30, alpha=0.8, color=plot.BLUE_GREY.neutral
-    )
-    plot.line(
-        x_grid, piecewise_line, axes[0], color="black", label="posterior mean"
-    )
-    plot.line_with_band(
-        x_grid,
-        piecewise_line,
-        np.full_like(piecewise_line, plot_args.sigma),
-        axes[0],
-        color=plot.BLUE_GREY.primary,
-        alpha=0.15,
-        label=f"noise band (sigma={plot_args.sigma})",
-    )
-    plot.line(x_grid, left_line, axes[0], color=plot.BLUE_GREY.primary,
-              linestyle=":", label="left line (posterior)")
-    plot.line(x_grid, right_line, axes[0], color=plot.EARTH.accent,
-              linestyle=":", label="right line (posterior)")
-    plot.line(x_grid, true_piecewise, axes[0], color=plot.EARTH.secondary,
-              linestyle="--", label="true line")
+def plot_posterior_lines(axis, grid, lines, switch_x, stdv):
+    blue = plot.BLUE_GREY.primary
+    mean = compute_piecewise(grid, *lines, grid <= switch_x)
+    plot.line(grid, mean, axis, "black", label="posterior mean")
+    label = f"noise band (sigma={stdv})"
+    plot.fill_between(grid, mean - stdv, mean + stdv, axis, blue, 0.15, label)
+    kwargs = {"linestyle": ":", "label": "left line (posterior)"}
+    plot.line(grid, evaluate(lines[0], grid), axis, blue, **kwargs)
+    kwargs = {"linestyle": ":", "label": "right line (posterior)"}
+    plot.line(grid, evaluate(lines[1], grid), axis, plot.EARTH.accent, **kwargs)
 
-    if density_lines is not None:
-        density_left = (
-            float(density_lines.left.slope) * x_grid
-            + float(density_lines.left.bias)
-        )
-        density_right = (
-            float(density_lines.right.slope) * x_grid
-            + float(density_lines.right.bias)
-        )
-        density_piecewise = np.where(
-            x_grid <= switch_map_x, density_left, density_right
-        )
-        plot.line(x_grid, density_piecewise, axes[0], color="purple",
-                  linestyle="--", label="gaussian approx")
 
-    plot.vline(switch_map_x, axes[0], color="black", linewidth=2,
-               label="posterior switch")
-    plot.vline(switch_true_x, axes[0], color=plot.EARTH.secondary,
-               linestyle="--", label="true switch")
+def plot_switches(axis, map_x, true_x):
+    plot.vline(map_x, axis, "black", "-", 2, "posterior switch")
+    plot.vline(true_x, axis, plot.EARTH.secondary, label="true switch")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Change-point regression")
+    parser.add_argument("--seed", type=int, default=21)
+    parser.add_argument("--stdv", type=float, default=0.15)
+    parser.add_argument("--num_samples", type=int, default=10_000)
+    parser.add_argument("--num_chains", type=int, default=10)
+    parser.add_argument("--warmup", type=float, default=0.2)
+    parser.add_argument("--sigma", type=float, default=0.25)
+    args = parser.parse_args()
+
+    true_lines = (Line(slope=1.0, bias=0.2), Line(slope=-0.6, bias=0.8))
+    true_switch_index = 17
+    x = jp.linspace(-1.0, 1.0, 40)
+    keys = jax.random.split(jax.random.PRNGKey(args.seed), 3)
+    noise_key, infer_key, density_key = keys
+    is_left = jp.arange(len(x)) <= true_switch_index
+    noise = args.stdv * jax.random.normal(noise_key, x.shape)
+    observations = compute_piecewise(x, *true_lines, is_left) + noise
+
+    model = paz.marginalize(build_switch_model(x, args.stdv), ["switch_index"])
+    tuner = paz.AdaptiveStepTuner(args.sigma)
+    kwargs = {"warmup": args.warmup, "sigma": args.sigma, "tuner": tuner}
+    model.configure(num_chains=args.num_chains, **kwargs)
+    kwargs = {"num_samples": args.num_samples}
+    posterior = model.infer(infer_key, observations, **kwargs)
+    samples = posterior.inverse_samples
+    draws = jax.tree.map(jp.ravel, samples)
+    switch_args = (model, "switch_index", draws, observations)
+    switch = paz.recover_discrete_posterior(*switch_args)
+    switch_posterior = switch.posterior.mean(axis=0)
+    map_index = int(switch.support[jp.argmax(switch_posterior)])
+    switch_positions = 0.5 * (x[:-1] + x[1:])
+    map_x = switch_positions[map_index]
+    true_x = switch_positions[true_switch_index]
+    acceptance_rates = posterior.infos.acceptance_rate
+    print(f"true switch index={true_switch_index}, x={true_x:.3f}")
+    print(f"posterior switch index={map_index}, x={map_x:.3f}")
+    print(f"acceptance rate={acceptance_rates.mean():.3f}")
+
+    means = jax.tree.map(jp.mean, draws)
+    left = Line(means.slope_left, means.bias_left)
+    right = Line(means.slope_right, means.bias_right)
+    draw = posterior.as_density(method="gaussian").sample(density_key)
+    density_left = Line(draw.slope_left, draw.bias_left)
+    density_right = Line(draw.slope_right, draw.bias_right)
+
+    plot.configure(fontsize=12)
+    figure, axes = plot.subplots(nrows=2, figsize=(11, 8))
+    grid = jp.linspace(x.min(), x.max(), 300)
+    kwargs = {"s": 30, "alpha": 0.8, "color": plot.BLUE_GREY.neutral}
+    plot.scatter(x, observations, axes[0], **kwargs)
+    plot_posterior_lines(axes[0], grid, (left, right), map_x, args.stdv)
+    true_mean = compute_piecewise(grid, *true_lines, grid <= true_x)
+    kwargs = {"linestyle": "--", "label": "true line"}
+    plot.line(grid, true_mean, axes[0], plot.EARTH.secondary, **kwargs)
+    density_lines = (density_left, density_right)
+    density_mean = compute_piecewise(grid, *density_lines, grid <= map_x)
+    kwargs = {"linestyle": "--", "label": "gaussian approx"}
+    plot.line(grid, density_mean, axes[0], "purple", **kwargs)
+    plot_switches(axes[0], map_x, true_x)
     axes[0].set_title("Change-point regression with a discrete switch")
     axes[0].legend(loc="upper left")
     plot.set_labels(axes[0], x="x", y="y")
     plot.clean(axes[0])
 
-    # Discrete posterior plot
-    switch_probs_np = np.array(plot_args.switch_posterior)
-    plot.discrete_posterior(switch_positions, switch_probs_np, axes[1],
-                            true_value=switch_true_x,
-                            color=plot.DANDELION.primary,
-                            true_color=plot.EARTH.secondary)
-    plot.vline(switch_map_x, axes[1], color="black", linewidth=2,
-               label="MAP switch")
+    width = switch_positions[1] - switch_positions[0]
+    bar_args = (switch_positions, switch_posterior, axes[1])
+    plot.bar(*bar_args, plot.DANDELION.primary, width=width)
+    plot_switches(axes[1], map_x, true_x)
     axes[1].set_ylim(0.0, 1.0)
     axes[1].legend(loc="upper left")
     plot.set_labels(axes[1], x="Switch location (x)", y="Posterior probability")
     plot.clean(axes[1])
+    figure.tight_layout()
+    plot.show()
 
-    plt.tight_layout()
-    return fig
+    plot.trace_panel(samples._asdict(), title="MCMC traces of the lines")
+    plot.show()
 
+    for side, true_line in zip(("left", "right"), true_lines):
+        names = (f"slope_{side}", f"bias_{side}")
+        side_draws = {name: getattr(draws, name) for name in names}
+        plot.corner(side_draws, dict(zip(names, true_line)))
+        plot.show()
 
-# Configure plotting
-plot.configure(fontsize=12, latex=False)
-
-key = jax.random.PRNGKey(21)
-num_observations = 40
-x = jp.linspace(-1.0, 1.0, num_observations)
-sigma = 0.15
-
-slope_left_true = 1.0
-bias_left_true = 0.2
-slope_right_true = -0.6
-bias_right_true = 0.8
-switch_index_true = 17
-
-indices = jp.arange(num_observations)
-use_left = indices <= switch_index_true
-mean_left = slope_left_true * x + bias_left_true
-mean_right = slope_right_true * x + bias_right_true
-mean = jp.where(use_left, mean_left, mean_right)
-key, noise_key = jax.random.split(key)
-observations = mean + sigma * jax.random.normal(
-    noise_key, (num_observations,)
-)
-
-model = build_switch_model(x, sigma)
-model_marg = paz.marginalize(model, ["switch_index"])
-data = {"y": observations}
-
-num_samples = 10_000
-num_chains = 10
-burn_in = 2000
-step_sigma = 0.25
-
-posterior = run_mcmc(
-    model_marg, key, data, num_samples, num_chains, step_sigma, burn_in
-)
-samples, infos = posterior.inverse_samples, posterior.infos
-slope_left_samples = samples.slope_left.reshape(-1)
-bias_left_samples = samples.bias_left.reshape(-1)
-slope_right_samples = samples.slope_right.reshape(-1)
-bias_right_samples = samples.bias_right.reshape(-1)
-
-slope_left_mean = slope_left_samples.mean()
-bias_left_mean = bias_left_samples.mean()
-slope_right_mean = slope_right_samples.mean()
-bias_right_mean = bias_right_samples.mean()
-acceptance_rate = infos.acceptance_rate.mean()
-
-Theta = SampleType(["slope_left", "bias_left", "slope_right", "bias_right"])
-theta_samples = Theta(
-    slope_left_samples,
-    bias_left_samples,
-    slope_right_samples,
-    bias_right_samples,
-)
-switch_posterior = paz.recover_discrete_posterior(
-    model_marg, "switch_index", theta_samples, data
-)
-switch_support = switch_posterior.support
-switch_probs = switch_posterior.posterior.mean(axis=0)
-
-posterior_lines = LineSet(
-    LineParameters(slope_left_mean, bias_left_mean),
-    LineParameters(slope_right_mean, bias_right_mean),
-)
-density = posterior.as_density(method="gaussian")
-key, density_key = jax.random.split(key)
-density_sample = density.sample(density_key, num_samples=1)
-density_lines = LineSet(
-    LineParameters(density_sample.slope_left, density_sample.bias_left),
-    LineParameters(density_sample.slope_right, density_sample.bias_right),
-)
-true_lines = LineSet(
-    LineParameters(slope_left_true, bias_left_true),
-    LineParameters(slope_right_true, bias_right_true),
-)
-plot_args = SwitchPlotArgs(
-    sigma, switch_support, switch_probs, switch_index_true
-)
-
-switch_map_index = int(switch_support[jp.argmax(switch_probs)])
-switch_positions = 0.5 * (np.array(x)[:-1] + np.array(x)[1:])
-switch_map_x = switch_positions[switch_map_index]
-switch_true_x = switch_positions[switch_index_true]
-
-print("=" * 60)
-print("Change-point regression with discrete switch")
-print("=" * 60)
-print(f"true switch index={switch_index_true}, x={switch_true_x:.3f}")
-print(f"posterior switch index={switch_map_index}, x={switch_map_x:.3f}")
-print(f"acceptance rate={acceptance_rate:.3f}")
-
-plot_switch_results(
-    x,
-    observations,
-    posterior_lines,
-    true_lines,
-    plot_args,
-    density_lines,
-)
-plot.show()
-
-# Additional plots: Trace panel for line parameters
-plot.trace_panel({
-    "slope_left": samples.slope_left,
-    "bias_left": samples.bias_left,
-    "slope_right": samples.slope_right,
-    "bias_right": samples.bias_right,
-}, title="MCMC Traces for Line Parameters")
-plot.show()
-
-# Corner plot for left line parameters
-plot.corner(
-    {"slope_left": np.array(slope_left_samples),
-     "bias_left": np.array(bias_left_samples)},
-    true_values={"slope_left": slope_left_true, "bias_left": bias_left_true}
-)
-plot.show()
-
-# Corner plot for right line parameters
-plot.corner(
-    {"slope_right": np.array(slope_right_samples),
-     "bias_right": np.array(bias_right_samples)},
-    true_values={"slope_right": slope_right_true, "bias_right": bias_right_true}
-)
-plot.show()
-
-# Diagnostics
-fig, ax = plot.subplots()
-plot.diagnostics(infos.acceptance_rate, ax, color=plot.DANDELION.primary)
-ax.set_title("Acceptance rates per chain")
-plot.clean(ax)
-plot.show()
+    figure, axis = plot.subplots()
+    plot.diagnostics(acceptance_rates, axis, plot.DANDELION.primary)
+    axis.set_title("Acceptance rates per chain")
+    plot.show()

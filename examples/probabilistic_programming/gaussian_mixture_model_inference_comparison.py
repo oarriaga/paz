@@ -41,6 +41,8 @@ The printed diagnostics report max absolute differences between exact and
 approximations, verifying consistency.
 """
 
+import argparse
+
 import jax
 import jax.numpy as jp
 from jax.scipy.special import logsumexp
@@ -50,255 +52,162 @@ import paz.utils.plot as plot
 from paz.inference.types import SampleType
 
 
-def build_mixture_model(prior_p, mean0, mean1, likelihood_stdv):
+def build_mixture_model(prior_p, means, stdv):
     p = paz.Prior(prior_p, name="p")
-
-    def z_distribution(p):
-        return paz.distributions.Bernoulli(probs=p, dtype=jp.float32)
-
-    z = paz.Latent(z_distribution, name="z")(p)
-
-    def y_distribution(z):
-        mean = jp.where(z == 1.0, mean1, mean0)
-        return paz.distributions.Normal(mean, likelihood_stdv)
-
-    y_obs = paz.Observable(y_distribution, name="y")(z)
-    return paz.PGM([p], [y_obs], "gaussian_mixture")
+    z = paz.Latent(build_switch, name="z")(p)
+    y = paz.Observable(Likelihood(means, stdv), name="y")(z)
+    return paz.PGM([p], [y], "gaussian_mixture")
 
 
-def compute_log_joint_over_grid(
-    prior_p, mean0, mean1, likelihood_stdv, observations, p_grid
-):
-    log_prior = prior_p.log_prob(p_grid)
-    bernoulli = paz.distributions.Bernoulli(probs=p_grid, dtype=jp.float32)
-    log_prob_z0 = bernoulli.log_prob(jp.array(0.0))
-    log_prob_z1 = bernoulli.log_prob(jp.array(1.0))
-    normal_z0 = paz.distributions.Normal(mean0, likelihood_stdv)
-    normal_z1 = paz.distributions.Normal(mean1, likelihood_stdv)
-    log_likelihood_z0 = normal_z0.log_prob(observations).sum()
-    log_likelihood_z1 = normal_z1.log_prob(observations).sum()
-    log_joint_z0 = log_prior + log_prob_z0 + log_likelihood_z0
-    log_joint_z1 = log_prior + log_prob_z1 + log_likelihood_z1
-    return log_joint_z0, log_joint_z1
+def build_switch(p):
+    return paz.distributions.Bernoulli(probs=p, dtype=jp.float32)
 
 
-def compute_log_marginal_pgm(model_marg, data, p_grid):
-    Theta = SampleType(["p"])
+def Likelihood(means, stdv):
+    def apply(z):
+        mean = jp.where(z == 1.0, means[1], means[0])
+        return paz.distributions.Normal(mean, stdv)
 
-    def log_prob_for_p(p_value):
-        log_prior = model_marg.prior.log_prob_inverse(
-            Theta(p_value)
-        ).log_prob_sum
-        log_like = model_marg.likelihood.log_prob_inverse(
-            Theta(p_value), data
-        ).log_prob_sum
-        return log_prior + log_like
-
-    return jax.vmap(log_prob_for_p)(p_grid)
+    return apply
 
 
-def normalize_log_density(log_density, grid):
-    stabilized = log_density - jp.max(log_density)
-    density = jp.exp(stabilized)
+def compute_log_joints(prior_p, means, stdv, observations, p_grid):
+    switch = build_switch(p_grid)
+    log_joints = []
+    for z, mean in enumerate(means):
+        normal = paz.distributions.Normal(mean, stdv)
+        log_prior = prior_p.log_prob(p_grid) + switch.log_prob(float(z))
+        log_joints.append(log_prior + normal.log_prob(observations).sum())
+    return jp.stack(log_joints)
+
+
+def normalize_density(log_density, grid):
+    density = jp.exp(log_density - log_density.max())
+    return density / (density.sum() * (grid[1] - grid[0]))
+
+
+def compute_grid_moments(density, grid):
     delta = grid[1] - grid[0]
-    normalization = density.sum() * delta
-    return density / normalization
+    mean = (density * grid).sum() * delta
+    variance = (density * (grid - mean) ** 2).sum() * delta
+    return mean, jp.sqrt(variance)
 
 
-def compute_posterior_z_from_grid(log_joint_z0, log_joint_z1):
-    joint_z0 = jp.exp(log_joint_z0)
-    joint_z1 = jp.exp(log_joint_z1)
-    normalization = joint_z0.sum() + joint_z1.sum()
-    return jp.array([joint_z0.sum(), joint_z1.sum()]) / normalization
-
-
-def compute_posterior_z_from_marginal(model_marg, data, p_grid, posterior_p):
-    Theta = SampleType(["p"])
-    posterior_z_given_p = paz.recover_discrete_posterior(
-        model_marg, "z", Theta(p_grid), data
-    ).posterior
-    posterior_z = (posterior_p[:, None] * posterior_z_given_p).sum(axis=0)
+def average_switch_posterior(model, data, p_values, weights):
+    samples = SampleType(["p"])(p_values)
+    switch = paz.recover_discrete_posterior(model, "z", samples, data)
+    posterior_z = (weights[:, None] * switch.posterior).sum(axis=0)
     return posterior_z / posterior_z.sum()
 
 
-def plot_results(
-    observations,
-    mean0,
-    mean1,
-    p_grid,
-    log_joint_z0,
-    log_joint_z1,
-    log_marginal_enum,
-    log_marginal_pgm,
-    posterior_p_enum,
-    posterior_p_marg,
-    posterior_z_enum,
-    posterior_z_marg,
-    p_samples,
-    posterior_z_mcmc,
-    posterior_p_density=None,
-):
+def plot_observations(axis, observations, means):
+    plot.histogram(observations, axis, bins=20)
+    plot.vline(means[0], axis, color="tab:blue", label="mean 0")
+    plot.vline(means[1], axis, color="tab:orange", label="mean 1")
+    plot.legend(axis)
+    plot.clean(axis)
+    axis.set_title("Observations and component means")
+
+
+def plot_log_densities(axis, p_grid, log_joints, log_enum, log_marginal):
+    plot.line(p_grid, log_joints[0], axis, "C0", label="log p(y,p,z=0)")
+    plot.line(p_grid, log_joints[1], axis, "C1", label="log p(y,p,z=1)")
+    kwargs = {"linestyle": "--", "label": "log p(y,p) enum"}
+    plot.line(p_grid, log_enum, axis, "C2", **kwargs)
+    kwargs = {"linestyle": ":", "label": "log p(y,p) marg"}
+    plot.line(p_grid, log_marginal, axis, "C3", **kwargs)
+    plot.legend(axis)
+    plot.clean(axis)
+    axis.set_title("Joint and marginalized log densities")
+
+
+def plot_posterior_p(axis, p_grid, p_samples, densities):
+    plot.histogram(p_samples, axis, bins=30, alpha=0.4, label="MCMC")
+    labels = ["enum", "marg", "gaussian fit"]
+    plot.compare_densities(p_grid, densities, labels, axis)
+    plot.legend(axis)
+    plot.clean(axis)
+    axis.set_title("Posterior over p")
+
+
+def plot_posterior_z(axis, posteriors, labels, width=0.35):
+    positions = jp.arange(2)
+    for offset, posterior, label in zip((-1, 0, 1), posteriors, labels):
+        x = positions + offset * width
+        color = f"C{offset + 1}"
+        plot.bar(x, posterior, axis, color, width=width, label=label)
+    axis.set_xticks(positions)
+    axis.set_xticklabels(["z=0", "z=1"])
+    axis.set_ylim(0.0, 1.0)
+    plot.legend(axis)
+    plot.clean(axis)
+    axis.set_title("Posterior over z")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Mixture inference comparison")
+    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--num_observations", type=int, default=8)
+    parser.add_argument("--means", type=float, nargs=2, default=(-0.2, 0.2))
+    parser.add_argument("--stdv", type=float, default=1.0)
+    parser.add_argument("--true_p", type=float, default=0.4)
+    parser.add_argument("--num_samples", type=int, default=1200)
+    parser.add_argument("--num_chains", type=int, default=2)
+    parser.add_argument("--warmup", type=float, default=0.25)
+    parser.add_argument("--sigma", type=float, default=0.2)
+    args = parser.parse_args()
+
+    keys = jax.random.split(jax.random.PRNGKey(args.seed), 3)
+    true_z = int(jax.random.bernoulli(keys[0], args.true_p))
+    noise = jax.random.normal(keys[1], (args.num_observations,))
+    observations = args.means[true_z] + args.stdv * noise
+    prior_p = paz.distributions.Beta(2.0, 2.0)
+    model = build_mixture_model(prior_p, args.means, args.stdv)
+    model = paz.marginalize(model, ["z"])
+
+    p_grid = jp.linspace(0.01, 0.99, 200)
+    model_args = (prior_p, args.means, args.stdv, observations)
+    log_joints = compute_log_joints(*model_args, p_grid)
+    log_enum = logsumexp(log_joints, axis=0)
+    grid_samples = SampleType(["p"])(p_grid)
+    log_marginal = model.log_prob_inverse(grid_samples, observations)
+    p_enum = normalize_density(log_enum, p_grid)
+    p_marginal = normalize_density(log_marginal, p_grid)
+    z_enum = jax.nn.softmax(logsumexp(log_joints, axis=1))
+    switch_args = (model, observations, p_grid, p_marginal)
+    z_marginal = average_switch_posterior(*switch_args)
+
+    tuner = paz.AdaptiveStepTuner(args.sigma)
+    kwargs = {"warmup": args.warmup, "sigma": args.sigma, "tuner": tuner}
+    model.configure(num_chains=args.num_chains, **kwargs)
+    posterior = model.infer(keys[2], observations, num_samples=args.num_samples)
+    p_samples = posterior.samples.p.flatten()
+    switch_args = (model, observations, p_samples, jp.ones_like(p_samples))
+    z_mcmc = average_switch_posterior(*switch_args)
+    p_gaussian = posterior.as_density(method="gaussian").prob(grid_samples)
+    exact_mean, exact_stdv = compute_grid_moments(p_enum, p_grid)
+
+    print(f"true_p={args.true_p}, true_z={true_z}")
+    print(f"max log p(y,p) diff: {jp.abs(log_enum - log_marginal).max():.6e}")
+    print(f"max posterior p diff: {jp.abs(p_enum - p_marginal).max():.6e}")
+    print(f"max posterior z diff: {jp.abs(z_enum - z_marginal).max():.6e}")
+    print(f"max posterior z diff (mcmc): {jp.abs(z_enum - z_mcmc).max():.6e}")
+    print(f"posterior p mean (exact): {exact_mean:.6f}")
+    print(f"posterior p mean (mcmc): {p_samples.mean():.6f}")
+    print(f"posterior p stdv (exact): {exact_stdv:.6f}")
+    print(f"posterior p stdv (mcmc): {p_samples.std():.6f}")
+    print(f"posterior z (enum): {z_enum}")
+    print(f"posterior z (marg): {z_marginal}")
+    print(f"posterior z (mcmc): {z_mcmc}")
+
     plot.configure(fontsize=12)
     figure, axes = plot.subplots(nrows=2, ncols=2, figsize=(12, 8))
-
-    plot.histogram(observations, axes[0, 0], bins=20, alpha=0.7)
-    plot.vline(
-        mean0, axes[0, 0], color="tab:blue", linestyle="--", label="mean0"
-    )
-    plot.vline(
-        mean1, axes[0, 0], color="tab:orange", linestyle="--", label="mean1"
-    )
-    plot.legend(axes[0, 0])
-    plot.clean(axes[0, 0])
-    axes[0, 0].set_title("Observations and component means")
-
-    plot.line(p_grid, log_joint_z0, axes[0, 1], label="log p(y,p,z=0)")
-    plot.line(p_grid, log_joint_z1, axes[0, 1], label="log p(y,p,z=1)")
-    plot.line(p_grid, log_marginal_enum, axes[0, 1], linestyle="--",
-              label="log p(y,p) enum")
-    plot.line(p_grid, log_marginal_pgm, axes[0, 1], linestyle=":",
-              label="log p(y,p) marg")
-    plot.legend(axes[0, 1])
-    plot.clean(axes[0, 1])
-    axes[0, 1].set_title("Joint and marginalized log densities")
-
-    plot.histogram(p_samples, axes[1, 0], bins=30, alpha=0.4,
-                   label="posterior p density (MCMC)")
-    plot.line(p_grid, posterior_p_enum, axes[1, 0],
-              label="posterior p density (enum)")
-    plot.line(p_grid, posterior_p_marg, axes[1, 0], linestyle="--",
-              label="posterior p density (marg)")
-    if posterior_p_density is not None:
-        plot.line(p_grid, posterior_p_density, axes[1, 0], linestyle=":",
-                  label="posterior p density (gaussian fit)")
-    plot.legend(axes[1, 0])
-    plot.clean(axes[1, 0])
-    axes[1, 0].set_title("Posterior over p")
-
-    bar_positions = jp.arange(2)
-    bar_width = 0.35
-    plot.bar(bar_positions - bar_width, posterior_z_enum, axes[1, 1],
-             width=bar_width, label="enum")
-    plot.bar(bar_positions, posterior_z_marg, axes[1, 1],
-             width=bar_width, label="marg")
-    plot.bar(bar_positions + bar_width, posterior_z_mcmc, axes[1, 1],
-             width=bar_width, label="mcmc")
-    axes[1, 1].set_xticks(bar_positions)
-    axes[1, 1].set_xticklabels(["z=0", "z=1"])
-    axes[1, 1].set_ylim(0.0, 1.0)
-    plot.legend(axes[1, 1])
-    plot.clean(axes[1, 1])
-    axes[1, 1].set_title("Posterior over z")
-
+    plot_observations(axes[0, 0], observations, args.means)
+    log_densities = (log_joints, log_enum, log_marginal)
+    plot_log_densities(axes[0, 1], p_grid, *log_densities)
+    densities = [p_enum, p_marginal, p_gaussian]
+    plot_posterior_p(axes[1, 0], p_grid, p_samples, densities)
+    posteriors, labels = (z_enum, z_marginal, z_mcmc), ("enum", "marg", "mcmc")
+    plot_posterior_z(axes[1, 1], posteriors, labels)
     figure.tight_layout()
-    return figure
-
-
-key = jax.random.PRNGKey(0)
-num_observations = 8
-mean0 = -0.2
-mean1 = 0.2
-likelihood_stdv = 1.0
-true_p = 0.4
-prior_p = paz.distributions.Beta(2.0, 2.0)
-
-key, z_key, y_key = jax.random.split(key, 3)
-z_true = jax.random.bernoulli(z_key, true_p)
-component_mean = mean1 if z_true else mean0
-observations = component_mean + likelihood_stdv * jax.random.normal(
-    y_key, (num_observations,)
-)
-
-model = build_mixture_model(prior_p, mean0, mean1, likelihood_stdv)
-data = {"y": observations}
-model_marg = paz.marginalize(model, ["z"])
-
-p_grid = jp.linspace(0.01, 0.99, 200)
-log_joint_z0, log_joint_z1 = compute_log_joint_over_grid(
-    prior_p, mean0, mean1, likelihood_stdv, observations, p_grid
-)
-log_marginal_enum = logsumexp(
-    jp.stack([log_joint_z0, log_joint_z1]), axis=0
-)
-log_marginal_pgm = compute_log_marginal_pgm(model_marg, data, p_grid)
-
-posterior_p_enum = normalize_log_density(log_marginal_enum, p_grid)
-posterior_p_marg = normalize_log_density(log_marginal_pgm, p_grid)
-
-posterior_z_enum = compute_posterior_z_from_grid(
-    log_joint_z0, log_joint_z1
-)
-posterior_z_marg = compute_posterior_z_from_marginal(
-    model_marg, data, p_grid, posterior_p_marg
-)
-
-num_samples = 1200
-num_chains = 2
-burn_in = 300
-sigma = 0.2
-
-key, infer_key = jax.random.split(key, 2)
-model_marg.configure(
-    num_chains=num_chains,
-    warmup=burn_in,
-    sigma=sigma,
-    tuner=paz.AdaptiveStepTuner(sigma=sigma),
-)
-posterior = model_marg.infer(infer_key, data, num_samples=num_samples)
-p_samples = posterior.samples.p.reshape(-1)
-posterior_density = posterior.as_density(method="gaussian")
-Theta = SampleType(["p"])
-posterior_p_density = posterior_density.prob(Theta(p_grid))
-mcmc_mean = p_samples.mean()
-mcmc_stdv = p_samples.std()
-
-delta = p_grid[1] - p_grid[0]
-exact_mean = (posterior_p_enum * p_grid).sum() * delta
-exact_var = (posterior_p_enum * (p_grid - exact_mean) ** 2).sum() * delta
-exact_stdv = jp.sqrt(exact_var)
-
-posterior_z_given_p = paz.recover_discrete_posterior(
-    model_marg, "z", Theta(p_samples), data
-).posterior
-posterior_z_mcmc = posterior_z_given_p.mean(axis=0)
-posterior_z_mcmc = posterior_z_mcmc / posterior_z_mcmc.sum()
-
-max_log_diff = jp.max(jp.abs(log_marginal_enum - log_marginal_pgm))
-max_p_diff = jp.max(jp.abs(posterior_p_enum - posterior_p_marg))
-max_z_diff = jp.max(jp.abs(posterior_z_enum - posterior_z_marg))
-max_z_mcmc_diff = jp.max(jp.abs(posterior_z_enum - posterior_z_mcmc))
-
-print("=" * 60)
-print("Gaussian mixture inference comparison")
-print("=" * 60)
-print(f"true_p={true_p}, z_true={int(z_true)}")
-print(f"max log p(y,p) diff: {max_log_diff:.6e}")
-print(f"max posterior p diff: {max_p_diff:.6e}")
-print(f"max posterior z diff: {max_z_diff:.6e}")
-print(f"max posterior z diff (mcmc): {max_z_mcmc_diff:.6e}")
-print(f"posterior p mean (exact): {exact_mean:.6f}")
-print(f"posterior p mean (mcmc): {mcmc_mean:.6f}")
-print(f"posterior p stdv (exact): {exact_stdv:.6f}")
-print(f"posterior p stdv (mcmc): {mcmc_stdv:.6f}")
-print(f"posterior z (enum): {posterior_z_enum}")
-print(f"posterior z (marg): {posterior_z_marg}")
-print(f"posterior z (mcmc): {posterior_z_mcmc}")
-
-plot_results(
-    observations,
-    mean0,
-    mean1,
-    p_grid,
-    log_joint_z0,
-    log_joint_z1,
-    log_marginal_enum,
-    log_marginal_pgm,
-    posterior_p_enum,
-    posterior_p_marg,
-    posterior_z_enum,
-    posterior_z_marg,
-    p_samples,
-    posterior_z_mcmc,
-    posterior_p_density,
-)
-plot.show()
+    plot.show()
