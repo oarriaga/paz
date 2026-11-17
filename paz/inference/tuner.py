@@ -119,7 +119,6 @@ def compute_cholesky_sigma(initial_sigma, measured_covariance):
 def Tuner(
     log_density_fn,
     samples,
-    num_chains,
     compute_rate=None,
     progress=True,
     compute_sigma=None,

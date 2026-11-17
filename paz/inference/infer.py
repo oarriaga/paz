@@ -80,14 +80,7 @@ def _infer_mh(key, data, prior, likelihood, sample_predictive, **kwargs):
         sigma = 0.1 if tuner is None else tuner.sigma
     run_tuner = _should_tune(tune, tuner)
     if run_tuner:
-        tuner_args = (
-            tuner,
-            key_tune,
-            log_density_fn,
-            positions,
-            num_chains,
-            sigma,
-        )
+        tuner_args = (tuner, key_tune, log_density_fn, positions, sigma)
         sigma, positions = _run_tuner(*tuner_args)
 
     total_samples = num_samples + num_warmup
@@ -181,13 +174,13 @@ def _should_tune(tune, tuner):
     return tune
 
 
-def _run_tuner(tuner, key, log_density_fn, positions, num_chains, sigma):
+def _run_tuner(tuner, key, log_density_fn, positions, sigma):
     tuner_config = {
         "compute_rate": tuner.compute_rate,
         "progress": tuner.progress,
         "compute_sigma": tuner.compute_sigma,
     }
-    tune = Tuner(log_density_fn, positions, num_chains, **tuner_config)
+    tune = Tuner(log_density_fn, positions, **tuner_config)
     tune_args = (key, tuner.num_steps, tuner.num_episodes, sigma)
     result = tune(*tune_args)
     num_invalid = int(jp.sum(~result.is_sigma_valid))

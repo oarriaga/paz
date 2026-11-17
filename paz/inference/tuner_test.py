@@ -15,28 +15,26 @@ def test_acceptance_to_variance_returns_finite():
 
 def test_tuner_returns_infos_shape():
     key = jax.random.PRNGKey(0)
-    num_chains = 2
     num_steps = 1
     num_episodes = 2
-    positions = jp.zeros((num_chains,))
+    positions = jp.zeros((2,))
 
     def log_density_fn(position):
         return -jp.sum(position ** 2)
 
-    tune = Tuner(log_density_fn, positions, num_chains, progress=False)
+    tune = Tuner(log_density_fn, positions, progress=False)
     infos = tune(key, num_steps, num_episodes, 0.1).infos
     assert infos.acceptance_rate.shape[0] == num_episodes
 
 
 def test_tuner_sigma_is_finite():
     key = jax.random.PRNGKey(1)
-    num_chains = 2
-    positions = jp.zeros((num_chains,))
+    positions = jp.zeros((2,))
 
     def log_density_fn(position):
         return -jp.sum(position ** 2)
 
-    tune = Tuner(log_density_fn, positions, num_chains, progress=False)
+    tune = Tuner(log_density_fn, positions, progress=False)
     tuned_sigma = tune(key, 1, 1, 0.1).sigma
     assert jp.isfinite(tuned_sigma)
 
@@ -50,10 +48,9 @@ def build_correlated_log_density(stdvs, correlation):
 
 def tune_correlated(compute_sigma):
     log_density_fn = build_correlated_log_density(jp.array([1.0, 0.1]), 0.9)
-    num_chains = 8
-    positions = jp.zeros((num_chains, 2))
+    positions = jp.zeros((8, 2))
     kwargs = {"progress": False, "compute_sigma": compute_sigma}
-    tune = Tuner(log_density_fn, positions, num_chains, **kwargs)
+    tune = Tuner(log_density_fn, positions, **kwargs)
     return tune(jax.random.PRNGKey(0), 500, 10, 0.1)
 
 
@@ -84,7 +81,7 @@ def test_covariance_tuner_keeps_shape_when_chains_never_move():
 
     positions = jp.zeros((4, 2))
     kwargs = {"progress": False, "compute_sigma": compute_cholesky_sigma}
-    tune = Tuner(log_density_fn, positions, 4, **kwargs)
+    tune = Tuner(log_density_fn, positions, **kwargs)
     result = tune(jax.random.PRNGKey(0), 20, 3, 0.1)
     assert jp.all(jp.isfinite(result.sigma))
     assert jp.all(jp.diagonal(result.sigma) > 0.0)
@@ -100,7 +97,7 @@ def tune_one_episode(compute_sigma, initial_sigma):
         return -0.5 * jp.sum(position**2)
 
     kwargs = {"progress": False, "compute_sigma": compute_sigma}
-    tune = Tuner(log_density_fn, jp.zeros((4, 2)), 4, **kwargs)
+    tune = Tuner(log_density_fn, jp.zeros((4, 2)), **kwargs)
     return tune(jax.random.PRNGKey(0), 20, 1, initial_sigma).sigma
 
 
