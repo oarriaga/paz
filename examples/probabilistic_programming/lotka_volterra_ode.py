@@ -88,9 +88,9 @@ if __name__ == "__main__":
     init = compute_initial_values(data, args.initial_period, args.initial_sigma)
     shape = (args.num_chains,)
     init = jax.tree.map(lambda x: jp.broadcast_to(x, shape + x.shape), init)
-    tuner_args = (args.sigma, args.tune_steps, args.tune_episodes, False)
+    tuner_args = (args.sigma, args.tune_steps, args.tune_episodes)
     tuner = paz.AdaptiveCovarianceTuner(*tuner_args)
-    kwargs = {"warmup": args.warmup, "tuner": tuner, "progress": False}
+    kwargs = {"warmup": args.warmup, "tuner": tuner}
     model.configure(num_chains=args.num_chains, **kwargs)
     kwargs = {"num_samples": args.num_samples, "init": init, "space": "fwd"}
     posterior = model.infer(keys[0], data, **kwargs)
@@ -111,4 +111,4 @@ if __name__ == "__main__":
     plot.set_limits(axis, y=(0, 160))
     plot.legend(axis)
     axis.set_title("Posterior predictive (80% CI) with predator-prey pattern.")
-    plot.save(figure, args.plot_path)
+    plot.show()
