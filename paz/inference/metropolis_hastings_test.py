@@ -65,6 +65,5 @@ def test_sample_shapes():
         sigma=0.1,
         num_samples=num_samples,
         num_chains=num_chains,
-        progress=False,
     )
     assert states.position.shape == (num_samples, num_chains)

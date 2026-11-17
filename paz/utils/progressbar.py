@@ -1,11 +1,14 @@
 import sys
 import time
+from collections import namedtuple
 
 import jax
 import jax.numpy as jp
 import numpy as np
 
 _LAST_LENGTH = 0
+fields = ["description", "total_value", "width"]
+Stage = namedtuple("Stage", fields + ["count", "start_time", "end_time"])
 
 
 def start():
@@ -95,3 +98,62 @@ def show(total_value, description="progress", width=50):
         draw(now_value, total_value, start_time, description, width)
 
     return _callback
+
+
+def skip(now_value):
+    return None
+
+
+def show_stages(stages):
+    """Shows several stages of one process on a single line.
+
+    # Arguments
+        stages: List of `(description, total_value, width)`, in run order.
+
+    # Returns
+        List with one callback per stage, each taking the current count.
+        They are safe to call under `jit`. End the line with `newline`.
+    """
+    states = [Stage(*stage, 0, None, None) for stage in stages]
+
+    def build_report(index):
+        def report(now_value):
+            def callback(count):
+                states[index] = _update_stage(states[index], int(count))
+                _write_line("  ".join(map(_build_stage_text, states)))
+
+            jax.debug.callback(callback, jp.asarray(now_value), ordered=True)
+
+        return report
+
+    return [build_report(index) for index in range(len(states))]
+
+
+def _update_stage(stage, count):
+    now = time.perf_counter()
+    start_time = now if stage.start_time is None else stage.start_time
+    end_time = now if count >= stage.total_value else None
+    return stage._replace(count=count, start_time=start_time, end_time=end_time)
+
+
+def _write_line(text):
+    sys.stdout.write(_pad_message(f"\r{text}"))
+    sys.stdout.flush()
+
+
+def _build_stage_text(stage):
+    filled_width = int(stage.width * stage.count / max(stage.total_value, 1))
+    bar = "█" * filled_width + "-" * (stage.width - filled_width)
+    text = f"{stage.description} |{bar}| {stage.count}/{stage.total_value}"
+    if stage.end_time is not None:
+        text = f"{text} {stage.end_time - stage.start_time:.2f}s"
+    elif stage.start_time is not None:
+        text = f"{text} {_build_timing_text(stage)}"
+    return text
+
+
+def _build_timing_text(stage):
+    elapsed = time.perf_counter() - stage.start_time
+    remaining = elapsed * (stage.total_value - stage.count) / stage.count
+    percent_complete = stage.count / stage.total_value
+    return f"{percent_complete:.0%} [{elapsed:.2f}s<{remaining:.2f}s]"

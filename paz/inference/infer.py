@@ -1,10 +1,13 @@
 import jax
 import jax.numpy as jp
 
+import paz.backend.message as message
+import paz.utils.progressbar as progressbar
+
 from paz.inference.metropolis_hastings import sample as mh_sample
 from paz.inference.posterior import MCMCPosterior
 from paz.inference.latent_space import as_latent_samples, to_inverse_samples
-from paz.inference.tuner import AdaptiveStepTuner, Tuner
+from paz.inference.tuner import Tuner
 from paz.inference.utils import validate_space
 
 
@@ -75,29 +78,22 @@ def _infer_mh(key, data, prior, likelihood, sample_predictive, **kwargs):
 
     num_warmup = _resolve_num_warmup(num_samples, warmup)
     if sigma is None:
-        sigma = tuner.sigma if isinstance(tuner, AdaptiveStepTuner) else 0.1
+        sigma = 0.1 if tuner is None else tuner.sigma
     run_tuner = _should_tune(tune, tuner)
-    if run_tuner:
-        tuner_args = (
-            tuner,
-            key_tune,
-            log_density_fn,
-            positions,
-            num_chains,
-            sigma,
-        )
-        sigma = _run_tuner(*tuner_args)
-
     total_samples = num_samples + num_warmup
-    states, infos = mh_sample(
-        key_sample,
-        log_density_fn,
-        positions,
-        sigma,
-        total_samples,
-        num_chains,
-        progress=progress,
-    )
+    shows_tuning = run_tuner and tuner.progress
+    reports = _show_stages(shows_tuning, tuner, progress, total_samples)
+    if run_tuner:
+        show_tuning = reports.get("tune", progressbar.skip)
+        tuner_args = (tuner, key_tune, log_density_fn, positions, sigma)
+        sigma, positions = _run_tuner(*tuner_args, show_tuning)
+
+    show_sampling = reports.get("sample", progressbar.skip)
+    sample_args = (key_sample, log_density_fn, positions, sigma)
+    sample_args = sample_args + (total_samples, num_chains, show_sampling)
+    states, infos = mh_sample(*sample_args)
+    if reports:
+        progressbar.newline()
     if num_warmup > 0:
         states = jax.tree.map(lambda x: x[num_warmup:], states)
         infos = jax.tree.map(lambda x: x[num_warmup:], infos)
@@ -179,13 +175,27 @@ def _should_tune(tune, tuner):
     return tune
 
 
-def _run_tuner(tuner, key, log_density_fn, positions, num_chains, sigma):
-    if not isinstance(tuner, AdaptiveStepTuner):
-        raise NotImplementedError("Only AdaptiveStepTuner is supported.")
+def _show_stages(shows_tuning, tuner, shows_sampling, total_samples):
+    stages = []
+    if shows_tuning:
+        stages.append(("tune", tuner.num_episodes, 10))
+    if shows_sampling:
+        stages.append(("sample", total_samples, 20))
+    names = [description for description, _, _ in stages]
+    return dict(zip(names, progressbar.show_stages(stages)))
+
+
+def _run_tuner(tuner, key, log_density_fn, positions, sigma, show_progress):
     tuner_config = {
         "compute_rate": tuner.compute_rate,
-        "progress": tuner.progress,
+        "compute_sigma": tuner.compute_sigma,
+        "show_progress": show_progress,
     }
-    tune = Tuner(log_density_fn, positions, num_chains, **tuner_config)
-    tuned_sigma, _ = tune(key, tuner.num_steps, tuner.num_episodes, sigma)
-    return tuned_sigma
+    tune = Tuner(log_density_fn, positions, **tuner_config)
+    tune_args = (key, tuner.num_steps, tuner.num_episodes, sigma)
+    result = tune(*tune_args)
+    num_invalid = int(jp.sum(~result.is_sigma_valid))
+    if num_invalid > 0:
+        episodes = f"{num_invalid} of {tuner.num_episodes} episodes"
+        message.warn(f"Tuner kept the previous sigma in {episodes}.")
+    return result.sigma, result.positions
