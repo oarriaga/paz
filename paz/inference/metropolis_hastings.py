@@ -64,6 +64,7 @@ def sample(
     num_samples,
     num_chains,
     progress=False,
+    show_progress=None,
 ):
     def build_trajectory(key, initial_state):
         position, log_density = initial_state
@@ -95,12 +96,15 @@ def sample(
 
     args = jp.arange(num_samples)
     state = Samples(positions, jax.vmap(log_density_fn)(positions))
-    if progress:
+    # A caller that passes show_progress draws the line and ends it.
+    owns_line = progress and show_progress is None
+    if owns_line:
         progress_callback = progressbar.show(num_samples, "sample", width=30)
     else:
-        progress_callback = None
-    scan_step = step_chain_with_progress if progress else step_chain
+        progress_callback = show_progress
+    has_progress = progress_callback is not None
+    scan_step = step_chain_with_progress if has_progress else step_chain
     _, (states, infos) = jax.lax.scan(scan_step, (key, state), args)
-    if progress:
+    if owns_line:
         progressbar.newline()
     return states, infos

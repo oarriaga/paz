@@ -125,3 +125,28 @@ def test_infer_mh_with_shape_tuners(Tuner, shape):
     assert posterior.config["sigma"].shape == shape
     assert jp.abs(samples.mean() - 0.125) < 0.1
     assert jp.abs(samples.std() - jp.sqrt(0.5)) < 0.1
+
+
+def infer_with_progress(tuner_progress, capsys):
+    model, data = build_simple_model()
+    kwargs = {"num_steps": 5, "num_episodes": 2, "progress": tuner_progress}
+    tuner = paz.AdaptiveStepTuner(sigma=0.4, **kwargs)
+    model.configure(num_chains=2, warmup=0, tuner=tuner, progress=True)
+    model.infer(jax.random.PRNGKey(6), data, num_samples=5)
+    jax.effects_barrier()
+    return capsys.readouterr().out
+
+
+def test_infer_mh_shows_tuning_and_sampling_on_one_line(capsys):
+    output = infer_with_progress(True, capsys)
+    last_frame = output.rstrip().split("\r")[-1]
+    assert output.count("\n") == 1
+    assert f"tune |{'█' * 10}| 2/2" in last_frame
+    assert f"sample |{'█' * 20}| 5/5" in last_frame
+
+
+def test_infer_mh_keeps_sample_bar_without_tuner_progress(capsys):
+    output = infer_with_progress(False, capsys)
+    assert output.count("\n") == 1
+    assert "sample: |" in output
+    assert "tune" not in output

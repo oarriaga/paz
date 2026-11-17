@@ -71,3 +71,22 @@ def test_show_builds_callback_for_scan(capsys):
     jax.effects_barrier()
     captured = capsys.readouterr()
     assert "scan" in captured.out
+
+
+def test_build_stage_draws_bar_and_count():
+    stage = utils_progressbar.build_stage("tune", 5, 10, 10)
+    assert stage == "tune |█████-----| 5/10"
+
+
+def test_build_timing_shows_percent():
+    start_time = utils_progressbar.start()
+    assert utils_progressbar.build_timing(5, 10, start_time).startswith("50% [")
+
+
+def test_show_text_rewrites_line_without_newline(capsys):
+    show = utils_progressbar.show_text(lambda count: f"count {count}")
+    show(3)
+    jax.effects_barrier()
+    captured = capsys.readouterr()
+    assert captured.out.startswith("\rcount 3")
+    assert "\n" not in captured.out

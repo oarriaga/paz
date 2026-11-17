@@ -95,3 +95,38 @@ def show(total_value, description="progress", width=50):
         draw(now_value, total_value, start_time, description, width)
 
     return _callback
+
+
+def show_text(build_text):
+    """Builds a callback that rewrites the current line with custom text.
+
+    # Arguments
+        build_text: Function from the current count (int) to a string.
+
+    # Returns
+        Callback taking the current count. It is safe to call under `jit`.
+        The caller ends the line with `newline`.
+    """
+
+    def _callback(now_value):
+        def callback(current):
+            message = _pad_message("\r" + build_text(int(current)))
+            sys.stdout.write(message)
+            sys.stdout.flush()
+
+        jax.debug.callback(callback, jp.asarray(now_value), ordered=True)
+
+    return _callback
+
+
+def build_stage(description, now_value, total_value, width):
+    filled_width = int(width * min(now_value / max(total_value, 1), 1.0))
+    bar = "█" * filled_width + "-" * (width - filled_width)
+    return f"{description} |{bar}| {now_value}/{total_value}"
+
+
+def build_timing(now_value, total_value, start_time):
+    elapsed = time.perf_counter() - start_time
+    remaining = elapsed * (total_value - now_value) / max(now_value, 1)
+    percent_complete = now_value / max(total_value, 1)
+    return f"{percent_complete:.0%} [{elapsed:.2f}s<{remaining:.2f}s]"
