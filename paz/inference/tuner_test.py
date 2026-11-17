@@ -24,7 +24,7 @@ def test_tuner_returns_infos_shape():
         return -jp.sum(position ** 2)
 
     tune = Tuner(log_density_fn, positions, num_chains, progress=False)
-    _, _, infos = tune(key, num_steps, num_episodes, 0.1)
+    infos = tune(key, num_steps, num_episodes, 0.1).infos
     assert infos.acceptance_rate.shape[0] == num_episodes
 
 
@@ -37,7 +37,7 @@ def test_tuner_sigma_is_finite():
         return -jp.sum(position ** 2)
 
     tune = Tuner(log_density_fn, positions, num_chains, progress=False)
-    tuned_sigma, _, _ = tune(key, 1, 1, 0.1)
+    tuned_sigma = tune(key, 1, 1, 0.1).sigma
     assert jp.isfinite(tuned_sigma)
 
 
@@ -58,13 +58,13 @@ def tune_correlated(compute_sigma):
 
 
 def test_diagonal_tuner_recovers_scale_ratio():
-    sigma, _, _ = tune_correlated(compute_diagonal_sigma)
+    sigma = tune_correlated(compute_diagonal_sigma).sigma
     assert sigma.shape == (2,)
     assert 5.0 < sigma[0] / sigma[1] < 20.0
 
 
 def test_covariance_tuner_recovers_correlation():
-    sigma, _, _ = tune_correlated(compute_cholesky_sigma)
+    sigma = tune_correlated(compute_cholesky_sigma).sigma
     covariance = sigma @ sigma.T
     stdvs = jp.sqrt(jp.diagonal(covariance))
     correlation = covariance[0, 1] / (stdvs[0] * stdvs[1])
@@ -73,7 +73,7 @@ def test_covariance_tuner_recovers_correlation():
 
 
 def test_tuner_returns_last_positions():
-    _, positions, _ = tune_correlated(compute_cholesky_sigma)
+    positions = tune_correlated(compute_cholesky_sigma).positions
     assert positions.shape == (8, 2)
     assert jp.all(positions != 0.0)
 
@@ -85,9 +85,14 @@ def test_covariance_tuner_keeps_shape_when_chains_never_move():
     positions = jp.zeros((4, 2))
     kwargs = {"progress": False, "compute_sigma": compute_cholesky_sigma}
     tune = Tuner(log_density_fn, positions, 4, **kwargs)
-    sigma, _, _ = tune(jax.random.PRNGKey(0), 20, 3, 0.1)
-    assert jp.all(jp.isfinite(sigma))
-    assert jp.all(jp.diagonal(sigma) > 0.0)
+    result = tune(jax.random.PRNGKey(0), 20, 3, 0.1)
+    assert jp.all(jp.isfinite(result.sigma))
+    assert jp.all(jp.diagonal(result.sigma) > 0.0)
+    assert not jp.any(result.is_sigma_valid)
+
+
+def test_tuner_reports_valid_sigma():
+    assert jp.all(tune_correlated(compute_cholesky_sigma).is_sigma_valid)
 
 
 def tune_one_episode(compute_sigma, initial_sigma):
@@ -96,8 +101,7 @@ def tune_one_episode(compute_sigma, initial_sigma):
 
     kwargs = {"progress": False, "compute_sigma": compute_sigma}
     tune = Tuner(log_density_fn, jp.zeros((4, 2)), 4, **kwargs)
-    sigma, _, _ = tune(jax.random.PRNGKey(0), 20, 1, initial_sigma)
-    return sigma
+    return tune(jax.random.PRNGKey(0), 20, 1, initial_sigma).sigma
 
 
 def test_step_tuner_keeps_proportions_of_vector_guess():

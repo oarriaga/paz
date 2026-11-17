@@ -1,6 +1,8 @@
 import jax
 import jax.numpy as jp
 
+import paz.backend.message as message
+
 from paz.inference.metropolis_hastings import sample as mh_sample
 from paz.inference.posterior import MCMCPosterior
 from paz.inference.latent_space import as_latent_samples, to_inverse_samples
@@ -187,5 +189,9 @@ def _run_tuner(tuner, key, log_density_fn, positions, num_chains, sigma):
     }
     tune = Tuner(log_density_fn, positions, num_chains, **tuner_config)
     tune_args = (key, tuner.num_steps, tuner.num_episodes, sigma)
-    tuned_sigma, positions, _ = tune(*tune_args)
-    return tuned_sigma, positions
+    result = tune(*tune_args)
+    num_invalid = int(jp.sum(~result.is_sigma_valid))
+    if num_invalid > 0:
+        episodes = f"{num_invalid} of {tuner.num_episodes} episodes"
+        message.warn(f"Tuner kept the previous sigma in {episodes}.")
+    return result.sigma, result.positions
