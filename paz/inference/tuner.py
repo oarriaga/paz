@@ -18,7 +18,7 @@ from .metropolis_hastings import (
 TunerInfo = namedtuple("TunerInfo", ["scale", "factor", "acceptance_rate"])
 TunerState = namedtuple("TunerState", ["kernel_state", "scale", "factor"])
 fields = ["sigma", "num_steps", "num_episodes", "progress", "compute_rate"]
-TunerConfig = namedtuple("TunerConfig", fields + ["compute_shape"])
+TunerConfig = namedtuple("TunerConfig", fields + ["compute_sigma"])
 ACCEPTANCE_RATES = jp.array([0.001, 0.05, 0.2, 0.5, 0.75, 0.95])
 VARIANCE_FACTORS = jp.array([0.1, 0.5, 0.9, 1.1, 2, 10])
 
@@ -34,26 +34,26 @@ def AdaptiveDiagonalTuner(
     sigma, num_steps=200, num_episodes=10, progress=True, compute_rate=None
 ):
     args = (sigma, num_steps, num_episodes, progress, compute_rate)
-    return TunerConfig(*args, compute_diagonal_shape)
+    return TunerConfig(*args, compute_diagonal_sigma)
 
 
 def AdaptiveCovarianceTuner(
     sigma, num_steps=200, num_episodes=10, progress=True, compute_rate=None
 ):
     args = (sigma, num_steps, num_episodes, progress, compute_rate)
-    return TunerConfig(*args, compute_cholesky_shape)
+    return TunerConfig(*args, compute_cholesky_sigma)
 
 
-def keep_sigma(sigma, covariance):
-    return sigma
+def keep_sigma(guess, measured_covariance):
+    return guess
 
 
-def compute_diagonal_shape(sigma, covariance):
-    return jp.sqrt(jp.diagonal(covariance))
+def compute_diagonal_sigma(guess, measured_covariance):
+    return jp.sqrt(jp.diagonal(measured_covariance))
 
 
-def compute_cholesky_shape(sigma, covariance):
-    return jp.linalg.cholesky(covariance)
+def compute_cholesky_sigma(guess, measured_covariance):
+    return jp.linalg.cholesky(measured_covariance)
 
 
 def Tuner(
@@ -62,16 +62,16 @@ def Tuner(
     num_chains,
     compute_rate=None,
     progress=True,
-    compute_shape=None,
+    compute_sigma=None,
 ):
     if compute_rate is None:
         compute_rate = AcceptanceToVariance(ACCEPTANCE_RATES, VARIANCE_FACTORS)
-    if compute_shape is None:
-        compute_shape = keep_sigma
+    if compute_sigma is None:
+        compute_sigma = keep_sigma
 
-    def tune_episode(tuner_state, key, shape, num_steps):
+    def tune_episode(tuner_state, key, sigma, num_steps):
         scale = tuner_state.factor * tuner_state.scale
-        propose = partial(propose_additively, sigma=scale * shape)
+        propose = partial(propose_additively, sigma=scale * sigma)
 
         def kernel_step(kernel_state, key):
             key_propose, key_accept = jax.random.split(key)
@@ -93,7 +93,7 @@ def Tuner(
         return new_state, (TunerInfo(scale, rate, acceptance_rate), positions)
 
     @partial(jax.jit, static_argnums=(1, 2))
-    def tune(key, num_steps, num_episodes, sigma):
+    def tune(key, num_steps, num_episodes, guess):
         if progress:
             progress_callback = progressbar.show(
                 num_episodes, "tuning", width=30
@@ -104,18 +104,18 @@ def Tuner(
         def one_episode(episode_state, sample_arg):
             if progress:
                 progress_callback(sample_arg + 1)
-            now_key, tune_states, shape = episode_state
+            now_key, tune_states, sigma = episode_state
             new_key, key = jax.random.split(now_key)
             keys = jax.random.split(key, num_chains)
-            tune_step = partial(tune_episode, shape=shape, num_steps=num_steps)
+            tune_step = partial(tune_episode, sigma=sigma, num_steps=num_steps)
             outputs = jax.vmap(tune_step)(tune_states, keys)
             tune_states, (infos, positions) = outputs
-            new_shape = compute_shape(sigma, compute_covariance(positions))
+            new_sigma = compute_sigma(guess, compute_covariance(positions))
             # Chains that never moved, or a covariance that is singular in
-            # float32, give no usable shape.
-            is_valid = jp.all(jp.isfinite(new_shape)) & jp.any(new_shape != 0)
-            new_shape = jp.where(is_valid, new_shape, shape)
-            return (new_key, tune_states, new_shape), (infos, shape)
+            # float32, give no usable sigma.
+            is_valid = jp.all(jp.isfinite(new_sigma)) & jp.any(new_sigma != 0)
+            new_sigma = jp.where(is_valid, new_sigma, sigma)
+            return (new_key, tune_states, new_sigma), (infos, sigma)
 
         def build_kernel_state(position):
             return Samples(position, log_density_fn(position))
@@ -124,23 +124,32 @@ def Tuner(
         ones = jp.ones(num_chains)
         tuner_state = TunerState(kernel_state, ones, ones)
         size = jax.vmap(flatten)(samples).shape[1]
-        shape = compute_shape(sigma, sigma**2 * jp.eye(size))
-        episode_state = (key, tuner_state, shape)
+        guess = jp.asarray(guess)
+        sigma = compute_sigma(guess, square_sigma(guess, size))
+        episode_state = (key, tuner_state, sigma)
         episode_args = jp.arange(num_episodes)
         outputs = jax.lax.scan(one_episode, episode_state, episode_args)
-        (_, tuner_state, _), (infos, shapes) = outputs
+        (_, tuner_state, _), (infos, sigmas) = outputs
         if progress:
             progressbar.newline()
-        # The last factor was measured with the last shape that was used.
+        # The last factor was measured with the last sigma that was used.
         tuned_scale = (infos.scale[-1] * infos.factor[-1]).mean()
         positions = tuner_state.kernel_state.position
-        return tuned_scale * shapes[-1], positions, infos
+        return tuned_scale * sigmas[-1], positions, infos
 
     return tune
 
 
 def flatten(position):
     return flatten_util.ravel_pytree(position)[0]
+
+
+def square_sigma(sigma, size):
+    if sigma.ndim == 2:
+        covariance = sigma @ sigma.T
+    else:
+        covariance = jp.diag(jp.broadcast_to(sigma**2, (size,)))
+    return covariance
 
 
 def compute_covariance(positions):

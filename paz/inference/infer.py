@@ -183,7 +183,7 @@ def _run_tuner(tuner, key, log_density_fn, positions, num_chains, sigma):
     tuner_config = {
         "compute_rate": tuner.compute_rate,
         "progress": tuner.progress,
-        "compute_shape": tuner.compute_shape,
+        "compute_sigma": tuner.compute_sigma,
     }
     tune = Tuner(log_density_fn, positions, num_chains, **tuner_config)
     tune_args = (key, tuner.num_steps, tuner.num_episodes, sigma)
