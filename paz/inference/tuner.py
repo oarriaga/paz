@@ -44,15 +44,15 @@ def AdaptiveCovarianceTuner(
     return TunerConfig(*args, compute_cholesky_sigma)
 
 
-def keep_sigma(guess, measured_covariance):
-    return guess
+def keep_sigma(initial_sigma, measured_covariance):
+    return initial_sigma
 
 
-def compute_diagonal_sigma(guess, measured_covariance):
+def compute_diagonal_sigma(initial_sigma, measured_covariance):
     return jp.sqrt(jp.diagonal(measured_covariance))
 
 
-def compute_cholesky_sigma(guess, measured_covariance):
+def compute_cholesky_sigma(initial_sigma, measured_covariance):
     return jp.linalg.cholesky(measured_covariance)
 
 
@@ -93,7 +93,7 @@ def Tuner(
         return new_state, (TunerInfo(scale, rate, acceptance_rate), positions)
 
     @partial(jax.jit, static_argnums=(1, 2))
-    def tune(key, num_steps, num_episodes, guess):
+    def tune(key, num_steps, num_episodes, initial_sigma):
         if progress:
             progress_callback = progressbar.show(
                 num_episodes, "tuning", width=30
@@ -110,7 +110,8 @@ def Tuner(
             tune_step = partial(tune_episode, sigma=sigma, num_steps=num_steps)
             outputs = jax.vmap(tune_step)(tune_states, keys)
             tune_states, (infos, positions) = outputs
-            new_sigma = compute_sigma(guess, compute_covariance(positions))
+            covariance = compute_covariance(positions)
+            new_sigma = compute_sigma(initial_sigma, covariance)
             # Chains that never moved, or a covariance that is singular in
             # float32, give no usable sigma.
             is_valid = jp.all(jp.isfinite(new_sigma)) & jp.any(new_sigma != 0)
@@ -124,8 +125,8 @@ def Tuner(
         ones = jp.ones(num_chains)
         tuner_state = TunerState(kernel_state, ones, ones)
         size = jax.vmap(flatten)(samples).shape[1]
-        guess = jp.asarray(guess)
-        sigma = compute_sigma(guess, square_sigma(guess, size))
+        initial_sigma = jp.asarray(initial_sigma)
+        sigma = compute_sigma(initial_sigma, square_sigma(initial_sigma, size))
         episode_state = (key, tuner_state, sigma)
         episode_args = jp.arange(num_episodes)
         outputs = jax.lax.scan(one_episode, episode_state, episode_args)

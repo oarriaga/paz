@@ -90,29 +90,32 @@ def test_covariance_tuner_keeps_shape_when_chains_never_move():
     assert jp.all(jp.diagonal(sigma) > 0.0)
 
 
-def tune_one_episode(compute_sigma, guess):
+def tune_one_episode(compute_sigma, initial_sigma):
     def log_density_fn(position):
         return -0.5 * jp.sum(position**2)
 
     kwargs = {"progress": False, "compute_sigma": compute_sigma}
     tune = Tuner(log_density_fn, jp.zeros((4, 2)), 4, **kwargs)
-    sigma, _, _ = tune(jax.random.PRNGKey(0), 20, 1, guess)
+    sigma, _, _ = tune(jax.random.PRNGKey(0), 20, 1, initial_sigma)
     return sigma
 
 
 def test_step_tuner_keeps_proportions_of_vector_guess():
-    guess = jp.array([0.5, 0.05])
-    sigma = tune_one_episode(keep_sigma, guess)
-    assert jp.allclose(sigma / sigma[0], guess / guess[0])
+    initial_sigma = jp.array([0.5, 0.05])
+    sigma = tune_one_episode(keep_sigma, initial_sigma)
+    expected = initial_sigma / initial_sigma[0]
+    assert jp.allclose(sigma / sigma[0], expected)
 
 
 def test_diagonal_tuner_starts_from_vector_guess():
-    guess = jp.array([0.5, 0.05])
-    sigma = tune_one_episode(compute_diagonal_sigma, guess)
-    assert jp.allclose(sigma / sigma[0], guess / guess[0], rtol=1e-4)
+    initial_sigma = jp.array([0.5, 0.05])
+    sigma = tune_one_episode(compute_diagonal_sigma, initial_sigma)
+    expected = initial_sigma / initial_sigma[0]
+    assert jp.allclose(sigma / sigma[0], expected, rtol=1e-4)
 
 
 def test_covariance_tuner_starts_from_matrix_guess():
-    guess = jp.array([[0.5, 0.0], [0.2, 0.05]])
-    sigma = tune_one_episode(compute_cholesky_sigma, guess)
-    assert jp.allclose(sigma / sigma[0, 0], guess / guess[0, 0], atol=1e-4)
+    initial_sigma = jp.array([[0.5, 0.0], [0.2, 0.05]])
+    sigma = tune_one_episode(compute_cholesky_sigma, initial_sigma)
+    expected = initial_sigma / initial_sigma[0, 0]
+    assert jp.allclose(sigma / sigma[0, 0], expected, atol=1e-4)
