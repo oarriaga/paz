@@ -21,9 +21,11 @@ def cache(function, cache_dir=CACHE_DIR, static_argnums=(), static_argnames=(), 
     The first call for an argument signature loads the program from
     `cache_dir`, or traces `function` and writes the program there. A
     program is reused only when the source of the function's package (or
-    script directory) and of paz, the Python, jax, jaxlib, optax and keras
-    versions, the platform, the x64 and PRNG flags, the argument shapes,
-    dtypes and pytree structure, the static values and `key` all match.
+    script directory), of paz and of the local packages its module imports,
+    the versions of the installed packages it imports, the Python, jax,
+    jaxlib, optax and keras versions, the platform, the x64 and PRNG flags,
+    the argument shapes, dtypes and pytree structure, the static values and
+    `key` all match. Files named `*_test.py` are not read.
 
     Args:
         function: named function, optionally already wrapped by `jax.jit`.
@@ -31,7 +33,9 @@ def cache(function, cache_dir=CACHE_DIR, static_argnums=(), static_argnames=(), 
         static_argnums: positions of arguments fixed while tracing.
         static_argnames: names of arguments fixed while tracing.
         key: describes what the cache cannot see, such as weights loaded
-            while tracing. Required when `function` is a closure.
+            while tracing, globals set at run time, constants imported
+            from a local package, or a package reached only through
+            another package. Required for a closure.
 
     Returns:
         Function with the call signature and results of `jax.jit(function)`.
@@ -148,10 +152,12 @@ def build_name(function, program_key, key):
 @functools.lru_cache
 def hash_code(module_name):
     digest = hashlib.sha256(describe_environment().encode())
-    for root, paths in [find_sources(module_name), find_sources("paz")]:
-        for path in paths:
-            digest.update(f"\0{path.relative_to(root)}\0".encode())
-            digest.update(path.read_bytes())
+    for name in sorted({module_name.partition(".")[0], "paz"}):
+        digest.update(f"\0{name}\0{hash_sources(name)}".encode())
+    # the function's own file counts even when it is a test file
+    digest.update(Path(sys.modules[module_name].__file__).read_bytes())
+    for name in find_packages(module_name):
+        digest.update(f"\0{name}\0{describe_package(name)}".encode())
     return digest.hexdigest()
 
 
@@ -162,17 +168,69 @@ def describe_environment():
     return "\n".join([sys.version, *versions])
 
 
-def find_sources(module_name):
-    top = sys.modules[module_name.partition(".")[0]]
-    if hasattr(top, "__path__"):
+@functools.lru_cache
+def hash_sources(name):
+    root = find_root(name)
+    digest = hashlib.sha256()
+    for path in find_sources(name, root):
+        digest.update(f"\0{path.relative_to(root)}\0".encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+def find_root(name):
+    top = sys.modules[name]
+    if has_file(name) and hasattr(top, "__path__"):
         root = Path(list(top.__path__)[0])
-        paths = sorted(root.rglob("*.py"))
-    elif getattr(top, "__file__", None):
+    elif has_file(name):
         root = Path(top.__file__).parent
-        paths = sorted(root.glob("*.py"))
     else:
-        raise ValueError(f"{module_name} was defined interactively, no source")
-    return root, paths
+        raise ValueError(f"{name} was defined interactively, no source")
+    return root
+
+
+def has_file(name):
+    top = sys.modules.get(name)
+    has_path = bool(list(getattr(top, "__path__", [])))
+    return has_path or bool(getattr(top, "__file__", ""))
+
+
+def find_sources(name, root):
+    is_package = hasattr(sys.modules[name], "__path__")
+    paths = sorted(root.rglob("*.py") if is_package else root.glob("*.py"))
+    # tests are not part of a traced program; editing one must not retrace
+    return [path for path in paths if not path.name.endswith("_test.py")]
+
+
+def find_packages(module_name):
+    values = vars(sys.modules[module_name]).values()
+    names = {find_package(value) for value in values}
+    names = {name for name in names if has_file(name)}
+    return sorted(names - sys.stdlib_module_names - {"builtins"})
+
+
+def find_package(value):
+    if inspect.ismodule(value):
+        name = value.__name__
+    elif inspect.isfunction(value) or inspect.isclass(value):
+        name = value.__module__
+    else:
+        name = type(value).__module__
+    return name.partition(".")[0] if isinstance(name, str) else ""
+
+
+def describe_package(name):
+    installed = {"site-packages", "dist-packages"}
+    is_installed = not installed.isdisjoint(find_root(name).parts)
+    return find_version(name) if is_installed else hash_sources(name)
+
+
+def find_version(name):
+    try:
+        version = importlib.metadata.version(name)
+    except importlib.metadata.PackageNotFoundError:
+        version = str(getattr(sys.modules[name], "__version__", ""))
+    return version
 
 
 def describe_flags():

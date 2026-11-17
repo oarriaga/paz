@@ -244,8 +244,9 @@ def read_script_output(script, cache_dir):
     return run.stdout.decode().strip()
 
 
-def test_cache_source_edit_invalidates(tmp_path):
-    script = tmp_path / "script" / "double.py"
+@pytest.mark.parametrize("name", ["double.py", "double_test.py"])
+def test_cache_source_edit_invalidates(tmp_path, name):
+    script = tmp_path / "script" / name
     script.parent.mkdir()
     script.write_text(SCRIPT)
     cache_dir = tmp_path / "programs"
@@ -264,6 +265,75 @@ def test_cache_separates_scripts_in_one_directory(tmp_path):
     triple.write_text(SCALE_SCRIPT.format(factor=3))
     assert read_script_output(double, cache_dir) == "[2. 2.]"
     assert read_script_output(triple, cache_dir) == "[3. 3.]"
+
+
+PACKAGE_SCRIPT = """import sys
+import jax.numpy as jp
+import paz
+{}
+
+traces = []
+
+
+def compute(x):
+    traces.append(1)
+    return {}(x)
+
+
+print(paz.cache(compute, sys.argv[1])(jp.ones(2)), len(traces))
+"""
+
+SCALE_MODULE = """def scale(x):
+    return {factor} * x
+"""
+
+BY_MODULE = ("import mypackage.math", "mypackage.math.scale")
+BY_NAME = ("from mypackage.math import scale", "scale")
+
+
+def write_package(directory, factor):
+    package = directory / "mypackage"
+    package.mkdir(exist_ok=True)
+    (package / "__init__.py").write_text("")
+    (package / "math.py").write_text(SCALE_MODULE.format(factor=factor))
+    return package
+
+
+@pytest.mark.parametrize("names", [BY_MODULE, BY_NAME])
+def test_cache_package_edit_invalidates(tmp_path, names):
+    script = tmp_path / "script" / "run.py"
+    script.parent.mkdir()
+    script.write_text(PACKAGE_SCRIPT.format(*names))
+    cache_dir = tmp_path / "programs"
+    write_package(script.parent, 2)
+    assert read_script_output(script, cache_dir) == "[2. 2.] 1"
+    write_package(script.parent, 3)
+    assert read_script_output(script, cache_dir) == "[3. 3.] 1"
+    assert len(list_programs(cache_dir)) == 2
+
+
+def test_cache_ignores_test_files(tmp_path):
+    script = tmp_path / "script" / "run.py"
+    script.parent.mkdir()
+    script.write_text(PACKAGE_SCRIPT.format(*BY_MODULE))
+    cache_dir = tmp_path / "programs"
+    package = write_package(script.parent, 2)
+    assert read_script_output(script, cache_dir) == "[2. 2.] 1"
+    (package / "math_test.py").write_text("# new test\n")
+    (script.parent / "run_test.py").write_text("# new test\n")
+    assert read_script_output(script, cache_dir) == "[2. 2.] 0"
+    assert len(list_programs(cache_dir)) == 1
+
+
+def test_find_packages_skips_standard_library():
+    names = caching.find_packages(__name__)
+    assert {"paz", "jax", "numpy", "pytest"} <= set(names)
+    assert {"os", "sys", "pickle", "builtins"}.isdisjoint(names)
+
+
+def test_describe_package_uses_version_of_installed_package():
+    version = caching.importlib.metadata.version("jax")
+    assert caching.describe_package("jax") == version
 
 
 def test_build_name_depends_on_x64():
