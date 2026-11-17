@@ -33,8 +33,9 @@ def cache(function, cache_dir=CACHE_DIR, static_argnums=(), static_argnames=(), 
         static_argnums: positions of arguments fixed while tracing.
         static_argnames: names of arguments fixed while tracing.
         key: describes what the cache cannot see, such as weights loaded
-            while tracing, globals set at run time, or a package reached
-            only through another package. Required for a closure.
+            while tracing, globals set at run time, constants imported
+            from a local package, or a package reached only through
+            another package. Required for a closure.
 
     Returns:
         Function with the call signature and results of `jax.jit(function)`.
