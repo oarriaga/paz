@@ -46,8 +46,7 @@ def PGM(inputs, outputs, name):
     )
     log_prob, log_prob_inverse = build_log_density(pgm_prior, pgm_likelihood)
     fit = build_fit()
-    configure = build_configure(inference_defaults, lambda: pgm)
-    tune = configure
+    configure = build_configure(inference_defaults)
     infer = build_infer(lambda: pgm, inference_defaults, sample_predictive)
     pgm = PGMType(
         sample_forward,
@@ -63,7 +62,6 @@ def PGM(inputs, outputs, name):
         pgm_prior,
         pgm_likelihood,
         configure,
-        tune,
         infer,
         fit,
         inference_defaults,

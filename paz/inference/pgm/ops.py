@@ -172,7 +172,7 @@ def build_log_density(prior, likelihood):
     return log_prob, log_prob_inverse
 
 
-def build_configure(inference_defaults, get_self):
+def build_configure(inference_defaults):
     def configure(
         method="mh",
         num_chains=None,
@@ -190,7 +190,6 @@ def build_configure(inference_defaults, get_self):
             defaults["tuner"] = tuner
         defaults.update(method_kwargs)
         inference_defaults["_compiled_method"] = method
-        return get_self()
 
     return configure
 
