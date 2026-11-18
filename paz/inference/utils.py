@@ -8,10 +8,6 @@ def validate_space(space):
         raise ValueError("space must be 'inv' or 'fwd'")
 
 
-def slice_batch(samples, batch_index):
-    return jax.tree_util.tree_map(lambda value: value[batch_index], samples)
-
-
 def squeeze_pytree(pytree):
     def squeeze_leaf(leaf):
         if hasattr(leaf, "shape") and len(leaf.shape) > 0 and leaf.shape[0] == 1:

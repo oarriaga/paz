@@ -1,7 +1,7 @@
 import jax.numpy as jp
 import paz
 from paz.abstract.dag import DAG
-from paz.inference.pgm import (
+from paz.inference.pgm.builder import (
     get_edges,
     get_latent_nodes,
     get_non_root_nodes,

@@ -17,12 +17,6 @@ def test_validate_space_invalid_raises():
         utils.validate_space("bad")
 
 
-def test_slice_batch_selects_index():
-    samples = {"x": jp.array([1.0, 2.0, 3.0])}
-    sliced = utils.slice_batch(samples, 1)
-    assert sliced["x"] == 2.0
-
-
 def test_squeeze_pytree_squeezes_first_axis():
     samples = {"x": jp.ones((1, 2))}
     squeezed = utils.squeeze_pytree(samples)

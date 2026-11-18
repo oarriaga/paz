@@ -26,8 +26,7 @@ Graph = namedtuple(
 def build_graph(inputs, outputs, name):
     nodes = search_nodes(outputs)
     _validate_unique_names(nodes)
-    edges = [[edge.name, node.name] for node in nodes for edge in node.edges]
-    dag = DAG([node.name for node in nodes], edges, name)
+    dag = DAG([node.name for node in nodes], get_edges(nodes), name)
     sorted_names = dag.sort_topologically()
     Sample = SampleType(sorted_names)
     non_priors = get_non_root_nodes(nodes, sorted_names, dag.root_nodes())
@@ -56,6 +55,10 @@ def build_graph(inputs, outputs, name):
         Sample,
         Latent,
     )
+
+
+def get_edges(nodes):
+    return [[edge.name, node.name] for node in nodes for edge in node.edges]
 
 
 def search_nodes(output_nodes):
