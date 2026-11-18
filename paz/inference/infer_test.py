@@ -171,3 +171,9 @@ def test_configure_rejects_unknown_setting():
     model.configure(num_chains=2, sigma=0.2, progress=False)
     posterior = model.infer(jax.random.PRNGKey(0), data, num_samples=5)
     assert posterior.inverse_samples.x.shape == (5, 2)
+
+
+def test_configure_rejects_unknown_method():
+    model, data = build_simple_model()
+    with pytest.raises(NotImplementedError):
+        model.configure(method="mhh", sigma=0.2)

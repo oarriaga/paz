@@ -60,16 +60,19 @@ def _build_density_from_flat(
         return to_forward_samples(latent_space, inverse)
 
     # One draw with a fixed key gives the shape of one sample.
-    shapes = jax.tree.map(jp.shape, sample_inverse(jax.random.PRNGKey(0)))
+    one_sample = sample_inverse(jax.random.PRNGKey(0))
+    inverse_shapes = jax.tree.map(jp.shape, one_sample)
+    one_sample = to_forward_samples(latent_space, one_sample)
+    shapes = jax.tree.map(jp.shape, one_sample)
 
     def log_prob_inverse(samples):
-        samples = as_one_sample(latent_space, samples, shapes)
+        samples = as_one_sample(latent_space, samples, inverse_shapes)
         flat, _ = flatten_util.ravel_pytree(samples)
         return log_prob_flat(flat)
 
     def log_prob(samples):
-        inverse = to_inverse_samples(latent_space, samples)
-        return log_prob_inverse(inverse)
+        samples = as_one_sample(latent_space, samples, shapes)
+        return log_prob_inverse(to_inverse_samples(latent_space, samples))
 
     def prob(samples):
         return jp.exp(log_prob(samples))

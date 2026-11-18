@@ -57,10 +57,6 @@ def build_graph(inputs, outputs, name):
     )
 
 
-def get_edges(nodes):
-    return [[edge.name, node.name] for node in nodes for edge in node.edges]
-
-
 def search_nodes(output_nodes):
     tree_nodes, queue = [], list(output_nodes)
     while len(queue) != 0:
@@ -69,6 +65,10 @@ def search_nodes(output_nodes):
         if node not in tree_nodes:
             tree_nodes.append(node)
     return tree_nodes
+
+
+def get_edges(nodes):
+    return [[edge.name, node.name] for node in nodes for edge in node.edges]
 
 
 def get_non_root_nodes(nodes, sorted_names, prior_names):

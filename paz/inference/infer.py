@@ -24,16 +24,6 @@ def infer(key, data, model, method, sample_predictive=None, **kwargs):
     raise ValueError(f"Unknown inference method '{method}'.")
 
 
-def find_unknown_settings(method, settings):
-    if method == "mh":
-        parameters = inspect.signature(_infer_mh).parameters.values()
-        known = [p.name for p in parameters if p.kind == p.KEYWORD_ONLY]
-        unknown = sorted(name for name in settings if name not in known)
-    else:
-        unknown = []
-    return unknown
-
-
 def _infer_mh(
     key,
     data,
@@ -167,3 +157,14 @@ def _run_tuner(tuner, key, log_density_fn, positions, sigma, show_progress):
         episodes = f"{num_invalid} of {tuner.num_episodes} episodes"
         message.warn(f"Tuner kept the previous sigma in {episodes}.")
     return result.sigma, result.positions
+
+
+def find_unknown_settings(method, settings):
+    if method != "mh":
+        raise NotImplementedError(f"Method '{method}' not implemented yet.")
+    parameters = inspect.signature(_infer_mh).parameters.values()
+    known = []
+    for parameter in parameters:
+        if parameter.kind == parameter.KEYWORD_ONLY:
+            known.append(parameter.name)
+    return sorted(name for name in settings if name not in known)
