@@ -1,3 +1,5 @@
+import inspect
+
 import jax
 import jax.numpy as jp
 
@@ -22,11 +24,22 @@ def infer(key, data, model, method, sample_predictive=None, **kwargs):
     raise ValueError(f"Unknown inference method '{method}'.")
 
 
+def find_unknown_settings(method, settings):
+    if method == "mh":
+        parameters = inspect.signature(_infer_mh).parameters.values()
+        known = [p.name for p in parameters if p.kind == p.KEYWORD_ONLY]
+        unknown = sorted(name for name in settings if name not in known)
+    else:
+        unknown = []
+    return unknown
+
+
 def _infer_mh(
     key,
     data,
     model,
     sample_predictive,
+    *,
     num_samples=None,
     num_chains=1,
     sigma=None,
