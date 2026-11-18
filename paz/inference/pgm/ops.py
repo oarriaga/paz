@@ -2,12 +2,8 @@ import jax
 import jax.numpy as jp
 
 from paz.inference.infer import infer as infer_fn
-from paz.inference.latent_space import (
-    as_latent_samples,
-    to_forward_samples,
-    to_inverse_samples,
-)
-from paz.inference.types import Distribution, NodeState
+from paz.inference.latent_space import as_latent_samples, to_forward_samples
+from paz.inference.types import NodeState
 from paz.inference.utils import get_leading_batch_size
 
 
@@ -73,33 +69,46 @@ def build_prior_sample(context, sample_inverse):
 
 
 def build_prior_log_prob(context):
-    latent_nodes_sorted = context.latent_nodes_sorted
+    nodes = context.latent_nodes_sorted
     latent_space = context.latent_space
 
     def prior_log_prob(samples):
         forward_samples = as_latent_samples(latent_space, samples)
-        log_prob = _compute_latent_log_probs(
-            latent_nodes_sorted,
-            forward_samples,
-            None,
-            include_jacobian=False,
-        )
-        log_prob_sum = sum(log_prob.values(), jp.array(0.0))
-        return NodeState(forward_samples, log_prob, log_prob_sum)
+        log_probs = compute_log_probs(nodes, forward_samples._asdict())
+        return build_node_state(forward_samples, log_probs)
 
     def prior_log_prob_inverse(samples):
         inverse_samples = as_latent_samples(latent_space, samples)
         forward_samples = to_forward_samples(latent_space, inverse_samples)
-        log_prob = _compute_latent_log_probs(
-            latent_nodes_sorted,
-            forward_samples,
-            inverse_samples,
-            include_jacobian=True,
-        )
-        log_prob_sum = sum(log_prob.values(), jp.array(0.0))
-        return NodeState(forward_samples, log_prob, log_prob_sum)
+        values = forward_samples._asdict()
+        inverse_values = inverse_samples._asdict()
+        log_probs = compute_inverse_log_probs(nodes, values, inverse_values)
+        return build_node_state(forward_samples, log_probs)
 
     return prior_log_prob, prior_log_prob_inverse
+
+
+def compute_log_probs(nodes, values):
+    log_probs = {}
+    for node in nodes:
+        parents = [values[edge.name] for edge in node.edges]
+        state = node.log_prob(values[node.name], *parents)
+        log_probs[node.name] = state.log_prob_sum
+    return log_probs
+
+
+def build_node_state(sample, log_probs):
+    log_prob_sum = sum(log_probs.values(), jp.array(0.0))
+    return NodeState(sample, log_probs, log_prob_sum)
+
+
+def compute_inverse_log_probs(nodes, values, inverse_values):
+    log_probs = {}
+    for node in nodes:
+        parents = [values[edge.name] for edge in node.edges]
+        state = node.log_prob_inverse(inverse_values[node.name], *parents)
+        log_probs[node.name] = state.log_prob_sum
+    return log_probs
 
 
 def build_prior_prob(prior_log_prob, prior_log_prob_inverse):
@@ -113,41 +122,32 @@ def build_prior_prob(prior_log_prob, prior_log_prob_inverse):
 
 
 def build_likelihood_log_prob(context):
-    output_nodes = context.output_nodes
-    observable_names = context.observable_names
-    latent_space = context.latent_space
-    priors = context.inputs
-    non_priors = context.non_priors
-    Sample = context.Sample
+    latent_space, Sample = context.latent_space, context.Sample
+    nodes, output_nodes = context.observable_nodes, context.output_nodes
+
+    def compute_state(forward_samples, observations):
+        values = {**forward_samples._asdict(), **observations}
+        log_probs = compute_log_probs(nodes, values)
+        return build_node_state(Sample(**values), log_probs)
 
     def likelihood_log_prob(samples, data):
-        data_mapping = build_data_mapping(data, output_nodes)
-        _validate_observations(data_mapping, observable_names)
+        observations = build_observations(data, output_nodes, nodes)
         forward_samples = as_latent_samples(latent_space, samples)
-        inverse_samples = to_inverse_samples(latent_space, forward_samples)
-        return _build_likelihood_state(
-            priors,
-            non_priors,
-            inverse_samples,
-            data_mapping,
-            observable_names,
-            Sample,
-        )
+        return compute_state(forward_samples, observations)
 
     def likelihood_log_prob_inverse(samples, data):
-        data_mapping = build_data_mapping(data, output_nodes)
-        _validate_observations(data_mapping, observable_names)
-        inverse_samples = as_latent_samples(latent_space, samples)
-        return _build_likelihood_state(
-            priors,
-            non_priors,
-            inverse_samples,
-            data_mapping,
-            observable_names,
-            Sample,
-        )
+        observations = build_observations(data, output_nodes, nodes)
+        forward_samples = to_forward_samples(latent_space, samples)
+        return compute_state(forward_samples, observations)
 
     return likelihood_log_prob, likelihood_log_prob_inverse
+
+
+def build_observations(data, output_nodes, observable_nodes):
+    names = [node.name for node in observable_nodes]
+    data_mapping = build_data_mapping(data, output_nodes)
+    _validate_observations(data_mapping, names)
+    return {name: data_mapping[name] for name in names}
 
 
 def build_configure(inference_defaults, get_self):
@@ -248,12 +248,6 @@ def build_data_mapping(data, output_nodes):
     raise TypeError(message)
 
 
-def get_namedtuple_value(field, named_tuple, default=None):
-    if isinstance(named_tuple, Distribution):
-        return named_tuple
-    return getattr(named_tuple, field, default)
-
-
 def _validate_observations(data_mapping, observable_names):
     missing = [name for name in observable_names if name not in data_mapping]
     missing.sort()
@@ -332,34 +326,6 @@ def _sample_forward(prior_nodes, non_prior_nodes, key, num_samples):
     )
 
 
-def _build_likelihood_state(
-    priors,
-    non_priors,
-    inverse_samples,
-    data_mapping,
-    observable_names,
-    Sample,
-):
-    samples, log_prob = {}, {}
-    for prior in priors:
-        prior_sample = get_namedtuple_value(prior.name, inverse_samples)
-        state = prior.log_prob_inverse(prior_sample)
-        samples[prior.name] = get_namedtuple_value(prior.name, state.sample)
-    for node in non_priors:
-        node_inputs = [samples[edge.name] for edge in node.edges]
-        if node.name in observable_names:
-            observation = data_mapping[node.name]
-            state = node.log_prob(observation, *node_inputs)
-            samples[node.name] = observation
-            log_prob[node.name] = state.log_prob_sum
-        else:
-            node_sample = get_namedtuple_value(node.name, inverse_samples)
-            state = node.log_prob_inverse(node_sample, *node_inputs)
-            samples[node.name] = get_namedtuple_value(node.name, state.sample)
-    log_prob_sum = sum(log_prob.values(), jp.array(0.0))
-    return NodeState(Sample(**samples), log_prob, log_prob_sum)
-
-
 def _sample_predictive_single(
     key, forward_samples, nodes_sorted, latent_names, Sample
 ):
@@ -374,23 +340,3 @@ def _sample_predictive_single(
             raise ValueError("Node sample is missing for " + node.name)
         samples[node.name] = node.sample(subkey, 1, *node_inputs)
     return Sample(**samples)
-
-
-def _compute_latent_log_probs(
-    latent_nodes, forward_samples, inverse_samples, include_jacobian
-):
-    log_prob = {}
-    for node in latent_nodes:
-        parent_samples = [
-            getattr(forward_samples, edge.name) for edge in node.edges
-        ]
-        if include_jacobian:
-            if inverse_samples is None:
-                raise ValueError("Inverse samples required for Jacobian.")
-            inverse_sample = getattr(inverse_samples, node.name)
-            state = node.log_prob_inverse(inverse_sample, *parent_samples)
-        else:
-            forward_sample = getattr(forward_samples, node.name)
-            state = node.log_prob(forward_sample, *parent_samples)
-        log_prob[node.name] = state.log_prob.sum()
-    return log_prob
