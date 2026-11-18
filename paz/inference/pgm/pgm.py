@@ -1,5 +1,5 @@
 from paz.inference.pgm.builder import (
-    build_pgm_context,
+    build_graph,
     get_latent_nodes,
     get_non_root_nodes,
     get_observable_nodes,
@@ -22,18 +22,18 @@ from paz.inference.types import Density, Likelihood, PGM as PGMType
 
 
 def PGM(inputs, outputs, name):
-    context = build_pgm_context(inputs, outputs, name)
-    sample_inverse = build_sample_inverse(context)
-    sample_forward = build_sample_forward(context)
-    sample_predictive = build_sample_predictive(context)
+    graph = build_graph(inputs, outputs, name)
+    sample_inverse = build_sample_inverse(graph)
+    sample_forward = build_sample_forward(graph)
+    sample_predictive = build_sample_predictive(graph)
     prior_sample, prior_sample_inverse = build_prior_sample(
-        context, sample_inverse
+        graph, sample_inverse
     )
-    prior_log_prob, prior_log_prob_inverse = build_prior_log_prob(context)
+    prior_log_prob, prior_log_prob_inverse = build_prior_log_prob(graph)
     prior_prob, prior_prob_inverse = build_prior_prob(
         prior_log_prob, prior_log_prob_inverse
     )
-    likelihood = build_likelihood_log_prob(context)
+    likelihood = build_likelihood_log_prob(graph)
     likelihood_log_prob, likelihood_log_prob_inverse = likelihood
     inference_defaults = {}
     pgm_prior = Density(
@@ -43,13 +43,13 @@ def PGM(inputs, outputs, name):
         prior_log_prob_inverse,
         prior_prob,
         prior_prob_inverse,
-        context.latent_space,
+        graph.latent_space,
         None,
     )
     pgm_likelihood = Likelihood(
         likelihood_log_prob,
         likelihood_log_prob_inverse,
-        context.latent_space,
+        graph.latent_space,
         None,
     )
     log_prob, log_prob_inverse = build_log_density(pgm_prior, pgm_likelihood)
@@ -66,13 +66,13 @@ def PGM(inputs, outputs, name):
         sample_forward,
         sample_inverse,
         name,
-        context.nodes,
-        context.inputs,
-        context.non_priors,
-        context.latent_nodes,
-        context.output_nodes,
-        context.observable_nodes,
-        context.latent_space,
+        graph.nodes,
+        graph.inputs,
+        graph.non_priors,
+        graph.latent_nodes,
+        graph.output_nodes,
+        graph.observable_nodes,
+        graph.latent_space,
         pgm_prior,
         pgm_likelihood,
         configure,

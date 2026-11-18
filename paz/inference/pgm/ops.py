@@ -7,33 +7,33 @@ from paz.inference.types import NodeState
 from paz.inference.utils import get_leading_batch_size
 
 
-def build_sample_inverse(context):
+def build_sample_inverse(graph):
     def sample_inverse(key, num_samples=1):
-        return context.Latent(
+        return graph.Latent(
             **_sample_inverse(
-                context.inputs, context.latent_nodes, key, num_samples
+                graph.inputs, graph.latent_nodes, key, num_samples
             )
         )
 
     return sample_inverse
 
 
-def build_sample_forward(context):
+def build_sample_forward(graph):
     def sample_forward(key, num_samples=1):
-        return context.Sample(
+        return graph.Sample(
             **_sample_forward(
-                context.inputs, context.non_priors, key, num_samples
+                graph.inputs, graph.non_priors, key, num_samples
             )
         )
 
     return sample_forward
 
 
-def build_sample_predictive(context):
-    Sample = context.Sample
+def build_sample_predictive(graph):
+    Sample = graph.Sample
     names = Sample._fields
-    nodes = context.nodes
-    latent_space = context.latent_space
+    nodes = graph.nodes
+    latent_space = graph.latent_space
     latent_names = set(latent_space.names)
     name_to_node = {node.name: node for node in nodes}
     nodes_sorted = [name_to_node[name] for name in names]
@@ -54,8 +54,8 @@ def build_sample_predictive(context):
     return sample_predictive
 
 
-def build_prior_sample(context, sample_inverse):
-    latent_space = context.latent_space
+def build_prior_sample(graph, sample_inverse):
+    latent_space = graph.latent_space
 
     def prior_sample_inverse(key, num_samples=1):
         inverse_samples = sample_inverse(key, num_samples)
@@ -68,9 +68,9 @@ def build_prior_sample(context, sample_inverse):
     return prior_sample, prior_sample_inverse
 
 
-def build_prior_log_prob(context):
-    nodes = context.latent_nodes_sorted
-    latent_space = context.latent_space
+def build_prior_log_prob(graph):
+    nodes = graph.latent_nodes_sorted
+    latent_space = graph.latent_space
 
     def prior_log_prob(samples):
         forward_samples = as_latent_samples(latent_space, samples)
@@ -121,9 +121,9 @@ def build_prior_prob(prior_log_prob, prior_log_prob_inverse):
     return prior_prob, prior_prob_inverse
 
 
-def build_likelihood_log_prob(context):
-    latent_space, Sample = context.latent_space, context.Sample
-    nodes, output_nodes = context.observable_nodes, context.output_nodes
+def build_likelihood_log_prob(graph):
+    latent_space, Sample = graph.latent_space, graph.Sample
+    nodes, output_nodes = graph.observable_nodes, graph.output_nodes
 
     def compute_state(forward_samples, observations):
         values = {**forward_samples._asdict(), **observations}

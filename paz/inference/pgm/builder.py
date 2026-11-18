@@ -5,8 +5,8 @@ from paz.inference.latent_space import build_latent_space
 from paz.inference.types import SampleType
 
 
-PGMContext = namedtuple(
-    "PGMContext",
+Graph = namedtuple(
+    "Graph",
     [
         "nodes",
         "inputs",
@@ -23,7 +23,7 @@ PGMContext = namedtuple(
 )
 
 
-def build_pgm_context(inputs, outputs, name):
+def build_graph(inputs, outputs, name):
     nodes = search_nodes(outputs)
     _validate_unique_names(nodes)
     edges = [[edge.name, node.name] for node in nodes for edge in node.edges]
@@ -43,7 +43,7 @@ def build_pgm_context(inputs, outputs, name):
     observable_nodes = get_observable_nodes(nodes)
     observable_names = [node.name for node in observable_nodes]
     Latent = SampleType(latent_names)
-    return PGMContext(
+    return Graph(
         nodes,
         inputs,
         non_priors,
