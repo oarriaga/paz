@@ -10,6 +10,7 @@ from paz.inference.pgm.ops import (
     build_fit,
     build_infer,
     build_likelihood_log_prob,
+    build_log_density,
     build_prior_log_prob,
     build_prior_prob,
     build_prior_sample,
@@ -17,7 +18,6 @@ from paz.inference.pgm.ops import (
     build_sample_inverse,
     build_sample_predictive,
 )
-from paz.inference.infer import build_log_density
 from paz.inference.types import Density, Likelihood, PGM as PGMType
 
 
@@ -54,12 +54,7 @@ def PGM(inputs, outputs, name):
     fit = build_fit()
     configure = build_configure(inference_defaults, lambda: pgm)
     tune = configure
-    infer = build_infer(
-        pgm_prior,
-        pgm_likelihood,
-        inference_defaults,
-        sample_predictive=sample_predictive,
-    )
+    infer = build_infer(lambda: pgm, inference_defaults, sample_predictive)
     pgm = PGMType(
         sample_forward,
         sample_inverse,

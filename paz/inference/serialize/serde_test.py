@@ -28,11 +28,9 @@ def _build_posterior():
     obs = Observable(likelihood, name="y")(prior)
     model = PGM([prior], [obs], "model")
     data = {"y": jp.array(0.2)}
-    return paz.infer(
+    return model.infer(
         jax.random.PRNGKey(0),
         data,
-        model.prior,
-        model.likelihood,
         method="mh",
         num_samples=10,
         num_chains=2,

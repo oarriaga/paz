@@ -1,3 +1,4 @@
+import jax
 import jax.numpy as jp
 import pytest
 
@@ -232,3 +233,15 @@ def test_marginalize_joint_matches_prior_plus_likelihood():
         log_likelihood = pgm_marg.likelihood.log_prob_inverse(samples, data)
         expected = log_prior + log_likelihood.log_prob_sum
         assert jp.allclose(pgm_marg.log_prob_inverse(samples, data), expected)
+
+
+def test_marginalized_model_infers():
+    data = {"y_obs": jp.array([1.5, -0.5, 0.2])}
+    beta = paz.distributions.Beta(2.0, 2.0)
+    pgm_marg = marginalize(build_bijected_model(beta), ["z"])
+    kwargs = {"num_samples": 20, "num_chains": 2, "sigma": 0.2}
+    posterior = pgm_marg.infer(jax.random.PRNGKey(0), data, **kwargs)
+    position = jax.tree.map(lambda leaf: leaf[-1, 0], posterior.inverse_samples)
+    expected = pgm_marg.log_prob_inverse(position, data)
+    assert posterior.samples.p.shape == (20, 2)
+    assert jp.allclose(posterior.inverse_log_probs[-1, 0], expected)

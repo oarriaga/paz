@@ -83,7 +83,6 @@ from paz.inference.tuner import AdaptiveStepTuner, Tuner
 from paz.inference.tuner import AdaptiveDiagonalTuner
 from paz.inference.tuner import AdaptiveCovarianceTuner
 from paz.inference.pgm import marginalize, recover_discrete_posterior
-from paz.inference.infer import infer
 from paz.inference.posterior import MCMCPosterior
 from paz.inference.metadata import (
     get_bijector,

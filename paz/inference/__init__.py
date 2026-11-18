@@ -9,7 +9,6 @@ from paz.inference.metadata import (
     get_output_nodes,
 )
 from paz.inference.types import Density, Likelihood
-from paz.inference.infer import infer
 from paz.inference.posterior import MCMCPosterior
 from paz.inference.tuner import AdaptiveStepTuner
 from paz.inference.tuner import AdaptiveDiagonalTuner

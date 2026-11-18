@@ -25,11 +25,9 @@ def build_bijected_model():
 def build_simple_posterior():
     model, data = build_bijected_model()
     key = jax.random.PRNGKey(0)
-    posterior = paz.infer(
+    posterior = model.infer(
         key,
         data,
-        model.prior,
-        model.likelihood,
         method="mh",
         num_samples=20,
         num_chains=2,
