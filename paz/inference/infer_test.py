@@ -151,3 +151,14 @@ def test_infer_rejects_unknown_setting():
     key = jax.random.PRNGKey(0)
     with pytest.raises(TypeError, match="num_chain"):
         model.infer(key, data, num_samples=5, num_chain=2)
+
+
+def test_infer_repeats_one_vector_start_for_every_chain():
+    normal = paz.distributions.Normal(jp.zeros(3), 1.0)
+    a = Prior(normal, name="a")
+    y = Observable(lambda a: paz.distributions.Normal(a, 1.0), name="y")(a)
+    model = PGM([a], [y], "vector_start")
+    kwargs = {"num_samples": 4, "num_chains": 3, "sigma": 0.1}
+    kwargs = {**kwargs, "init": {"a": jp.zeros(3)}, "progress": False}
+    posterior = model.infer(jax.random.PRNGKey(0), {"y": jp.zeros(3)}, **kwargs)
+    assert posterior.inverse_samples.a.shape == (4, 3, 3)

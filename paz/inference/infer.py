@@ -111,16 +111,15 @@ def _get_initial_positions(key, prior, init, num_chains, space):
     if space == "fwd":
         init = to_inverse_samples(prior.latent_space, init)
 
-    def ensure(value):
-        if not hasattr(value, "shape"):
-            return value
-        if value.shape == ():
-            return jp.broadcast_to(value, (num_chains,))
-        if value.shape[0] == num_chains:
-            return value
-        return jp.broadcast_to(value, (num_chains,) + value.shape)
+    def repeat_one_sample(value, one_value):
+        shape = jp.shape(value)
+        if shape == jp.shape(one_value):
+            value = jp.broadcast_to(value, (num_chains,) + shape)
+        return value
 
-    return jax.tree.map(ensure, init)
+    # A start given as one sample is repeated for every chain.
+    one_sample = prior.sample_inverse(key)
+    return jax.tree.map(repeat_one_sample, init, one_sample)
 
 
 def _should_tune(tune, tuner):

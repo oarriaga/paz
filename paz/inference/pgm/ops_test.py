@@ -467,3 +467,43 @@ def test_sample_inverse_draws_root_latent_missing_from_inputs():
     model = PGM([mu], [y], "missing_input")
     inverse_samples = model.sample_inverse(jax.random.PRNGKey(0), 50)
     assert inverse_samples.sigma.shape == (50,)
+
+
+def build_equal_length_vectors_model():
+    normal = paz.distributions.Normal(jp.zeros(3), 1.0)
+    a = Prior(normal, name="a")
+    b = Prior(normal, name="b")
+    y = Observable(lambda a, b: paz.distributions.Normal(a + b, 1.0), name="y")
+    return PGM([a, b], [y(a, b)], "equal_length_vectors")
+
+
+def test_log_prob_rejects_many_samples_and_names_the_latent():
+    model = build_equal_length_vectors_model()
+    data = {"y": jp.zeros(3)}
+    samples = model.prior.sample_inverse(jax.random.PRNGKey(0), 5)
+    with pytest.raises(ValueError, match="'a' has shape \\(5, 3\\)"):
+        model.prior.log_prob_inverse(samples)
+    with pytest.raises(ValueError, match="jax.vmap"):
+        model.prior.log_prob(samples)
+    with pytest.raises(ValueError, match="jax.vmap"):
+        model.likelihood.log_prob_inverse(samples, data)
+    with pytest.raises(ValueError, match="jax.vmap"):
+        model.log_prob(samples, data)
+
+
+def test_log_prob_accepts_one_sample_of_equal_length_vectors():
+    model = build_equal_length_vectors_model()
+    data = {"y": jp.zeros(3)}
+    sample = model.prior.sample_inverse(jax.random.PRNGKey(0))
+    assert model.log_prob_inverse(sample, data).shape == ()
+
+
+def test_log_prob_vmaps_and_jits_over_many_samples():
+    model = build_equal_length_vectors_model()
+    data = {"y": jp.zeros(3)}
+    samples = model.prior.sample_inverse(jax.random.PRNGKey(0), 5)
+    log_prob_inverse = jax.jit(jax.vmap(model.log_prob_inverse, (0, None)))
+    log_probs = log_prob_inverse(samples, data)
+    first = jax.tree.map(lambda leaf: leaf[0], samples)
+    assert log_probs.shape == (5,)
+    assert jp.isclose(log_probs[0], model.log_prob_inverse(first, data))

@@ -8,7 +8,6 @@ from paz.inference.latent_space import (
     to_inverse_samples,
 )
 from paz.inference.types import NodeState
-from paz.inference.utils import get_leading_batch_size
 
 
 def build_sample_inverse(graph, prior_sample_inverse):
@@ -48,10 +47,8 @@ def build_sample_predictive(graph):
 
     def sample_predictive(key, forward_samples):
         forward_samples = as_latent_samples(latent_space, forward_samples)
-        batch_size = get_leading_batch_size(forward_samples)
-        if batch_size is None:
-            return predictive_single(key, forward_samples)
-        keys = jax.random.split(key, batch_size)
+        num_samples = jax.tree.leaves(forward_samples)[0].shape[0]
+        keys = jax.random.split(key, num_samples)
         return jax.vmap(predictive_single)(keys, forward_samples)
 
     return sample_predictive
@@ -76,17 +73,23 @@ def build_prior_sample(graph):
     return prior_sample, prior_sample_inverse
 
 
-def build_prior_log_prob(graph):
+# One draw with a fixed key gives the shape of one sample of every latent.
+def compute_sample_shapes(sample):
+    return jax.tree.map(jp.shape, sample(jax.random.PRNGKey(0)))
+
+
+def build_prior_log_prob(graph, shapes, inverse_shapes):
     nodes = graph.latent_nodes_sorted
     latent_space = graph.latent_space
 
     def prior_log_prob(samples):
-        forward_samples = as_latent_samples(latent_space, samples)
+        forward_samples = as_one_sample(latent_space, samples, shapes)
         log_probs = compute_log_probs(nodes, forward_samples._asdict())
         return build_node_state(forward_samples, log_probs)
 
     def prior_log_prob_inverse(samples):
-        inverse_samples = as_latent_samples(latent_space, samples)
+        args = (latent_space, samples, inverse_shapes)
+        inverse_samples = as_one_sample(*args)
         forward_samples = to_forward_samples(latent_space, inverse_samples)
         values = forward_samples._asdict()
         inverse_values = inverse_samples._asdict()
@@ -94,6 +97,19 @@ def build_prior_log_prob(graph):
         return build_node_state(forward_samples, log_probs)
 
     return prior_log_prob, prior_log_prob_inverse
+
+
+def as_one_sample(latent_space, samples, shapes):
+    samples = as_latent_samples(latent_space, samples)
+    for name in latent_space.names:
+        shape = jp.shape(getattr(samples, name))
+        expected = getattr(shapes, name)
+        if shape != expected:
+            message = f"'{name}' has shape {shape} but one sample has shape "
+            message += f"{expected}. Score one sample per call and use "
+            message += "jax.vmap for many."
+            raise ValueError(message)
+    return samples
 
 
 def compute_log_probs(nodes, values):
@@ -129,7 +145,7 @@ def build_prior_prob(prior_log_prob, prior_log_prob_inverse):
     return prior_prob, prior_prob_inverse
 
 
-def build_likelihood_log_prob(graph):
+def build_likelihood_log_prob(graph, shapes, inverse_shapes):
     latent_space, Sample = graph.latent_space, graph.Sample
     nodes, output_nodes = graph.observable_nodes, graph.output_nodes
 
@@ -140,12 +156,13 @@ def build_likelihood_log_prob(graph):
 
     def likelihood_log_prob(samples, data):
         observations = build_observations(data, output_nodes, nodes)
-        forward_samples = as_latent_samples(latent_space, samples)
+        forward_samples = as_one_sample(latent_space, samples, shapes)
         return compute_state(forward_samples, observations)
 
     def likelihood_log_prob_inverse(samples, data):
         observations = build_observations(data, output_nodes, nodes)
-        forward_samples = to_forward_samples(latent_space, samples)
+        args = (latent_space, samples, inverse_shapes)
+        forward_samples = to_forward_samples(latent_space, as_one_sample(*args))
         return compute_state(forward_samples, observations)
 
     return likelihood_log_prob, likelihood_log_prob_inverse
