@@ -11,48 +11,18 @@ from paz.inference.tuner import Tuner
 from paz.inference.utils import validate_space
 
 
-def infer(
-    key, data, prior, likelihood, method, sample_predictive=None, **kwargs
-):
+def infer(key, data, model, method, sample_predictive=None, **kwargs):
     if method is None:
         raise ValueError("method is required")
     method = method.lower()
     if method == "mh":
-        return _infer_mh(
-            key, data, prior, likelihood, sample_predictive, **kwargs
-        )
+        return _infer_mh(key, data, model, sample_predictive, **kwargs)
     if method in ("smc", "vi", "hmc", "nuts"):
         raise NotImplementedError(f"Method '{method}' not implemented yet.")
     raise ValueError(f"Unknown inference method '{method}'.")
 
 
-def build_log_density(prior, likelihood):
-    """Builds the joint log density: log prior plus log likelihood.
-
-    # Arguments
-        prior: Density of the PGM priors.
-        likelihood: Likelihood of the PGM observables.
-
-    # Returns
-        log_prob(samples, data) and log_prob_inverse(samples, data), each
-        returning the scalar joint log density. The per-node terms remain
-        available from prior.log_prob* and likelihood.log_prob*.
-    """
-
-    def log_prob(samples, data):
-        log_prior = prior.log_prob(samples).log_prob_sum
-        log_likelihood = likelihood.log_prob(samples, data).log_prob_sum
-        return log_prior + log_likelihood
-
-    def log_prob_inverse(samples, data):
-        log_prior = prior.log_prob_inverse(samples).log_prob_sum
-        log_likelihood = likelihood.log_prob_inverse(samples, data)
-        return log_prior + log_likelihood.log_prob_sum
-
-    return log_prob, log_prob_inverse
-
-
-def _infer_mh(key, data, prior, likelihood, sample_predictive, **kwargs):
+def _infer_mh(key, data, model, sample_predictive, **kwargs):
     num_samples = kwargs.get("num_samples")
     if num_samples is None:
         raise ValueError("num_samples is required for MH")
@@ -69,12 +39,11 @@ def _infer_mh(key, data, prior, likelihood, sample_predictive, **kwargs):
 
     # Split once for init/tune/sample to avoid key reuse.
     key_init, key_tune, key_sample = jax.random.split(key, 3)
-    positions = _get_initial_positions(key_init, prior, init, num_chains, space)
-
-    _, log_prob_inverse = build_log_density(prior, likelihood)
+    init_args = (key_init, model.prior, init, num_chains, space)
+    positions = _get_initial_positions(*init_args)
 
     def log_density_fn(position):
-        return log_prob_inverse(position, data)
+        return model.log_prob_inverse(position, data)
 
     num_warmup = _resolve_num_warmup(num_samples, warmup)
     if sigma is None:
@@ -109,9 +78,8 @@ def _infer_mh(key, data, prior, likelihood, sample_predictive, **kwargs):
         "space": space,
         "progress": progress,
     }
-    return MCMCPosterior(
-        states, infos, config, prior.latent_space, sample_predictive
-    )
+    posterior_args = (states, infos, config, model.latent_space)
+    return MCMCPosterior(*posterior_args, sample_predictive)
 
 
 def _resolve_mh_settings(kwargs):

@@ -153,6 +153,20 @@ def build_observations(data, output_nodes, observable_nodes):
     return {name: data_mapping[name] for name in names}
 
 
+def build_log_density(prior, likelihood):
+    def log_prob(samples, data):
+        log_prior = prior.log_prob(samples).log_prob_sum
+        log_likelihood = likelihood.log_prob(samples, data).log_prob_sum
+        return log_prior + log_likelihood
+
+    def log_prob_inverse(samples, data):
+        log_prior = prior.log_prob_inverse(samples).log_prob_sum
+        log_likelihood = likelihood.log_prob_inverse(samples, data)
+        return log_prior + log_likelihood.log_prob_sum
+
+    return log_prob, log_prob_inverse
+
+
 def build_configure(inference_defaults, get_self):
     def configure(
         method="mh",
@@ -176,40 +190,16 @@ def build_configure(inference_defaults, get_self):
     return configure
 
 
-def build_infer(
-    pgm_prior, pgm_likelihood, inference_defaults, sample_predictive=None
-):
-    sample_predictive_default = sample_predictive
-
-    def infer(
-        key,
-        data,
-        prior=None,
-        likelihood=None,
-        method=None,
-        tune=None,
-        sample_predictive=None,
-        **overrides,
-    ):
-        if sample_predictive is None:
-            sample_predictive = sample_predictive_default
+def build_infer(get_model, inference_defaults, sample_predictive=None):
+    def infer(key, data, method=None, tune=None, **overrides):
         method_name = method or inference_defaults.get("_compiled_method", "mh")
         method_name = method_name.lower()
         resolved = dict(inference_defaults.get(method_name, {}))
         if tune is not None:
             overrides["tune"] = tune
         resolved.update(overrides)
-        prior = prior if prior is not None else pgm_prior
-        likelihood = likelihood if likelihood is not None else pgm_likelihood
-        return infer_fn(
-            key,
-            data,
-            prior,
-            likelihood,
-            method_name,
-            sample_predictive=sample_predictive,
-            **resolved,
-        )
+        resolved["sample_predictive"] = sample_predictive
+        return infer_fn(key, data, get_model(), method_name, **resolved)
 
     return infer
 

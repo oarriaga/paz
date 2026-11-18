@@ -22,11 +22,9 @@ def build_simple_model():
 def test_infer_mh_shapes():
     model, data = build_simple_model()
     key = jax.random.PRNGKey(0)
-    posterior = paz.infer(
+    posterior = model.infer(
         key,
         data,
-        model.prior,
-        model.likelihood,
         method="mh",
         num_samples=10,
         num_chains=2,
@@ -59,11 +57,9 @@ def test_infer_mh_uses_tuned_defaults():
 def test_infer_mh_warmup_discards_samples():
     model, data = build_simple_model()
     key = jax.random.PRNGKey(2)
-    posterior = paz.infer(
+    posterior = model.infer(
         key,
         data,
-        model.prior,
-        model.likelihood,
         method="mh",
         num_samples=5,
         num_chains=1,
@@ -79,11 +75,9 @@ def test_infer_mh_unknown_method_raises():
     model, data = build_simple_model()
     key = jax.random.PRNGKey(3)
     with pytest.raises(NotImplementedError):
-        paz.infer(
+        model.infer(
             key,
             data,
-            model.prior,
-            model.likelihood,
             method="smc",
             num_samples=5,
         )

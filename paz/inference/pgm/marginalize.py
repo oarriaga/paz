@@ -211,7 +211,7 @@ def build_marginal(pgm, name, prior, likelihood, joint):
 
     defaults = {}
     configure = build_configure(defaults, lambda: marginal)
-    infer = build_infer(prior, likelihood, defaults)
+    infer = build_infer(lambda: marginal, defaults)
     samplers = (sample, prior.sample_inverse)
     marginal_name = f"{pgm.name}_marg_{name}"
     node_groups = remove_node(pgm, name)
