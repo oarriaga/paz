@@ -2,29 +2,27 @@ import jax
 import jax.numpy as jp
 
 from paz.inference.infer import infer as infer_fn
-from paz.inference.latent_space import as_latent_samples, to_forward_samples
+from paz.inference.latent_space import (
+    as_latent_samples,
+    to_forward_samples,
+    to_inverse_samples,
+)
 from paz.inference.types import NodeState
 from paz.inference.utils import get_leading_batch_size
 
 
-def build_sample_inverse(graph):
+def build_sample_inverse(graph, prior_sample_inverse):
     def sample_inverse(key, num_samples=1):
-        return graph.Latent(
-            **_sample_inverse(
-                graph.inputs, graph.latent_nodes, key, num_samples
-            )
-        )
+        inverse_samples = prior_sample_inverse(key, num_samples)
+        return graph.Latent(**inverse_samples._asdict())
 
     return sample_inverse
 
 
 def build_sample_forward(graph):
     def sample_forward(key, num_samples=1):
-        return graph.Sample(
-            **_sample_forward(
-                graph.inputs, graph.non_priors, key, num_samples
-            )
-        )
+        args = (graph.inputs, graph.non_priors, key, num_samples)
+        return graph.Sample(**_sample_nodes(*args))
 
     return sample_forward
 
@@ -54,16 +52,21 @@ def build_sample_predictive(graph):
     return sample_predictive
 
 
-def build_prior_sample(graph, sample_inverse):
+# Latents are drawn in forward space, where their parents are valid
+# distribution parameters, and are moved to inverse space afterwards.
+def build_prior_sample(graph):
     latent_space = graph.latent_space
-
-    def prior_sample_inverse(key, num_samples=1):
-        inverse_samples = sample_inverse(key, num_samples)
-        return as_latent_samples(latent_space, inverse_samples)
+    input_names = [node.name for node in graph.inputs]
+    nodes = graph.latent_nodes_sorted
+    nodes = [node for node in nodes if node.name not in input_names]
 
     def prior_sample(key, num_samples=1):
-        inverse_samples = prior_sample_inverse(key, num_samples)
-        return to_forward_samples(latent_space, inverse_samples)
+        samples = _sample_nodes(graph.inputs, nodes, key, num_samples)
+        return as_latent_samples(latent_space, samples)
+
+    def prior_sample_inverse(key, num_samples=1):
+        forward_samples = prior_sample(key, num_samples)
+        return to_inverse_samples(latent_space, forward_samples)
 
     return prior_sample, prior_sample_inverse
 
@@ -255,75 +258,30 @@ def _validate_observations(data_mapping, observable_names):
         raise ValueError("Missing observations for: " + ", ".join(missing))
 
 
-def _sample_with_inputs(node, sample_fn, key, num_samples, node_inputs):
-    if num_samples == 1 or len(node_inputs) == 0:
-        return sample_fn(node, key, num_samples, *node_inputs)
-    subkeys = jax.random.split(key, num_samples)
-
-    def sample_node(subkey, *inputs):
-        return sample_fn(node, subkey, 1, *inputs)
-
-    in_axes = (0,) + (0,) * len(node_inputs)
-    return jax.vmap(sample_node, in_axes=in_axes)(subkeys, *node_inputs)
-
-
-def _sample_nodes(
-    prior_nodes,
-    non_prior_nodes,
-    key,
-    num_samples,
-    prior_sample_fn,
-    node_sample_fn,
-):
+def _sample_nodes(prior_nodes, non_prior_nodes, key, num_samples):
     key_prior, key_node = jax.random.split(key)
     samples, keys = {}, jax.random.split(key_prior, len(prior_nodes))
-    for key, prior in zip(keys, prior_nodes):
-        samples[prior.name] = prior_sample_fn(prior, key, num_samples)
+    for subkey, prior in zip(keys, prior_nodes):
+        samples[prior.name] = prior.sample(subkey, num_samples)
     keys = jax.random.split(key_node, len(non_prior_nodes))
-    for key, node in zip(keys, non_prior_nodes):
-        node_inputs = [samples[edge.name] for edge in node.edges]
-        node_sample = _sample_with_inputs(
-            node, node_sample_fn, key, num_samples, node_inputs
-        )
-        samples[node.name] = node_sample
+    for subkey, node in zip(keys, non_prior_nodes):
+        parents = [samples[edge.name] for edge in node.edges]
+        args = (node, subkey, num_samples, parents)
+        samples[node.name] = _sample_with_parents(*args)
     return samples
 
 
-def _sample_inverse(prior_nodes, latent_nodes, key, num_samples):
-    prior_names = {prior.name for prior in prior_nodes}
-    non_prior_latents = [n for n in latent_nodes if n.name not in prior_names]
+def _sample_with_parents(node, key, num_samples, parents):
+    if num_samples == 1 or len(parents) == 0:
+        sample = node.sample(key, num_samples, *parents)
+    else:
+        subkeys = jax.random.split(key, num_samples)
 
-    def prior_sample_fn(prior, subkey, num):
-        return prior.sample_inverse(subkey, num)
+        def sample_once(subkey, *parent_values):
+            return node.sample(subkey, 1, *parent_values)
 
-    def node_sample_fn(node, subkey, num, *inputs):
-        return node.sample_inverse(subkey, num, *inputs)
-
-    return _sample_nodes(
-        prior_nodes,
-        non_prior_latents,
-        key,
-        num_samples,
-        prior_sample_fn,
-        node_sample_fn,
-    )
-
-
-def _sample_forward(prior_nodes, non_prior_nodes, key, num_samples):
-    def prior_sample_fn(prior, subkey, num):
-        return prior.sample(subkey, num)
-
-    def node_sample_fn(node, subkey, num, *inputs):
-        return node.sample(subkey, num, *inputs)
-
-    return _sample_nodes(
-        prior_nodes,
-        non_prior_nodes,
-        key,
-        num_samples,
-        prior_sample_fn,
-        node_sample_fn,
-    )
+        sample = jax.vmap(sample_once)(subkeys, *parents)
+    return sample
 
 
 def _sample_predictive_single(

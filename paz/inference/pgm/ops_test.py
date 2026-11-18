@@ -426,3 +426,44 @@ def test_likelihood_scores_observable_without_parents():
     assert jp.isclose(state.log_prob["z"], normal.log_prob(3.0))
     expected = normal.log_prob(jp.array([0.0, 3.0])).sum()
     assert jp.isclose(state.log_prob_sum, expected)
+
+
+def test_sample_inverse_draws_children_from_forward_parents():
+    def x_distribution(scale):
+        return paz.distributions.Normal(0.0, scale)
+
+    uniform = paz.distributions.Uniform(100.0, 101.0)
+    scale = Prior(uniform, paz.bijectors.Exp(), "scale")
+    x = paz.Latent(x_distribution, name="x")(scale)
+    y = Observable(lambda x: paz.distributions.Normal(x, 1.0), name="y")(x)
+    model = PGM([scale], [y], "scaled_child")
+    key = jax.random.PRNGKey(0)
+    inverse_samples = model.sample_inverse(key, 20_000)
+    assert jp.isclose(inverse_samples.x.std(), 100.5, rtol=0.05)
+    forward_scale = model.sample(key, 20_000).scale
+    assert jp.allclose(inverse_samples.scale, jp.log(forward_scale))
+
+
+def test_prior_sample_inverse_applies_child_bijector():
+    def x_distribution(high):
+        return paz.distributions.Uniform(0.0, high)
+
+    high = Prior(paz.distributions.Uniform(1.0, 2.0), name="high")
+    x = paz.Latent(x_distribution, paz.bijectors.Exp(), "x")(high)
+    y = Observable(lambda x: paz.distributions.Normal(x, 1.0), name="y")(x)
+    prior = PGM([high], [y], "bijected_child").prior
+    key = jax.random.PRNGKey(0)
+    forward_samples = prior.sample(key, 100)
+    inverse_samples = prior.sample_inverse(key, 100)
+    assert jp.allclose(inverse_samples.x, jp.log(forward_samples.x))
+    assert jp.all(forward_samples.x < forward_samples.high)
+
+
+def test_sample_inverse_draws_root_latent_missing_from_inputs():
+    normal = paz.distributions.Normal(0.0, 1.0)
+    mu = Prior(normal, name="mu")
+    sigma = Prior(paz.distributions.Uniform(1.0, 2.0), name="sigma")
+    y = Observable(paz.distributions.Normal, name="y")(mu, sigma)
+    model = PGM([mu], [y], "missing_input")
+    inverse_samples = model.sample_inverse(jax.random.PRNGKey(0), 50)
+    assert inverse_samples.sigma.shape == (50,)

@@ -23,12 +23,10 @@ from paz.inference.types import Density, Likelihood, PGM as PGMType
 
 def PGM(inputs, outputs, name):
     graph = build_graph(inputs, outputs, name)
-    sample_inverse = build_sample_inverse(graph)
+    prior_sample, prior_sample_inverse = build_prior_sample(graph)
+    sample_inverse = build_sample_inverse(graph, prior_sample_inverse)
     sample_forward = build_sample_forward(graph)
     sample_predictive = build_sample_predictive(graph)
-    prior_sample, prior_sample_inverse = build_prior_sample(
-        graph, sample_inverse
-    )
     prior_log_prob, prior_log_prob_inverse = build_prior_log_prob(graph)
     prior_prob, prior_prob_inverse = build_prior_prob(
         prior_log_prob, prior_log_prob_inverse
