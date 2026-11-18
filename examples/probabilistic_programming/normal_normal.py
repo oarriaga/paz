@@ -123,7 +123,7 @@ if __name__ == "__main__":
     exact = paz.distributions.Normal(analytical.mean, analytical.stdv)
     gaussian_fit = posterior.as_density(method="gaussian")
     densities = [exact.prob(grid), prior.prob(grid)]
-    densities = densities + [gaussian_fit.prob({"mu": grid})]
+    densities = densities + [jax.vmap(gaussian_fit.prob)({"mu": grid})]
     labels = ["Analytical posterior", "Prior", "Gaussian fit"]
     colors = [plot.EARTH.primary, plot.EARTH.secondary, "black"]
     figure, axis = plot.subplots()

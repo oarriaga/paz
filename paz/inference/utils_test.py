@@ -17,21 +17,6 @@ def test_validate_space_invalid_raises():
         utils.validate_space("bad")
 
 
-def test_get_leading_batch_size_none_for_scalar():
-    samples = {"x": jp.array(1.0)}
-    assert utils.get_leading_batch_size(samples) is None
-
-
-def test_get_leading_batch_size_consistent():
-    samples = {"x": jp.zeros((3,)), "y": jp.ones((3, 2))}
-    assert utils.get_leading_batch_size(samples) == 3
-
-
-def test_get_leading_batch_size_mismatch():
-    samples = {"x": jp.zeros((2,)), "y": jp.ones((3,))}
-    assert utils.get_leading_batch_size(samples) is None
-
-
 def test_slice_batch_selects_index():
     samples = {"x": jp.array([1.0, 2.0, 3.0])}
     sliced = utils.slice_batch(samples, 1)

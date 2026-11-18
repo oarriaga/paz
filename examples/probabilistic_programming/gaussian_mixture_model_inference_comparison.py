@@ -188,7 +188,8 @@ if __name__ == "__main__":
     weights = jp.ones_like(p_samples)
     switch_args = (mixture_model, observations, p_samples, weights)
     z_mcmc = average_switch_posterior(*switch_args)
-    p_gaussian = posterior.as_density(method="gaussian").prob(grid_samples)
+    gaussian_fit = posterior.as_density(method="gaussian")
+    p_gaussian = jax.vmap(gaussian_fit.prob)(grid_samples)
     exact_mean, exact_stdv = compute_grid_moments(p_enum, p_grid)
 
     print(f"true_p={args.true_p}, true_z={true_z}")

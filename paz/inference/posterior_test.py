@@ -101,7 +101,7 @@ def test_posterior_as_density_gmm():
         covariance="diag",
     )
     sample = density.sample_inverse(key, num_samples=2)
-    log_prob = density.log_prob_inverse(sample)
+    log_prob = jax.vmap(density.log_prob_inverse)(sample)
     assert log_prob.shape == (2,)
     assert jp.all(jp.isfinite(log_prob))
 
@@ -111,6 +111,6 @@ def test_posterior_as_density_kde():
     density = posterior.as_density(method="kde")
     key = jax.random.PRNGKey(4)
     sample = density.sample_inverse(key, num_samples=3)
-    log_prob = density.log_prob_inverse(sample)
+    log_prob = jax.vmap(density.log_prob_inverse)(sample)
     assert log_prob.shape == (3,)
     assert jp.all(jp.isfinite(log_prob))

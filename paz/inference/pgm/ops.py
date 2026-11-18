@@ -4,6 +4,7 @@ import jax.numpy as jp
 from paz.inference.infer import infer as infer_fn
 from paz.inference.latent_space import (
     as_latent_samples,
+    as_one_sample,
     to_forward_samples,
     to_inverse_samples,
 )
@@ -97,19 +98,6 @@ def build_prior_log_prob(graph, shapes, inverse_shapes):
         return build_node_state(forward_samples, log_probs)
 
     return prior_log_prob, prior_log_prob_inverse
-
-
-def as_one_sample(latent_space, samples, shapes):
-    samples = as_latent_samples(latent_space, samples)
-    for name in latent_space.names:
-        shape = jp.shape(getattr(samples, name))
-        expected = getattr(shapes, name)
-        if shape != expected:
-            message = f"'{name}' has shape {shape} but one sample has shape "
-            message += f"{expected}. Score one sample per call and use "
-            message += "jax.vmap for many."
-            raise ValueError(message)
-    return samples
 
 
 def compute_log_probs(nodes, values):

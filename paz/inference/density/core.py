@@ -4,11 +4,12 @@ from jax import flatten_util
 
 from paz.inference.latent_space import (
     as_latent_samples,
+    as_one_sample,
     to_forward_samples,
     to_inverse_samples,
 )
 from paz.inference.types import Density
-from paz.inference.utils import get_leading_batch_size, squeeze_pytree
+from paz.inference.utils import squeeze_pytree
 
 
 def _build_distribution_density(distribution, latent_space, unravel):
@@ -33,7 +34,7 @@ def _build_kde_density(kde, latent_space, unravel):
         return jp.swapaxes(flat, 0, 1)
 
     def log_prob_flat(flat):
-        return kde.logpdf(flat) if flat.ndim == 1 else kde.logpdf(flat.T)
+        return kde.logpdf(flat)[0]
 
     return _build_density_from_flat(
         sample_flat,
@@ -58,9 +59,12 @@ def _build_density_from_flat(
         inverse = sample_inverse(key, num_samples)
         return to_forward_samples(latent_space, inverse)
 
+    # One draw with a fixed key gives the shape of one sample.
+    shapes = jax.tree.map(jp.shape, sample_inverse(jax.random.PRNGKey(0)))
+
     def log_prob_inverse(samples):
-        samples = as_latent_samples(latent_space, samples)
-        flat = _flatten_for_log_prob(samples)
+        samples = as_one_sample(latent_space, samples, shapes)
+        flat, _ = flatten_util.ravel_pytree(samples)
         return log_prob_flat(flat)
 
     def log_prob(samples):
@@ -91,14 +95,6 @@ def _flatten_samples(samples, latent_space):
     _, unravel = flatten_util.ravel_pytree(sample)
     flat_samples = jax.vmap(lambda s: flatten_util.ravel_pytree(s)[0])(samples)
     return flat_samples, unravel
-
-
-def _flatten_for_log_prob(samples):
-    batch_size = get_leading_batch_size(samples)
-    if batch_size is None:
-        flat, _ = flatten_util.ravel_pytree(samples)
-        return flat
-    return jax.vmap(lambda s: flatten_util.ravel_pytree(s)[0])(samples)
 
 
 def _unflatten_samples(unravel, flat):
