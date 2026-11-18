@@ -6,7 +6,6 @@ from jax.scipy.special import logsumexp
 
 from paz.backend import bijectors
 from paz.backend import distributions
-from paz.inference.infer import build_log_density
 from paz.inference.latent_space import (
     LatentSpace,
     as_latent_samples,
@@ -35,7 +34,8 @@ def marginalize(pgm, names):
     latent_space = remove_latent(pgm.latent_space, node.name)
     prior = build_prior(pgm, node, latent_space)
     likelihood = build_likelihood(pgm, node, latent_space)
-    return build_marginal(pgm, node.name, prior, likelihood)
+    joint = build_joint(pgm, node, latent_space)
+    return build_marginal(pgm, node.name, prior, likelihood, joint)
 
 
 def find_discrete_node(pgm, names):
@@ -107,13 +107,16 @@ def build_prior(pgm, node, latent_space):
 
 
 def sum_prior(log_prob, node, forward_samples, samples):
-    args = (log_prob, node, forward_samples, samples)
-    _, log_priors = enumerate_log_probs(*args)
+    def compute_log_prior(values):
+        return log_prob(values).log_prob_sum
+
+    args = (compute_log_prior, node, forward_samples, samples)
+    _, log_priors = enumerate_support(*args)
     return build_state(forward_samples, logsumexp(log_priors, axis=-1))
 
 
-def enumerate_log_probs(log_prob, node, forward_samples, samples):
-    enumerate_one = partial(enumerate_sample, log_prob, node)
+def enumerate_support(function, node, forward_samples, samples):
+    enumerate_one = partial(enumerate_sample, function, node)
     if get_leading_batch_size(samples) is None:
         result = enumerate_one(forward_samples, samples)
     else:
@@ -122,14 +125,13 @@ def enumerate_log_probs(log_prob, node, forward_samples, samples):
     return result
 
 
-def enumerate_sample(log_prob, node, forward_sample, sample):
+def enumerate_sample(function, node, forward_sample, sample):
     support = compute_support(build_distribution(node, forward_sample))
 
-    def compute_log_prob(value):
-        values = {**sample._asdict(), node.name: value}
-        return log_prob(values).log_prob_sum
+    def apply(value):
+        return function({**sample._asdict(), node.name: value})
 
-    return support, jax.vmap(compute_log_prob)(support)
+    return support, jax.vmap(apply)(support)
 
 
 def build_distribution(node, forward_sample):
@@ -154,27 +156,56 @@ def build_likelihood(pgm, node, latent_space):
     def log_prob_inverse(samples, data):
         samples = as_latent_samples(latent_space, samples)
         forward_samples = to_forward_samples(latent_space, samples)
-        args = (pgm, node, forward_samples, samples, data)
+        log_probs = get_inverse_log_probs(pgm)
+        args = (log_probs, node, forward_samples, samples, data)
         _, log_priors, log_joints = compute_log_joints(*args)
         log_prior = logsumexp(log_priors, axis=-1)
         log_prob_sum = logsumexp(log_joints, axis=-1) - log_prior
+        # Without prior mass the difference is -inf - -inf, which is NaN.
+        has_prior_mass = jp.logical_not(jp.isneginf(log_prior))
+        log_prob_sum = jp.where(has_prior_mass, log_prob_sum, -jp.inf)
         return build_state(forward_samples, log_prob_sum)
 
     return Likelihood(log_prob, log_prob_inverse, latent_space, None)
 
 
-def compute_log_joints(pgm, node, forward_samples, inverse_samples, data):
-    def log_likelihood(samples):
-        return pgm.likelihood.log_prob_inverse(samples, data)
-
-    args = (node, forward_samples, inverse_samples)
-    log_prior = pgm.prior.log_prob_inverse
-    support, log_priors = enumerate_log_probs(log_prior, *args)
-    _, log_likelihoods = enumerate_log_probs(log_likelihood, *args)
-    return support, log_priors, log_priors + log_likelihoods
+def get_inverse_log_probs(pgm):
+    return pgm.prior.log_prob_inverse, pgm.likelihood.log_prob_inverse
 
 
-def build_marginal(pgm, name, prior, likelihood):
+def compute_log_joints(log_probs, node, forward_samples, samples, data):
+    compute_log_prior, compute_log_likelihood = log_probs
+
+    def compute_log_terms(values):
+        log_prior = compute_log_prior(values).log_prob_sum
+        log_likelihood = compute_log_likelihood(values, data).log_prob_sum
+        return log_prior, log_prior + log_likelihood
+
+    args = (compute_log_terms, node, forward_samples, samples)
+    support, (log_priors, log_joints) = enumerate_support(*args)
+    return support, log_priors, log_joints
+
+
+# Summing the joint directly evaluates the prior once per support value;
+# adding the marginal prior and likelihood would evaluate it twice.
+def build_joint(pgm, node, latent_space):
+    def log_prob(samples, data):
+        samples = as_latent_samples(latent_space, samples)
+        log_probs = (pgm.prior.log_prob, pgm.likelihood.log_prob)
+        args = (log_probs, node, samples, samples, data)
+        return logsumexp(compute_log_joints(*args)[2], axis=-1)
+
+    def log_prob_inverse(samples, data):
+        samples = as_latent_samples(latent_space, samples)
+        forward_samples = to_forward_samples(latent_space, samples)
+        log_probs = get_inverse_log_probs(pgm)
+        args = (log_probs, node, forward_samples, samples, data)
+        return logsumexp(compute_log_joints(*args)[2], axis=-1)
+
+    return log_prob, log_prob_inverse
+
+
+def build_marginal(pgm, name, prior, likelihood, joint):
     def sample(key, num_samples=1):
         return remove_field(pgm.sample(key, num_samples), name)
 
@@ -186,7 +217,6 @@ def build_marginal(pgm, name, prior, likelihood):
     node_groups = remove_node(pgm, name)
     densities = (prior.latent_space, prior, likelihood)
     inference = (configure, configure, infer, build_fit(), defaults)
-    joint = build_log_density(prior, likelihood)
     args = (*samplers, marginal_name, *node_groups, *densities, *inference)
     marginal = PGM(*args, *joint)
     return marginal
@@ -208,7 +238,8 @@ def recover_discrete_posterior(pgm, name, inverse_samples, data=None):
     latent_space = remove_latent(pgm.latent_space, name)
     inverse_samples = as_latent_samples(latent_space, inverse_samples)
     forward_samples = to_forward_samples(latent_space, inverse_samples)
-    args = (pgm, node, forward_samples, inverse_samples, data)
+    log_probs = get_inverse_log_probs(pgm)
+    args = (log_probs, node, forward_samples, inverse_samples, data)
     support, _, log_joints = compute_log_joints(*args)
     log_evidence = logsumexp(log_joints, axis=-1, keepdims=True)
     log_posterior = log_joints - log_evidence

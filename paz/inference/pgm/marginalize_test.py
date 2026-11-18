@@ -208,3 +208,27 @@ def test_marginalize_forward_prior_log_prob_excludes_jacobian():
     prior = marginalize(build_bijected_model(beta), ["z"]).prior
     log_prob_sum = prior.log_prob({"p": jp.array(0.3)}).log_prob_sum
     assert jp.allclose(log_prob_sum, beta.log_prob(0.3))
+
+
+def test_marginalize_without_prior_mass_is_not_nan():
+    pgm, data = build_scalar_mixture_model(0.0, 2.0, 1.0, 0.3, 1.5)
+    pgm_marg = marginalize(pgm, ["z"])
+    theta = make_theta_inverse_samples(0.0, 2.0, 1.0, 0.5)
+    likelihood_state = pgm_marg.likelihood.log_prob_inverse(theta, data)
+    assert jp.isneginf(likelihood_state.log_prob_sum)
+    assert jp.isneginf(pgm_marg.log_prob_inverse(theta, data))
+
+
+def test_marginalize_joint_matches_prior_plus_likelihood():
+    data = {"y_obs": jp.array([1.5, -0.5, 0.2])}
+    beta = paz.distributions.Beta(2.0, 2.0)
+    pgm_marg = marginalize(build_bijected_model(beta), ["z"])
+    for samples in ({"p": jp.array(0.3)}, {"p": jp.array([0.2, 0.5, 0.8])}):
+        log_prior = pgm_marg.prior.log_prob(samples).log_prob_sum
+        log_likelihood = pgm_marg.likelihood.log_prob(samples, data)
+        expected = log_prior + log_likelihood.log_prob_sum
+        assert jp.allclose(pgm_marg.log_prob(samples, data), expected)
+        log_prior = pgm_marg.prior.log_prob_inverse(samples).log_prob_sum
+        log_likelihood = pgm_marg.likelihood.log_prob_inverse(samples, data)
+        expected = log_prior + log_likelihood.log_prob_sum
+        assert jp.allclose(pgm_marg.log_prob_inverse(samples, data), expected)
