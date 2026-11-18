@@ -84,14 +84,6 @@ from paz.inference.tuner import AdaptiveDiagonalTuner
 from paz.inference.tuner import AdaptiveCovarianceTuner
 from paz.inference.pgm import marginalize, recover_discrete_posterior
 from paz.inference.posterior import MCMCPosterior
-from paz.inference.metadata import (
-    get_bijector,
-    get_distribution_fn,
-    get_inputs,
-    get_latent_nodes,
-    get_nodes,
-    get_non_priors,
-)
 
 
 def __getattr__(name):

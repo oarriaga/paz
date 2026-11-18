@@ -1,10 +1,4 @@
-from paz.inference.pgm.builder import (
-    build_graph,
-    get_latent_nodes,
-    get_non_root_nodes,
-    get_observable_nodes,
-    search_nodes,
-)
+from paz.inference.pgm.builder import build_graph
 from paz.inference.pgm.ops import (
     build_configure,
     build_fit,
