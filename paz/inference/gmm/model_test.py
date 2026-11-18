@@ -46,3 +46,13 @@ def test_gmm_pgm_fit_recovers_means():
     order = jp.argsort(fitted_means)
     max_diff = jp.max(jp.abs(fitted_means[order] - jp.sort(means)))
     assert float(max_diff) < 0.6
+
+
+def test_gmm_keeps_fit_after_configure():
+    weights, means, covariances = _initial_parameters()
+    model = GMM(weights, means, covariances)
+    sample_key, fit_key = jax.random.split(jax.random.PRNGKey(0))
+    samples, _ = _sample_1d_mixture(sample_key, 200)
+    assert model.configure(num_chains=2) is None
+    fitted = model.fit(fit_key, samples, method="em", num_iters=10)
+    assert isinstance(fitted, paz.distributions.MixtureSameFamily)
