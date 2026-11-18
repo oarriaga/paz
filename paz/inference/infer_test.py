@@ -144,3 +144,10 @@ def test_infer_mh_shows_only_sampling_without_tuner_progress(capsys):
     assert output.count("\n") == 1
     assert "sample |" in output
     assert "tune" not in output
+
+
+def test_infer_rejects_unknown_setting():
+    model, data = build_simple_model()
+    key = jax.random.PRNGKey(0)
+    with pytest.raises(TypeError, match="num_chain"):
+        model.infer(key, data, num_samples=5, num_chain=2)

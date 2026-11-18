@@ -22,19 +22,23 @@ def infer(key, data, model, method, sample_predictive=None, **kwargs):
     raise ValueError(f"Unknown inference method '{method}'.")
 
 
-def _infer_mh(key, data, model, sample_predictive, **kwargs):
-    num_samples = kwargs.get("num_samples")
+def _infer_mh(
+    key,
+    data,
+    model,
+    sample_predictive,
+    num_samples=None,
+    num_chains=1,
+    sigma=None,
+    warmup=None,
+    init=None,
+    space="inv",
+    tuner=None,
+    tune=None,
+    progress=True,
+):
     if num_samples is None:
         raise ValueError("num_samples is required for MH")
-    settings = _resolve_mh_settings(kwargs)
-    num_chains = settings["num_chains"]
-    sigma = settings["sigma"]
-    warmup = settings["warmup"]
-    init = settings["init"]
-    space = settings["space"]
-    tuner = settings["tuner"]
-    tune = settings["tune"]
-    progress = settings["progress"]
     validate_space(space)
 
     # Split once for init/tune/sample to avoid key reuse.
@@ -80,22 +84,6 @@ def _infer_mh(key, data, model, sample_predictive, **kwargs):
     }
     posterior_args = (states, infos, config, model.latent_space)
     return MCMCPosterior(*posterior_args, sample_predictive)
-
-
-def _resolve_mh_settings(kwargs):
-    defaults = {
-        "num_chains": 1,
-        "sigma": None,
-        "warmup": None,
-        "init": None,
-        "space": "inv",
-        "tuner": None,
-        "tune": None,
-        "progress": True,
-    }
-    return {
-        name: kwargs.get(name, default) for name, default in defaults.items()
-    }
 
 
 def _resolve_num_warmup(num_samples, warmup):
