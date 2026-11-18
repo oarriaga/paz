@@ -44,19 +44,35 @@ def compute_normal_log_pdf(mean, stdv, value):
     return -0.5 * z**2 - 0.5 * jp.log(2.0 * jp.pi) - jp.log(stdv)
 
 
-def compute_analytic_log_marginal(mu0_value, mu1_value, sigma_value, p_value, y_value):
-    log_prob0 = compute_normal_log_pdf(mu0_value, sigma_value, y_value)
-    log_prob1 = compute_normal_log_pdf(mu1_value, sigma_value, y_value)
-    log_joint0 = jp.log1p(-p_value) + log_prob0
-    log_joint1 = jp.log(p_value) + log_prob1
+def compute_analytic_log_marginal(*values):
+    log_joint0, log_joint1 = compute_analytic_log_joints(*values)
     return jp.logaddexp(log_joint0, log_joint1)
 
 
-def compute_analytic_posterior(mu0_value, mu1_value, sigma_value, p_value, y_value):
-    log_prob0 = compute_normal_log_pdf(mu0_value, sigma_value, y_value)
-    log_prob1 = compute_normal_log_pdf(mu1_value, sigma_value, y_value)
-    logits = jp.stack([jp.log1p(-p_value) + log_prob0, jp.log(p_value) + log_prob1])
+def compute_analytic_log_joints(mu0_value, mu1_value, sigma_value, p_value, y):
+    log_prob0 = compute_normal_log_pdf(mu0_value, sigma_value, y)
+    log_prob1 = compute_normal_log_pdf(mu1_value, sigma_value, y)
+    return jp.log1p(-p_value) + log_prob0, jp.log(p_value) + log_prob1
+
+
+def compute_analytic_posterior(*values):
+    logits = jp.stack(compute_analytic_log_joints(*values))
     return jp.exp(logits - jp.logaddexp(logits[0], logits[1]))
+
+
+def build_bijected_model(beta):
+    p = Prior(beta, paz.bijectors.Sigmoid(), "p")
+
+    def z_distribution(p):
+        return paz.distributions.Bernoulli(probs=p)
+
+    z = Latent(z_distribution, name="z")(p)
+
+    def y_distribution(z):
+        return paz.distributions.Normal(z, 1.0)
+
+    y_obs = Observable(y_distribution, name="y_obs")(z)
+    return PGM([p], [y_obs], "bijected")
 
 
 def test_marginalize_log_prob_matches_analytic():
@@ -84,13 +100,10 @@ def test_recover_discrete_posterior_matches_analytic():
     pgm, data = build_scalar_mixture_model(
         mu0_value, mu1_value, sigma_value, p_value, y_value
     )
-    pgm_marg = marginalize(pgm, ["z"])
     theta = make_theta_inverse_samples(
         mu0_value, mu1_value, sigma_value, p_value
     )
-    posterior = recover_discrete_posterior(
-        pgm_marg, "z", theta, data
-    ).posterior
+    posterior = recover_discrete_posterior(pgm, "z", theta, data).posterior
     expected = compute_analytic_posterior(
         mu0_value, mu1_value, sigma_value, p_value, y_value
     )
@@ -124,16 +137,13 @@ def test_recover_discrete_posterior_batched_shape():
     pgm, data = build_scalar_mixture_model(
         mu0_value, mu1_value, sigma_value, p_value, y_value
     )
-    pgm_marg = marginalize(pgm, ["z"])
     theta = make_theta_inverse_samples(
         jp.full((num_samples,), mu0_value),
         jp.full((num_samples,), mu1_value),
         jp.full((num_samples,), sigma_value),
         jp.full((num_samples,), p_value),
     )
-    posterior = recover_discrete_posterior(
-        pgm_marg, "z", theta, data
-    ).posterior
+    posterior = recover_discrete_posterior(pgm, "z", theta, data).posterior
     assert posterior.shape == (num_samples, 2)
 
 
@@ -180,3 +190,21 @@ def test_marginalize_joint_log_prob_matches_analytic():
         mu0_value, mu1_value, sigma_value, p_value, y_value
     )
     assert jp.allclose(log_density, expected)
+
+
+def test_marginalize_shares_data_across_samples():
+    data = {"y_obs": jp.array([1.5, -0.5, 0.2])}
+    beta = paz.distributions.Beta(2.0, 2.0)
+    likelihood = marginalize(build_bijected_model(beta), ["z"]).likelihood
+    p_values = jp.array([-1.0, 0.0, 1.0])
+    log_probs = likelihood.log_prob_inverse({"p": p_values}, data).log_prob_sum
+    for p_value, log_prob in zip(p_values, log_probs):
+        expected = likelihood.log_prob_inverse({"p": p_value}, data)
+        assert jp.allclose(log_prob, expected.log_prob_sum)
+
+
+def test_marginalize_forward_prior_log_prob_excludes_jacobian():
+    beta = paz.distributions.Beta(2.0, 2.0)
+    prior = marginalize(build_bijected_model(beta), ["z"]).prior
+    log_prob_sum = prior.log_prob({"p": jp.array(0.3)}).log_prob_sum
+    assert jp.allclose(log_prob_sum, beta.log_prob(0.3))

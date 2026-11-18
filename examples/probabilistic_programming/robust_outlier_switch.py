@@ -100,7 +100,8 @@ if __name__ == "__main__":
     true_line = Line(slope=1.2, bias=-0.2)
     stdvs = (args.inlier_stdv, args.outlier_stdv)
     x = jp.linspace(-1.0, 1.0, args.num_observations)
-    model = paz.marginalize(build_switch_model(x, stdvs), ["z"])
+    switch_model = build_switch_model(x, stdvs)
+    model = paz.marginalize(switch_model, ["z"])
     tuner = paz.AdaptiveStepTuner(args.sigma)
     kwargs = {"warmup": args.warmup, "sigma": args.sigma, "tuner": tuner}
     model.configure(num_chains=args.num_chains, **kwargs)
@@ -114,7 +115,7 @@ if __name__ == "__main__":
         kwargs = {"num_samples": args.num_samples}
         posterior = model.infer(infer_key, observations, **kwargs)
         samples = jax.tree.map(jp.ravel, posterior.inverse_samples)
-        switch_args = (model, "z", samples, observations)
+        switch_args = (switch_model, "z", samples, observations)
         switch = paz.recover_discrete_posterior(*switch_args)
         posterior_z = switch.posterior.mean(axis=0)
         mean_line = Line(samples.slope.mean(), samples.bias.mean())

@@ -162,8 +162,8 @@ if __name__ == "__main__":
     noise = jax.random.normal(keys[1], (args.num_observations,))
     observations = args.means[true_z] + args.stdv * noise
     prior_p = paz.distributions.Beta(2.0, 2.0)
-    model = build_mixture_model(prior_p, args.means, args.stdv)
-    model = paz.marginalize(model, ["z"])
+    mixture_model = build_mixture_model(prior_p, args.means, args.stdv)
+    model = paz.marginalize(mixture_model, ["z"])
 
     p_grid = jp.linspace(0.01, 0.99, 200)
     model_args = (prior_p, args.means, args.stdv, observations)
@@ -174,7 +174,7 @@ if __name__ == "__main__":
     p_enum = normalize_density(log_enum, p_grid)
     p_marginal = normalize_density(log_marginal, p_grid)
     z_enum = jax.nn.softmax(logsumexp(log_joints, axis=1))
-    switch_args = (model, observations, p_grid, p_marginal)
+    switch_args = (mixture_model, observations, p_grid, p_marginal)
     z_marginal = average_switch_posterior(*switch_args)
 
     tuner = paz.AdaptiveStepTuner(args.sigma)
@@ -182,7 +182,8 @@ if __name__ == "__main__":
     model.configure(num_chains=args.num_chains, **kwargs)
     posterior = model.infer(keys[2], observations, num_samples=args.num_samples)
     p_samples = posterior.samples.p.flatten()
-    switch_args = (model, observations, p_samples, jp.ones_like(p_samples))
+    weights = jp.ones_like(p_samples)
+    switch_args = (mixture_model, observations, p_samples, weights)
     z_mcmc = average_switch_posterior(*switch_args)
     p_gaussian = posterior.as_density(method="gaussian").prob(grid_samples)
     exact_mean, exact_stdv = compute_grid_moments(p_enum, p_grid)

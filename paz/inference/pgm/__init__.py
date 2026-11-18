@@ -1,4 +1,5 @@
-from paz.inference.pgm.marginalize import marginalize, recover_discrete_posterior
+from paz.inference.pgm.marginalize import marginalize
+from paz.inference.pgm.marginalize import recover_discrete_posterior
 from paz.inference.pgm.pgm import PGM, get_edges
 from paz.inference.pgm.builder import (
     build_pgm_context,

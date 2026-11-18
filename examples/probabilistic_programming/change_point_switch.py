@@ -89,7 +89,8 @@ if __name__ == "__main__":
     noise = args.stdv * jax.random.normal(noise_key, x.shape)
     observations = compute_piecewise(x, *true_lines, is_left) + noise
 
-    model = paz.marginalize(build_switch_model(x, args.stdv), ["switch_index"])
+    switch_model = build_switch_model(x, args.stdv)
+    model = paz.marginalize(switch_model, ["switch_index"])
     tuner = paz.AdaptiveStepTuner(args.sigma)
     kwargs = {"warmup": args.warmup, "sigma": args.sigma, "tuner": tuner}
     model.configure(num_chains=args.num_chains, **kwargs)
@@ -97,7 +98,7 @@ if __name__ == "__main__":
     posterior = model.infer(infer_key, observations, **kwargs)
     samples = posterior.inverse_samples
     draws = jax.tree.map(jp.ravel, samples)
-    switch_args = (model, "switch_index", draws, observations)
+    switch_args = (switch_model, "switch_index", draws, observations)
     switch = paz.recover_discrete_posterior(*switch_args)
     switch_posterior = switch.posterior.mean(axis=0)
     map_index = int(switch.support[jp.argmax(switch_posterior)])
