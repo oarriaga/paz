@@ -414,3 +414,15 @@ def test_likelihood_rejects_single_value_for_multi_output():
     theta_inv = model.sample_inverse(key)
     with pytest.raises(TypeError):
         model.likelihood.log_prob_inverse(theta_inv, data["y1"])
+
+
+def test_likelihood_scores_observable_without_parents():
+    normal = paz.distributions.Normal(0.0, 1.0)
+    mu = Prior(normal, name="mu")
+    y = Observable(lambda mu: paz.distributions.Normal(mu, 1.0), name="y")(mu)
+    z = Observable(lambda: normal, name="z")()
+    likelihood = PGM([mu], [y, z], "parentless_observable").likelihood
+    state = likelihood.log_prob({"mu": 0.0}, {"y": 0.0, "z": 3.0})
+    assert jp.isclose(state.log_prob["z"], normal.log_prob(3.0))
+    expected = normal.log_prob(jp.array([0.0, 3.0])).sum()
+    assert jp.isclose(state.log_prob_sum, expected)

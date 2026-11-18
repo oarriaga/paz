@@ -2,7 +2,7 @@ from paz.inference.pgm.marginalize import marginalize
 from paz.inference.pgm.marginalize import recover_discrete_posterior
 from paz.inference.pgm.pgm import PGM, get_edges
 from paz.inference.pgm.builder import (
-    build_pgm_context,
+    build_graph,
     get_latent_nodes,
     get_non_root_nodes,
     get_observable_nodes,
@@ -11,7 +11,7 @@ from paz.inference.pgm.builder import (
 
 __all__ = [
     "PGM",
-    "build_pgm_context",
+    "build_graph",
     "get_edges",
     "get_latent_nodes",
     "get_non_root_nodes",
