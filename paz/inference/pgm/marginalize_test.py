@@ -1,3 +1,5 @@
+from functools import partial
+
 import jax
 import jax.numpy as jp
 import pytest
@@ -111,41 +113,25 @@ def test_recover_discrete_posterior_matches_analytic():
     assert jp.allclose(posterior, expected)
 
 
-def test_marginalize_batched_log_prob_shape():
-    num_samples = 4
-    mu0_value, mu1_value = 0.0, 2.0
-    sigma_value, p_value, y_value = 1.0, 0.3, 1.5
-    pgm, data = build_scalar_mixture_model(
-        mu0_value, mu1_value, sigma_value, p_value, y_value
-    )
+def build_batched_theta(num_samples):
+    values = [jp.full((num_samples,), value) for value in (0.0, 2.0, 1.0, 0.3)]
+    return make_theta_inverse_samples(*values)
+
+
+def test_marginalize_log_prob_vmaps_over_samples():
+    pgm, data = build_scalar_mixture_model(0.0, 2.0, 1.0, 0.3, 1.5)
     pgm_marg = marginalize(pgm, ["z"])
-    theta = make_theta_inverse_samples(
-        jp.full((num_samples,), mu0_value),
-        jp.full((num_samples,), mu1_value),
-        jp.full((num_samples,), sigma_value),
-        jp.full((num_samples,), p_value),
-    )
-    prior_state = pgm_marg.prior.log_prob_inverse(theta)
-    likelihood_state = pgm_marg.likelihood.log_prob_inverse(theta, data)
-    log_prob_sum = prior_state.log_prob_sum + likelihood_state.log_prob_sum
-    assert log_prob_sum.shape == (num_samples,)
+    log_prob_inverse = partial(pgm_marg.log_prob_inverse, data=data)
+    log_probs = jax.vmap(log_prob_inverse)(build_batched_theta(4))
+    expected = compute_analytic_log_marginal(0.0, 2.0, 1.0, 0.3, 1.5)
+    assert jp.allclose(log_probs, jp.full((4,), expected))
 
 
-def test_recover_discrete_posterior_batched_shape():
-    num_samples = 4
-    mu0_value, mu1_value = 0.0, 2.0
-    sigma_value, p_value, y_value = 1.0, 0.3, 1.5
-    pgm, data = build_scalar_mixture_model(
-        mu0_value, mu1_value, sigma_value, p_value, y_value
-    )
-    theta = make_theta_inverse_samples(
-        jp.full((num_samples,), mu0_value),
-        jp.full((num_samples,), mu1_value),
-        jp.full((num_samples,), sigma_value),
-        jp.full((num_samples,), p_value),
-    )
-    posterior = recover_discrete_posterior(pgm, "z", theta, data).posterior
-    assert posterior.shape == (num_samples, 2)
+def test_recover_discrete_posterior_vmaps_over_samples():
+    pgm, data = build_scalar_mixture_model(0.0, 2.0, 1.0, 0.3, 1.5)
+    recover = partial(recover_discrete_posterior, pgm, "z", data=data)
+    posterior = jax.vmap(recover)(build_batched_theta(4)).posterior
+    assert posterior.shape == (4, 2)
 
 
 def test_marginalize_multiple_names_raises():
@@ -193,17 +179,6 @@ def test_marginalize_joint_log_prob_matches_analytic():
     assert jp.allclose(log_density, expected)
 
 
-def test_marginalize_shares_data_across_samples():
-    data = {"y_obs": jp.array([1.5, -0.5, 0.2])}
-    beta = paz.distributions.Beta(2.0, 2.0)
-    likelihood = marginalize(build_bijected_model(beta), ["z"]).likelihood
-    p_values = jp.array([-1.0, 0.0, 1.0])
-    log_probs = likelihood.log_prob_inverse({"p": p_values}, data).log_prob_sum
-    for p_value, log_prob in zip(p_values, log_probs):
-        expected = likelihood.log_prob_inverse({"p": p_value}, data)
-        assert jp.allclose(log_prob, expected.log_prob_sum)
-
-
 def test_marginalize_forward_prior_log_prob_excludes_jacobian():
     beta = paz.distributions.Beta(2.0, 2.0)
     prior = marginalize(build_bijected_model(beta), ["z"]).prior
@@ -216,23 +191,40 @@ def test_marginalize_without_prior_mass_is_not_nan():
     pgm_marg = marginalize(pgm, ["z"])
     theta = make_theta_inverse_samples(0.0, 2.0, 1.0, 0.5)
     likelihood_state = pgm_marg.likelihood.log_prob_inverse(theta, data)
-    assert jp.isneginf(likelihood_state.log_prob_sum)
+    assert jp.isfinite(likelihood_state.log_prob_sum)
     assert jp.isneginf(pgm_marg.log_prob_inverse(theta, data))
 
 
-def test_marginalize_joint_matches_prior_plus_likelihood():
-    data = {"y_obs": jp.array([1.5, -0.5, 0.2])}
+def test_marginalize_keeps_prior_of_remaining_latents():
     beta = paz.distributions.Beta(2.0, 2.0)
-    pgm_marg = marginalize(build_bijected_model(beta), ["z"])
-    for samples in ({"p": jp.array(0.3)}, {"p": jp.array([0.2, 0.5, 0.8])}):
-        log_prior = pgm_marg.prior.log_prob(samples).log_prob_sum
-        log_likelihood = pgm_marg.likelihood.log_prob(samples, data)
-        expected = log_prior + log_likelihood.log_prob_sum
-        assert jp.allclose(pgm_marg.log_prob(samples, data), expected)
-        log_prior = pgm_marg.prior.log_prob_inverse(samples).log_prob_sum
-        log_likelihood = pgm_marg.likelihood.log_prob_inverse(samples, data)
-        expected = log_prior + log_likelihood.log_prob_sum
-        assert jp.allclose(pgm_marg.log_prob_inverse(samples, data), expected)
+    pgm = build_bijected_model(beta)
+    samples = {"p": jp.array(0.4)}
+    state = marginalize(pgm, ["z"]).prior.log_prob_inverse(samples)
+    expected = pgm.inputs[0].log_prob_inverse(samples["p"]).log_prob_sum
+    assert jp.allclose(state.log_prob_sum, expected)
+
+
+def test_marginalize_samples_without_discrete_node():
+    pgm, data = build_scalar_mixture_model(0.0, 2.0, 1.0, 0.3, 1.5)
+    samples = marginalize(pgm, ["z"]).sample(jax.random.PRNGKey(0), 2000)
+    assert set(samples._fields) == {"mu0", "mu1", "sigma", "p", "y_obs"}
+    assert jp.isclose(samples.y_obs.mean(), 0.3 * 2.0, atol=0.1)
+
+
+def test_marginalize_latent_child_raises():
+    z = Prior(paz.distributions.Bernoulli(probs=0.5), name="z")
+    mean = Latent(lambda z: paz.distributions.Normal(z, 1.0), name="mean")(z)
+    y = Observable(lambda m: paz.distributions.Normal(m, 1.0), name="y")(mean)
+    with pytest.raises(NotImplementedError):
+        marginalize(PGM([z], [y], "latent_child"), ["z"])
+
+
+def test_marginalize_two_children_raises():
+    z = Prior(paz.distributions.Bernoulli(probs=0.5), name="z")
+    y0 = Observable(lambda z: paz.distributions.Normal(z, 1.0), name="y0")(z)
+    y1 = Observable(lambda z: paz.distributions.Normal(z, 2.0), name="y1")(z)
+    with pytest.raises(NotImplementedError):
+        marginalize(PGM([z], [y0, y1], "two_children"), ["z"])
 
 
 def test_marginalized_model_infers():
@@ -245,3 +237,34 @@ def test_marginalized_model_infers():
     expected = pgm_marg.log_prob_inverse(position, data)
     assert posterior.samples.p.shape == (20, 2)
     assert jp.allclose(posterior.inverse_log_probs[-1, 0], expected)
+
+
+def test_marginalize_samples_child_of_parentless_discrete_prior():
+    def y_distribution(z):
+        return paz.distributions.Normal(2.0 * z, 1.0)
+
+    z = Prior(paz.distributions.Bernoulli(probs=0.3), name="z")
+    y = Observable(y_distribution, name="y")(z)
+    pgm_marg = marginalize(PGM([z], [y], "only_discrete"), ["z"])
+    samples = pgm_marg.sample(jax.random.PRNGKey(0), 4000)
+    assert samples._fields == ("y",)
+    assert jp.isclose(samples.y.mean(), 0.6, atol=0.1)
+
+
+def test_recover_discrete_posterior_missing_data_raises():
+    pgm, data = build_scalar_mixture_model(0.0, 2.0, 1.0, 0.3, 1.5)
+    theta = make_theta_inverse_samples(0.0, 2.0, 1.0, 0.3)
+    with pytest.raises(ValueError):
+        recover_discrete_posterior(pgm, "z", theta, {})
+
+
+def test_marginalize_child_sees_float_values_when_sampling():
+    def y_distribution(z):
+        assert jp.issubdtype(z.dtype, jp.floating)
+        return paz.distributions.Normal(z, 1.0)
+
+    z = Prior(paz.distributions.Bernoulli(probs=0.3), name="z")
+    y = Observable(y_distribution, name="y")(z)
+    pgm_marg = marginalize(PGM([z], [y], "integer_discrete"), ["z"])
+    pgm_marg.sample(jax.random.PRNGKey(0), 3)
+    pgm_marg.likelihood.log_prob({}, {"y": 0.5})

@@ -131,8 +131,9 @@ if __name__ == "__main__":
     kwargs = {"num_samples": args.num_samples}
     posterior = model.infer(infer_key, observations, **kwargs)
     draws = jax.tree.map(jp.ravel, posterior.inverse_samples)
-    switch_args = (switch_model, "switch_index", draws, observations)
-    switch = paz.recover_discrete_posterior(*switch_args)
+    recover = partial(paz.recover_discrete_posterior, switch_model)
+    recover = partial(recover, "switch_index", data=observations)
+    switch = jax.vmap(recover)(draws)
     config_posterior = switch.posterior.mean(axis=0)
     map_switches = switch_table[jp.argmax(config_posterior)]
 

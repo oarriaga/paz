@@ -1,3 +1,4 @@
+from collections import namedtuple
 from functools import partial
 
 import jax
@@ -6,36 +7,28 @@ from jax.scipy.special import logsumexp
 
 from paz.backend import bijectors
 from paz.backend import distributions
-from paz.inference.latent_space import (
-    LatentSpace,
-    as_latent_samples,
-    to_forward_samples,
-    to_inverse_samples,
-)
-from paz.inference.pgm.ops import (
-    build_configure,
-    build_fit,
-    build_infer,
-    build_prior_prob,
-)
-from paz.inference.types import (
-    PGM,
-    Density,
-    DiscretePosterior,
-    Likelihood,
-    NodeState,
-    SampleType,
-)
-from paz.inference.utils import get_leading_batch_size
+from paz.inference.latent_space import LatentSpace, to_forward_samples
+from paz.inference.observable import Observable
+from paz.inference.pgm.ops import build_observations
+from paz.inference.pgm.pgm import PGM
+from paz.inference.types import DiscretePosterior, SampleType
+
+Marginal = namedtuple("Marginal", ["log_prob", "sample"])
 
 
 def marginalize(pgm, names):
     node = find_discrete_node(pgm, names)
-    latent_space = remove_latent(pgm.latent_space, node.name)
-    prior = build_prior(pgm, node, latent_space)
-    likelihood = build_likelihood(pgm, node, latent_space)
-    joint = build_joint(pgm, node, latent_space)
-    return build_marginal(pgm, node.name, prior, likelihood, joint)
+    child = find_observed_child(pgm, node)
+    parents = merge_parents(node, child)
+    parent_names = [parent.name for parent in parents]
+    distribution_fn = MarginalFn(node, child, parent_names)
+    marginal_child = Observable(distribution_fn, name=child.name)(*parents)
+    inputs = [prior for prior in pgm.inputs if prior.name != node.name]
+    outputs = []
+    for output in pgm.output_nodes:
+        is_child = output.name == child.name
+        outputs.append(marginal_child if is_child else output)
+    return PGM(inputs, outputs, f"{pgm.name}_marg_{node.name}")
 
 
 def find_discrete_node(pgm, names):
@@ -76,175 +69,107 @@ def compute_support(distribution):
     return jp.arange(num_values, dtype=jp.float32 if is_discrete else dtype)
 
 
-def remove_latent(latent_space, name):
-    names = [other for other in latent_space.names if other != name]
-    kept = {other: latent_space.bijectors[other] for other in names}
-    return LatentSpace(names, kept, SampleType(names))
+def find_observed_child(pgm, node):
+    children = find_children(pgm, node)
+    is_observed = len(children) == 1 and children[0].sample_inverse is None
+    if not is_observed or len(find_children(pgm, children[0])) != 0:
+        message = f"{node.name} must feed exactly one observed node, "
+        message += "and no other node may depend on that node."
+        raise NotImplementedError(message)
+    return children[0]
 
 
-def build_prior(pgm, node, latent_space):
-    def sample(key, num_samples=1):
-        samples = pgm.prior.sample(key, num_samples)
-        return as_latent_samples(latent_space, samples)
-
-    def sample_inverse(key, num_samples=1):
-        samples = pgm.prior.sample_inverse(key, num_samples)
-        return as_latent_samples(latent_space, samples)
-
-    def log_prob(samples):
-        samples = as_latent_samples(latent_space, samples)
-        return sum_prior(pgm.prior.log_prob, node, samples, samples)
-
-    def log_prob_inverse(samples):
-        samples = as_latent_samples(latent_space, samples)
-        forward_samples = to_forward_samples(latent_space, samples)
-        args = (pgm.prior.log_prob_inverse, node, forward_samples, samples)
-        return sum_prior(*args)
-
-    probs = build_prior_prob(log_prob, log_prob_inverse)
-    functions = (sample, sample_inverse, log_prob, log_prob_inverse)
-    return Density(*functions, *probs, latent_space, None)
+def find_children(pgm, node):
+    children = []
+    for other in pgm.nodes:
+        if node.name in [edge.name for edge in other.edges]:
+            children.append(other)
+    return children
 
 
-def sum_prior(log_prob, node, forward_samples, samples):
-    def compute_log_prior(values):
-        return log_prob(values).log_prob_sum
-
-    args = (compute_log_prior, node, forward_samples, samples)
-    _, log_priors = enumerate_support(*args)
-    return build_state(forward_samples, logsumexp(log_priors, axis=-1))
-
-
-def enumerate_support(function, node, forward_samples, samples):
-    enumerate_one = partial(enumerate_sample, function, node)
-    if get_leading_batch_size(samples) is None:
-        result = enumerate_one(forward_samples, samples)
-    else:
-        enumerate_batch = jax.vmap(enumerate_one, out_axes=(None, 0))
-        result = enumerate_batch(forward_samples, samples)
-    return result
+# The child takes the parents of the discrete node in its place.
+def merge_parents(node, child):
+    parents = {}
+    for edge in child.edges:
+        replacements = node.edges if edge.name == node.name else [edge]
+        parents.update({parent.name: parent for parent in replacements})
+    return list(parents.values())
 
 
-def enumerate_sample(function, node, forward_sample, sample):
-    support = compute_support(build_distribution(node, forward_sample))
+def MarginalFn(node, child, parent_names):
+    def apply(*parent_values):
+        values = dict(zip(parent_names, parent_values))
+        discrete = build_discrete_distribution(node, values)
+        build_child = partial(build_child_distribution, node, child, values)
 
-    def apply(value):
-        return function({**sample._asdict(), node.name: value})
+        def log_prob(observation):
+            args = (discrete, build_child, observation)
+            _, log_joints = compute_log_joints(*args)
+            return logsumexp(log_joints)
 
-    return support, jax.vmap(apply)(support)
+        def sample(num_samples, seed):
+            return sample_child(discrete, build_child, num_samples, seed)
+
+        return Marginal(log_prob, sample)
+
+    return apply
 
 
-def build_distribution(node, forward_sample):
+def build_discrete_distribution(node, values):
     if is_prior(node):
         distribution = node.distribution
     else:
-        parents = [getattr(forward_sample, edge.name) for edge in node.edges]
+        parents = [values[edge.name] for edge in node.edges]
         distribution = node.distribution_fn(*parents)
     return distribution
 
 
-def build_state(forward_samples, log_prob_sum):
-    log_prob = {"_marginal": log_prob_sum}
-    return NodeState(forward_samples, log_prob, log_prob_sum)
+def build_child_distribution(node, child, values, discrete_value):
+    values = {**values, node.name: discrete_value}
+    parents = [values[edge.name] for edge in child.edges]
+    return child.distribution_fn(*parents)
 
 
-def build_likelihood(pgm, node, latent_space):
-    def log_prob(samples, data):
-        samples = to_inverse_samples(latent_space, samples)
-        return log_prob_inverse(samples, data)
+def compute_log_joints(discrete, build_child, observation):
+    def compute_log_likelihood(discrete_value):
+        return build_child(discrete_value).log_prob(observation).sum()
 
-    def log_prob_inverse(samples, data):
-        samples = as_latent_samples(latent_space, samples)
-        forward_samples = to_forward_samples(latent_space, samples)
-        log_probs = get_inverse_log_probs(pgm)
-        args = (log_probs, node, forward_samples, samples, data)
-        _, log_priors, log_joints = compute_log_joints(*args)
-        log_prior = logsumexp(log_priors, axis=-1)
-        log_prob_sum = logsumexp(log_joints, axis=-1) - log_prior
-        # Without prior mass the difference is -inf - -inf, which is NaN.
-        has_prior_mass = jp.logical_not(jp.isneginf(log_prior))
-        log_prob_sum = jp.where(has_prior_mass, log_prob_sum, -jp.inf)
-        return build_state(forward_samples, log_prob_sum)
-
-    return Likelihood(log_prob, log_prob_inverse, latent_space, None)
+    support = compute_support(discrete)
+    log_likelihoods = jax.vmap(compute_log_likelihood)(support)
+    return support, discrete.log_prob(support) + log_likelihoods
 
 
-def get_inverse_log_probs(pgm):
-    return pgm.prior.log_prob_inverse, pgm.likelihood.log_prob_inverse
+def sample_child(discrete, build_child, num_samples, seed):
+    def sample_once(key, discrete_value):
+        return build_child(discrete_value).sample(1, seed=key)[0]
+
+    key_discrete, key_child = jax.random.split(seed)
+    discrete_values = discrete.sample(num_samples, seed=key_discrete)
+    # The child sees the same dtype here as in the sum over the support.
+    dtype = compute_support(discrete).dtype
+    keys = jax.random.split(key_child, num_samples)
+    return jax.vmap(sample_once)(keys, discrete_values.astype(dtype))
 
 
-def compute_log_joints(log_probs, node, forward_samples, samples, data):
-    compute_log_prior, compute_log_likelihood = log_probs
-
-    def compute_log_terms(values):
-        log_prior = compute_log_prior(values).log_prob_sum
-        log_likelihood = compute_log_likelihood(values, data).log_prob_sum
-        return log_prior, log_prior + log_likelihood
-
-    args = (compute_log_terms, node, forward_samples, samples)
-    support, (log_priors, log_joints) = enumerate_support(*args)
-    return support, log_priors, log_joints
-
-
-# Summing the joint directly evaluates the prior once per support value;
-# adding the marginal prior and likelihood would evaluate it twice.
-def build_joint(pgm, node, latent_space):
-    def log_prob(samples, data):
-        samples = as_latent_samples(latent_space, samples)
-        log_probs = (pgm.prior.log_prob, pgm.likelihood.log_prob)
-        args = (log_probs, node, samples, samples, data)
-        return logsumexp(compute_log_joints(*args)[2], axis=-1)
-
-    def log_prob_inverse(samples, data):
-        samples = as_latent_samples(latent_space, samples)
-        forward_samples = to_forward_samples(latent_space, samples)
-        log_probs = get_inverse_log_probs(pgm)
-        args = (log_probs, node, forward_samples, samples, data)
-        return logsumexp(compute_log_joints(*args)[2], axis=-1)
-
-    return log_prob, log_prob_inverse
-
-
-def build_marginal(pgm, name, prior, likelihood, joint):
-    def sample(key, num_samples=1):
-        return remove_field(pgm.sample(key, num_samples), name)
-
-    defaults = {}
-    configure = build_configure(defaults, lambda: marginal)
-    infer = build_infer(lambda: marginal, defaults)
-    samplers = (sample, prior.sample_inverse)
-    marginal_name = f"{pgm.name}_marg_{name}"
-    node_groups = remove_node(pgm, name)
-    densities = (prior.latent_space, prior, likelihood)
-    inference = (configure, configure, infer, build_fit(), defaults)
-    args = (*samplers, marginal_name, *node_groups, *densities, *inference)
-    marginal = PGM(*args, *joint)
-    return marginal
-
-
-def remove_field(samples, name):
-    names = [field for field in samples._fields if field != name]
-    return SampleType(names)(*[getattr(samples, field) for field in names])
-
-
-def remove_node(pgm, name):
-    groups = (pgm.nodes, pgm.inputs, pgm.non_priors, pgm.latent_nodes)
-    groups = groups + (pgm.output_nodes, pgm.observable_nodes)
-    return [[node for node in nodes if node.name != name] for nodes in groups]
-
-
-def recover_discrete_posterior(pgm, name, inverse_samples, data=None):
+def recover_discrete_posterior(pgm, name, inverse_samples, data):
     node = find_discrete_node(pgm, [name])
+    child = find_observed_child(pgm, node)
     latent_space = remove_latent(pgm.latent_space, name)
-    inverse_samples = as_latent_samples(latent_space, inverse_samples)
-    forward_samples = to_forward_samples(latent_space, inverse_samples)
-    log_probs = get_inverse_log_probs(pgm)
-    args = (log_probs, node, forward_samples, inverse_samples, data)
-    support, _, log_joints = compute_log_joints(*args)
-    log_evidence = logsumexp(log_joints, axis=-1, keepdims=True)
-    log_posterior = log_joints - log_evidence
-    z_map = jp.argmax(log_posterior, axis=-1)
-    z_map_value = jp.take(support, z_map)
+    values = to_forward_samples(latent_space, inverse_samples)._asdict()
+    nodes = (pgm.output_nodes, pgm.observable_nodes)
+    observation = build_observations(data, *nodes)[child.name]
+    discrete = build_discrete_distribution(node, values)
+    build_child = partial(build_child_distribution, node, child, values)
+    args = (discrete, build_child, observation)
+    support, log_joints = compute_log_joints(*args)
+    log_posterior = log_joints - logsumexp(log_joints)
+    z_map = jp.argmax(log_posterior)
     posterior = jp.exp(log_posterior)
-    args = (support, log_posterior, posterior, z_map, z_map_value)
+    args = (support, log_posterior, posterior, z_map, support[z_map])
     return DiscretePosterior(*args)
+
+
+def remove_latent(latent_space, name):
+    names = [other for other in latent_space.names if other != name]
+    kept = {other: latent_space.bijectors[other] for other in names}
+    return LatentSpace(names, kept, SampleType(names))

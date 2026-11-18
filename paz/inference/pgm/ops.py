@@ -20,9 +20,14 @@ def build_sample_inverse(graph, prior_sample_inverse):
 
 
 def build_sample_forward(graph):
+    input_names = [node.name for node in graph.inputs]
+    nodes = {node.name: node for node in graph.nodes}
+    names = [name for name in graph.Sample._fields if name not in input_names]
+    nodes = [nodes[name] for name in names]
+
     def sample_forward(key, num_samples=1):
-        args = (graph.inputs, graph.non_priors, key, num_samples)
-        return graph.Sample(**_sample_nodes(*args))
+        samples = _sample_nodes(graph.inputs, nodes, key, num_samples)
+        return graph.Sample(**samples)
 
     return sample_forward
 
