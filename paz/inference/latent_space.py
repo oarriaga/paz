@@ -66,3 +66,16 @@ def to_inverse_samples(latent_space, forward_samples):
         bijector = latent_space.bijectors[name]
         inverse[name] = bijector.inverse(getattr(forward_samples, name))
     return latent_space.Sample(**inverse)
+
+
+# The log-density change of one sample when a density moves from inverse to
+# forward space is minus this value. The whole value of a latent counts as
+# one event.
+def compute_forward_log_det(latent_space, inverse_samples):
+    log_det = 0.0
+    for name in latent_space.names:
+        value = getattr(inverse_samples, name)
+        bijector = latent_space.bijectors[name]
+        num_dims = jp.ndim(value)
+        log_det = log_det + bijector.forward_log_det_jacobian(value, num_dims)
+    return log_det

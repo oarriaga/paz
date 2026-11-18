@@ -5,6 +5,7 @@ from jax import flatten_util
 from paz.inference.latent_space import (
     as_latent_samples,
     as_one_sample,
+    compute_forward_log_det,
     to_forward_samples,
     to_inverse_samples,
 )
@@ -72,7 +73,9 @@ def _build_density_from_flat(
 
     def log_prob(samples):
         samples = as_one_sample(latent_space, samples, shapes)
-        return log_prob_inverse(to_inverse_samples(latent_space, samples))
+        inverse_samples = to_inverse_samples(latent_space, samples)
+        log_det = compute_forward_log_det(latent_space, inverse_samples)
+        return log_prob_inverse(inverse_samples) - log_det
 
     def prob(samples):
         return jp.exp(log_prob(samples))

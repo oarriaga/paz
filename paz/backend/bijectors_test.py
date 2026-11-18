@@ -148,3 +148,28 @@ def test_chain_round_trip():
     inverse = jp.array([-3.0, 0.0, 2.0])
     recovered = bijector.inverse(bijector(inverse))
     assert jp.allclose(recovered, inverse, atol=1e-5)
+
+
+def test_softmax_centered_sums_log_det_over_all_event_axes():
+    bijector = B.SoftmaxCentered()
+    values = jax.random.normal(jax.random.PRNGKey(0), (3, 4))
+    per_row = bijector.forward_log_det_jacobian(values)
+    log_det = bijector.forward_log_det_jacobian(values, event_ndims=2)
+    assert per_row.shape == (3,)
+    assert jp.isclose(log_det, per_row.sum())
+    forward = bijector(values)
+    per_row = bijector.inverse_log_det_jacobian(forward)
+    log_det = bijector.inverse_log_det_jacobian(forward, event_ndims=2)
+    assert jp.isclose(log_det, per_row.sum())
+
+
+def test_chain_with_softmax_centered_returns_one_log_det_for_a_matrix():
+    chain = B.Chain([B.SoftmaxCentered(), B.Scale(2.0)])
+    values = jax.random.normal(jax.random.PRNGKey(0), (3, 4))
+    log_det = chain.forward_log_det_jacobian(values, event_ndims=2)
+    rows = []
+    for row in values:
+        rows.append(chain.forward_log_det_jacobian(row, event_ndims=1))
+    assert log_det.shape == ()
+    assert jp.isclose(log_det, jp.stack(rows).sum())
+

@@ -272,18 +272,21 @@ class SoftmaxCentered(_SoftmaxCenteredBase, Bijector):
         values = to_float(values)
         size = values.shape[-1] + 1
         log_norm = jax.scipy.special.logsumexp(values, axis=-1)
-        return (
+        log_det = (
             0.5 * jp.log(jp.asarray(size, dtype=values.dtype))
             + values.sum(axis=-1)
             - size * jax.nn.softplus(log_norm)
         )
+        # The last axis is summed above; the other event axes are summed here.
+        return _sum_event(log_det, event_ndims - 1)
 
     def inverse_log_det_jacobian(self, values, event_ndims=1):
         values = to_float(values)
         size = values.shape[-1]
-        return -0.5 * jp.log(jp.asarray(size, dtype=values.dtype)) - jp.log(
+        log_det = -0.5 * jp.log(jp.asarray(size, dtype=values.dtype)) - jp.log(
             values
         ).sum(axis=-1)
+        return _sum_event(log_det, event_ndims - 1)
 
     def forward_event_shape(self, event_shape):
         if len(event_shape) == 0:
