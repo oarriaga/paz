@@ -73,7 +73,3 @@ def PGM(inputs, outputs, name):
         log_prob_inverse,
     )
     return pgm
-
-
-def get_edges(nodes):
-    return [[edge.name, node.name] for node in nodes for edge in node.edges]

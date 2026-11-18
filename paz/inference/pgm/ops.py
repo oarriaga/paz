@@ -1,9 +1,11 @@
 import jax
 import jax.numpy as jp
 
+from paz.inference.infer import find_unknown_settings
 from paz.inference.infer import infer as infer_fn
 from paz.inference.latent_space import (
     as_latent_samples,
+    as_one_sample,
     to_forward_samples,
     to_inverse_samples,
 )
@@ -99,19 +101,6 @@ def build_prior_log_prob(graph, shapes, inverse_shapes):
     return prior_log_prob, prior_log_prob_inverse
 
 
-def as_one_sample(latent_space, samples, shapes):
-    samples = as_latent_samples(latent_space, samples)
-    for name in latent_space.names:
-        shape = jp.shape(getattr(samples, name))
-        expected = getattr(shapes, name)
-        if shape != expected:
-            message = f"'{name}' has shape {shape} but one sample has shape "
-            message += f"{expected}. Score one sample per call and use "
-            message += "jax.vmap for many."
-            raise ValueError(message)
-    return samples
-
-
 def compute_log_probs(nodes, values):
     log_probs = {}
     for node in nodes:
@@ -198,6 +187,10 @@ def build_configure(inference_defaults):
         **method_kwargs,
     ):
         method = method.lower()
+        unknown = find_unknown_settings(method, method_kwargs)
+        if unknown:
+            message = f"Unknown {method} settings: " + ", ".join(unknown)
+            raise TypeError(message)
         defaults = inference_defaults.setdefault(method, {})
         if num_chains is not None:
             defaults["num_chains"] = num_chains

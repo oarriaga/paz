@@ -1,5 +1,6 @@
 from collections import namedtuple
 
+import jax.numpy as jp
 
 from paz.backend import bijectors
 from paz.inference.types import SampleType
@@ -34,6 +35,19 @@ def as_latent_samples(latent_space, samples):
         raise ValueError("Missing latent samples: " + ", ".join(missing))
     filtered = {name: values[name] for name in latent_space.names}
     return latent_space.Sample(**filtered)
+
+
+def as_one_sample(latent_space, samples, shapes):
+    samples = as_latent_samples(latent_space, samples)
+    for name in latent_space.names:
+        shape = jp.shape(getattr(samples, name))
+        expected = getattr(shapes, name)
+        if shape != expected:
+            message = f"'{name}' has shape {shape} but one sample has shape "
+            message += f"{expected}. Score one sample per call and use "
+            message += "jax.vmap for many."
+            raise ValueError(message)
+    return samples
 
 
 def to_forward_samples(latent_space, inverse_samples):
