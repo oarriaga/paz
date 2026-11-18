@@ -14,6 +14,7 @@
 
 import argparse
 from collections import namedtuple
+from functools import partial
 
 import jax
 import jax.numpy as jp
@@ -98,10 +99,11 @@ if __name__ == "__main__":
     posterior = model.infer(infer_key, observations, **kwargs)
     samples = posterior.inverse_samples
     draws = jax.tree.map(jp.ravel, samples)
-    switch_args = (switch_model, "switch_index", draws, observations)
-    switch = paz.recover_discrete_posterior(*switch_args)
+    recover = partial(paz.recover_discrete_posterior, switch_model)
+    recover = partial(recover, "switch_index", data=observations)
+    switch = jax.vmap(recover)(draws)
     switch_posterior = switch.posterior.mean(axis=0)
-    map_index = int(switch.support[jp.argmax(switch_posterior)])
+    map_index = int(jp.argmax(switch_posterior))
     switch_positions = 0.5 * (x[:-1] + x[1:])
     map_x = switch_positions[map_index]
     true_x = switch_positions[true_switch_index]

@@ -42,6 +42,7 @@ approximations, verifying consistency.
 """
 
 import argparse
+from functools import partial
 
 import jax
 import jax.numpy as jp
@@ -95,7 +96,8 @@ def compute_grid_moments(density, grid):
 
 def average_switch_posterior(model, data, p_values, weights):
     samples = SampleType(["p"])(p_values)
-    switch = paz.recover_discrete_posterior(model, "z", samples, data)
+    recover = partial(paz.recover_discrete_posterior, model, "z", data=data)
+    switch = jax.vmap(recover)(samples)
     posterior_z = (weights[:, None] * switch.posterior).sum(axis=0)
     return posterior_z / posterior_z.sum()
 
@@ -170,7 +172,8 @@ if __name__ == "__main__":
     log_joints = compute_log_joints(*model_args, p_grid)
     log_enum = logsumexp(log_joints, axis=0)
     grid_samples = SampleType(["p"])(p_grid)
-    log_marginal = model.log_prob_inverse(grid_samples, observations)
+    log_prob_inverse = partial(model.log_prob_inverse, data=observations)
+    log_marginal = jax.vmap(log_prob_inverse)(grid_samples)
     p_enum = normalize_density(log_enum, p_grid)
     p_marginal = normalize_density(log_marginal, p_grid)
     z_enum = jax.nn.softmax(logsumexp(log_joints, axis=1))

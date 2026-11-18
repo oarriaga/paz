@@ -13,6 +13,7 @@
 
 import argparse
 from collections import namedtuple
+from functools import partial
 
 import jax
 import jax.numpy as jp
@@ -115,8 +116,9 @@ if __name__ == "__main__":
         kwargs = {"num_samples": args.num_samples}
         posterior = model.infer(infer_key, observations, **kwargs)
         samples = jax.tree.map(jp.ravel, posterior.inverse_samples)
-        switch_args = (switch_model, "z", samples, observations)
-        switch = paz.recover_discrete_posterior(*switch_args)
+        recover = partial(paz.recover_discrete_posterior, switch_model)
+        recover = partial(recover, "z", data=observations)
+        switch = jax.vmap(recover)(samples)
         posterior_z = switch.posterior.mean(axis=0)
         mean_line = Line(samples.slope.mean(), samples.bias.mean())
         density = posterior.as_density(method="gaussian")
