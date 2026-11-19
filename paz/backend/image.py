@@ -77,6 +77,15 @@ def write(filepath, image):
     return cv2.imwrite(filepath, image)
 
 
+def encode_JPEG(image, quality=90):
+    image = np.ascontiguousarray(paz.to_numpy(RGB_to_BGR(image)))
+    return cv2.imencode(".jpg", image, [cv2.IMWRITE_JPEG_QUALITY, quality])[1]
+
+
+def decode_JPEG(encoded_image):
+    return jp.array(BGR_to_RGB(cv2.imdecode(encoded_image, COLOR)))
+
+
 def resize(image, size, method="linear", antialias=False):
     # TODO change to split size into H, W
     return jax.image.resize(image, (*size, image.shape[-1]), method, antialias)
