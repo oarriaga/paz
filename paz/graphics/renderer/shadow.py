@@ -38,10 +38,7 @@ def compute_occlusion(compiled, receiver, light, face_chunk):
     rows = []
     if len(compiled.shapes) > 0:
         shape_args = compiled, receiver, origins, directions
-        rows.append(compute_shape_blockers(*shape_args))
-    for tree in compiled.solids:
-        solid_args = compiled, tree, receiver, (origins, directions)
-        rows.append(compute_solid_blockers(*solid_args))
+        rows.extend(compute_shape_blockers(*shape_args))
     if compiled.triangles is not None:
         blocker_args = compiled, receiver, (origins, directions), face_chunk
         rows.append(compute_triangle_blockers(*blocker_args))
@@ -64,7 +61,11 @@ def compute_shape_blockers(compiled, receiver, origins, directions):
     masks = hide_solid_leaves(compiled, masks)
     depth_args = masks, depths, casters, receiver.indices
     depth_args += receiver.normals, directions
-    return select_shadow_depths(*depth_args)
+    blockers = [select_shadow_depths(*depth_args)]
+    for tree in compiled.solids:
+        solid_args = compiled, tree, depths, receiver
+        blockers.append(compute_solid_blockers(*solid_args))
+    return blockers
 
 
 def hide_solid_leaves(compiled, masks):
@@ -76,12 +77,11 @@ def hide_solid_leaves(compiled, masks):
 
 # A carved solid is concave: its leaves may shadow their own lit side, so
 # they skip the same-shape rule that convex shapes go through.
-def compute_solid_blockers(compiled, tree, receiver, rays):
-    args = compiled.shapes, tree, rays, compiled.mask, receiver.indices
-    hit_masks, depths = csg.intersect_shadow(*args)
+def compute_solid_blockers(compiled, tree, roots, receiver):
     leaves = jp.array(csg.collect_leaves(tree))
-    shape = len(compiled.shapes), hit_masks.shape[1]
-    masks = jp.zeros(shape, dtype=bool).at[leaves].set(hit_masks)
+    args = tree, roots[leaves], compiled.mask, receiver.indices
+    hit_masks, depths = csg.intersect_shadow(*args)
+    masks = jp.zeros(roots[:, 0].shape, dtype=bool).at[leaves].set(hit_masks)
     return resolve_shadow_masks(compiled, masks)[leaves], depths
 
 

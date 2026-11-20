@@ -1,45 +1,34 @@
-import jax
 import jax.numpy as jp
 
 import paz
 from paz.graphics.constants import DIFFERENCE, INTERSECTION, UNION
-from paz.graphics.constants import EPSILON, FARAWAY
-from paz.graphics.shapes import solid
+from paz.graphics.constants import FARAWAY
+from paz.graphics.geometry import is_ahead
 
 
-def intersect(shapes, tree, rays, mask):
-    """Closest surface of a CSG tree, as one row per leaf shape.
+def intersect(tree, roots, mask):
+    """Closest surface depth of a CSG tree, as one row per leaf shape.
 
-    A leaf boundary is a surface of the tree only where crossing it changes
-    whether the ray is inside the tree. Each leaf reports the nearest such
-    crossing, so the rows shade and shadow like any other shape row.
+    `roots` holds every root of every leaf, shaped `(L, 4, N)`. A root is a
+    surface of the tree only where crossing it changes whether the ray is
+    inside the tree, so each leaf row shades and shadows like any shape.
     """
-    origins, directions = rays
-    merged = merge_leaves(shapes, tree)
-    enters, exits = compute_intervals(merged, rays)
     is_present = map_leaf_masks(tree, mask)
-    roots = select_surface_roots(tree, enters, exits, is_present)
-    depths = jp.expand_dims(jp.min(roots, axis=0), -1)
-    points = origins + depths * directions
-    eyes = jp.broadcast_to(-directions, points.shape)
-    normals = jax.vmap(solid.compute_normals)(merged, points, eyes)
-    return depths[..., 0] < FARAWAY, depths, points, normals, eyes
+    return jp.min(select_surface_roots(tree, roots, is_present), axis=1)
 
 
-def intersect_shadow(shapes, tree, rays, mask, receivers):
+def intersect_shadow(tree, roots, mask, receivers):
     """Closest surface crossing of a CSG tree, as one blocker per leaf.
 
     `receivers` holds the shape index each shadow ray starts on. The root
     it starts on is dropped by identity, since float error can put it on
     either side of the origin.
     """
-    merged = merge_leaves(shapes, tree)
-    enters, exits = compute_intervals(merged, rays)
     is_present = map_leaf_masks(tree, mask)
-    roots = select_surface_roots(tree, enters, exits, is_present)
+    surface_roots = select_surface_roots(tree, roots, is_present)
     is_receiver = jp.array(collect_leaves(tree))[:, None] == receivers
-    roots = drop_starting_roots(roots, enters, exits, is_receiver)
-    depths = jp.min(roots, axis=0)
+    surface_roots = drop_starting_roots(surface_roots, roots, is_receiver)
+    depths = jp.min(surface_roots, axis=1)
     return depths < FARAWAY, depths
 
 
@@ -52,40 +41,40 @@ def collect_leaves(tree):
     return leaves
 
 
-def merge_leaves(shapes, tree):
-    leaves = [shapes[leaf] for leaf in collect_leaves(tree)]
-    return paz.graphics.shapes.field_merge(leaves, ["transform", "type"])
-
-
-def compute_intervals(merged, rays):
-    compute_interval = paz.lock(solid.compute_interval, *rays)
-    return jax.vmap(compute_interval)(merged)
-
-
 def map_leaf_masks(tree, mask):
     leaves = collect_leaves(tree)
     return dict(zip(leaves, mask[jp.array(leaves)]))
 
 
-def drop_starting_roots(roots, enters, exits, is_receiver):
-    starts_on_enter = jp.abs(enters) < jp.abs(exits)
-    is_start = jp.stack([starts_on_enter, ~starts_on_enter]) & is_receiver
-    return jp.where(is_start, FARAWAY, roots)
+def drop_starting_roots(surface_roots, roots, is_receiver):
+    distances = jp.where(is_root(roots), jp.abs(roots), jp.inf)
+    is_start = distances == jp.min(distances, axis=1, keepdims=True)
+    is_start = is_start & jp.expand_dims(is_receiver, 1)
+    return jp.where(is_start, FARAWAY, surface_roots)
 
 
-# Keeps the leaf roots, shaped `(2, L, N)`, where the tree changes state.
-# Comparing just before with just after a root lets flush leaves agree.
-def select_surface_roots(tree, enters, exits, is_present):
-    num_leaves = len(enters)
-    roots = jp.concatenate([enters, exits])[:, None]
-    is_inside_before = (enters < roots) & (roots <= exits)
-    is_inside_after = (enters <= roots) & (roots < exits)
+# Keeps the roots where the tree changes state. Comparing just before with
+# just after a root lets leaves with flush faces agree on it.
+def select_surface_roots(tree, roots, is_present):
+    depths = roots.reshape(-1, 1, 1, roots.shape[-1])
+    is_inside_before = count_is_odd((roots >= depths) & is_root(roots))
+    is_inside_after = count_is_odd((roots > depths) & is_root(roots))
     before = evaluate_leaves(tree, is_inside_before, is_present)
     after = evaluate_leaves(tree, is_inside_after, is_present)
-    roots = roots[:, 0]
-    is_surface = (before != after) & (roots > EPSILON) & (roots < FARAWAY)
-    roots = jp.where(is_surface, roots, FARAWAY)
-    return roots.reshape(2, num_leaves, -1)
+    depths = depths[:, 0, 0]
+    is_surface = (before != after) & is_ahead(depths)
+    return jp.where(is_surface, depths, FARAWAY).reshape(roots.shape)
+
+
+# `FARAWAY` marks a row without a root. A half-space ends at infinity,
+# which is a root like any other.
+def is_root(roots):
+    return roots != FARAWAY
+
+
+# A ray is inside a shape while an odd number of its roots are still ahead.
+def count_is_odd(is_beyond):
+    return jp.sum(is_beyond, axis=2) % 2 == 1
 
 
 def evaluate_leaves(tree, is_inside, is_present):

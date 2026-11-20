@@ -6,6 +6,7 @@ import jax.numpy as jp
 import paz
 
 from paz.graphics.composite import find_closest_intersection_args, take_closest
+from paz.graphics.constants import FARAWAY
 from paz.graphics.renderer import csg
 from paz.graphics.types import Surfaces
 
@@ -17,7 +18,7 @@ TriangleHit = namedtuple("TriangleHit", TRIANGLE_HIT_NAMES.split())
 def build_candidates(compiled, rays, triangle_hit):
     rows = []
     if len(compiled.shapes) > 0:
-        rows.append(intersect_scene_shapes(compiled, rays))
+        rows.append(intersect_shapes(compiled, rays))
     if triangle_hit is not None:
         rows.append(build_triangle_row(triangle_hit))
     joined = tuple(jp.concatenate(fields, axis=0) for fields in zip(*rows))
@@ -25,28 +26,25 @@ def build_candidates(compiled, rays, triangle_hit):
     return hit_masks, depths, Surfaces(points, normals, eyes)
 
 
-def intersect_scene_shapes(compiled, rays):
-    rows = intersect_shapes(compiled.shapes, rays, compiled.mask)
+def intersect_shapes(compiled, rays):
+    shapes = paz.graphics.shapes
+    merged = shapes.field_merge(compiled.shapes, ["transform", "type"])
+    compute_roots = jax.vmap(paz.lock(shapes.compute_roots, *rays))
+    hit_masks, roots, depths = compute_roots(merged)
+    hit_masks, depths = replace_solid_hits(compiled, hit_masks, roots, depths)
+    compute_surface = jax.vmap(paz.lock(shapes.compute_surface, *rays))
+    surfaces = compute_surface(merged, roots, depths)
+    hit_masks = jp.where(jp.expand_dims(compiled.mask, 1), hit_masks, False)
+    return hit_masks, depths, *surfaces
+
+
+def replace_solid_hits(compiled, hit_masks, roots, depths):
     for tree in compiled.solids:
-        args = compiled.shapes, tree, rays, compiled.mask
         leaves = jp.array(csg.collect_leaves(tree))
-        rows = replace_rows(rows, csg.intersect(*args), leaves)
-    return rows
-
-
-def replace_rows(rows, new_rows, indices):
-    replaced = []
-    for row, new_row in zip(rows, new_rows):
-        replaced.append(row.at[indices].set(new_row))
-    return tuple(replaced)
-
-
-def intersect_shapes(shapes, rays, mask):
-    merged = paz.graphics.shapes.field_merge(shapes, ["transform", "type"])
-    intersect_fun = paz.lock(paz.graphics.shapes.intersect, *rays)
-    hit_masks, depths, points, normals, eyes = jax.vmap(intersect_fun)(merged)
-    hit_masks = jp.where(jp.expand_dims(mask, 1), hit_masks, False)
-    return hit_masks, depths, points, normals, eyes
+        solid_depths = csg.intersect(tree, roots[leaves], compiled.mask)
+        hit_masks = hit_masks.at[leaves].set(solid_depths < FARAWAY)
+        depths = depths.at[leaves].set(jp.expand_dims(solid_depths, -1))
+    return hit_masks, depths
 
 
 def build_triangle_row(triangle_hit):

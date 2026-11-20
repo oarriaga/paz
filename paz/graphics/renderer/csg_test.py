@@ -59,15 +59,21 @@ def test_node_without_operands_is_skipped_by_its_parent():
     assert bool(csg.evaluate(tree, is_inside, is_present)[0][0])
 
 
+def build_roots(*leaf_roots):
+    roots = jp.full((len(leaf_roots), 4, 1), FARAWAY)
+    for leaf, (enter, exit) in enumerate(leaf_roots):
+        roots = roots.at[leaf, :2, 0].set(jp.array([enter, exit]))
+    return roots
+
+
 def select_roots(operation, is_present=PRESENT):
-    enters = jp.array([[2.0], [1.0]])
-    exits = jp.array([[6.0], [4.0]])
-    args = CSG(0, 1, operation), enters, exits, is_present
-    return csg.select_surface_roots(*args)[..., 0]
+    roots = build_roots((2.0, 6.0), (1.0, 4.0))
+    tree = CSG(0, 1, operation)
+    return csg.select_surface_roots(tree, roots, is_present)[:, :2, 0]
 
 
 def test_union_keeps_outer_roots():
-    expected = jp.array([[FARAWAY, 1.0], [6.0, FARAWAY]])
+    expected = jp.array([[FARAWAY, 6.0], [1.0, FARAWAY]])
     assert jp.array_equal(select_roots(UNION), expected)
 
 
@@ -77,28 +83,34 @@ def test_intersection_keeps_inner_roots():
 
 
 def test_difference_keeps_cut_and_far_roots():
-    expected = jp.array([[FARAWAY, FARAWAY], [6.0, 4.0]])
+    expected = jp.array([[FARAWAY, 6.0], [FARAWAY, 4.0]])
     assert jp.array_equal(select_roots(DIFFERENCE), expected)
 
 
 def test_masked_leaf_has_no_roots():
     is_present = {0: jp.array(True), 1: jp.array(False)}
-    expected = jp.array([[2.0, FARAWAY], [6.0, FARAWAY]])
+    expected = jp.array([[2.0, 6.0], [FARAWAY, FARAWAY]])
     assert jp.array_equal(select_roots(DIFFERENCE, is_present), expected)
 
 
 def test_roots_behind_the_origin_are_dropped():
-    enters, exits = jp.array([[-3.0]]), jp.array([[2.0]])
+    roots = build_roots((-3.0, 2.0))
     is_present = {0: jp.array(True)}
-    roots = csg.select_surface_roots(0, enters, exits, is_present)
-    assert jp.array_equal(roots[..., 0], jp.array([[FARAWAY], [2.0]]))
+    surface_roots = csg.select_surface_roots(0, roots, is_present)
+    assert jp.array_equal(surface_roots[0, :2, 0], jp.array([FARAWAY, 2.0]))
+
+
+def test_half_space_is_inside_up_to_infinity():
+    roots = build_roots((2.0, 6.0), (4.0, jp.inf))
+    tree = CSG(0, 1, INTERSECTION)
+    surface_roots = csg.select_surface_roots(tree, roots, PRESENT)
+    expected = jp.array([[FARAWAY, 6.0], [4.0, FARAWAY]])
+    assert jp.array_equal(surface_roots[:, :2, 0], expected)
 
 
 def test_shadow_ray_drops_only_the_root_it_starts_on():
-    enters, exits = jp.array([[1e-4]]), jp.array([[3.0]])
-    roots = jp.stack([enters, exits])
-    args = roots, enters, exits
-    dropped = csg.drop_starting_roots(*args, jp.array([[True]]))
-    assert jp.array_equal(dropped[..., 0], jp.array([[FARAWAY], [3.0]]))
-    kept = csg.drop_starting_roots(*args, jp.array([[False]]))
+    roots = build_roots((-1e-4, 3.0))
+    dropped = csg.drop_starting_roots(roots, roots, jp.array([[True]]))
+    assert jp.array_equal(dropped[0, :2, 0], jp.array([FARAWAY, 3.0]))
+    kept = csg.drop_starting_roots(roots, roots, jp.array([[False]]))
     assert jp.array_equal(kept, roots)
