@@ -35,6 +35,13 @@ def test_load_accepts_path_object():
         assert loaded.shape == image.shape
 
 
+def test_decode_JPEG_recovers_encoded_image():
+    image = jp.full((8, 8, 3), jp.array([200, 100, 50]), dtype=jp.uint8)
+    decoded = paz.image.decode_JPEG(paz.image.encode_JPEG(image))
+    assert decoded.shape == image.shape
+    assert jp.abs(decoded.astype(int) - image.astype(int)).max() <= 3
+
+
 def test_forward_differences_matches_example_formula():
     image = jp.array([[[1.0], [2.0]], [[4.0], [8.0]]])
     dy, dx = paz.image.forward_differences(image)
