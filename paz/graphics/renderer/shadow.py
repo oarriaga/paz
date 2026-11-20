@@ -5,6 +5,7 @@ import jax.numpy as jp
 import paz
 
 from paz.graphics.composite import compute_scene_hit_mask
+from paz.graphics.renderer import csg
 from paz.graphics.renderer.intersect import intersect_shadow_groups
 
 SHADOW_ORIGIN_EPSILON = 1e-5
@@ -38,6 +39,9 @@ def compute_occlusion(compiled, receiver, light, face_chunk):
     if len(compiled.shapes) > 0:
         shape_args = compiled, receiver, origins, directions
         rows.append(compute_shape_blockers(*shape_args))
+    for tree in compiled.solids:
+        solid_args = compiled, tree, receiver, (origins, directions)
+        rows.append(compute_solid_blockers(*solid_args))
     if compiled.triangles is not None:
         blocker_args = compiled, receiver, (origins, directions), face_chunk
         rows.append(compute_triangle_blockers(*blocker_args))
@@ -57,9 +61,28 @@ def compute_shape_blockers(compiled, receiver, origins, directions):
     intersections = intersect_shadow_groups(*shadow_args)
     hit_masks, depths, _, _, _, casters = intersections
     masks = resolve_shadow_masks(compiled, hit_masks)
+    masks = hide_solid_leaves(compiled, masks)
     depth_args = masks, depths, casters, receiver.indices
     depth_args += receiver.normals, directions
     return select_shadow_depths(*depth_args)
+
+
+def hide_solid_leaves(compiled, masks):
+    for tree in compiled.solids:
+        leaves = jp.array(csg.collect_leaves(tree))
+        masks = masks.at[leaves].set(False)
+    return masks
+
+
+# A carved solid is concave: its leaves may shadow their own lit side, so
+# they skip the same-shape rule that convex shapes go through.
+def compute_solid_blockers(compiled, tree, receiver, rays):
+    args = compiled.shapes, tree, rays, compiled.mask, receiver.indices
+    hit_masks, depths = csg.intersect_shadow(*args)
+    leaves = jp.array(csg.collect_leaves(tree))
+    shape = len(compiled.shapes), hit_masks.shape[1]
+    masks = jp.zeros(shape, dtype=bool).at[leaves].set(hit_masks)
+    return resolve_shadow_masks(compiled, masks)[leaves], depths
 
 
 def compute_triangle_blockers(compiled, receiver, rays, face_chunk):

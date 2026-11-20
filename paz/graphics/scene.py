@@ -18,25 +18,38 @@ def _get_node_name(node):
     types = [SPHERE, CYLINDER, CONE, CUBE, PLANE]
     names = ["Sphere  ", "Cylinder", "Cone    ", "Cube    ", "Plane   "]
     type_to_name = dict(zip(types, names))
-    return type_to_name[node.type] if isinstance(node, Shape) else "Group   "
+    if isinstance(node, Shape):
+        name = type_to_name[node.type]
+    elif isinstance(node, paz.graphics.CSG):
+        operations = {paz.graphics.UNION: "Union"}
+        operations[paz.graphics.INTERSECTION] = "Intersection"
+        operations[paz.graphics.DIFFERENCE] = "Difference"
+        name = operations[int(node.operation)]
+    else:
+        name = "Group   "
+    return name
 
 
 def get_tree_data(node, prefix, is_last):
     BOLD, GREEN, BLUE, RESET = "\033[1m", "\033[92m", "\033[94m", "\033[0m"
     name = _get_node_name(node)
-    if isinstance(node, paz.graphics.Group):
+    if isinstance(node, (paz.graphics.Group, paz.graphics.CSG)):
         label = f"{BOLD}{BLUE}{name}{RESET}"
     else:
         label = f"{GREEN}{name}{RESET}"
     connector = "└── " if is_last else "├── "
     main_string = f"{prefix}{connector}{label}"
-    data_string = _build_node_data_string(node, prefix, is_last)
+    if isinstance(node, paz.graphics.CSG):
+        data_string = ""
+    else:
+        data_string = _build_node_data_string(node, prefix, is_last)
     now_total_lines = [main_string + data_string]
     new_prefix = prefix + ("    " if is_last else "│   ")
     now_lines, now_child_count = [], 0
-    if isinstance(node, paz.graphics.Group):
-        count = len(node.shapes)
-        for child_arg, child in enumerate(node.shapes):
+    if isinstance(node, (paz.graphics.Group, paz.graphics.CSG)):
+        children = list_children(node)
+        count = len(children)
+        for child_arg, child in enumerate(children):
             is_child_last = child_arg == count - 1
             child_data = get_tree_data(child, new_prefix, is_child_last)
             new_lines, new_child_count = child_data
@@ -122,14 +135,35 @@ def prepare_mask(mask, num_shapes, scene):
 
 def expand_mask_node(mask_value, node):
     if isinstance(node, (paz.graphics.Shape, paz.graphics.Mesh)):
-        return [mask_value]
+        expanded = [mask_value]
+    else:
+        expanded = expand_child_masks(mask_value, list_children(node))
+    return expanded
+
+
+# A nested mask holds one entry per child. A single value masks them all.
+def expand_child_masks(mask_value, children):
+    is_nested = isinstance(mask_value, (list, tuple))
+    if not (is_nested or jp.ndim(mask_value) > 0):
+        mask_value = [mask_value] * len(children)
+    if len(mask_value) != len(children):
+        raise ValueError("Nested mask length must match the node children.")
+    expanded = []
+    for child_mask, child in zip(mask_value, children):
+        expanded.extend(expand_mask_node(child_mask, child))
+    return expanded
+
+
+def list_children(node):
+    if isinstance(node, (paz.graphics.Shape, paz.graphics.Mesh)):
+        children = []
     elif isinstance(node, paz.graphics.Group):
-        group_mask = []
-        for shape_or_group in node.shapes:
-            group_mask.extend(expand_mask_node(mask_value, shape_or_group))
-        return group_mask
+        children = node.shapes
+    elif isinstance(node, paz.graphics.CSG):
+        children = [node.shape_A, node.shape_B]
     else:
         raise ValueError(f"Invalid node type: {type(node)}")
+    return children
 
 
 def expand_mask(mask, scene):
@@ -141,14 +175,20 @@ def expand_mask(mask, scene):
 
 def flatten(node, accumulated_transform):
     if isinstance(node, (paz.graphics.Shape, paz.graphics.Mesh)):
-        return [node._replace(transform=accumulated_transform @ node.transform)]
-    elif isinstance(node, paz.graphics.Group):
-        children, child_transform = [], accumulated_transform @ node.transform
-        for shape_or_group in node.shapes:
-            children.extend(flatten(shape_or_group, child_transform))
-        return children
+        transform = accumulated_transform @ node.transform
+        flat_nodes = [node._replace(transform=transform)]
     else:
-        raise ValueError(f"Invalid node type{type(node)}.")
+        flat_nodes = flatten_children(node, accumulated_transform)
+    return flat_nodes
+
+
+def flatten_children(node, accumulated_transform):
+    if isinstance(node, paz.graphics.Group):
+        accumulated_transform = accumulated_transform @ node.transform
+    flat_nodes = []
+    for child in list_children(node):
+        flat_nodes.extend(flatten(child, accumulated_transform))
+    return flat_nodes
 
 
 def flatten_scene(scene):
@@ -195,7 +235,69 @@ def compile(scene, lights, mask, shadow_mask=None):
     shapes, shape_mask, shadow_mask = sort_by_group(*shape_args)
     args = shapes, build_triangles(meshes), lights, shape_mask
     args += shadow_mask, triangle_mask, triangle_shadow_mask
-    return paz.graphics.CompiledScene(*args)
+    solids = build_solids(scene, flat_scene, shapes)
+    return paz.graphics.CompiledScene(*args, solids)
+
+
+# One CSG tree per solid, with indices into `shapes` as leaves.
+def build_solids(scene, flat_scene, shapes):
+    ID_to_arg = {id(shape): arg for arg, shape in enumerate(shapes)}
+    shape_args = [ID_to_arg.get(id(node)) for node in flat_scene]
+    return find_solids(scene.nodes, shape_args)
+
+
+def find_solids(nodes, shape_args):
+    solids = []
+    for node, node_args in split_shape_args(nodes, shape_args):
+        if isinstance(node, paz.graphics.CSG):
+            solids.append(build_tree(node, node_args))
+        elif isinstance(node, paz.graphics.Group):
+            solids.extend(find_solids(node.shapes, node_args))
+    return solids
+
+
+# Pairs each node with the shape indices of its own leaves.
+def split_shape_args(nodes, shape_args):
+    pairs, offset = [], 0
+    for node in nodes:
+        final = offset + count_leaves(node)
+        pairs.append((node, shape_args[offset:final]))
+        offset = final
+    return pairs
+
+
+def count_leaves(node):
+    if isinstance(node, (paz.graphics.Shape, paz.graphics.Mesh)):
+        count = 1
+    else:
+        count = sum(count_leaves(child) for child in list_children(node))
+    return count
+
+
+def build_tree(node, shape_args):
+    if isinstance(node, paz.graphics.Shape):
+        tree = shape_args[0]
+    elif isinstance(node, paz.graphics.Mesh):
+        raise ValueError("A Mesh cannot be a CSG operand.")
+    else:
+        pairs = split_shape_args(list_children(node), shape_args)
+        trees = [build_tree(*pair) for pair in pairs]
+        tree = join_trees(node, trees)
+    return tree
+
+
+# A Group operand is the union of its children.
+def join_trees(node, trees):
+    if isinstance(node, paz.graphics.CSG):
+        operation = node.operation
+    else:
+        operation = paz.graphics.UNION
+    if len(trees) == 0:
+        raise ValueError("An empty Group cannot be a CSG operand.")
+    joined = trees[0]
+    for tree in trees[1:]:
+        joined = paz.graphics.CSG(joined, tree, operation)
+    return joined
 
 
 def select_shapes(flat_scene, mask, shadow_mask):

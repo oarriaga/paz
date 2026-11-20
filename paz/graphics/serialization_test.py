@@ -179,6 +179,33 @@ def test_full_scene_save_and_load_round_trip(tmp_path, sample_scene):
     assert_pytrees_allclose(loaded_scene, sample_scene)
 
 
+def test_save_and_load_scene_with_solid(tmp_path, sample_group, sample_shape):
+    inner = types.CSG(sample_shape, sample_group, constants.UNION)
+    solid = types.CSG(inner, types.Cube(), constants.DIFFERENCE)
+    scene = types.Scene([types.Group([solid]), sample_shape])
+    filepath = tmp_path / "scene_with_solid"
+    serialization.save(filepath, scene)
+    loaded_scene = serialization.load(filepath)
+    assert_pytrees_allclose(loaded_scene, scene)
+
+
+def test_save_and_load_standalone_solid(tmp_path, sample_shape):
+    solid = types.CSG(sample_shape, types.Cube(), constants.INTERSECTION)
+    filepath = tmp_path / "solid"
+    serialization.save(filepath, solid)
+    loaded_solid = serialization.load(filepath)
+    assert isinstance(loaded_solid, types.CSG)
+    assert_pytrees_allclose(loaded_solid, solid)
+
+
+def test_save_and_load_group_with_solid(tmp_path, sample_shape):
+    solid = types.CSG(sample_shape, types.Cube(), constants.DIFFERENCE)
+    group = types.Group([solid, sample_shape])
+    filepath = tmp_path / "group_with_solid"
+    serialization.save(filepath, group)
+    assert_pytrees_allclose(serialization.load(filepath), group)
+
+
 def test_save_and_load_standalone_group(tmp_path, sample_group):
     """Tests a round-trip for a standalone Group object."""
     filepath = tmp_path / "group"
@@ -222,7 +249,7 @@ def test_load_raises_error_for_unknown_top_level_type(tmp_path):
     with open(filepath, "w") as f:
         json.dump(invalid_data, f)
     with pytest.raises(
-        TypeError, match="Data is not a valid Scene, Group or Shape"
+        TypeError, match="Data is not a valid Scene, Group, Shape or CSG"
     ):
         serialization.load(dir_path)
 

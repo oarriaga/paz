@@ -6,6 +6,7 @@ import jax.numpy as jp
 import paz
 
 from paz.graphics.composite import find_closest_intersection_args, take_closest
+from paz.graphics.renderer import csg
 from paz.graphics.types import Surfaces
 
 TRIANGLE_HIT_NAMES = "hit_mask depth points normals eyes albedo primitive "
@@ -16,12 +17,28 @@ TriangleHit = namedtuple("TriangleHit", TRIANGLE_HIT_NAMES.split())
 def build_candidates(compiled, rays, triangle_hit):
     rows = []
     if len(compiled.shapes) > 0:
-        rows.append(intersect_shapes(compiled.shapes, rays, compiled.mask))
+        rows.append(intersect_scene_shapes(compiled, rays))
     if triangle_hit is not None:
         rows.append(build_triangle_row(triangle_hit))
     joined = tuple(jp.concatenate(fields, axis=0) for fields in zip(*rows))
     hit_masks, depths, points, normals, eyes = joined
     return hit_masks, depths, Surfaces(points, normals, eyes)
+
+
+def intersect_scene_shapes(compiled, rays):
+    rows = intersect_shapes(compiled.shapes, rays, compiled.mask)
+    for tree in compiled.solids:
+        args = compiled.shapes, tree, rays, compiled.mask
+        leaves = jp.array(csg.collect_leaves(tree))
+        rows = replace_rows(rows, csg.intersect(*args), leaves)
+    return rows
+
+
+def replace_rows(rows, new_rows, indices):
+    replaced = []
+    for row, new_row in zip(rows, new_rows):
+        replaced.append(row.at[indices].set(new_row))
+    return tuple(replaced)
 
 
 def intersect_shapes(shapes, rays, mask):
