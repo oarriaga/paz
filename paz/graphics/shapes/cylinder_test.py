@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jp
+import pytest
 
 import paz
 from paz.graphics.constants import EPSILON, FARAWAY
@@ -190,3 +191,21 @@ def test_bottom_corner_ray_escapes_cap():
     point = jp.array([[0.9995, -1.0, 0.0]])
     directions = jp.array([[0.707, -0.707, 0.0]])
     assert_corner_escapes(compute_lower_cap_normals, point, directions)
+
+
+def compute_depth(origin, direction):
+    return intersect_canonical_cylinder(origin[None], direction[None])[2][0, 0]
+
+
+@pytest.mark.parametrize("slope", [0.0, 1e-20, -1e-20, 1e-9])
+def test_depth_gradient_is_finite_for_a_level_ray(slope):
+    rays = jp.array([-3.0, 0.2, 0.0]), jp.array([1.0, slope, 0.0])
+    gradients = jax.grad(compute_depth, argnums=(0, 1))(*rays)
+    assert all(bool(jp.all(jp.isfinite(gradient))) for gradient in gradients)
+
+
+@pytest.mark.parametrize("slope", [0.0, 1e-12, -1e-12, 1e-5])
+def test_depth_gradient_is_finite_for_a_vertical_ray(slope):
+    rays = jp.array([0.3, 5.0, 0.0]), jp.array([slope, -1.0, 0.0])
+    gradients = jax.grad(compute_depth, argnums=(0, 1))(*rays)
+    assert all(bool(jp.all(jp.isfinite(gradient))) for gradient in gradients)

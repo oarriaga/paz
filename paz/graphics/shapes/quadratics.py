@@ -47,7 +47,6 @@ def intersect_canonical_cone(origins, directions):
 def intersect_capped(a, b, c, origins, directions, minimum, maximum):
     has_sides, side_A, side_B = solve_quadratic_depth(a, b, c)
     sides = jp.hstack([side_A, side_B])
-    has_sides = has_sides & jp.all(jp.isfinite(sides), axis=1, keepdims=True)
     lower_cap = intersect_infinite_plane(origins, directions, minimum)
     upper_cap = intersect_infinite_plane(origins, directions, maximum)
     caps = jp.hstack([lower_cap, upper_cap])
@@ -66,13 +65,14 @@ def is_between(depths, depth_A, depth_B):
     return (lower <= depths) & (depths < upper)
 
 
-# Without side roots a ray is inside everywhere or nowhere, as at its origin.
+# Without side roots the quadratic keeps one sign along the whole ray.
 def is_inside_quadratic(a, c, has_sides, sides, depths):
     near = jp.min(sides, axis=1, keepdims=True)
     far = jp.max(sides, axis=1, keepdims=True)
     is_between_sides = (near < depths) & (depths <= far)
-    is_inside = is_between_sides == (a > 0.0)
-    return jp.where(has_sides, is_inside, c <= 0.0)
+    is_inside = is_between_sides == (a >= 0.0)
+    is_inside_without_sides = jp.where(a == 0.0, c < 0.0, a < 0.0)
+    return jp.where(has_sides, is_inside, is_inside_without_sides)
 
 
 def select_roots(is_root, roots):
