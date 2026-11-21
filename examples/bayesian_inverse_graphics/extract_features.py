@@ -12,6 +12,7 @@ import jax
 import jax.numpy as jp
 import keras
 import paz
+import figures
 
 
 def build_render(image_shape, intrinsics, camera_origin, shadows):
@@ -134,6 +135,18 @@ def extract_invariances(layer_to_results, layer_names, top_k=5):
     errors, layer_to_features, num_features = layer_errors
     args = find_top_k_indices(errors, num_features, top_k)
     return build_invariances_dict(*args, layer_names, layer_to_features)
+
+
+def gather_selected_maps(invariances, layer_names, layer_to_results, maps):
+    """Picks the maps `(2, N, h, w)` of each selected feature."""
+    selected, selected_maps = [], []
+    for selection in invariances.values():
+        layer, channel = selection["layer"], selection["featuremap"]
+        layer_arg = layer_names.index(layer)
+        rank = layer_to_results[layer_arg][0].index(channel)
+        selected.append((layer, channel))
+        selected_maps.append(maps[layer_arg][:, :, rank])
+    return selected, selected_maps
 
 
 def write_image(image, directory, filename):
@@ -280,6 +293,7 @@ paz.file.write_json(layer_map, str(layer_names_file))
 
 image_args = RNG.integers(0, len(true_images), args.num_images)
 layer_to_results, results, kept_layer_names = [], [], []
+example_args, layer_errors, layer_to_maps = image_args[:3], {}, []
 num_layers = len(layer_names)
 for layer_arg, layer_name in enumerate(layer_names):
     layer_num = layer_arg + 1
@@ -305,6 +319,11 @@ for layer_arg, layer_name in enumerate(layer_names):
     invariant_errors = error_per_featuremap[invariant_indices]
     invariant_true_features = true_features[:, invariant_indices]
     invariant_pred_features = pred_features[:, invariant_indices]
+    layer_errors[layer_name] = error_per_featuremap
+    example_true_features = invariant_true_features[example_args]
+    example_pred_features = invariant_pred_features[example_args]
+    example_maps = np.stack([example_true_features, example_pred_features])
+    layer_to_maps.append(example_maps)
     kept_layer_arg = len(kept_layer_names) - 1
     layer_path = Path(root) / f"layer_{kept_layer_arg:02d}"
     paz.directory.make(str(layer_path))
@@ -346,6 +365,13 @@ invariances = extract_invariances(
 )
 invariances_file = Path(root) / args.invariance_filename
 paz.file.write_json(invariances, str(invariances_file))
+map_args = (invariances, kept_layer_names, layer_to_results, layer_to_maps)
+selected, selected_maps = gather_selected_maps(*map_args)
+example_pairs = [true_images[example_args], pred_images[example_args]]
+example_images = np.stack(example_pairs)
+figure_data = (example_images, selected_maps, selected, layer_errors)
+with open(Path(root) / "figure_data.pkl", "wb") as filedata:
+    pickle.dump(figure_data, filedata)
 layer_labels, label_names = [], []
 for layer_arg in range(len(kept_layer_names)):
     layer_label = f"layer_{layer_arg:02d}"
@@ -362,3 +388,7 @@ for name in layer_labels:
     data_frame[name, "featuremap"] = col.astype(int)
 data_frame.style.to_latex(str(Path(root) / "results.tex"))
 data_frame.to_csv(str(Path(root) / "results.csv"))
+# Figures come last so a drawing failure cannot cost the results above.
+figures.configure()
+figures_directory = Path(paz.directory.make(Path(root) / "figures"))
+figures.write_feature_figures(figures_directory, *figure_data)
