@@ -67,8 +67,9 @@ def transfer(source, backbone):
 
 def transfer_layer(source, layer, prefix):
     for attribute, name in NORM_NAMES.items():
-        scale = read(source, prefix + name + ".weight")
-        getattr(layer, attribute).scale.assign(scale)
+        norm = getattr(layer, attribute)
+        if norm is not None:
+            norm.scale.assign(read(source, prefix + name + ".weight"))
     layer.layer_scalar.scale.assign(read(source, prefix + "layer_scalar")[0])
     transfer_attention(source, layer, prefix + "self_attn.")
     transfer_feedforward(source, layer, prefix + "mlp.")
@@ -79,8 +80,9 @@ def transfer_attention(source, layer, prefix):
     num_heads = layer.config.num_query_heads
     query = read(source, prefix + "q_proj.weight")
     layer.query_proj.kernel.assign(to_heads(query, num_heads, head_dim))
-    key = read(source, prefix + "k_proj.weight")
-    layer.key_proj.kernel.assign(to_heads(key, num_kv_heads, head_dim))
+    if layer.key_proj is not None:
+        key = read(source, prefix + "k_proj.weight")
+        layer.key_proj.kernel.assign(to_heads(key, num_kv_heads, head_dim))
     if layer.value_proj is not None:
         value = read(source, prefix + "v_proj.weight")
         layer.value_proj.kernel.assign(to_heads(value, num_kv_heads, head_dim))

@@ -33,7 +33,7 @@ if __name__ == "__main__":
     add("--model_name", default="gemma4_2b")
     # Default downloads the published weights; pass a local dir to override.
     add("--models_path", default=None)
-    add("--max_tokens", default=64, type=int)
+    add("--max_tokens", default=256, type=int)
     args = parser.parse_args()
     generate = GenerateGemma4(
         args.model_name, args.max_tokens, models_path=args.models_path)

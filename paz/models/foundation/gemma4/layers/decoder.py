@@ -6,7 +6,7 @@ from paz.models.foundation.gemma4.configuration import (
     build_cache_head_dim, build_cache_num_kv_heads, build_feedforward_dim,
     build_head_dim, build_num_kv_heads, build_partial_rotary_factor,
     build_rope_scaling_factor, build_rope_wavelength,
-    is_global_attention_layer, shares_key_and_value,
+    is_global_attention_layer, is_kv_shared_layer, shares_key_and_value,
     use_sliding_window)
 from paz.models.transformers.numerics import add_residual, clip_float16
 from paz.models.foundation.gemma4.configuration import TextBackboneArgs
@@ -58,16 +58,25 @@ class Gemma4DecoderLayer(Layer):
             "btd,ndh->btnh", config.num_query_heads, head_dim, dtype,
             "attention_query")
         self.query_norm = build_rms_norm(epsilon, dtype, "attention_query_norm")
+        # KV-shared layers reuse an earlier layer's keys and values, so their
+        # own key and value sublayers would never be called nor built.
+        if is_kv_shared_layer(config, self.layer_index):
+            self.key_proj, self.key_norm = None, None
+            self.value_proj, self.value_norm = None, None
+        else:
+            self.build_key_and_value_layers(head_dim, epsilon, dtype)
+        self.output_proj = dense(
+            "btnh,nhd->btd", config.hidden_dim, dtype, "attention_output")
+        self.post_attention_norm = build_rms_norm(
+            epsilon, dtype, "post_attention_norm")
+
+    def build_key_and_value_layers(self, head_dim, epsilon, dtype):
         self.key_proj = head_projection(
             "btd,kdh->btkh", self.num_kv_heads, head_dim, dtype,
             "attention_key")
         self.key_norm = build_rms_norm(epsilon, dtype, "attention_key_norm")
         self.value_proj = self.build_value_projection(head_dim, dtype)
         self.value_norm = build_v_norm(epsilon, dtype, "attention_value_norm")
-        self.output_proj = dense(
-            "btnh,nhd->btd", config.hidden_dim, dtype, "attention_output")
-        self.post_attention_norm = build_rms_norm(
-            epsilon, dtype, "post_attention_norm")
 
     def build_value_projection(self, head_dim, dtype):
         # None where the key projection doubles as the value one, so the
