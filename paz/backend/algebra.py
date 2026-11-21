@@ -177,15 +177,33 @@ def solve_quadratic(a, b, c):
     valid_mask = discriminator > 0  # TODO why is >= bad for auto-diff
     discriminator = jp.where(valid_mask, discriminator, 1e-4)
     sqrt_discriminator = jp.sqrt(discriminator)
-    solution_A = (-b - sqrt_discriminator) / (2.0 * a)
-    solution_B = (-b + sqrt_discriminator) / (2.0 * a)
-    # sign_b = jp.where(b >= 0.0, 1.0, -1.0)
-    # q = -0.5 * (b + sign_b * sqrt_discriminator)
-    # safe_q = jp.where(q == 0.0, 1.0, q)
-    # safe_a = jp.where(a == 0.0, 1.0, a)
-    # solution_A = q / safe_a
-    # solution_B = c / safe_q
+    # Adding terms of equal sign avoids the cancellation of (-b + sqrt) / 2a.
+    sign_b = jp.where(b >= 0.0, 1.0, -1.0)
+    q = -0.5 * (b + sign_b * sqrt_discriminator)
+    # A linear equation keeps its root in `c / q`; the other one moves far.
+    root_A = divide_far(q, a)
+    root_B = c / q
+    solution_A = jp.where(b >= 0.0, root_A, root_B)
+    solution_B = jp.where(b >= 0.0, root_B, root_A)
     return solution_A, solution_B, valid_mask
+
+
+def divide_far(numerator, denominator):
+    """Divides, placing quotients of a near-zero denominator far away
+
+    # Arguments
+        numerator: Array
+        denominator: Array
+
+    # Returns
+        quotient: Array. Where the denominator is near zero it is a large
+            constant with the quotient's sign, so it and its gradient
+            stay finite.
+    """
+    is_small = jp.abs(denominator) < 1e-12
+    quotient = numerator / jp.where(is_small, 1.0, denominator)
+    is_positive = (numerator >= 0.0) == (denominator >= 0.0)
+    return jp.where(is_small, jp.where(is_positive, 1e30, -1e30), quotient)
 
 
 def add_zeros(vectors):

@@ -24,5 +24,5 @@ def intersect_canonical_sphere(ray_origin, ray_directions):
     depth = apply_hit_mask(hit_mask, depth)
     depth = jp.expand_dims(depth, axis=-1)
     depths = jp.vstack([depths_A, depths_B])
-    depths = paz.graphics.shapes.pad_depths(depths, hit_mask, 2)
+    depths = paz.graphics.shapes.pad_depths(depths, is_valid, 2)
     return hit_mask, depths, depth

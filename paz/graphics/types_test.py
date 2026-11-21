@@ -184,8 +184,8 @@ def test_scene_raises_error_for_non_list_nodes(valid_parent_array):
 
 
 def test_scene_raises_error_for_invalid_node_content(valid_parent_array):
-    """Tests that all elements in `nodes` must be Shape, Group or Mesh."""
-    with pytest.raises(TypeError, match="must be Shape, Group or Mesh"):
+    """Tests that `nodes` elements must be Shape, Group, Mesh or CSG."""
+    with pytest.raises(TypeError, match="must be Shape, Group, Mesh or CSG"):
         types.Scene(
             nodes=[types.Sphere(), 123], parent_array=valid_parent_array
         )

@@ -3,6 +3,10 @@ import paz
 from paz.graphics.constants import FARAWAY, EPSILON
 
 
+def is_ahead(depths):
+    return (depths > EPSILON) & (depths < FARAWAY)
+
+
 def compute_quadratic_is_hit(depths_A, depths_B, is_valid):
     """Computes is hit mask from quadratic depths solution
 

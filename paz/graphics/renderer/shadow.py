@@ -5,6 +5,7 @@ import jax.numpy as jp
 import paz
 
 from paz.graphics.composite import compute_scene_hit_mask
+from paz.graphics.renderer import csg
 from paz.graphics.renderer.intersect import intersect_shadow_groups
 
 SHADOW_ORIGIN_EPSILON = 1e-5
@@ -55,11 +56,25 @@ def compute_light_directions(light, points):
 def compute_shape_blockers(compiled, receiver, origins, directions):
     shadow_args = compiled.shapes, origins, directions
     intersections = intersect_shadow_groups(*shadow_args)
-    hit_masks, depths, _, _, _, casters = intersections
+    hit_masks, roots, _, _, _, casters = intersections
     masks = resolve_shadow_masks(compiled, hit_masks)
-    depth_args = masks, depths, casters, receiver.indices
+    depth_args = masks, roots, casters, receiver.indices
     depth_args += receiver.normals, directions
-    return select_shadow_depths(*depth_args)
+    masks, depths = select_shadow_depths(*depth_args)
+    return replace_csg_blockers(compiled, receiver, roots, masks, depths)
+
+
+# A carved shape is concave: its leaves may shadow their own lit side, so
+# they replace the same-shape rule that convex shapes go through.
+def replace_csg_blockers(compiled, receiver, roots, masks, depths):
+    is_caster = resolve_shadow_masks(compiled, jp.ones_like(masks))
+    for tree in compiled.csg_trees:
+        leaves = jp.array(csg.collect_leaves(tree))
+        args = tree, roots[leaves], compiled.mask, receiver.indices
+        hit_masks, csg_depths = csg.intersect_shadow(*args)
+        masks = masks.at[leaves].set(hit_masks & is_caster[leaves])
+        depths = depths.at[leaves].set(csg_depths)
+    return masks, depths
 
 
 def compute_triangle_blockers(compiled, receiver, rays, face_chunk):
