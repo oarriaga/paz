@@ -54,11 +54,19 @@ def test_intersection_hit_wall():
 
 
 def test_intersection_hit_cap():
+    origins = jp.array([[0.0, -5.0, 0.0]])
+    directions = jp.array([[0.0, 1.0, 0.0]])
+    hit_mask, _, depth = intersect_canonical_cone(origins, directions)
+    assert hit_mask[0]
+    assert jp.allclose(depth[0], 4.0)
+
+
+def test_intersection_hit_tip():
     origins = jp.array([[0.0, 5.0, 0.0]])
     directions = jp.array([[0.0, -1.0, 0.0]])
     hit_mask, _, depth = intersect_canonical_cone(origins, directions)
     assert hit_mask[0]
-    assert jp.allclose(depth[0], 6.0)
+    assert jp.allclose(depth[0], 5.0)
 
 
 def test_normal_on_cap():

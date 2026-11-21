@@ -1,16 +1,9 @@
 import jax.numpy as jp
 import paz
 
-from paz.graphics.geometry import (
-    compute_points3D,
-    replace_misses,
-    compute_quadratic_depths,
-    is_ahead,
-)
-from paz.graphics.shapes.caps import (
-    intersect_cone_caps,
-    intersect_cylinder_caps,
-)
+from paz.graphics.constants import FARAWAY
+from paz.graphics.geometry import is_ahead, replace_misses
+from paz.graphics.shapes.caps import intersect_infinite_plane
 
 
 def get_ring_quadratic_coefficients(ray_origins, ray_directions):
@@ -36,83 +29,54 @@ def get_cone_quadratic_coefficients(ray_origins, ray_directions):
     return a, b, c
 
 
-def compute_bounding_mask(points3D, minimum, maximum):
-    points3D_y = points3D[:, 1:2]
-    above_min = minimum < points3D_y
-    below_max = points3D_y < maximum
-    bounding_mask = jp.logical_and(above_min, below_max)
-    return bounding_mask
-
-
-def bound_depth(depth, origins, directions, valid_mask, minimum, maximum):
-    points3D = compute_points3D(origins, directions, depth)
-    bounding_mask = compute_bounding_mask(points3D, minimum, maximum)
-    bounding_mask = jp.logical_and(valid_mask, bounding_mask)
-    bounded_depth = replace_misses(depth, bounding_mask)
-    return bounding_mask, bounded_depth
-
-
 def solve_quadratic_depth(a, b, c):
     depth_A, depth_B, valid_mask = paz.algebra.solve_quadratic(a, b, c)
     return valid_mask, depth_A, depth_B
 
 
-def intersect_quadratic(a, b, c, origins, directions, minimum, maximum):
-    valid_mask, depth_A, depth_B = solve_quadratic_depth(a, b, c)
-    args = (origins, directions, valid_mask, minimum, maximum)
-    bounding_mask_A, bounded_depth_A = bound_depth(depth_A, *args)
-    bounding_mask_B, bounded_depth_B = bound_depth(depth_B, *args)
-    mask = jp.logical_or(bounding_mask_A, bounding_mask_B)
-    depths = compute_quadratic_depths(bounded_depth_A, bounded_depth_B)
-    mask = jp.logical_and(mask, is_ahead(depths))
-    depths = replace_misses(depths, mask)
-    sorted_depths = jp.vstack([bounded_depth_A[:, 0], bounded_depth_B[:, 0]])
-    return jp.squeeze(mask, -1), sorted_depths, depths
-
-
-def intersect_caped_quadratic(body_intersections, caps_intersections):
-    body_mask, body_depths, body_depth = body_intersections
-    caps_mask, caps_depths, caps_depth = caps_intersections
-    body_mask = jp.expand_dims(body_mask, axis=1)
-    caps_mask = jp.expand_dims(caps_mask, axis=1)
-    hit_mask = jp.logical_or(body_mask, caps_mask)
-    depths = jp.concatenate([body_depth, caps_depth], axis=1)
-    depth = jp.min(depths, axis=1, keepdims=True)
-    depth = replace_misses(depth, hit_mask)
-
-    hit_mask = jp.squeeze(hit_mask, axis=1)
-    depths = jp.vstack([body_depths, caps_depths])
-    return hit_mask, depths, depth
-
-
 def intersect_canonical_cylinder(origins, directions):
-    minimum = -1.0
-    maximum = 1.0
-    a, b, c = get_ring_quadratic_coefficients(origins, directions)
-    args = (origins, directions, minimum, maximum)
-    body_intersections = intersect_quadratic(a, b, c, *args)
-    caps_intersections = intersect_cylinder_caps(*args)
-    return intersect_caped_quadratic(body_intersections, caps_intersections)
-
-
-# def intersect_canonical_cylinder(origins, directions):
-#     minimum, maximum = -1.0, 1.0
-#     a, b, c = get_ring_quadratic_coefficients(origins, directions)
-#     args = (origins, directions, minimum, maximum)
-#     body_intersections = intersect_quadratic(a, b, c, *args)
-#     body_hit_mask, body_depths, body_depth = body_intersections
-#     caps_intersections = intersect_cylinder_caps(*args)
-#     caps_hit_mask, caps_depths, caps_depth = caps_intersections
-#     hit_mask = jp.logical_or(body_hit_mask, caps_hit_mask)
-#     depths = jp.concatenate([body_depths, caps_depths], axis=0)
-#     depth = jp.expand_dims(jp.min(depths, axis=0), axis=1)
-#     return hit_mask, depths, depth
+    coefficients = get_ring_quadratic_coefficients(origins, directions)
+    return intersect_capped(*coefficients, origins, directions, -1.0, 1.0)
 
 
 def intersect_canonical_cone(origins, directions):
-    minimum, maximum = -1.0, 0.0
-    a, b, c = get_cone_quadratic_coefficients(origins, directions)
-    args = (origins, directions, minimum, maximum)
-    body_intersections = intersect_quadratic(a, b, c, *args)
-    caps_intersections = intersect_cone_caps(*args)
-    return intersect_caped_quadratic(body_intersections, caps_intersections)
+    coefficients = get_cone_quadratic_coefficients(origins, directions)
+    return intersect_capped(*coefficients, origins, directions, -1.0, 0.0)
+
+
+def intersect_capped(a, b, c, origins, directions, minimum, maximum):
+    has_sides, side_A, side_B = solve_quadratic_depth(a, b, c)
+    sides = jp.hstack([side_A, side_B])
+    has_sides = has_sides & jp.all(jp.isfinite(sides), axis=1, keepdims=True)
+    lower_cap = intersect_infinite_plane(origins, directions, minimum)
+    upper_cap = intersect_infinite_plane(origins, directions, maximum)
+    caps = jp.hstack([lower_cap, upper_cap])
+    is_side = has_sides & is_between(sides, lower_cap, upper_cap)
+    is_cap = is_inside_quadratic(a, c, has_sides, sides, caps)
+    is_root = jp.hstack([is_side, is_cap])
+    return select_roots(is_root, jp.hstack([sides, caps]))
+
+
+# A side root is real between the caps and a cap root is real inside the
+# quadratic. Both compare the same depths, one including the tie the other
+# excludes, so a ray crossing a rim gets an even number of roots.
+def is_between(depths, depth_A, depth_B):
+    lower = jp.minimum(depth_A, depth_B)
+    upper = jp.maximum(depth_A, depth_B)
+    return (lower <= depths) & (depths < upper)
+
+
+# Without side roots a ray is inside everywhere or nowhere, as at its origin.
+def is_inside_quadratic(a, c, has_sides, sides, depths):
+    near = jp.min(sides, axis=1, keepdims=True)
+    far = jp.max(sides, axis=1, keepdims=True)
+    is_between_sides = (near < depths) & (depths <= far)
+    is_inside = is_between_sides == (a > 0.0)
+    return jp.where(has_sides, is_inside, c <= 0.0)
+
+
+def select_roots(is_root, roots):
+    roots = replace_misses(roots, is_root)
+    ahead_roots = replace_misses(roots, is_ahead(roots))
+    depth = jp.min(ahead_roots, axis=1, keepdims=True)
+    return depth[:, 0] < FARAWAY, roots.T, depth

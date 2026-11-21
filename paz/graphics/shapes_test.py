@@ -171,6 +171,33 @@ def test_roots_ahead_count_whether_a_ray_is_inside(build, origin_radius):
     assert bool(jp.all((sampled == predicted) | is_near_root))
 
 
+def sample_rim_rays(radius, height):
+    keys = jax.random.split(jax.random.PRNGKey(0), 3)
+    angles = jax.random.uniform(keys[0], (200_000,), maxval=2.0 * jp.pi)
+    heights = jp.full_like(angles, height)
+    circle = radius * jp.cos(angles), heights, radius * jp.sin(angles)
+    rim = jp.stack(circle, axis=1)
+    targets = rim + 1e-3 * jax.random.normal(keys[1], rim.shape)
+    origins = jax.random.normal(keys[2], rim.shape)
+    origins = 4.0 * paz.algebra.normalize(origins)
+    return origins, paz.algebra.normalize(targets - origins)
+
+
+@pytest.mark.parametrize("build, height", [(Cylinder, 1.0), (Cone, -1.0)])
+def test_rays_grazing_a_rim_have_an_even_number_of_roots(build, height):
+    rays = sample_rim_rays(1.0, height)
+    _, roots, _ = paz.graphics.shapes.compute_roots(build(), *rays)
+    num_roots = jp.sum(roots != FARAWAY, axis=0)
+    assert bool(jp.all(num_roots % 2 == 0))
+
+
+def test_rays_grazing_the_cone_tip_have_an_even_number_of_roots():
+    rays = sample_rim_rays(0.0, 1.0)
+    _, roots, _ = paz.graphics.shapes.compute_roots(Cone(), *rays)
+    num_roots = jp.sum(roots != FARAWAY, axis=0)
+    assert bool(jp.all(num_roots % 2 == 0))
+
+
 def compute_exit_normal(origin, direction):
     shape, rays = Cylinder(), (origin[None], direction[None])
     _, roots, _ = paz.graphics.shapes.compute_roots(shape, *rays)
