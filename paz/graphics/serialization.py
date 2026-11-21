@@ -4,7 +4,7 @@ import pathlib
 import jax.numpy as jp
 import numpy as np
 
-from paz.graphics.types import Material, Pattern, Shape, Group, Scene
+from paz.graphics.types import Material, Pattern, Shape, Group, Scene, CSG
 import paz
 
 
@@ -18,6 +18,10 @@ def is_group(node_data):
 
 def is_shape(node_data):
     return "material" in node_data
+
+
+def is_csg(node_data):
+    return "operation" in node_data
 
 
 def is_scene(node_data):
@@ -122,8 +126,8 @@ def build_shape(data, base_path=None):
 
 
 def build_group(data, base_path=None):
-    shapes = [build_shape(shape, base_path) for shape in data["shapes"]]
-    return Group(shapes=shapes, transform=jp.array(data["transform"]))
+    (group,) = build_node(data, base_path)
+    return group
 
 
 def build_node(node_data, base_path=None):
@@ -134,8 +138,16 @@ def build_node(node_data, base_path=None):
         for shape_or_group_data in node_data["shapes"]:
             nodes.extend(build_node(shape_or_group_data, base_path))
         return [Group(nodes, jp.array(node_data["transform"]))]
+    elif is_csg(node_data):
+        return [build_csg(node_data, base_path)]
     else:
         raise ValueError(f"Invalid node type {type(node_data)}")
+
+
+def build_csg(data, base_path=None):
+    (shape_A,) = build_node(data["shape_A"], base_path)
+    (shape_B,) = build_node(data["shape_B"], base_path)
+    return CSG(shape_A, shape_B, data["operation"])
 
 
 def build_scene(data, base_path=None):
@@ -158,6 +170,8 @@ def load(filepath):
         data = build_group(json_data, base_path)
     elif is_shape(json_data):
         data = build_shape(json_data, base_path)
+    elif is_csg(json_data):
+        data = build_csg(json_data, base_path)
     else:
-        raise TypeError("Data is not a valid Scene, Group or Shape.")
+        raise TypeError("Data is not a valid Scene, Group, Shape or CSG.")
     return data
