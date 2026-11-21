@@ -67,6 +67,16 @@ def test_kv_source_map_shares_tail_layers():
     assert model(build_test_inputs()).shape == (2, 5, config.hidden_dim)
 
 
+def test_kv_shared_layers_allocate_no_key_or_value_layers():
+    config = build_text_backbone_args(
+        num_layers=6, num_kv_shared_layers=2, sliding_window_pattern=3)
+    model = Gemma4Backbone(config)
+    model(build_test_inputs())
+    for layer in model.decoder_layers[4:]:
+        assert layer.key_proj is None and layer.value_proj is None
+    assert model.decoder_layers[3].key_proj is not None
+
+
 def full_feature_config():
     return build_text_backbone_args(
         num_layers=6, sliding_window_pattern=3, head_dim=8, global_head_dim=16,

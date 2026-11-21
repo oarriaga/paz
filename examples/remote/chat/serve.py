@@ -8,7 +8,7 @@ The 12B model has about 24 GB of weights. Give it a shorter cache, and turn
 off the XLA autotuner, whose profiling buffers no longer fit:
 
     XLA_FLAGS=--xla_gpu_autotune_level=0 python serve.py \
-        --model_name gemma4_12b --max_seq 256
+        --model_name gemma4_12b --max_seq 256 --max_tokens 128
 """
 import os
 
@@ -71,7 +71,7 @@ if __name__ == "__main__":
     }
     names = list(tokenizers)
     parser.add_argument("--model_name", default="gemma4_2b", choices=names)
-    parser.add_argument("--max_tokens", type=int, default=64)
+    parser.add_argument("--max_tokens", type=int, default=256)
     parser.add_argument("--max_seq", type=int, default=512)
     parser.add_argument("--max_prompt", type=int, default=128)
     args = parser.parse_args()
