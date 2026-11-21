@@ -11,10 +11,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import paz
-import paz.utils.plot as plot
 from paz.backend import directory
 from paz.inference.gmm.model import GMM
-from observation_model import build_observation_model, build_render_function
+from observation_model import build_display_model, sample_priors
+import figures
+from draw_program import write_prior_program
 
 
 parser = argparse.ArgumentParser(description="Optimize Bijectors")
@@ -37,7 +38,6 @@ parser.add_argument("--theta_mean", default=0.0, type=float)
 parser.add_argument("--theta_concentration", default=0.0, type=float)
 parser.add_argument("--scale_mean", nargs="+", default=[0.025, 0.025, 0.025])
 parser.add_argument("--scale_scale", nargs="+", default=[1e-4, 1e-4, 1e-4])
-parser.add_argument("--shadows", default=True, type=bool)
 parser.add_argument("--num_images", default=100, type=int)
 parser.add_argument("--classes_temperature", default=0.5, type=float)
 parser.add_argument(
@@ -47,27 +47,6 @@ args = parser.parse_args()
 
 
 BijectorParams = namedtuple("BijectorParams", ["shift", "scale"])
-
-
-NAME_TO_TEX = {
-    "shift": r"$x$-$y$ translation [m]",
-    "x-translation": r"$x$ [m]",
-    "y-translation": r"$y$ [m]",
-    "theta": r"$\theta$ [rad]",
-    "scale": r"scale",
-    "x-scale": r"scale $s_x$ [m]",
-    "y-scale": r"scale $s_y$ [m]",
-    "z-scale": r"scale $s_z$ [m]",
-    "color": r"color [rgb]",
-    "ambient": r"ambient [$k_a$]",
-    "diffuse": r"diffuse [$k_d$]",
-    "specular": r"specular [$k_s$]",
-    "shininess": r"shininess [$\alpha$]",
-    "classes": r"classes",
-    "R-color": r"color [r]",
-    "G-color": r"color [g]",
-    "B-color": r"color [b]",
-}
 
 
 def load_parameters(wildcard, filename):
@@ -94,121 +73,6 @@ def write_image(image, output_directory, filename):
     plt.imsave(filepath, image)
 
 
-def write_losses(losses, output_directory, filename):
-    figure, axis = plot.subplots()
-    steps = np.arange(len(losses))
-    plot.line(steps, losses, axis=axis, color=plot.DANDELION.primary)
-    plot.set_labels(axis, x="step", y="loss")
-    plot.hide_spines(axis, "box")
-    fullpath = Path(output_directory) / filename
-    if fullpath.suffix != ".pdf":
-        raise ValueError(f"Filename {fullpath} missing extension .pdf")
-    plot.save(figure, fullpath)
-
-
-def plot_forward_samples(forward_samples, name, output_directory):
-    figure, axis = plot.subplots()
-    finite_samples = forward_samples[np.isfinite(forward_samples)]
-    plot.density(
-        finite_samples,
-        axis=axis,
-        color=plot.DANDELION.primary,
-        alpha=0.4,
-        linewidth=5.0,
-    )
-    plot.clean(axis)
-    plot.set_labels(
-        axis, x=NAME_TO_TEX.get(name, name), y="density", labelpad=20
-    )
-    filepath = Path(output_directory) / f"prior_forward_{name}.pdf"
-    plot.save(figure, filepath)
-
-
-def plot_inverse_samples(
-    inverse_samples, normals_samples, name, output_directory
-):
-    figure, axis = plot.subplots()
-    finite_inverse = inverse_samples[np.isfinite(inverse_samples)]
-    finite_normals = normals_samples[np.isfinite(normals_samples)]
-    plot.density(
-        finite_normals,
-        axis=axis,
-        color="tab:red",
-        alpha=0.4,
-        linewidth=5.0,
-        label="normal",
-    )
-    plot.density(
-        finite_inverse,
-        axis=axis,
-        color="tab:blue",
-        alpha=0.4,
-        linewidth=5.0,
-        label="inverse",
-    )
-    plot.clean(axis)
-    plot.legend(axis, frameon=False, fontsize=10)
-    plot.set_labels(
-        axis, x=NAME_TO_TEX.get(name, name), y="density", labelpad=20
-    )
-    filepath = Path(output_directory) / f"prior_inverse_{name}.pdf"
-    plot.save(figure, filepath)
-
-
-def plot_prior(key, prior_node, output_directory, num_samples=10_000):
-    key_0, key_1, key_2 = jax.random.split(key, 3)
-    forward_samples = prior_node.sample(key_0, num_samples)
-    inverse_samples = prior_node.sample_inverse(key_1, num_samples)
-    standard = paz.distributions.Normal(0.0, 1.0)
-    normals_samples = standard.sample(num_samples, seed=key_2)
-    name = prior_node.name
-
-    if name == "shift":
-        for arg, shift_name in enumerate(["x-translation", "y-translation"]):
-            plot_forward_samples(
-                forward_samples[:, arg], shift_name, output_directory
-            )
-            plot_inverse_samples(
-                inverse_samples[:, arg],
-                normals_samples,
-                shift_name,
-                output_directory,
-            )
-    elif name == "color":
-        for arg, channel_name in enumerate(["R-color", "G-color", "B-color"]):
-            plot_forward_samples(
-                forward_samples[:, arg], channel_name, output_directory
-            )
-            plot_inverse_samples(
-                inverse_samples[:, arg],
-                normals_samples,
-                channel_name,
-                output_directory,
-            )
-    elif name == "scale":
-        for arg, scale_name in enumerate(["x-scale", "y-scale", "z-scale"]):
-            plot_forward_samples(
-                forward_samples[:, arg], scale_name, output_directory
-            )
-            plot_inverse_samples(
-                inverse_samples[:, arg],
-                normals_samples,
-                scale_name,
-                output_directory,
-            )
-    else:
-        plot_forward_samples(forward_samples, name, output_directory)
-        plot_inverse_samples(
-            inverse_samples, normals_samples, name, output_directory
-        )
-
-
-def plot_priors(key, priors, output_directory, num_samples=10_000):
-    keys = jax.random.split(key, len(priors))
-    for subkey, prior_node in zip(keys, priors):
-        plot_prior(subkey, prior_node, output_directory, num_samples)
-
-
 def get_property_values(shape_parameters, name):
     values = []
     for type_name, type_values in shape_parameters.items():
@@ -216,6 +80,15 @@ def get_property_values(shape_parameters, name):
             if property_name == name:
                 values.append(property_value)
     return np.array(values)
+
+
+def build_figure_data(key, priors, initial_priors, fitted_values, losses):
+    samples, inverse_after = sample_priors(key, priors, 20_000)
+    _, inverse_before = sample_priors(key, initial_priors, 20_000)
+    inverse_fitted = {name: inverse_after[name] for name in inverse_before}
+    inverses = (inverse_before, inverse_fitted)
+    data = (samples, inverses, fitted_values, losses)
+    return jax.tree.map(np.asarray, data)
 
 
 def fit_gaussian_mixture(seed, samples, unidimensional=True):
@@ -314,7 +187,8 @@ root = build_directory(Path(args.root) / args.dataset_name, args.label)
 paz.file.write_json(args.__dict__, root / "parameters.json")
 wildcard = Path(args.root) / args.dataset_name / args.parameters_wildcard
 key = jax.random.PRNGKey(args.seed)
-material_priors = []
+material_priors, initial_priors = [], []
+losses_by_name, fitted_values = {}, {}
 
 optimization_directory = find_latest_directory(wildcard)
 require_files(
@@ -347,7 +221,9 @@ for name in ["ambient", "diffuse", "specular", "shininess", "color"]:
         num_steps=args.gradient_steps,
         return_losses=True,
     )
-    write_losses(losses, root, f"loss_{name}.pdf")
+    initial_prior = paz.Prior(target_dist, name=name, bijector=bijector)
+    initial_priors.append(initial_prior)
+    losses_by_name[name], fitted_values[name] = losses, values
     material_priors.append(fitted_prior)
 
 
@@ -356,9 +232,6 @@ camera_origin = jp.array(dataset_metadata["camera_origin"])
 H, W = dataset_metadata["image_shape"]
 y_FOV = dataset_metadata["y_FOV"]
 
-optimization_metadata = load_parameters(wildcard, args.parameters_filename)
-viewport_factor = optimization_metadata["viewport_factor"]
-image_shape = [int(H * viewport_factor), int(W * viewport_factor)]
 
 floor_filename = optimization_directory / "floor.pkl"
 lights_filename = optimization_directory / "lights.pkl"
@@ -373,11 +246,8 @@ camera_upward = jp.array([0.0, 1.0, 0.0])
 camera_pose = paz.SE3.view_transform(
     camera_origin, camera_target, camera_upward
 )
-intrinsics = paz.graphics.camera.compute_intrinsics(y_FOV, *image_shape)
-_render = build_render_function(
-    image_shape, intrinsics, camera_pose, lights, args.shadows
-)
-render = build_observation_model(_render, floor)
+display_args = ((H, W), y_FOV, camera_pose, lights, floor)
+render = build_display_model(*display_args)
 
 print("Building render function and observation model...")
 
@@ -396,25 +266,38 @@ all_priors = load_priors(priors_path)
 print(f"\nAll prior names: {[p.name for p in all_priors]}")
 print(f"Number of priors: {len(all_priors)}")
 
-print(f"\nGenerating {args.num_samples} samples for prior visualization...")
-plot_priors(key, all_priors, root, args.num_samples)
-print(f"Saved prior plots to: {root}")
+figures_directory = Path(directory.make(root / "figures"))
+data_args = (key, all_priors, initial_priors, fitted_values, losses_by_name)
+figure_data = build_figure_data(*data_args)
+with open(root / "figure_data.pkl", "wb") as filedata:
+    pickle.dump(figure_data, filedata)
 
 image_directory = root / "prior_predictive_samples"
 directory.make(image_directory)
 
 print(f"\nGenerating {args.num_images} prior predictive samples...")
+predictive_images = []
 for image_arg, subkey in enumerate(jax.random.split(key, args.num_images)):
     subkeys = jax.random.split(subkey, len(all_priors))
     sample_dict = {}
     for prior, subkey_i in zip(all_priors, subkeys):
         sample = prior.sample(subkey_i, 1)
         sample_dict[prior.name] = jp.squeeze(sample)
-    image, _ = render(sample_dict)
+    image = render(sample_dict)
     filename = f"{image_arg:02d}_prior_predictive_sample.png"
     write_image(image, image_directory, filename)
+    predictive_images.append(image)
     if (image_arg + 1) % 10 == 0:
         print(f"  Generated {image_arg + 1}/{args.num_images} images")
 
 print(f"\nSaved prior predictive samples to: {image_directory}")
 print("Done!")
+
+# Figures come last so a drawing failure cannot cost the outputs above.
+figures.configure()
+figures.write_prior_figures(figures_directory, all_priors, *figure_data)
+mosaic_path = figures_directory / "prior_predictive_samples.png"
+mosaic = figures.build_mosaic(predictive_images[:16], (4, 4))
+paz.image.write(str(mosaic_path), mosaic)
+sample_paths = sorted(image_directory.glob("*.png"))
+write_prior_program(figures_directory, sample_paths)
