@@ -64,6 +64,7 @@ def sample(
     num_samples,
     num_chains,
     show_progress=progressbar.skip,
+    callbacks=(),
 ):
     def build_trajectory(key, initial_state):
         position, log_density = initial_state
@@ -84,9 +85,29 @@ def sample(
         new_key, now_key = jax.random.split(old_key)
         keys = jax.random.split(now_key, num_chains)
         states, infos = jax.vmap(step_kernel)(keys, states)
+        callback_args = (sample_arg, states, infos.acceptance_rate)
+        run_callbacks(callbacks, "sample", *callback_args)
         return (new_key, states), (states, infos)
 
     args = jp.arange(num_samples)
     state = Samples(positions, jax.vmap(log_density_fn)(positions))
     _, (states, infos) = jax.lax.scan(step_chain, (key, state), args)
     return states, infos
+
+
+def run_callbacks(callbacks, stage, step_arg, samples, acceptance_rate):
+    """Calls each host function with the state of every chain, as
+    `callback(stage, step_arg, samples, acceptance_rate)`.
+
+    In stage "tune" a step is one episode and the rate is the share of
+    accepted moves in it. In stage "sample" a step is one draw, warmup
+    included, and the rate is the acceptance probability of that draw.
+    """
+    if len(callbacks) > 0:
+
+        def observe(step_arg, samples, acceptance_rate):
+            for callback in callbacks:
+                callback(stage, step_arg, samples, acceptance_rate)
+
+        args = (step_arg, samples, acceptance_rate)
+        jax.debug.callback(observe, *args, ordered=True)

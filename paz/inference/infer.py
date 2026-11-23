@@ -39,6 +39,7 @@ def _infer_mh(
     tuner=None,
     tune=None,
     progress=True,
+    callbacks=None,
 ):
     if num_samples is None:
         raise ValueError("num_samples is required for MH")
@@ -57,17 +58,18 @@ def _infer_mh(
         sigma = 0.1 if tuner is None else tuner.sigma
     run_tuner = _should_tune(tune, tuner)
     total_samples = num_samples + num_warmup
+    callbacks = () if callbacks is None else tuple(callbacks)
     shows_tuning = run_tuner and tuner.progress
     reports = _show_stages(shows_tuning, tuner, progress, total_samples)
     if run_tuner:
         show_tuning = reports.get("tune", progressbar.skip)
         tuner_args = (tuner, key_tune, log_density_fn, positions, sigma)
-        sigma, positions = _run_tuner(*tuner_args, show_tuning)
+        sigma, positions = _run_tuner(*tuner_args, show_tuning, callbacks)
 
     show_sampling = reports.get("sample", progressbar.skip)
     sample_args = (key_sample, log_density_fn, positions, sigma)
     sample_args = sample_args + (total_samples, num_chains, show_sampling)
-    states, infos = mh_sample(*sample_args)
+    states, infos = mh_sample(*sample_args, callbacks)
     if reports:
         progressbar.newline()
     if num_warmup > 0:
@@ -143,11 +145,12 @@ def _show_stages(shows_tuning, tuner, shows_sampling, total_samples):
     return dict(zip(names, progressbar.show_stages(stages)))
 
 
-def _run_tuner(tuner, key, log_density_fn, positions, sigma, show_progress):
+def _run_tuner(tuner, key, log_density_fn, positions, sigma, show, callbacks):
     tuner_config = {
         "compute_rate": tuner.compute_rate,
         "compute_sigma": tuner.compute_sigma,
-        "show_progress": show_progress,
+        "show_progress": show,
+        "callbacks": callbacks,
     }
     tune = Tuner(log_density_fn, positions, **tuner_config)
     tune_args = (key, tuner.num_steps, tuner.num_episodes, sigma)

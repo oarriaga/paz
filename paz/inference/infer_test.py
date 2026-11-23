@@ -177,3 +177,44 @@ def test_configure_rejects_unknown_method():
     model, data = build_simple_model()
     with pytest.raises(NotImplementedError):
         model.configure(method="mhh", sigma=0.2)
+
+
+def test_infer_mh_callbacks_receive_every_tuning_and_sampling_step():
+    model, data = build_simple_model()
+    calls = []
+
+    def callback(stage, step_arg, samples, acceptance_rate):
+        shapes = (samples.position.x.shape, samples.log_density.shape)
+        calls.append((stage, int(step_arg), shapes, acceptance_rate.shape))
+
+    tuner = paz.AdaptiveCovarianceTuner(0.2, 5, 3, progress=False)
+    kwargs = dict(num_samples=6, num_chains=2, warmup=2, tuner=tuner)
+    kwargs.update(progress=False, callbacks=[callback])
+    model.infer(jax.random.PRNGKey(0), data, method="mh", **kwargs)
+    shapes = (((2,), (2,)), (2,))
+    expected = [("tune", episode, *shapes) for episode in range(3)]
+    expected += [("sample", step, *shapes) for step in range(8)]
+    assert calls == expected
+
+
+def test_infer_mh_callbacks_receive_the_samples_of_the_chain():
+    model, data = build_simple_model()
+    positions = []
+
+    def callback(stage, step_arg, samples, acceptance_rate):
+        positions.append(samples.position.x)
+
+    kwargs = dict(method="mh", num_samples=6, num_chains=2, sigma=0.2)
+    kwargs.update(warmup=2, progress=False, callbacks=[callback])
+    posterior = model.infer(jax.random.PRNGKey(0), data, **kwargs)
+    assert jp.array_equal(jp.stack(positions[2:]), posterior.inverse_samples.x)
+
+
+def test_infer_mh_callbacks_do_not_change_the_samples():
+    model, data = build_simple_model()
+    kwargs = dict(method="mh", num_samples=10, num_chains=2, sigma=0.2)
+    kwargs.update(progress=False)
+    key = jax.random.PRNGKey(0)
+    plain = model.infer(key, data, **kwargs)
+    observed = model.infer(key, data, callbacks=[lambda *args: None], **kwargs)
+    assert jp.array_equal(plain.inverse_samples.x, observed.inverse_samples.x)
