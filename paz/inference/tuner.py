@@ -12,6 +12,7 @@ from .metropolis_hastings import (
     build_now_proposal,
     choose_proposal,
     propose_additively,
+    run_callbacks,
 )
 
 
@@ -122,6 +123,7 @@ def Tuner(
     compute_rate=None,
     compute_sigma=None,
     show_progress=progressbar.skip,
+    callbacks=(),
 ):
     if compute_rate is None:
         compute_rate = AcceptanceToVariance(ACCEPTANCE_RATES, VARIANCE_FACTORS)
@@ -138,7 +140,11 @@ def Tuner(
 
         def step(state, episode):
             show_progress(episode + 1)
-            return run_episode(*episode_args, state)
+            state, result = run_episode(*episode_args, state)
+            callback_args = (episode, state.tuner_state.kernel_state)
+            callback_args += (result.infos.acceptance_rate,)
+            run_callbacks(callbacks, "tune", *callback_args)
+            return state, result
 
         indices = jp.arange(num_episodes)
         state, episodes = jax.lax.scan(step, state, indices)
