@@ -760,3 +760,9 @@ def test_beta_log_prob_on_the_boundary_with_unit_concentration():
     values = f([0.0, 0.0, 1.0])
     expected = stats.beta(alpha, beta).logpdf(values)
     assert_close(D.Beta(alpha, beta).log_prob(values), expected)
+
+
+def test_categorical_log_prob_is_minus_infinity_out_of_range():
+    categorical = D.Categorical(logits=jp.zeros(3))
+    expected = jp.array([-jp.inf, -jp.log(3.0), -jp.log(3.0), -jp.inf])
+    assert_close(categorical.log_prob(jp.array([-1, 0, 2, 5])), expected)

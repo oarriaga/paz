@@ -922,10 +922,9 @@ class Categorical(_CategoricalBase, Distribution):
             safe_values, num_categories, dtype=log_probs.dtype
         )
         gathered = jp.sum(multiply_no_nan(log_probs, mask), axis=-1)
-        if not self.force_probs:
-            return gathered
         in_support = (safe_values >= 0) & (safe_values < num_categories)
-        if jp.issubdtype(values.dtype, jp.inexact):
+        is_inexact = jp.issubdtype(values.dtype, jp.inexact)
+        if self.force_probs and is_inexact:
             same = values == safe_values.astype(values.dtype)
             in_support = in_support & same
         return jp.where(in_support, gathered, -jp.inf)
