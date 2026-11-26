@@ -184,18 +184,20 @@ def EfficientDet(model, names, score_thresh=0.60, nms_thresh=0.45,
         image = image / np.array(paz.image.RGB_IMAGENET_STDV)
         return scaled_resize(image, input_size)
 
-    def postprocess(outputs, scale):
+    def postprocess(outputs, scale, image_size):
         detections = change_box_coordinates(outputs)[0]
         detections = paz.detection.decode(detections, priors, variances)
         detections = scale_boxes(detections, scale)
         detections = apply_NMS(detections)
         detections = paz.detection.filter_by_score(detections, score_thresh, -1)
+        detections = paz.detection.clip(detections, *image_size)
         detections = paz.detection.remove_invalid(detections)
         return paz.detection.to_boxes2D(detections)
 
     def call(image):
         model_input, scale = preprocess(image)
-        return postprocess(model(model_input), scale)
+        image_size = paz.image.get_size(image)
+        return postprocess(model(model_input), scale, image_size)
 
     return (lambda x: (y := call(x), draw(x, *y))) if callable(draw) else call
 
