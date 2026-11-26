@@ -57,7 +57,7 @@ def cache(function, cache_dir=CACHE_DIR, static_argnums=(), static_argnames=(), 
         split_args = (signature, static_names, args, kwargs)
         statics, dynamics = split_arguments(*split_args)
         leaves, tree = jax.tree.flatten(dynamics)
-        types = tuple(jax.typeof(leaf) for leaf in leaves)
+        types = tuple(describe_leaf(leaf) for leaf in leaves)
         program_key = (tree, types, encode_statics(statics))
         flat_args = (function, signature, tree, statics)
         flat_function = build_flat_function(*flat_args)
@@ -104,6 +104,10 @@ def split_arguments(signature, static_names, args, kwargs):
         else:
             dynamics[name] = value
     return statics, dynamics
+
+
+def describe_leaf(leaf):
+    return (leaf.shape, leaf.dtype, leaf.weak_type)
 
 
 def encode_statics(statics):
