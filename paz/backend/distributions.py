@@ -1309,9 +1309,7 @@ class MultivariateNormalFullCovariance(_MVNFullBase, Distribution):
         covariance = to_float(self.covariance_matrix, self.dtype)
         chol = jp.linalg.cholesky(covariance)
         diff = values - self.loc
-        solved = jsp_linalg.solve_triangular(
-            chol, diff[..., None], lower=True
-        )[..., 0]
+        solved = _solve_lower_triangular(chol, diff)
         standard = Normal(
             jp.asarray(0.0, dtype=self.dtype),
             jp.asarray(1.0, dtype=self.dtype),
@@ -2219,9 +2217,7 @@ class MultivariateNormalTriL(_MVNTriLBase, Distribution):
         values = to_float(values, self.dtype)
         chol = to_float(self.scale_tril, self.dtype)
         diff = values - self.loc
-        solved = jsp_linalg.solve_triangular(
-            chol, diff[..., None], lower=True
-        )[..., 0]
+        solved = _solve_lower_triangular(chol, diff)
         standard = Normal(
             jp.asarray(0.0, self.dtype), jp.asarray(1.0, self.dtype)
         )
@@ -2338,6 +2334,14 @@ def _require_seed(seed):
 
 def _standardized_bounds(loc, scale, low, high):
     return (low - loc) / scale, (high - loc) / scale
+
+
+def _solve_lower_triangular(chol, diff):
+    batch_shape = jp.broadcast_shapes(chol.shape[:-2], diff.shape[:-1])
+    chol = jp.broadcast_to(chol, batch_shape + chol.shape[-2:])
+    diff = jp.broadcast_to(diff, batch_shape + diff.shape[-1:])
+    solved = jsp_linalg.solve_triangular(chol, diff[..., None], lower=True)
+    return solved[..., 0]
 
 
 def _bernoulli_log_probs(logits, probs):

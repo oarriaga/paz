@@ -688,3 +688,23 @@ def test_masked_shapes_and_sample():
     assert masked.event_shape == ()
     draws = masked.sample(10, seed=jax.random.PRNGKey(0))
     assert draws.shape == (10, 4)
+
+
+def test_multivariate_normal_log_prob_broadcasts_values_and_parameters():
+    key = jax.random.split(KEY, 3)
+    loc, values = sample(key[0], (3,), -3, 3), sample(key[1], (4, 3), -6, 6)
+    covariance = build_covariance(key[2], (3,))
+    scale_tril = jp.linalg.cholesky(covariance)
+    expected = compute_full_log_pdf(loc, covariance, values)
+    full = D.MultivariateNormalFullCovariance(loc, covariance)
+    assert_close(full.log_prob(values), expected)
+    tril = D.MultivariateNormalTriL(loc, scale_tril)
+    assert_close(tril.log_prob(values), expected)
+    scales = jp.array([1.0, 2.0])[:, None, None]
+    expected_0 = compute_full_log_pdf(loc, covariance, values[0])
+    expected_1 = compute_full_log_pdf(loc, 2.0 * covariance, values[0])
+    expected = jp.stack([expected_0, expected_1])
+    full = D.MultivariateNormalFullCovariance(loc, scales * covariance)
+    assert_close(full.log_prob(values[0]), expected)
+    tril = D.MultivariateNormalTriL(loc, jp.sqrt(scales) * scale_tril)
+    assert_close(tril.log_prob(values[0]), expected)
