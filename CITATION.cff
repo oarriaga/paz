@@ -1,0 +1,40 @@
+cff-version: 1.2.0
+message: "If you use PAZ in your research, please cite the paper below."
+type: software
+title: "PAZ: Perception for Autonomous Systems"
+abstract: "A JAX-first perception library for autonomous systems."
+authors:
+  - family-names: Arriaga
+    given-names: Octavio
+license: MIT
+repository-code: "https://github.com/oarriaga/paz"
+url: "https://github.com/oarriaga/paz"
+keywords:
+  - computer vision
+  - perception
+  - robotics
+  - deep learning
+  - differentiable rendering
+  - jax
+  - keras
+preferred-citation:
+  type: article
+  title: "Perception for Autonomous Systems (PAZ)"
+  authors:
+    - family-names: Arriaga
+      given-names: Octavio
+    - family-names: Valdenegro-Toro
+      given-names: Matias
+    - family-names: Muthuraja
+      given-names: Mohandass
+    - family-names: Devaramani
+      given-names: Sushma
+    - family-names: Kirchner
+      given-names: Frank
+  year: 2020
+  journal: "arXiv preprint arXiv:2010.14541"
+  url: "https://arxiv.org/abs/2010.14541"
+  identifiers:
+    - type: other
+      value: "arXiv:2010.14541"
+      description: "arXiv identifier (primary class cs.CV)"
