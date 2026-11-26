@@ -16,8 +16,7 @@ EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 
 
 def find_scripts():
-    return sorted(path for path in EXAMPLES.rglob("*.py")
-                  if "legacy" not in path.parts)
+    return sorted(EXAMPLES.rglob("*.py"))
 
 
 def parse(path):
