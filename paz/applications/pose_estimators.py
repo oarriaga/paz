@@ -113,6 +113,20 @@ def build_face_points3D():
 
 
 def HeadPoseKeypointNet2D32(camera, box_scale=1.2, draw=None):
+    """Estimates the 6D head pose of each detected face with PnP.
+
+    # Arguments
+    - `camera`: Camera with the `intrinsics` used to solve PnP.
+    - `box_scale`: Factor that scales each squared face box before cropping.
+    - `draw`: `None` draws a 3D box per pose. A callable is called as
+      `draw(image, poses6D)`. Any other value, such as `False`, disables
+      drawing.
+
+    # Returns
+    Callable taking an image. Without drawing it returns a list with one
+    `Pose6D` per detected face. With drawing it returns
+    `(poses6D, drawn_image)`.
+    """
     detect = paz.models.HaarCascadeFrontalFaceDetector(draw=False)
     estimate_keypoints = paz.applications.FaceKeypointNet2D32(draw=False)
     points3D = build_face_points3D()

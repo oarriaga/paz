@@ -14,6 +14,23 @@ NUM_KEYPOINTS = 17
 
 def HigherHRNetHumanPose2D(max_people=30, detection_thresh=0.2,
                            tag_thresh=1.0, draw=None):
+    """Builds a multi-person 2D human pose estimator with HigherHRNet.
+
+    # Arguments
+    - `max_people`: Number of top detections taken per keypoint heatmap.
+    - `detection_thresh`: Detection threshold used when grouping keypoints.
+    - `tag_thresh`: Tag threshold used when grouping keypoints into people.
+    - `draw`: `None` draws the skeletons. A callable is called as
+      `draw(image, people)`, with each person an array with columns
+      `(x, y, score)`. Any other value, such as `False`, disables
+      drawing.
+
+    # Returns
+    Callable taking an image. Without drawing it returns `(keypoints, scores)`:
+    a list with the `(x, y)` keypoints of each person in coordinates of the
+    input image, and a score per person. With drawing it returns
+    `((keypoints, scores), drawn_image)`.
+    """
     model = paz.models.HigherHRNet(weights="COCO")
     if draw is None:
         draw = draw_human_skeletons
@@ -137,6 +154,13 @@ def transform_to_image(people, center, scale, shape):
 
 
 def EstimateHumanPose3D():
+    """Builds a 2D to 3D human pose lifter with SimpleBaseline.
+
+    # Returns
+    Callable taking the 2D keypoints of each person, as returned by
+    `HigherHRNetHumanPose2D`, and returning an array of shape
+    `(num_people, 32, 3)` with the 3D keypoints.
+    """
     model = paz.models.SimpleBaseline(weights="human36m")
 
     def call(keypoints2D):
@@ -153,6 +177,22 @@ def EstimateHumanPose3D():
 
 
 def EstimateHumanPose(solver, camera_intrinsics, draw=None):
+    """Builds a human pose estimator returning 2D, 3D and 6D poses.
+
+    # Arguments
+    - `solver`: Solver passed to `paz.poses.optimize_human_pose3D`.
+    - `camera_intrinsics`: Camera intrinsics matrix.
+    - `draw`: `None` draws the axes of the 6D pose. A callable is called as
+      `draw(image, rotation, translation, camera_intrinsics)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image. Without drawing it returns
+    `(keypoints2D, poses3D, pose6D)`, with `pose6D` computed from the first
+    optimized 3D pose; `poses3D` and `pose6D` are empty lists if no person is
+    found. With drawing it returns
+    `((keypoints2D, poses3D, pose6D), drawn_image)`.
+    """
     estimate_keypoints2D = HigherHRNetHumanPose2D(draw=False)
     estimate_keypoints3D = EstimateHumanPose3D()
     if draw is None:

@@ -55,32 +55,152 @@ def overlay_best_mask(image, masks, scores):
 
 
 def SAMHieraTiny2(multimask=True, draw=None):
+    """Builds a SAM 2 Hiera Tiny promptable image segmenter.
+
+    # Arguments
+    - `multimask`: If `True` the callable returns every candidate mask after
+      the first one, otherwise only the first one.
+    - `draw`: `None` overlays the highest scoring mask on the image. A callable
+      is called as `draw(image, masks, scores)`. Any other value, such as
+      `False`, disables drawing.
+
+    # Returns
+    Callable `segment(image, points=None, labels=None, box=None, mask=None)`.
+    Without drawing it returns `(masks, scores)`, with `masks` a boolean array
+    of shape `(num_masks, H, W)` at the input image size. With drawing the
+    prompts are keyword arguments and it returns `(masks, scores, drawn)`.
+    """
     return SAM(paz.models.SAMHieraTiny2(), multimask, draw)
 
 
 def SAMHieraSmall2(multimask=True, draw=None):
+    """Builds a SAM 2 Hiera Small promptable image segmenter.
+
+    # Arguments
+    - `multimask`: If `True` the callable returns every candidate mask after
+      the first one, otherwise only the first one.
+    - `draw`: `None` overlays the highest scoring mask on the image. A callable
+      is called as `draw(image, masks, scores)`. Any other value, such as
+      `False`, disables drawing.
+
+    # Returns
+    Callable `segment(image, points=None, labels=None, box=None, mask=None)`.
+    Without drawing it returns `(masks, scores)`, with `masks` a boolean array
+    of shape `(num_masks, H, W)` at the input image size. With drawing the
+    prompts are keyword arguments and it returns `(masks, scores, drawn)`.
+    """
     return SAM(paz.models.SAMHieraSmall2(), multimask, draw)
 
 
 def SAMHieraBasePlus2(multimask=True, draw=None):
+    """Builds a SAM 2 Hiera Base+ promptable image segmenter.
+
+    # Arguments
+    - `multimask`: If `True` the callable returns every candidate mask after
+      the first one, otherwise only the first one.
+    - `draw`: `None` overlays the highest scoring mask on the image. A callable
+      is called as `draw(image, masks, scores)`. Any other value, such as
+      `False`, disables drawing.
+
+    # Returns
+    Callable `segment(image, points=None, labels=None, box=None, mask=None)`.
+    Without drawing it returns `(masks, scores)`, with `masks` a boolean array
+    of shape `(num_masks, H, W)` at the input image size. With drawing the
+    prompts are keyword arguments and it returns `(masks, scores, drawn)`.
+    """
     return SAM(paz.models.SAMHieraBasePlus2(), multimask, draw)
 
 
 def SAMHieraLarge2(multimask=True, draw=None):
+    """Builds a SAM 2 Hiera Large promptable image segmenter.
+
+    # Arguments
+    - `multimask`: If `True` the callable returns every candidate mask after
+      the first one, otherwise only the first one.
+    - `draw`: `None` overlays the highest scoring mask on the image. A callable
+      is called as `draw(image, masks, scores)`. Any other value, such as
+      `False`, disables drawing.
+
+    # Returns
+    Callable `segment(image, points=None, labels=None, box=None, mask=None)`.
+    Without drawing it returns `(masks, scores)`, with `masks` a boolean array
+    of shape `(num_masks, H, W)` at the input image size. With drawing the
+    prompts are keyword arguments and it returns `(masks, scores, drawn)`.
+    """
     return SAM(paz.models.SAMHieraLarge2(), multimask, draw)
 
 
 def SAMHieraTiny21(multimask=True, draw=None):
+    """Builds a SAM 2.1 Hiera Tiny promptable image segmenter.
+
+    # Arguments
+    - `multimask`: If `True` the callable returns every candidate mask after
+      the first one, otherwise only the first one.
+    - `draw`: `None` overlays the highest scoring mask on the image. A callable
+      is called as `draw(image, masks, scores)`. Any other value, such as
+      `False`, disables drawing.
+
+    # Returns
+    Callable `segment(image, points=None, labels=None, box=None, mask=None)`.
+    Without drawing it returns `(masks, scores)`, with `masks` a boolean array
+    of shape `(num_masks, H, W)` at the input image size. With drawing the
+    prompts are keyword arguments and it returns `(masks, scores, drawn)`.
+    """
     return SAM(paz.models.SAMHieraTiny21(), multimask, draw)
 
 
 def SAMHieraSmall21(multimask=True, draw=None):
+    """Builds a SAM 2.1 Hiera Small promptable image segmenter.
+
+    # Arguments
+    - `multimask`: If `True` the callable returns every candidate mask after
+      the first one, otherwise only the first one.
+    - `draw`: `None` overlays the highest scoring mask on the image. A callable
+      is called as `draw(image, masks, scores)`. Any other value, such as
+      `False`, disables drawing.
+
+    # Returns
+    Callable `segment(image, points=None, labels=None, box=None, mask=None)`.
+    Without drawing it returns `(masks, scores)`, with `masks` a boolean array
+    of shape `(num_masks, H, W)` at the input image size. With drawing the
+    prompts are keyword arguments and it returns `(masks, scores, drawn)`.
+    """
     return SAM(paz.models.SAMHieraSmall21(), multimask, draw)
 
 
 def SAMHieraBasePlus21(multimask=True, draw=None):
+    """Builds a SAM 2.1 Hiera Base+ promptable image segmenter.
+
+    # Arguments
+    - `multimask`: If `True` the callable returns every candidate mask after
+      the first one, otherwise only the first one.
+    - `draw`: `None` overlays the highest scoring mask on the image. A callable
+      is called as `draw(image, masks, scores)`. Any other value, such as
+      `False`, disables drawing.
+
+    # Returns
+    Callable `segment(image, points=None, labels=None, box=None, mask=None)`.
+    Without drawing it returns `(masks, scores)`, with `masks` a boolean array
+    of shape `(num_masks, H, W)` at the input image size. With drawing the
+    prompts are keyword arguments and it returns `(masks, scores, drawn)`.
+    """
     return SAM(paz.models.SAMHieraBasePlus21(), multimask, draw)
 
 
 def SAMHieraLarge21(multimask=True, draw=None):
+    """Builds a SAM 2.1 Hiera Large promptable image segmenter.
+
+    # Arguments
+    - `multimask`: If `True` the callable returns every candidate mask after
+      the first one, otherwise only the first one.
+    - `draw`: `None` overlays the highest scoring mask on the image. A callable
+      is called as `draw(image, masks, scores)`. Any other value, such as
+      `False`, disables drawing.
+
+    # Returns
+    Callable `segment(image, points=None, labels=None, box=None, mask=None)`.
+    Without drawing it returns `(masks, scores)`, with `masks` a boolean array
+    of shape `(num_masks, H, W)` at the input image size. With drawing the
+    prompts are keyword arguments and it returns `(masks, scores, drawn)`.
+    """
     return SAM(paz.models.SAMHieraLarge21(), multimask, draw)

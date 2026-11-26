@@ -17,6 +17,20 @@ HandPose = namedtuple(
 
 
 def DetectFaceKeypointNet2D32(box_scale=1.2, draw=None):
+    """Detects faces and estimates 2D keypoints with `FaceKeypointNet2D32`.
+
+    # Arguments
+    - `box_scale`: Factor that scales each squared face box before cropping.
+    - `draw`: `None` draws the boxes and keypoints. A callable is called as
+      `draw(image, boxes, keypoints)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image. Without drawing it returns `(boxes, keypoints)`:
+    the `int32` face boxes and, for each box, its keypoints shifted to the
+    coordinates of the input image. With drawing it returns
+    `((boxes, keypoints), drawn_image)`.
+    """
     detect = paz.models.HaarCascadeFrontalFaceDetector(draw=False)
     estimate_keypoints = FaceKeypointNet2D32(draw=False)
     colors = paz.draw.lincolor(15 + 1)
@@ -41,6 +55,18 @@ def DetectFaceKeypointNet2D32(box_scale=1.2, draw=None):
 
 
 def FaceKeypointNet2D32(draw=None):
+    """Builds a 2D face keypoint estimator with `FaceKeypointNet2D32`.
+
+    # Arguments
+    - `draw`: `None` draws the keypoints. A callable is called as
+      `draw(image, keypoints)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image. Without drawing it returns the keypoints scaled
+    to the size of the input image. With drawing it returns
+    `(keypoints, drawn_image)`.
+    """
     model = paz.models.FaceKeypointNet2D32()
     if draw is None:
         draw = paz.lock(paz.draw.keypoints, paz.draw.lincolor(15), 3)
@@ -66,6 +92,18 @@ GMM_WEIGHTS = "https://github.com/oarriaga/altamira-data/releases/download/v0.18
 
 
 def GMMKeypointNet2D(draw=None):
+    """Builds a 2D face keypoint estimator with a Gaussian mixture model.
+
+    # Arguments
+    - `draw`: `None` draws the keypoints. A callable is called as
+      `draw(image, keypoints)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image. Without drawing it returns the keypoints scaled
+    to the size of the input image. With drawing it returns
+    `(keypoints, drawn_image)`.
+    """
     model = paz.models.GaussianMixtureModel((96, 96, 1), 15, 8)
     weights_path = get_file(os.path.basename(GMM_WEIGHTS), GMM_WEIGHTS,
                             cache_subdir="paz/models")
@@ -96,6 +134,20 @@ def compute_mixture_keypoints(maps, grid):
 
 
 def DetectGMMKeypointNet2D(box_scale=1.2, draw=None):
+    """Detects faces and estimates 2D keypoints with `GMMKeypointNet2D`.
+
+    # Arguments
+    - `box_scale`: Factor that scales each squared face box before cropping.
+    - `draw`: `None` draws the boxes and keypoints. A callable is called as
+      `draw(image, boxes, keypoints)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image. Without drawing it returns `(boxes, keypoints)`:
+    the `int32` face boxes and, for each box, its keypoints shifted to the
+    coordinates of the input image. With drawing it returns
+    `((boxes, keypoints), drawn_image)`.
+    """
     detect = paz.models.HaarCascadeFrontalFaceDetector(draw=False)
     estimate_keypoints = GMMKeypointNet2D(draw=False)
     colors = paz.draw.lincolor(15 + 1)
@@ -136,6 +188,20 @@ def draw_hand_status(image, status, keypoints2D):
 
 
 def ClassifyHandClosure(right_hand=False, thresh=0.4, draw=None):
+    """Classifies a hand image as open or closed from its joint angles.
+
+    # Arguments
+    - `right_hand`: If `True` the input is treated as a right hand.
+    - `thresh`: Threshold passed to `paz.angles.is_hand_open`.
+    - `draw`: `None` draws the hand skeleton and the status text. A callable
+      is called as `draw(image, status, keypoints2D)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image of a hand. Without drawing it returns
+    `(status, keypoints2D)`, with `status` either `"OPEN"` or `"CLOSE"`. With
+    drawing it returns `((status, keypoints2D), drawn_image)`.
+    """
     estimate = MinimalHandPoseEstimation(right_hand=right_hand, draw=False)
     if draw is None:
         draw = draw_hand_status
@@ -149,6 +215,22 @@ def ClassifyHandClosure(right_hand=False, thresh=0.4, draw=None):
 
 
 def DetNetHandKeypoints(right_hand=False, draw=None, grid=32, input_size=128):
+    """Builds a hand keypoint estimator with DetNet.
+
+    # Arguments
+    - `right_hand`: If `True` the input is treated as a right hand.
+    - `draw`: `None` draws the hand skeleton. A callable is called as
+      `draw(image, keypoints2D)`. Any other
+      value, such as `False`, disables drawing.
+    - `grid`: Size of the model output grid, used to mirror right hands.
+    - `input_size`: Side of the square input the image is resized to.
+
+    # Returns
+    Callable taking an image of a hand. Without drawing it returns
+    `(keypoints2D, keypoints3D)`, with `keypoints2D` an `int32` array in pixel
+    coordinates of the input image. With drawing it returns
+    `((keypoints2D, keypoints3D), drawn_image)`.
+    """
     model = paz.models.DetNet(weights="detnet")
     if draw is None:
         draw = draw_hand_skeleton
@@ -176,6 +258,15 @@ def DetNetHandKeypoints(right_hand=False, draw=None, grid=32, input_size=128):
 
 
 def IKNetHandJointAngles(right_hand=False):
+    """Builds a hand joint angle estimator with IKNet.
+
+    # Arguments
+    - `right_hand`: If `True` the input is treated as a right hand.
+
+    # Returns
+    Callable taking the hand `keypoints3D` and returning
+    `(absolute_angles, relative_angles)`.
+    """
     model = paz.models.IKNet(weights="iknet")
     parents = MPIIHandJoints.parents
     links_origin = MPIIHandJoints.links_origin
@@ -197,6 +288,20 @@ def IKNetHandJointAngles(right_hand=False):
 
 
 def MinimalHandPoseEstimation(right_hand=False, draw=None):
+    """Builds a hand pose estimator from DetNet keypoints and IKNet angles.
+
+    # Arguments
+    - `right_hand`: If `True` the input is treated as a right hand.
+    - `draw`: `None` draws the hand skeleton. A callable is called as
+      `draw(image, keypoints2D)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image of a hand. Without drawing it returns a
+    `HandPose` namedtuple with fields `keypoints2D`, `keypoints3D`,
+    `absolute_angles` and `relative_angles`. With drawing it returns
+    `(hand_pose, drawn_image)`.
+    """
     estimate_keypoints = DetNetHandKeypoints(right_hand=right_hand, draw=False)
     estimate_angles = IKNetHandJointAngles(right_hand=right_hand)
     if draw is None:
@@ -216,6 +321,21 @@ def MinimalHandPoseEstimation(right_hand=False, draw=None):
 
 
 def DetectMinimalHand(box_scale=1.5, right_hand=False, draw=None):
+    """Detects hands and estimates their 2D keypoints.
+
+    # Arguments
+    - `box_scale`: Factor that scales each squared hand box before cropping.
+    - `right_hand`: If `True` the input is treated as a right hand.
+    - `draw`: `None` draws the hand skeletons. A callable is called once per
+      hand as `draw(image, keypoints2D)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image. Without drawing it returns
+    `(boxes, all_keypoints2D)`: the `int32` hand boxes and a list with the 2D
+    keypoints of each hand in coordinates of the input image. With drawing it
+    returns `((boxes, all_keypoints2D), drawn_image)`.
+    """
     detect = paz.applications.SSD512HandDetection(draw=False)
     estimate = MinimalHandPoseEstimation(right_hand=right_hand, draw=False)
     if draw is None:
@@ -244,6 +364,22 @@ def DetectMinimalHand(box_scale=1.5, right_hand=False, draw=None):
 
 
 def SSD512MinimalHandPose(box_scale=1.5, right_hand=False, draw=None):
+    """Detects hands and estimates their 2D and 3D keypoints.
+
+    # Arguments
+    - `box_scale`: Factor that scales each squared hand box before cropping.
+    - `right_hand`: If `True` the input is treated as a right hand.
+    - `draw`: `None` draws the hand skeletons. A callable is called once per
+      hand as `draw(image, keypoints2D)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image. Without drawing it returns
+    `(boxes, all_keypoints2D, all_keypoints3D)`: the `int32` hand boxes, a
+    list with the 2D keypoints of each hand in coordinates of the input image
+    and a list with the 3D keypoints of each hand. With drawing it returns
+    `((boxes, all_keypoints2D, all_keypoints3D), drawn_image)`.
+    """
     detect = paz.applications.SSD512HandDetection(draw=False)
     estimate = MinimalHandPoseEstimation(right_hand=right_hand, draw=False)
     if draw is None:

@@ -17,6 +17,22 @@ from paz.models.foundation.gemma4.vision import VisionEncoderArgs
 def GenerateGemma4(model_name="gemma4_2b", max_tokens=64, max_seq=512,
                    max_prompt=128, weights="pretrained", models_path=None,
                    models=None):
+    """Builds a Gemma 4 text generator.
+
+    # Arguments
+    - `model_name`: Name of the Gemma 4 model, for example `"gemma4_2b"`.
+    - `max_tokens`: `max_tokens` passed to the generator.
+    - `max_seq`: `max_seq` passed to the generator.
+    - `max_prompt`: `max_prompt` passed to the generator.
+    - `weights`: `weights` passed to `paz.models.Gemma4`.
+    - `models_path`: Path used to resolve the model directory, which holds
+      the tokenizer.
+    - `models`: Already built `paz.models.Gemma4` models. `None` builds them.
+
+    # Returns
+    Callable taking a text prompt. It prints the generated tokens while
+    decoding and returns the generated text.
+    """
     tokenize = Gemma4Tokenizer.tokenize_generation_prompt
     args = (model_name, tokenize, max_tokens, max_seq, max_prompt, weights,
             models_path, models)
@@ -53,6 +69,25 @@ def build_token_printer(tokenizer, stop_id):
 def DescribeImageGemma4(model_name="gemma4_2b", max_tokens=64, max_seq=512,
                         max_prompt=400, weights="pretrained", models_path=None,
                         models=None):
+    """Builds a Gemma 4 generator that answers a question about an image.
+
+    # Arguments
+    - `model_name`: Name of the Gemma 4 model, for example `"gemma4_2b"`.
+    - `max_tokens`: `max_tokens` passed to the generator.
+    - `max_seq`: `max_seq` passed to the generator.
+    - `max_prompt`: `max_prompt` passed to the generator.
+    - `weights`: `weights` passed to `paz.models.Gemma4`.
+    - `models_path`: Path used to resolve the model directory, which holds
+      the tokenizer.
+    - `models`: Already built `paz.models.Gemma4` models. `None` builds them.
+
+    # Returns
+    Callable `describe(image, question="Describe this image.")`. It prints
+    the generated tokens while decoding and returns the generated text. Its
+    attributes `describe.encode(image)` and
+    `describe.answer(embeddings, question)` allow encoding an image once and
+    asking several questions about it.
+    """
     model_dir = resolve_dir(model_name, models_path)
     if models is None:
         models = Gemma4(model_name, weights=weights, models_path=model_dir)
@@ -126,21 +161,77 @@ def build_image_prompt(tokenizer, num_image_tokens, question):
 
 
 def GenerateGemma42B(**kwargs):
+    """Builds a Gemma 4 2B text generator.
+
+    # Arguments
+    - `kwargs`: Forwarded to `GenerateGemma4` with `model_name` set to
+      `"gemma4_2b"`.
+
+    # Returns
+    Callable taking a text prompt. It prints the generated tokens while
+    decoding and returns the generated text.
+    """
     return GenerateGemma4("gemma4_2b", **kwargs)
 
 
 def GenerateGemma44B(**kwargs):
+    """Builds a Gemma 4 4B text generator.
+
+    # Arguments
+    - `kwargs`: Forwarded to `GenerateGemma4` with `model_name` set to
+      `"gemma4_4b"`.
+
+    # Returns
+    Callable taking a text prompt. It prints the generated tokens while
+    decoding and returns the generated text.
+    """
     return GenerateGemma4("gemma4_4b", **kwargs)
 
 
 def GenerateGemma412B(**kwargs):
+    """Builds a Gemma 4 12B text generator.
+
+    # Arguments
+    - `kwargs`: Forwarded to `build_chat` with `model_name` set to
+      `"gemma4_12b"`.
+
+    # Returns
+    Callable taking a text prompt. It prints the generated tokens while
+    decoding and returns the generated text.
+    """
     tokenize = Gemma4Tokenizer.tokenize_answer_prompt
     return build_chat("gemma4_12b", tokenize, **kwargs)
 
 
 def DescribeImageGemma42B(**kwargs):
+    """Builds a Gemma 4 2B generator that answers a question about an image.
+
+    # Arguments
+    - `kwargs`: Forwarded to `DescribeImageGemma4` with `model_name` set to
+      `"gemma4_2b"`.
+
+    # Returns
+    Callable `describe(image, question="Describe this image.")`. It prints
+    the generated tokens while decoding and returns the generated text. Its
+    attributes `describe.encode(image)` and
+    `describe.answer(embeddings, question)` allow encoding an image once and
+    asking several questions about it.
+    """
     return DescribeImageGemma4("gemma4_2b", **kwargs)
 
 
 def DescribeImageGemma44B(**kwargs):
+    """Builds a Gemma 4 4B generator that answers a question about an image.
+
+    # Arguments
+    - `kwargs`: Forwarded to `DescribeImageGemma4` with `model_name` set to
+      `"gemma4_4b"`.
+
+    # Returns
+    Callable `describe(image, question="Describe this image.")`. It prints
+    the generated tokens while decoding and returns the generated text. Its
+    attributes `describe.encode(image)` and
+    `describe.answer(embeddings, question)` allow encoding an image once and
+    asking several questions about it.
+    """
     return DescribeImageGemma4("gemma4_4b", **kwargs)
