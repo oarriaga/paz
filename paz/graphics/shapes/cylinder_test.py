@@ -93,7 +93,7 @@ def test_rotated_intersection_keeps_wall_normal():
         ray_direction = jp.array([[-1.0, 0.0, 0.0]])
         args = shape, ray_origin, ray_direction
         intersection = paz.graphics.shapes.intersect(*args)
-        hit_mask, _, hit_point, world_normals, _ = intersection
+        hit_mask, _, hit_point, world_normals, _, _ = intersection
         assert hit_mask[0]
         assert jp.allclose(hit_point, world_point, atol=1e-5)
         assert world_normals[0, 0] > 0.95
@@ -116,7 +116,7 @@ def test_rotated_oblique_cap_hit_keeps_cap_normal():
         ray_direction = rays[1][6456:6457]
         args = shape, ray_origin, ray_direction
         intersection = paz.graphics.shapes.intersect(*args)
-        hit_mask, _, hit_point, world_normals, _ = intersection
+        hit_mask, _, hit_point, world_normals, _, _ = intersection
         inverse_transpose = jp.linalg.inv(transform).T
         cap_normal = jp.array([[0.0, 1.0, 0.0]])
         expected = paz.algebra.transform_points(inverse_transpose, cap_normal)
@@ -190,3 +190,15 @@ def test_bottom_corner_ray_escapes_cap():
     point = jp.array([[0.9995, -1.0, 0.0]])
     directions = jp.array([[0.707, -0.707, 0.0]])
     assert_corner_escapes(compute_lower_cap_normals, point, directions)
+
+
+def test_axis_ray_depth_gradient_is_finite():
+    directions = jp.array([[0.0, -1.0, 0.0]])
+
+    def compute_depth(origins):
+        return intersect_canonical_cylinder(origins, directions)[2].sum()
+
+    origins = jp.array([[0.0, 5.0, 0.0]])
+    assert compute_depth(origins) == 4.0
+    gradient = jax.grad(compute_depth)(origins)
+    assert jp.allclose(gradient, jp.array([[0.0, 1.0, 0.0]]))

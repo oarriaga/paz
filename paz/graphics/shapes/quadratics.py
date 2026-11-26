@@ -55,7 +55,12 @@ def bound_depth(depth, origins, directions, valid_mask, minimum, maximum):
 
 
 def solve_quadratic_depth(a, b, c):
-    depth_A, depth_B, valid_mask = paz.algebra.solve_quadratic(a, b, c)
+    # A ray parallel to the surface has no quadratic term; dividing by it
+    # gives infinite depths and NaN gradients.
+    is_quadratic = jp.abs(a) > EPSILON**2
+    safe_a = jp.where(is_quadratic, a, 1.0)
+    depth_A, depth_B, valid_mask = paz.algebra.solve_quadratic(safe_a, b, c)
+    valid_mask = jp.logical_and(valid_mask, is_quadratic)
     positive_depth_side = jp.logical_or(depth_A >= 0, depth_B >= 0)
     valid_mask = jp.logical_and(valid_mask, positive_depth_side)
     return valid_mask, depth_A, depth_B

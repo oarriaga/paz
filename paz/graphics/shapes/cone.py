@@ -10,9 +10,15 @@ from paz.graphics.shapes.caps import (
 
 def build_shell_normals(points):
     x_points, y_points, z_points = jp.split(points, 3, 1)
-    distances = jp.sqrt(x_points**2 + z_points**2)
+    squared_distances = x_points**2 + z_points**2
+    # sqrt and normalize have NaN gradients for points on the axis.
+    is_off_axis = squared_distances > 0.0
+    safe_squared_distances = jp.where(is_off_axis, squared_distances, 1.0)
+    distances = jp.where(is_off_axis, jp.sqrt(safe_squared_distances), 0.0)
     y_normals = jp.where(y_points > 0, -distances, distances)
     shape_normals = jp.hstack([x_points, y_normals, z_points])
+    axis_normals = build_upper_cap_normals(points)
+    shape_normals = jp.where(is_off_axis, shape_normals, axis_normals)
     return paz.algebra.normalize(shape_normals)
 
 

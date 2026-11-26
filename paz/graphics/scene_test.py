@@ -126,3 +126,13 @@ def test_compile_sorting(shape_256_A, shape_512, shape_256_B):
     assert shadow_mask_out[0] == False
     assert shadow_mask_out[1] == False
     assert shadow_mask_out[2] == True
+
+
+def test_compile_rejects_mixed_shape_materials():
+    phong_sphere = paz.graphics.Sphere(jp.eye(4), Material())
+    cook_torrance = paz.graphics.CookTorranceMaterial()
+    cook_torrance_sphere = paz.graphics.Sphere(jp.eye(4), cook_torrance)
+    scene = paz.graphics.Scene([phong_sphere, cook_torrance_sphere])
+    lights = [paz.graphics.PointLight(jp.ones(3), jp.zeros(3))]
+    with pytest.raises(ValueError, match="must all be of one type"):
+        paz.graphics.scene.compile(scene, lights, None)

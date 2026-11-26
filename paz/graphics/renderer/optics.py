@@ -6,7 +6,7 @@ BOUNCE_ORIGIN_EPSILON = 1e-2
 
 
 def compute_bounce(directions, closest, refractive_index, material):
-    args = directions, closest.normal, refractive_index
+    args = directions, closest, refractive_index
     terms = compute_refraction_terms(*args, material.refractive_indices)
     normal, eye, n_1, n_2, n_ratio = terms
     reflectance = compute_reflectance(normal, eye, n_1, n_2)
@@ -14,17 +14,17 @@ def compute_bounce(directions, closest, refractive_index, material):
     return compute_new_rays(*ray_args), n_2, reflectance
 
 
-def compute_refraction_terms(directions, normal, n_1, refractive_indices):
+def compute_refraction_terms(directions, closest, n_1, refractive_indices):
     eye = -directions
-    normal, is_inside = flip_normal_if_inside(eye, normal)
-    # TODO why 1.0 hardcoded
-    n_2 = jp.where(is_inside, 1.0, refractive_indices)
+    normal = flip_normal_to_eye(eye, closest.normal)
+    # A ray leaving a surface enters air: nested media are not tracked.
+    n_2 = jp.where(closest.is_inside, 1.0, refractive_indices)
     return normal, eye, n_1, n_2, n_1 / n_2
 
 
-def flip_normal_if_inside(eye, normal):
-    is_inside = jp.sum(normal * eye, axis=-1) < 0.0
-    return jp.where(jp.expand_dims(is_inside, -1), -normal, normal), is_inside
+def flip_normal_to_eye(eye, normal):
+    is_back_facing = jp.sum(normal * eye, axis=-1) < 0.0
+    return jp.where(jp.expand_dims(is_back_facing, -1), -normal, normal)
 
 
 def compute_reflectance(normal, eye, n_1, n_2):
@@ -40,13 +40,19 @@ def compute_reflectance(normal, eye, n_1, n_2):
 def compute_transmission_cosines(eye, normal, n_ratio):
     cos_incident = jp.sum(eye * normal, axis=-1)
     sin_transmit_squared = (n_ratio**2) * (1.0 - (cos_incident**2))
-    cos_transmit = jp.sqrt(jp.maximum(0.0, 1.0 - sin_transmit_squared))
+    is_transmitted = sin_transmit_squared < 1.0
+    safe_sin_squared = jp.where(is_transmitted, sin_transmit_squared, 0.0)
+    cos_transmit = jp.sqrt(1.0 - safe_sin_squared)
+    cos_transmit = jp.where(is_transmitted, cos_transmit, 0.0)
     return cos_incident, sin_transmit_squared, cos_transmit
 
 
 def compute_new_rays(normal, eye, n_ratio, point, transparencies):
     is_transparent = transparencies > 0.0
-    do_reflect = jp.expand_dims(~is_transparent, -1)
+    cosines = compute_transmission_cosines(eye, normal, n_ratio)
+    _, sin_transmit_squared, _ = cosines
+    is_total_reflection = sin_transmit_squared > 1.0
+    do_reflect = jp.expand_dims(~is_transparent | is_total_reflection, -1)
     reflection = paz.graphics.geometry.reflect(-eye, normal)
     refraction = compute_refractive_direction(eye, normal, n_ratio)
     direction = jp.where(do_reflect, reflection, refraction)

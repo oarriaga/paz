@@ -566,3 +566,67 @@ def test_jit_compilation_full(small_image_shape, camera_pose):
 
     image, depth = jitted_render()
     assert image.shape == (small_image_shape[0], small_image_shape[1], 3)
+
+
+def compute_glass_gradients(build_shape, num_bounces):
+    lights = [PointLight(jp.ones(3), jp.array([0.0, 10.0, 5.0]))]
+    floor = Plane(SE3.translation(jp.array([0.0, -1.0, 0.0])))
+    up = jp.array([0.0, 1.0, 0.0])
+
+    def loss(refractive_index, eye):
+        glass = Material(transparency=0.9, refractive_index=refractive_index)
+        scene = Scene([build_shape(jp.eye(4), glass), floor])
+        pose = SE3.view_transform(eye, jp.zeros(3), up)
+        args = (16, 16), pose, scene, lights
+        return jp.mean(render_scene(*args, num_bounces=num_bounces)[0])
+
+    gradient = jax.jit(jax.grad(loss, argnums=(0, 1)))
+    return gradient(1.5, jp.array([0.3, 1.0, 6.0]))
+
+
+@pytest.mark.parametrize("build_shape", [Sphere, Cube])
+@pytest.mark.parametrize("num_bounces", [3, 4])
+def test_glass_gradients_are_finite(build_shape, num_bounces):
+    gradients = compute_glass_gradients(build_shape, num_bounces)
+    assert all(jp.all(jp.isfinite(gradient)) for gradient in gradients)
+
+
+def render_lone_sphere(image_shape, camera_pose, material, num_bounces):
+    scene = Scene([Sphere(jp.eye(4), material)])
+    lights = [PointLight(jp.ones(3), jp.array([0.0, 5.0, 5.0]))]
+    args = image_shape, camera_pose, scene, lights
+    render = jax.jit(lambda: render_scene(*args, num_bounces=num_bounces))
+    return render()[0]
+
+
+def test_refracted_rays_leaving_scene_show_background(camera_pose):
+    invisible = Material(jp.zeros(3), 0.0, 0.0, 0.0, 200.0, 0.0, 1.0, 1.0)
+    image = render_lone_sphere((32, 32), camera_pose, invisible, 4)
+    assert jp.allclose(image[16, 16], 1.0, atol=1e-4)
+    assert jp.allclose(image[0, 0], 1.0, atol=1e-4)
+
+
+def test_reflected_rays_leaving_scene_show_background(camera_pose):
+    mirror = Material(jp.zeros(3), 0.0, 0.0, 0.0, 200.0, 1.0)
+    image = render_lone_sphere((32, 32), camera_pose, mirror, 2)
+    assert jp.allclose(image, 1.0, atol=1e-4)
+
+
+def compute_axis_view_gradient(build_shape, height):
+    lights = [PointLight(jp.ones(3), jp.array([3.0, 5.0, 4.0]))]
+    eye, up = jp.array([0.0, height, 0.0]), jp.array([0.0, 0.0, -1.0])
+    pose = SE3.view_transform(eye, jp.zeros(3), up)
+
+    def loss(shift):
+        scene = Scene([build_shape(SE3.translation(shift))])
+        image, depth = render_scene((33, 33), pose, scene, lights)
+        return jp.mean(image) + 0.1 * jp.mean(depth)
+
+    return jax.jit(jax.grad(loss))(jp.zeros(3))
+
+
+@pytest.mark.parametrize("build_shape", [Cylinder, Cone])
+@pytest.mark.parametrize("height", [5.0, -5.0])
+def test_axis_aligned_view_gradient_is_finite(build_shape, height):
+    gradient = compute_axis_view_gradient(build_shape, height)
+    assert jp.all(jp.isfinite(gradient))

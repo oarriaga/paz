@@ -384,3 +384,14 @@ def test_material_save_and_load_round_trip(tmp_path, sample_material):
     loaded_shape = serialization.load(filepath)
     assert isinstance(loaded_shape, types.Shape)
     assert_pytrees_allclose(loaded_shape.material, sample_material)
+
+
+def test_cook_torrance_scene_save_and_load_round_trip(tmp_path):
+    material = types.CookTorranceMaterial(roughness=0.2, metallic=1.0)
+    scene = types.Scene([types.Sphere(material=material), types.Plane()])
+    serialization.save(tmp_path, scene)
+    loaded_scene = serialization.load(tmp_path)
+    loaded_material = loaded_scene.nodes[0].material
+    assert isinstance(loaded_material, types.CookTorranceMaterial)
+    assert isinstance(loaded_scene.nodes[1].material, types.Material)
+    assert_pytrees_allclose(loaded_scene, scene)
