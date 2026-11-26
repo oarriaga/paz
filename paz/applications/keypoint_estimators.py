@@ -162,7 +162,7 @@ def DetNetHandKeypoints(right_hand=False, draw=None, grid=32, input_size=128):
         keypoints3D = paz.to_numpy(keypoints3D)
         uv = paz.to_numpy(uv)
         if right_hand:
-            uv[:, 0] = grid - uv[:, 0]
+            uv[:, 1] = grid - 1 - uv[:, 1]
         keypoints2D = uv[:, ::-1]
         scale = np.array([W / input_size * 4, H / input_size * 4])
         keypoints2D = (keypoints2D * scale).astype(np.int32)
