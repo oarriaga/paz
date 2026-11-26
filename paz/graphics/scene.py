@@ -193,6 +193,7 @@ def compile(scene, lights, mask, shadow_mask=None):
     meshes, triangle_mask, triangle_shadow_mask = mesh_args
     shape_args = select_shapes(flat_scene, mask, shadow_mask)
     shapes, shape_mask, shadow_mask = sort_by_group(*shape_args)
+    assert_one_material_type(shapes)
     args = shapes, build_triangles(meshes), lights, shape_mask
     args += shadow_mask, triangle_mask, triangle_shadow_mask
     return paz.graphics.CompiledScene(*args)
@@ -205,6 +206,12 @@ def select_shapes(flat_scene, mask, shadow_mask):
     if shadow_mask is not None:
         shadow_mask = shadow_mask[indices]
     return shapes, mask[indices], shadow_mask
+
+
+def assert_one_material_type(shapes):
+    types = {type(shape.material) for shape in shapes}
+    if len(types) > 1:
+        raise ValueError("Shape materials must all be of one type.")
 
 
 def select_meshes(flat_scene, mask, shadow_mask):
