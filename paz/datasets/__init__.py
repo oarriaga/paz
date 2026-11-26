@@ -49,7 +49,7 @@ def labels(name):
     elif name == "FERPlus":
         class_names = ferplus.get_class_names()
     elif name == "IMDB":
-        class_names = ["man", "woman"]
+        class_names = ["woman", "man"]
     elif name == "COCO":
         class_names = coco.get_class_names()
     elif name == "COCO_EFFICIENTDET":
