@@ -1686,7 +1686,8 @@ class Exponential(_ExponentialBase, Distribution):
     def log_prob(self, values):
         values = to_float(values, self.dtype)
         rate = to_float(self.rate, self.dtype)
-        return jp.log(rate) - rate * values
+        log_prob = jp.log(rate) - rate * values
+        return jp.where(values < 0.0, -jp.inf, log_prob)
 
     def cdf(self, values):
         values = to_float(values, self.dtype)
@@ -1694,12 +1695,12 @@ class Exponential(_ExponentialBase, Distribution):
         return jp.where(values < 0.0, 0.0, -jp.expm1(-rate * values))
 
     def survival_function(self, values):
-        values = to_float(values, self.dtype)
-        return jp.exp(-to_float(self.rate, self.dtype) * values)
+        return jp.exp(self.log_survival_function(values))
 
     def log_survival_function(self, values):
         values = to_float(values, self.dtype)
-        return -to_float(self.rate, self.dtype) * values
+        log_survival = -to_float(self.rate, self.dtype) * values
+        return jp.where(values < 0.0, 0.0, log_survival)
 
     def mean(self):
         return _fill(1.0 / to_float(self.rate, self.dtype), self.batch_shape,
@@ -1712,7 +1713,7 @@ class Exponential(_ExponentialBase, Distribution):
         return jp.sqrt(self.variance())
 
     def mode(self):
-        return _fill(jp.nan, self.batch_shape, self.dtype)
+        return _fill(0.0, self.batch_shape, self.dtype)
 
     def entropy(self):
         return _fill(1.0 - jp.log(self.rate), self.batch_shape, self.dtype)

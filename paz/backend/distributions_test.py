@@ -741,3 +741,14 @@ def test_truncated_normal_samples_the_upper_tail_in_single_precision():
     expected_mean = stats.truncnorm(6.0, 9.0).mean()
     assert jp.all((samples >= 6.0) & (samples <= 9.0))
     assert jp.isclose(samples.mean(), expected_mean, atol=0.02)
+
+
+def test_exponential_has_no_mass_below_zero():
+    exponential = D.Exponential(1.7)
+    values = jp.array([-1.0, -0.1])
+    assert jp.array_equal(exponential.log_prob(values), jp.full(2, -jp.inf))
+    assert jp.array_equal(exponential.cdf(values), jp.zeros(2))
+    assert jp.array_equal(exponential.survival_function(values), jp.ones(2))
+    log_survival = exponential.log_survival_function(values)
+    assert jp.array_equal(log_survival, jp.zeros(2))
+    assert exponential.mode() == 0.0
