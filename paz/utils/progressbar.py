@@ -154,6 +154,9 @@ def _build_stage_text(stage):
 
 def _build_timing_text(stage):
     elapsed = time.perf_counter() - stage.start_time
-    remaining = elapsed * (stage.total_value - stage.count) / stage.count
+    if stage.count == 0:
+        remaining = float("inf")
+    else:
+        remaining = elapsed * (stage.total_value - stage.count) / stage.count
     percent_complete = stage.count / stage.total_value
     return f"{percent_complete:.0%} [{elapsed:.2f}s<{remaining:.2f}s]"
