@@ -228,7 +228,7 @@ def scale_with_aspect_ratio(image, scale, method="linear", antialias=False):
     H, W = get_size(image)
     H_scaled = int(H * scale[0])
     W_scaled = int(W * scale[1])
-    resize(image, (H_scaled, W_scaled), method, antialias)
+    return resize(image, (H_scaled, W_scaled), method, antialias)
 
 
 def show(image, name="image", wait=True):

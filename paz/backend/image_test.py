@@ -99,3 +99,9 @@ def test_random_photometric_stays_in_uint8_range():
     out = paz.image.random_photometric(jax.random.PRNGKey(2), image)
     assert out.dtype == jp.uint8
     assert int(out.min()) >= 0 and int(out.max()) <= 255
+
+
+def test_scale_with_aspect_ratio_returns_scaled_image():
+    image = jp.ones((10, 20, 3))
+    scaled = paz.image.scale_with_aspect_ratio(image, (2.0, 0.5))
+    assert scaled.shape == (20, 10, 3)
