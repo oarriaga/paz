@@ -91,11 +91,11 @@ def safe_norm(x, axis=None):
        [1] https://github.com/google/jax/issues/3058 for details
     """
 
-    is_zero = jp.allclose(x, 0.0)
+    is_zero = jp.all(jp.isclose(x, 0.0), axis=axis, keepdims=True)
     # temporarily swap x with ones if is_zero, then swap back
     x = jp.where(is_zero, jp.ones_like(x), x)
     norm = jp.linalg.norm(x, axis=axis)
-    norm = jp.where(is_zero, 0.0, norm)
+    norm = jp.where(jp.squeeze(is_zero, axis=axis), 0.0, norm)
     return norm
 
 
