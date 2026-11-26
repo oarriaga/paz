@@ -190,3 +190,15 @@ def test_bottom_corner_ray_escapes_cap():
     point = jp.array([[0.9995, -1.0, 0.0]])
     directions = jp.array([[0.707, -0.707, 0.0]])
     assert_corner_escapes(compute_lower_cap_normals, point, directions)
+
+
+def test_axis_ray_depth_gradient_is_finite():
+    directions = jp.array([[0.0, -1.0, 0.0]])
+
+    def compute_depth(origins):
+        return intersect_canonical_cylinder(origins, directions)[2].sum()
+
+    origins = jp.array([[0.0, 5.0, 0.0]])
+    assert compute_depth(origins) == 4.0
+    gradient = jax.grad(compute_depth)(origins)
+    assert jp.allclose(gradient, jp.array([[0.0, 1.0, 0.0]]))

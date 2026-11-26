@@ -610,3 +610,23 @@ def test_reflected_rays_leaving_scene_show_background(camera_pose):
     mirror = Material(jp.zeros(3), 0.0, 0.0, 0.0, 200.0, 1.0)
     image = render_lone_sphere((32, 32), camera_pose, mirror, 2)
     assert jp.allclose(image, 1.0, atol=1e-4)
+
+
+def compute_axis_view_gradient(build_shape, height):
+    lights = [PointLight(jp.ones(3), jp.array([3.0, 5.0, 4.0]))]
+    eye, up = jp.array([0.0, height, 0.0]), jp.array([0.0, 0.0, -1.0])
+    pose = SE3.view_transform(eye, jp.zeros(3), up)
+
+    def loss(shift):
+        scene = Scene([build_shape(SE3.translation(shift))])
+        image, depth = render_scene((33, 33), pose, scene, lights)
+        return jp.mean(image) + 0.1 * jp.mean(depth)
+
+    return jax.jit(jax.grad(loss))(jp.zeros(3))
+
+
+@pytest.mark.parametrize("build_shape", [Cylinder, Cone])
+@pytest.mark.parametrize("height", [5.0, -5.0])
+def test_axis_aligned_view_gradient_is_finite(build_shape, height):
+    gradient = compute_axis_view_gradient(build_shape, height)
+    assert jp.all(jp.isfinite(gradient))

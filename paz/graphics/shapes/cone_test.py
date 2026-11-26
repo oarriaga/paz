@@ -1,6 +1,8 @@
+import jax
 import jax.numpy as jp
 
 from paz.graphics.constants import EPSILON, FARAWAY
+from paz.graphics.shapes.cone import build_shell_normals
 from paz.graphics.shapes.cone import compute_canonical_normals_cone
 from paz.graphics.shapes.cone import intersect_canonical_cone
 
@@ -141,3 +143,12 @@ def test_base_corner_ray_escapes_cap():
     point = jp.array([[0.9995, -1.0, 0.0]])
     directions = jp.array([[0.707, -0.707, 0.0]])
     assert_corner_escapes(compute_lower_cap_normals, point, directions)
+
+
+def test_shell_normal_gradient_is_finite_on_axis():
+    def sum_shell_normals(points):
+        return build_shell_normals(points).sum()
+
+    cap_center = jp.array([[0.0, -1.0, 0.0]])
+    assert jp.all(jp.isfinite(jax.grad(sum_shell_normals)(cap_center)))
+    assert jp.all(jp.isfinite(jax.grad(sum_shell_normals)(jp.zeros((1, 3)))))
