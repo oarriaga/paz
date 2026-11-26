@@ -20,12 +20,36 @@ from paz.models.foundation.depth_anything3 import pretrained
 
 
 def EstimateDepthAnything3Small(weights="pretrained", image_size=518):
+    """Builds a Depth Anything 3 Small any-view estimator.
+
+    # Arguments
+    - `weights`: `"pretrained"` downloads the hosted weights; otherwise a path
+      to a local `.weights.h5` file.
+    - `image_size`: Side of the square resolution images are resized to.
+
+    # Returns
+    Callable taking a sequence of images, the views. It returns the model
+    outputs `depth`, `depth_confidence`, `extrinsics`, `intrinsics`, `rays`
+    and `ray_confidence`, in that order.
+    """
     path = resolve_weights(weights, "da3_small")
     args = DepthAnything3Small, path, image_size
     return build_any_view_estimator(*args)
 
 
 def EstimateDepthAnything3Base(weights="pretrained", image_size=518):
+    """Builds a Depth Anything 3 Base any-view estimator.
+
+    # Arguments
+    - `weights`: `"pretrained"` downloads the hosted weights; otherwise a path
+      to a local `.weights.h5` file.
+    - `image_size`: Side of the square resolution images are resized to.
+
+    # Returns
+    Callable taking a sequence of images, the views. It returns the model
+    outputs `depth`, `depth_confidence`, `extrinsics`, `intrinsics`, `rays`
+    and `ray_confidence`, in that order.
+    """
     path = resolve_weights(weights, "da3_base")
     args = DepthAnything3Base, path, image_size
     return build_any_view_estimator(*args)
@@ -43,6 +67,16 @@ def build_any_view_estimator(builder, weights_path, image_size):
 
 
 def EstimateDepthAnything3MonoLarge(weights="pretrained", image_size=518):
+    """Builds a Depth Anything 3 Mono Large monocular depth estimator.
+
+    # Arguments
+    - `weights`: `"pretrained"` downloads the hosted weights; otherwise a path
+      to a local `.weights.h5` file.
+    - `image_size`: Side of the square resolution images are resized to.
+
+    # Returns
+    Callable taking one image and returning `(depth, sky)`.
+    """
     path = resolve_weights(weights, "da3_mono_large")
     model = load_mono_model(DepthAnything3MonoLarge, path, image_size)
 
@@ -54,6 +88,18 @@ def EstimateDepthAnything3MonoLarge(weights="pretrained", image_size=518):
 
 def EstimateDepthAnything3MetricLarge(focal_length, weights="pretrained",
                                       image_size=518):
+    """Builds a Depth Anything 3 Metric Large metric depth estimator.
+
+    # Arguments
+    - `focal_length`: Camera focal length; the model depth is multiplied by
+      `focal_length / 300.0`.
+    - `weights`: `"pretrained"` downloads the hosted weights; otherwise a path
+      to a local `.weights.h5` file.
+    - `image_size`: Side of the square resolution images are resized to.
+
+    # Returns
+    Callable taking one image and returning `(depth_meters, sky)`.
+    """
     path = resolve_weights(weights, "da3_metric_large")
     model = load_mono_model(DepthAnything3MetricLarge, path, image_size)
 

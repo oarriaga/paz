@@ -7,6 +7,21 @@ from paz.models.feature.lightglue.model import match_pairs
 
 
 def MatchXFeat(top_k=4096, threshold=0.05, min_score=0.1, draw=None):
+    """Builds an image pair matcher with XFeat and LighterGlue.
+
+    # Arguments
+    - `top_k`: `top_k` passed to `XFeat`, also the `LighterGlue` capacity.
+    - `threshold`: `threshold` passed to `XFeat`.
+    - `min_score`: `min_score` passed to `LighterGlue`.
+    - `draw`: `None` draws with `paz.draw.matches`. A callable is called as
+      `draw(image_A, image_B, keypoints_A, keypoints_B)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking `image_A` and `image_B`. Without drawing it returns
+    `(keypoints_A, keypoints_B)`, the matched keypoints of each image in the
+    same order. With drawing it returns only the output of `draw`.
+    """
     extract = XFeat("pretrained", top_k, threshold)
     match = LighterGlue("pretrained", min_score, capacity=top_k)
 
