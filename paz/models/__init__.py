@@ -29,7 +29,6 @@ from .keypoint.detnet import DetNet
 from .keypoint.iknet import IKNet
 from .keypoint.simplebaselines import SimpleBaseline
 from .pose_estimation.higher_hrnet import HigherHRNet
-from .pose_estimation.efficientpose import EfficientPosePhi0
 from .segmentation.unet import UNET
 from .segmentation.unet import UNET_VGG16
 from .segmentation.unet import UNET_VGG19
