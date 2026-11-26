@@ -59,7 +59,7 @@ class Camera(object):
     def read(self):
         image = self._camera.read()[1]
         if image is not None:
-            image = paz.image.BGR_to_RGB(self._camera.read()[1])
+            image = paz.image.BGR_to_RGB(image)
             image = np.ascontiguousarray(image)
         return image
         # return cv2.cvtColor(self._camera.read()[1], cv2.COLOR_BGR2RGB)
