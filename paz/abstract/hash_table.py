@@ -92,7 +92,7 @@ def pytree_to_uint32(pytree):
 
 def pytree_to_uint32_with_slot_arg(table, pytree):
     item_uint32 = pytree_to_uint32(pytree)
-    slot_arg = hash_to_slot_arg(table.key, item_uint32, table.num_slots)
+    slot_arg = hash_to_slot_arg(table.key, item_uint32, table.sub_table_size)
     return slot_arg, item_uint32
 
 
@@ -151,7 +151,8 @@ def _lookup(table, item):
 
         def next_slot(key, counter):
             new_key, zero_table_arg = key + 1, TABLE_ARG_DTYPE(0)
-            slot_arg = hash_to_slot_arg(new_key, query_uint32, table.num_slots)
+            hash_args = (new_key, query_uint32, table.sub_table_size)
+            slot_arg = hash_to_slot_arg(*hash_args)
             return new_key, Counter(slot_arg, zero_table_arg)
 
         def next_table(key, counter):
@@ -282,7 +283,7 @@ def _resolve_insert_conflicts(
             )
             new_key = key + 1
             new_slot_arg = hash_to_slot_arg(
-                new_key, item_uint32, table.num_slots
+                new_key, item_uint32, table.sub_table_size
             )
             new_table_arg = table.table_occupancy[new_slot_arg]
             next_ctr_new_slot = Counter(new_slot_arg, new_table_arg)
@@ -395,7 +396,7 @@ def insert_parallel(table, items):
     )
     initial_slot_args_for_uniques = jax.vmap(
         hash_to_slot_arg, in_axes=(None, 0, None)
-    )(table.key, unique_items_uint32, table.num_slots)
+    )(table.key, unique_items_uint32, table.sub_table_size)
     initial_table_args_for_uniques = table.table_occupancy[
         initial_slot_args_for_uniques
     ]

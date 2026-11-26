@@ -4,6 +4,7 @@ import jax.numpy as jp
 
 from .hash_table import (
     build,
+    get_batch_size,
     lookup,
     Item,
     pytree_to_uint32_with_slot_arg,
@@ -588,3 +589,25 @@ def test_insert_parallel_with_duplicates_inserts_every_unique_item():
     assert jp.all(found_flags)
     assert table.size == 4
     assert jp.sum(table.table_occupancy) == 4
+
+
+def insert_sequentially(table, items):
+    inserted_flags = []
+    for item_arg in range(get_batch_size(items)):
+        item = jax.tree_util.tree_map(lambda x: x[item_arg], items)
+        table, inserted, _ = insert(table, item)
+        inserted_flags.append(inserted)
+    return table, jp.array(inserted_flags)
+
+
+@pytest.mark.parametrize("num_tables", [1, 2, 3, 4])
+@pytest.mark.parametrize("capacity_multiplier", [2, 4])
+def test_insert_finds_items_in_any_geometry(num_tables, capacity_multiplier):
+    geometry = (num_tables, capacity_multiplier)
+    table = build(8, (2,), jp.uint32, jp.uint32, *geometry)
+    items = build_batch(range(8))
+    table, inserted_flags = insert_sequentially(table, items)
+    _, found_flags = lookup_parallel(table, items)
+    assert jp.all(inserted_flags)
+    assert jp.all(found_flags)
+    assert table.size == 8
