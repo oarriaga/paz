@@ -13,7 +13,7 @@ class Camera(object):
         self.identifier = identifier
         self.name = name
         self.intrinsics = intrinsics
-        self.distortion = None
+        self.distortion = distortion
         self._camera = None
 
     @property

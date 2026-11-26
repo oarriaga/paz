@@ -23,3 +23,9 @@ def test_camera_read_returns_every_frame_once():
     assert np.array_equal(camera.read(), blue_BGR[..., ::-1])
     assert np.array_equal(camera.read(), red_BGR[..., ::-1])
     assert camera.read() is None
+
+
+def test_camera_keeps_distortion():
+    distortion = np.ones(5)
+    camera = paz.Camera(distortion=distortion)
+    assert camera.distortion is distortion
