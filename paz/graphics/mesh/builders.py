@@ -30,7 +30,15 @@ def load_mesh(filepath):
     mesh = trimesh.load(filepath)
     vertices = jp.array(mesh.vertices.view(onp.ndarray))
     faces = jp.array(mesh.faces.view(onp.ndarray))
-    vertex_colors = mesh.visual.vertex_colors[:, :3]
+    vertex_colors = to_color_visual(mesh.visual).vertex_colors[:, :3]
     vertex_colors = jp.array(vertex_colors.view(onp.ndarray))
     vertex_colors = vertex_colors / 255.0
     return vertices, faces, vertex_colors
+
+
+def to_color_visual(visual):
+    if visual.kind == "texture":
+        color_visual = visual.to_color()
+    else:
+        color_visual = visual
+    return color_visual
