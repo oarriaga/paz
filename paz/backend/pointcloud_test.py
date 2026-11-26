@@ -156,18 +156,28 @@ def test_from_depth_two_pixels():
     assert jp.allclose(pointcloud, expected)
 
 
-def test_to_depth_raises_typeerror_default():
-    intrinsics = build_intrinsics()
-    pointcloud = jp.array([[0.0, 0.0, 2.0], [0.0, 0.0, 1.0]])
-    with pytest.raises(TypeError):
-        _ = to_depth(pointcloud, intrinsics, H=1, W=1)
+def test_to_depth_inverts_from_depth():
+    intrinsics = build_intrinsics(57.3, 61.1, 31.5, 23.5)
+    key, shape = jax.random.PRNGKey(0), (48, 64)
+    depth = jax.random.uniform(key, shape, minval=0.5, maxval=3.0)
+    pointcloud = from_depth(depth, intrinsics)
+    assert jp.allclose(to_depth(pointcloud, intrinsics, *shape), depth)
 
 
-def test_to_depth_raises_typeerror_with_min_depth():
+def test_to_depth_keeps_nearest_point_above_min_depth():
     intrinsics = build_intrinsics()
-    pointcloud = jp.array([[0.0, 0.0, 1.0], [0.0, 0.0, 2.0]])
-    with pytest.raises(TypeError):
-        _ = to_depth(pointcloud, intrinsics, H=1, W=1, min_depth=1.5)
+    pointcloud = jp.array([[0.0, 0.0, 3.0], [0.0, 0.0, 1.0], [0.0, 0.0, 2.0]])
+    depth = to_depth(pointcloud, intrinsics, H=1, W=1)
+    assert jp.allclose(depth, jp.array([[1.0]]))
+    depth = to_depth(pointcloud, intrinsics, H=1, W=1, min_depth=1.5)
+    assert jp.allclose(depth, jp.array([[2.0]]))
+
+
+def test_to_depth_ignores_points_behind_camera_and_outside_image():
+    intrinsics = build_intrinsics(cx=1.0, cy=1.0)
+    pointcloud = jp.array([[0.0, 0.0, -1.0], [5.0, 0.0, 1.0]])
+    depth = to_depth(pointcloud, intrinsics, H=3, W=3)
+    assert jp.allclose(depth, jp.zeros((3, 3)))
 
 
 def test_sample_returns_requested_count():
