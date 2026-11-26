@@ -1,3 +1,5 @@
+__version__ = "0.3.0"
+
 from paz import datasets
 from paz.backend import draw
 from paz.backend import boxes

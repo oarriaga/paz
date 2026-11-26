@@ -4,8 +4,8 @@ import os
 import pytest
 import keras
 from keras import ops
-import convnext
-import torch_convnext_for_testing
+from paz.models.foundation.dinov3.models import convnext
+from paz.models.foundation.dinov3.models import torch_convnext_for_testing
 
 TOLERANCE = 1e-5
 DINO_WEIGHTS_DIR = r"D:\DFKI_SeaMe_project\Tasks\Task2_porting_paz_model_to_keras3\paz/"

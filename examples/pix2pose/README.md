@@ -28,6 +28,8 @@ decimated vertices by nearest neighbor. This drops rendering to ~32 ms/sample
 < 0.1 mm (so pose scaling is unaffected). Data is still rendered once and
 cached; augmentation runs per batch.
 
+The decimation needs `pip install fast_simplification`.
+
 ## Scripts
 
 ```bash
