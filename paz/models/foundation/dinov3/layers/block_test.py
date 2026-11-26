@@ -1,13 +1,14 @@
 import os
-import torch
 import numpy as np
-from torch import nn
 from functools import partial
 import keras
 import jax
 import jax.numpy as jnp
 from keras import layers
 import pytest
+
+torch = pytest.importorskip("torch")
+from torch import nn
 
 from paz.models.foundation.dinov3.layers.block import (
     SelfAttentionBlock,

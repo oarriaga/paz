@@ -1,6 +1,8 @@
 import os
 import pytest
-import torch
+
+torch = pytest.importorskip("torch")
+
 import numpy as np
 from paz.models.foundation.dinov3.layers.attention import (
     SelfAttention,

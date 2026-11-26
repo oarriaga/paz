@@ -11,6 +11,7 @@ import numpy as np
 import pytest
 
 ort = pytest.importorskip("onnxruntime")
+pytest.importorskip("onnx")
 
 from paz.models.foundation.sonic.conversion import port_weights
 from paz.models.foundation.sonic.layout import compute_mode_scalar_index

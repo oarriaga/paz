@@ -1,9 +1,11 @@
 import os
 import pytest
+
+torch = pytest.importorskip("torch")
+
 import numpy as np
 import jax
 import keras
-import torch
 from keras import ops
 
 from paz.models.foundation.dinov3.layers.rms_norm import RMSNorm

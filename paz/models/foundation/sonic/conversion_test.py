@@ -1,4 +1,8 @@
 import numpy as np
+import pytest
+
+pytest.importorskip("onnx")
+
 from onnx import helper
 from onnx import numpy_helper
 

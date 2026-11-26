@@ -1,6 +1,8 @@
 import os
 import pytest
-import torch
+
+torch = pytest.importorskip("torch")
+
 import numpy as np
 import keras
 from paz.models.foundation.dinov3.models.vision_transformer import vit_small

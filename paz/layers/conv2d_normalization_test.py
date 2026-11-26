@@ -34,7 +34,8 @@ def test_normalization_and_scaling(parameters):
     model = Model(inputs=input_tensor, outputs=layer(input_tensor))
 
     # Create a random input tensor
-    x = np.random.rand(1, *input_shape).astype(np.float32)
+    random_state = np.random.RandomState(0)
+    x = random_state.rand(1, *input_shape).astype(np.float32)
 
     # Compute the L2 norm manually
     l2_norm = np.sqrt(
