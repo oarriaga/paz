@@ -42,3 +42,18 @@ def test_transform_variance_matches_fit_variances(x):
     assert projected.shape == (50, 2)
     variances = np.var(projected, axis=0, ddof=1)
     assert np.allclose(variances, state.variances, rtol=1e-4)
+
+
+def test_fit_randomized_jits_with_static_num_components(x):
+    fit = jax.jit(paz.PCA.fit_randomized, static_argnums=1)
+    state = fit(jp.array(x), 2, jax.random.PRNGKey(0))
+    expected = compute_covariance_eigenvalues(x, 2)
+    assert np.allclose(state.variances, expected, rtol=1e-3)
+
+
+def test_fit_randomized_with_fewer_samples_than_twice_components():
+    x = np.random.default_rng(0).normal(size=(5, 20))
+    state = paz.PCA.fit_randomized(jp.array(x), 3, jax.random.PRNGKey(0))
+    expected = compute_covariance_eigenvalues(x, 3)
+    assert state.base.shape == (3, 20)
+    assert np.allclose(state.variances, expected, rtol=1e-3)
