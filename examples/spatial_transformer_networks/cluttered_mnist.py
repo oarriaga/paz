@@ -3,9 +3,11 @@ import keras
 
 
 def download():
-    URL = "https://github.com/daviddao/spatial-transformer-tensorflow/raw/"
-    "7d954f8d57f75c1787b489328c8fb4201ed2fb05/data/"
-    "mnist_sequence1_sample_5distortions5x5.npz"
+    URL = (
+        "https://github.com/daviddao/spatial-transformer-tensorflow/raw/"
+        "7d954f8d57f75c1787b489328c8fb4201ed2fb05/data/"
+        "mnist_sequence1_sample_5distortions5x5.npz"
+    )
     return keras.utils.get_file(
         "mnist_sequence1_sample_5distortions5x5.npz",
         URL,

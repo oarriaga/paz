@@ -21,9 +21,6 @@ From the PAZ repository:
 That's it — `mujoco_demo.py` downloads its G1 MuJoCo scene, meshes, and
 bundled reference motions from the same release as the actor weights on
 first run, so no local GR00T-WholeBodyControl checkout is required.
-`quickstart.py` runs one actor step to confirm the install works:
-
-    python3 examples/sonic/quickstart.py
 
 If you already have a local checkout (e.g. NVlabs/GR00T-WholeBodyControl) and
 want its full motion library or a newer scene revision instead of the

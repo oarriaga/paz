@@ -2,7 +2,7 @@ The eigenfaces example in this branch is pure JAX and pure functions.
 
 Scripts:
 
-- `python examples/eigenfaces/eigenfaces.py`
+- `python examples/eigenfaces/build_eigenfaces.py`
 - `python examples/eigenfaces/database.py`
 - `python examples/eigenfaces/demo.py`
 
