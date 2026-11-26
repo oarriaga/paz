@@ -58,29 +58,12 @@ def test_serialization():
             os.remove(save_path)
 
 
-def test_pretrained_instantiation():
-    print("\n--- Testing Pretrained Model Instantiation ---")
-
-    # We just check if they can be instantiated without crashing.
-    # If weights are missing, it prints a warning but returns the model.
-
-    try:
-        model_s = DINOV3VITS()
-        assert isinstance(model_s, DinoVisionTransformer)
-        print("✅ DINOV3VITS instantiated.")
-
-        model_b = DINOV3VITB()
-        assert isinstance(model_b, DinoVisionTransformer)
-        print("✅ DINOV3VITB instantiated.")
-
-        model_l = DINOV3VITL()
-        assert isinstance(model_l, DinoVisionTransformer)
-        print("✅ DINOV3VITL instantiated.")
-
-    except Exception as e:
-        pytest.fail(f"Instantiation failed: {e}")
+@pytest.mark.parametrize("factory", [DINOV3VITS, DINOV3VITB, DINOV3VITL])
+def test_pretrained_raises_when_weights_missing(factory, tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    with pytest.raises(FileNotFoundError, match="not hosted yet"):
+        factory()
 
 
 if __name__ == "__main__":
     test_serialization()
-    test_pretrained_instantiation()
