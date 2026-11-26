@@ -3,13 +3,35 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "paz"
-version = "0.3.0"
+name = "pypaz"
+dynamic = ["version"]
 description = "Perception for Autonomous Systems"
 readme = "README.md"
 requires-python = ">=3.10"
+license = { text = "MIT" }
 authors = [
     { name = "Octavio Arriaga" }
+]
+keywords = [
+    "computer vision",
+    "perception",
+    "robotics",
+    "deep learning",
+    "differentiable rendering",
+    "jax",
+    "keras",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Image Recognition",
 ]
 dependencies = [
     "numpy>=1.26",
@@ -18,9 +40,9 @@ dependencies = [
     "jax",
     "matplotlib",
     "optax",
+    "pyyaml>=6",
     "scipy",
-    "trimesh",
-    "fast_simplification"
+    "trimesh"
 ]
 
 [project.optional-dependencies]
@@ -39,6 +61,16 @@ learning_to_walk = [
     "pyyaml>=6",
     "torch>=2.0",
 ]
+weights = [
+    "safetensors",
+    "huggingface_hub",
+    "keras_hub",
+]
+datasets = [
+    "gdown",
+    "kaggle",
+    "cityscapesscripts",
+]
 
 [project.urls]
 Homepage = "https://github.com/oarriaga/paz"
@@ -48,3 +80,6 @@ Issues = "https://github.com/oarriaga/paz/issues"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["paz*"]
+
+[tool.setuptools.dynamic]
+version = { attr = "paz.__version__" }
