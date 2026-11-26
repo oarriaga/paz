@@ -1100,33 +1100,33 @@ class TransformedDistribution(_TransformedBase, Distribution):
         if self.event_shape != ():
             raise NotImplementedError("cdf is only implemented for scalars.")
         inverse_values = self.bijector.inverse(values)
-        if self.bijector.is_increasing():
-            return self.distribution.cdf(inverse_values)
-        return self.distribution.survival_function(inverse_values)
+        increasing = self.distribution.cdf(inverse_values)
+        decreasing = self.distribution.survival_function(inverse_values)
+        return jp.where(self.bijector.is_increasing(), increasing, decreasing)
 
     def log_cdf(self, values):
         if self.event_shape != ():
             raise NotImplementedError("log_cdf is only defined for scalars.")
         inverse_values = self.bijector.inverse(values)
-        if self.bijector.is_increasing():
-            return self.distribution.log_cdf(inverse_values)
-        return self.distribution.log_survival_function(inverse_values)
+        increasing = self.distribution.log_cdf(inverse_values)
+        decreasing = self.distribution.log_survival_function(inverse_values)
+        return jp.where(self.bijector.is_increasing(), increasing, decreasing)
 
     def survival_function(self, values):
         if self.event_shape != ():
             raise NotImplementedError("sf is only implemented for scalars.")
         inverse_values = self.bijector.inverse(values)
-        if self.bijector.is_increasing():
-            return self.distribution.survival_function(inverse_values)
-        return self.distribution.cdf(inverse_values)
+        increasing = self.distribution.survival_function(inverse_values)
+        decreasing = self.distribution.cdf(inverse_values)
+        return jp.where(self.bijector.is_increasing(), increasing, decreasing)
 
     def log_survival_function(self, values):
         if self.event_shape != ():
             raise NotImplementedError("log_sf is only implemented for scalars.")
         inverse_values = self.bijector.inverse(values)
-        if self.bijector.is_increasing():
-            return self.distribution.log_survival_function(inverse_values)
-        return self.distribution.log_cdf(inverse_values)
+        increasing = self.distribution.log_survival_function(inverse_values)
+        decreasing = self.distribution.log_cdf(inverse_values)
+        return jp.where(self.bijector.is_increasing(), increasing, decreasing)
 
     def sample(self, num_samples=1, seed=None):
         values = self.distribution.sample(num_samples, seed=seed)

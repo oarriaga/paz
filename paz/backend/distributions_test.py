@@ -708,3 +708,21 @@ def test_multivariate_normal_log_prob_broadcasts_values_and_parameters():
     assert_close(full.log_prob(values[0]), expected)
     tril = D.MultivariateNormalTriL(loc, jp.sqrt(scales) * scale_tril)
     assert_close(tril.log_prob(values[0]), expected)
+
+
+def test_transformed_cumulative_selects_direction_per_element():
+    base = D.Normal(jp.array([0.5, 1.0]), 0.7)
+    bijector = B.Scale(jp.array([2.0, -1.0]))
+    transformed = D.TransformedDistribution(base, bijector)
+    reference = stats.norm([1.0, -1.0], [1.4, 0.7])
+    assert_methods(transformed, reference, jp.array([0.3, 0.3]), SCALAR)
+
+
+def test_transformed_cumulative_is_jittable_over_the_bijector():
+    def compute_cdf(scale, values):
+        bijector = B.Chain([B.Shift(1.0), B.Scale(scale)])
+        transformed = D.TransformedDistribution(D.Normal(0.5, 0.7), bijector)
+        return transformed.cdf(values)
+
+    expected = stats.norm(0.0, 1.4).cdf(0.3)
+    assert_close(jax.jit(compute_cdf)(-2.0, 0.3), expected, rtol=1e-6)
