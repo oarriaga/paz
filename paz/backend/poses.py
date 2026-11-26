@@ -137,7 +137,7 @@ def compute_optimized_pose3D(keypoints3D, translation, camera_intrinsics):
 def optimize_human_pose3D(keypoints3D, keypoints2D, solver, camera_intrinsics):
     joints3D = filter_keypoints3D(keypoints3D, human36m.args_to_joints3D)
     joints2D = filter_keypoints2D_to_h36m(keypoints2D)
-    length2D, length3D = get_bones_length(joints2D, keypoints3D,
+    length2D, length3D = get_bones_length(joints2D, joints3D,
                                           human36m.human_start_joints)
     ratio = length3D / length2D
     initial = initialize_translation(joints2D[:, :2], camera_intrinsics, ratio)
