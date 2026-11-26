@@ -71,10 +71,9 @@ def build_canonical_caps_normals(points, inner_cap_mask, minimum, maximum):
 def intersect_infinite_plane(ray_origins, ray_directions, y_translation=0.0):
     y_origins, y_directions = ray_origins[:, 1:2], ray_directions[:, 1:2]
     depths = (y_translation - y_origins) / y_directions
-    # TODO understand why is needed to fix cylinder shadow error.
+    # Without this mask a cap behind the ray origin wins the `min`.
     valid_mask = jp.logical_and((depths > EPSILON), (depths < FARAWAY))
     depths = jp.where(valid_mask, depths, FARAWAY)
-    # -------------------------------------------------------------------------
     return depths
 
 
@@ -85,7 +84,7 @@ def intersect_plane(origins, directions, y_translation):
 
 
 def intersect_canonical_caps(caps_mask, lower_cap_depth, upper_cap_depth):
-    # TODO missing sort
+    # Rows stay (lower, upper): the normal code reads them by position.
     caps_depths = jp.vstack([lower_cap_depth[:, 0], upper_cap_depth[:, 0]])
     caps_depth = compute_quadratic_depths(lower_cap_depth, upper_cap_depth)
 

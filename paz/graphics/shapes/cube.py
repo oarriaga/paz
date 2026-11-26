@@ -44,7 +44,6 @@ def intersect_canonical_cube(ray_origins, ray_directions):
 
     depths = jp.vstack([depth_min[:, 0], depth_max[:, 0]])
     depths = paz.graphics.shapes.pad_depths(depths, hit_mask, 2)
-    # TODO do apply_hit_mask for sorted depths as well
     return hit_mask, depths, depth
 
 

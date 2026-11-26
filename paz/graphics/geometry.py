@@ -13,9 +13,6 @@ def compute_quadratic_is_hit(depths_A, depths_B, is_valid):
 
     # Returns
         is_hit: Array
-
-    # Notes
-        TODO: check if it should not be >= instead of just >
     """
     is_positive = jp.logical_or(depths_A > EPSILON, depths_B > EPSILON)
     is_hit = jp.logical_and(is_valid, is_positive)
