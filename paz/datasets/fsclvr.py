@@ -156,7 +156,7 @@ def parse_labels(labels, name_to_class, diffuse=0.9, ambient=0.1):
     return samples
 
 
-def parse_metadata(dataset="PRIMITIVES"):
+def parse_metadata(dataset="plain"):
     root = download(dataset)
     metadata = os.path.join(root, "metadata.json")
     metadata = json.load(open(metadata, "r"))
