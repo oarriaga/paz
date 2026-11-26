@@ -238,3 +238,13 @@ def test_axis_rotations_match_scipy(angle):
     assert jp.allclose(SO3.rotation_y(angle), expected_y, atol=1e-6)
     assert jp.allclose(SO3.rotation_z(angle), expected_z, atol=1e-6)
 
+
+def test_sample_is_uniform_over_rotations():
+    keys = jax.random.split(jax.random.PRNGKey(0), 4000)
+    rotations = jax.vmap(SO3.sample)(keys)
+    gram_matrices = rotations @ jp.swapaxes(rotations, 1, 2)
+    traces = jp.trace(rotations, axis1=1, axis2=2)
+    assert jp.allclose(gram_matrices, jp.eye(3), atol=1e-5)
+    assert jp.allclose(jp.linalg.det(rotations), 1.0, atol=1e-5)
+    assert jp.abs(jp.mean(traces)) < 0.1
+    assert jp.abs(jp.mean(rotations[:, 0, 0] > 0) - 0.5) < 0.05

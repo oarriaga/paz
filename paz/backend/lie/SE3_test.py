@@ -206,3 +206,9 @@ def test_sample_SE3(sample_key):
         jp.dot(rotation_matrix, rotation_matrix.T), jp.eye(3), atol=1e-6
     )
     assert jp.array_equal(SE3_matrix[3, :], jp.array([0, 0, 0, 1]))
+
+
+def test_sample_position_does_not_reuse_rotation_key(sample_key):
+    position = SE3.sample(sample_key, -1.0, 1.0)[:3, 3]
+    reused_key_position = jax.random.uniform(sample_key, (3,), float, -1, 1)
+    assert not jp.allclose(position, reused_key_position)

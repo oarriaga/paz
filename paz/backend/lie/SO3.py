@@ -201,7 +201,10 @@ def log(SO3_matrix):
 
 def sample(key):
     normal_matrix = jax.random.normal(key, (3, 3))
-    orthonormal_matrix = jp.linalg.qr(normal_matrix)[0]
+    orthonormal_matrix, upper_triangular = jp.linalg.qr(normal_matrix)
+    # QR is only uniform over rotations once the diagonal of R is positive
+    column_signs = jp.sign(jp.diag(upper_triangular))
+    orthonormal_matrix = orthonormal_matrix * column_signs
     negative_determinant = jp.linalg.det(orthonormal_matrix) < 0
     column_0 = orthonormal_matrix[:, 0:1]
     column_1 = orthonormal_matrix[:, 1:2]

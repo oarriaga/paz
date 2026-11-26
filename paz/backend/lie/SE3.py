@@ -272,7 +272,8 @@ def vee(se3_matrix):
 def sample(key, min_value, max_value):
     key_SO3, key_SE3 = jax.random.split(key)
     rotation = SO3.sample(key_SO3)
-    position = jax.random.uniform(key, (3,), float, min_value, max_value)
+    limits = (min_value, max_value)
+    position = jax.random.uniform(key_SE3, (3,), float, *limits)
     return to_affine_matrix(rotation, position)
 
 
