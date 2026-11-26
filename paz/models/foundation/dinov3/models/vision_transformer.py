@@ -426,15 +426,21 @@ class DinoVisionTransformer(keras.Model):
 
 def load_pretrained_weights(model, model_name):
     weights_path = os.path.expanduser(f"~/.keras/paz/models/{model_name}.keras")
-    if os.path.exists(weights_path):
-        print(f"Loading weights from {weights_path}")
-        # Build the model first with a dummy input
-        img_size = model.img_size_config
-        dummy_input = np.zeros((1, img_size, img_size, 3), dtype="float32")
-        model(dummy_input, training=False)
-        model.load_weights(weights_path)
-    else:
-        print(f"Weights file not found at {weights_path}. Model initialized with random weights.")
+    if not os.path.exists(weights_path):
+        raise FileNotFoundError(build_missing_weights_message(weights_path))
+    # Build the model first with a dummy input
+    img_size = model.img_size_config
+    dummy_input = np.zeros((1, img_size, img_size, 3), dtype="float32")
+    model(dummy_input, training=False)
+    model.load_weights(weights_path)
+
+
+def build_missing_weights_message(weights_path):
+    script = "paz/models/foundation/dinov3/"
+    script = script + "port_dino_weights_from_torch_to_keras.py"
+    message = f"DINOv3 weights not found at {weights_path}. "
+    message = message + "DINOv3 weights are not hosted yet; "
+    return message + f"port them locally with {script}."
 
 
 def vit_small(patch_size=16, weights=None, input_shape=(224, 224, 3), **kwargs):
