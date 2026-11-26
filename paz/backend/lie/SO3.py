@@ -1,7 +1,7 @@
 import jax
 import jax.numpy as jp
 
-from paz.backend.algebra import safe_norm, near_zero
+from paz.backend.algebra import safe_norm
 
 
 def hat(so3_vector):
@@ -160,59 +160,43 @@ def rpy_to_SO3(coordinates):
     )
 
 
-def case_0_log(R):
-    return jp.zeros((3, 3))
+def compute_angle_over_sine(sine_squared, theta):
+    """Logarithm coefficient `theta / sin(theta)`.
+
+    It is `0 / 0` at `theta = 0` but has the limit `1`. Near zero a
+    Taylor series in `sin(theta)^2` replaces the singular ratio so value
+    and gradient stay finite.
+    """
+    use_taylor = sine_squared < 1e-8
+    safe = jp.where(use_taylor, 1.0, sine_squared)
+    exact = theta / jp.sqrt(safe)
+    taylor = 1.0 + sine_squared / 6.0 + 3.0 * sine_squared**2 / 40.0
+    return jp.where(use_taylor, taylor, exact)
 
 
-def case_1_log(SO3):
-    choose_omega_0 = jp.logical_not(near_zero(1 + SO3[2, 2]))
-    choose_omega_1 = jp.logical_not(near_zero(1 + SO3[1, 1]))
-    omega_0 = (1.0 / jp.sqrt(2 * (1 + SO3[2, 2]))) * jp.array(
-        [SO3[0, 2], SO3[1, 2], 1 + SO3[2, 2]]
-    )
-    omega_1 = (1.0 / jp.sqrt(2 * (1 + SO3[1, 1]))) * jp.array(
-        [SO3[0, 1], SO3[1, 1], 1 + SO3[2, 1]]
-    )
-    omega_2 = (1.0 / jp.sqrt(2 * (1 + SO3[0, 0]))) * jp.array(
-        [1 + SO3[0, 0], SO3[1, 0], SO3[2, 0]]
-    )
-    omega = jp.where(
-        choose_omega_0, omega_0, jp.where(choose_omega_1, omega_1, omega_2)
-    )
-    return omega
+def compute_axis_near_pi(SO3_matrix, cosine, sine_axis):
+    """Rotation axis from the symmetric part `cos I + (1 - cos) a a^T`.
 
-
-def old_case_2_log(SO3):
-    arccos_input = (jp.trace(SO3) - 1) / 2.0
-    theta = jp.arccos(arccos_input - 1e-6)
-    return (theta / (2.0 * jp.sin(theta) + 1e-6)) * (SO3 - SO3.T)
-
-
-def case_2_log(SO3):
-    arccos_input = jp.clip((jp.trace(SO3) - 1) / 2.0, -1.0, 1.0)
-    theta = jp.arccos(arccos_input - 1e-6)
-    return (theta / (2.0 * jp.sin(theta) + 1e-6)) * (SO3 - SO3.T)
-
-
-# def case_2_log(SO3):
-#     arccos_input = jp.clip((jp.trace(SO3) - 1) / 2.0, -1.0, 1.0)
-#     theta = jp.arccos(arccos_input)
-#     small_angle = theta < 1e-8
-#     scalar_factor = jp.where(
-#         small_angle, 0.5 + theta**2 / 12.0, theta / (2.0 * jp.sin(theta))
-#     )
-#     return scalar_factor * (SO3 - SO3.T)
+    Near a half-turn the skew part `sin(theta) hat(a)` vanishes, so the
+    axis is read from the largest column of `a a^T` and only its sign
+    comes from the skew part.
+    """
+    symmetric_part = (SO3_matrix + SO3_matrix.T) / 2.0
+    outer_product = symmetric_part - cosine * jp.eye(3)
+    column = outer_product[:, jp.argmax(jp.diag(outer_product))]
+    axis = column / jp.linalg.norm(column)
+    return jp.where(jp.dot(axis, sine_axis) < 0.0, -axis, axis)
 
 
 def log(SO3_matrix):
-    acosinput = (jp.trace(SO3_matrix) - 1) / 2.0
-    choose_0 = acosinput >= 1
-    choose_1 = acosinput <= -1
-    return jp.where(
-        choose_0,
-        case_0_log(SO3_matrix),
-        jp.where(choose_1, case_1_log(SO3_matrix), case_2_log(SO3_matrix)),
-    )
+    cosine = (jp.trace(SO3_matrix) - 1.0) / 2.0
+    sine_axis = vee(SO3_matrix - SO3_matrix.T) / 2.0
+    theta = jp.arctan2(safe_norm(sine_axis), cosine)
+    ratio = compute_angle_over_sine(jp.dot(sine_axis, sine_axis), theta)
+    near_pi = cosine < -0.9
+    safe_cosine = jp.where(near_pi, cosine, -1.0)
+    axis = compute_axis_near_pi(SO3_matrix, safe_cosine, sine_axis)
+    return jp.where(near_pi, hat(theta * axis), hat(ratio * sine_axis))
 
 
 def sample(key):
@@ -236,7 +220,6 @@ def rotation_z(angle):
     # Return
         Array (3, 3) rotation matrix in Z axis.
     """
-    # TODO verify that signs are correct
     cos_angle = jp.cos(angle)
     sin_angle = jp.sin(angle)
     rotation_matrix_z = jp.array(

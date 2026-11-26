@@ -1,10 +1,12 @@
 import math
 
 import pytest
+import numpy as np
 import jax.numpy as jp
 import jax
 import jax.test_util
 import jax.scipy.linalg
+from scipy.spatial.transform import Rotation
 
 from paz import SO3
 
@@ -15,6 +17,10 @@ EXP_EDGE_ANGLES = [
     0.0, 1e-30, 1e-12, 1e-8, 1e-4, 1e-3, 0.5,
     math.pi - 1e-3, math.pi, math.pi + 1e-2, 2 * math.pi, 10.0,
 ]
+
+# Angles that stress the series branch near zero, the generic branch and
+# the axis-from-diagonal branch near the half-turn of the logarithm.
+LOG_EDGE_ANGLES = [0.0, 1e-6, 1e-4, 1e-2, 1.0, 3.0, 3.14, math.pi - 1e-3]
 
 
 @pytest.fixture
@@ -181,3 +187,54 @@ def test_sample_function(sample_key):
     assert jp.allclose(jp.dot(SO3_matrix, SO3_matrix.T), jp.eye(3), atol=1e-6)
     # Assert that the determinant is 1
     assert jp.isclose(jp.linalg.det(SO3_matrix), 1.0)
+
+
+def log_of_exp(omega):
+    return SO3.vee(SO3.log(SO3.exp(SO3.hat(omega))))
+
+
+@pytest.mark.parametrize("axis", [0, 1, 2])
+def test_log_of_half_turn(axis):
+    omega = jp.zeros(3).at[axis].set(jp.pi)
+    rotation = jp.array(Rotation.from_rotvec(np.asarray(omega)).as_matrix())
+    so3_matrix = SO3.log(rotation)
+    assert jp.allclose(so3_matrix, -so3_matrix.T)
+    assert jp.allclose(jp.abs(SO3.vee(so3_matrix)), omega, atol=1e-5)
+
+
+@pytest.mark.parametrize("angle", LOG_EDGE_ANGLES)
+def test_log_matches_scipy_rotation_vector(angle):
+    omega = angle * jp.array([1.0, 2.0, -0.5]) / jp.sqrt(5.25)
+    rotation = np.asarray(SO3.exp(SO3.hat(omega)), dtype=np.float64)
+    expected = Rotation.from_matrix(rotation).as_rotvec()
+    assert jp.allclose(log_of_exp(omega), expected, rtol=1e-5, atol=1e-9)
+    assert jp.allclose(log_of_exp(omega), omega, rtol=1e-5, atol=1e-9)
+
+
+def test_log_gradient_is_identity_at_identity():
+    jacobian = jax.jacobian(log_of_exp)(jp.zeros(3))
+    assert jp.allclose(jacobian, jp.eye(3))
+
+
+@pytest.mark.parametrize("angle", LOG_EDGE_ANGLES)
+def test_log_gradient_inverts_exp_gradient(angle):
+    omega = angle * jp.array([1.0, 2.0, -0.5]) / jp.sqrt(5.25)
+    jacobian = jax.jacobian(log_of_exp)(omega)
+    assert jp.allclose(jacobian, jp.eye(3), atol=1e-3)
+
+
+def test_log_works_under_jit_and_vmap():
+    omegas = jp.array([[0.0, 0.0, 0.0], [0.3, -0.2, 0.1], [0.0, jp.pi, 0.0]])
+    recovered = jax.jit(jax.vmap(log_of_exp))(omegas)
+    assert jp.allclose(jp.abs(recovered), jp.abs(omegas), atol=1e-5)
+
+
+@pytest.mark.parametrize("angle", [0.3, -1.2, 2.9])
+def test_axis_rotations_match_scipy(angle):
+    expected_x = Rotation.from_euler("x", angle).as_matrix()
+    expected_y = Rotation.from_euler("y", angle).as_matrix()
+    expected_z = Rotation.from_euler("z", angle).as_matrix()
+    assert jp.allclose(SO3.rotation_x(angle), expected_x, atol=1e-6)
+    assert jp.allclose(SO3.rotation_y(angle), expected_y, atol=1e-6)
+    assert jp.allclose(SO3.rotation_z(angle), expected_z, atol=1e-6)
+
