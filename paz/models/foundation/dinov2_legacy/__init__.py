@@ -1,1 +1,0 @@
-from paz.models.foundation.dinov2_legacy.models.vision_transformer import arange_indices

@@ -2,37 +2,14 @@ import os
 
 import numpy as np
 import pytest
-from keras import Model
 
 from paz.models import DINOv2Small
 from paz.models.foundation.dinov2.models import count_positions
 from paz.models.foundation.dinov2.port_weights import port_weights
-from paz.models.foundation.dinov2_legacy.models.vision_transformer import (
-    DINOV2Small as LegacyDINOv2Small,
-)
 
 IMAGE_SHAPE = (98, 98, 3)
 HIDDEN_SIZE = 384
 DEPTH = 12
-
-
-def copy_weights_by_name(source, target):
-    for layer in target.layers:
-        weights = layer.get_weights()
-        if weights:
-            layer.set_weights(source.get_layer(layer.name).get_weights())
-
-
-def test_matches_legacy_dinov2():
-    canonical = DINOv2Small(image_shape=IMAGE_SHAPE)
-    legacy = LegacyDINOv2Small(img_size=IMAGE_SHAPE[0])
-    copy_weights_by_name(legacy, canonical)
-    legacy_norm = Model(legacy.input, legacy.get_layer("norm").output)
-    data = np.random.RandomState(0).randn(2, *IMAGE_SHAPE).astype("float32")
-    class_token, patch_tokens = canonical(data)
-    normalized = np.array(legacy_norm(data))
-    assert np.allclose(np.array(class_token), normalized[:, 0], atol=1e-5)
-    assert np.allclose(np.array(patch_tokens), normalized[:, 1:], atol=1e-5)
 
 
 def build_torch_state_dict(model):
