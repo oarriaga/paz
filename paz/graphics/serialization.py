@@ -4,7 +4,8 @@ import pathlib
 import jax.numpy as jp
 import numpy as np
 
-from paz.graphics.types import Material, Pattern, Shape, Group, Scene
+from paz.graphics.types import Material, CookTorranceMaterial
+from paz.graphics.types import Pattern, Shape, Group, Scene
 import paz
 
 
@@ -22,6 +23,10 @@ def is_shape(node_data):
 
 def is_scene(node_data):
     return "nodes" in node_data
+
+
+def is_cook_torrance_material(material_data):
+    return "roughness" in material_data
 
 
 def pattern_contains_image(pattern_node):
@@ -81,16 +86,12 @@ def save(filepath, component):
 
 
 def build_material(data):
-    return Material(
-        color=jp.array(data["color"]),
-        ambient=data["ambient"],
-        diffuse=data["diffuse"],
-        specular=data["specular"],
-        shininess=data["shininess"],
-        reflective=data["reflective"],
-        transparency=data["transparency"],
-        refractive_index=data["refractive_index"],
-    )
+    fields = dict(data, color=jp.array(data["color"]))
+    if is_cook_torrance_material(data):
+        material = CookTorranceMaterial(**fields)
+    else:
+        material = Material(**fields)
+    return material
 
 
 def build_pattern(data, base_path=None):
