@@ -3,18 +3,35 @@ on:
   push:
     branches:
       - master
+  pull_request:
+    branches:
+      - paz-jax
+      - master
+env:
+  KERAS_BACKEND: jax
+  JAX_PLATFORMS: cpu
 jobs:
-  deploy:
+  build:
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: 3.8
-      - run: python -m pip install --upgrade pip
-      - run: pip install mkdocs-material
-      - run: pip install . --user
-      - run: python docs/autogenerate_documentation.py
-      - run: |
-          cd docs/
-          mkdocs gh-deploy --force
+          python-version: "3.11"
+      - run: pip install -e . mkdocs-material
+      - run: python docs/build.py
+      - run: mkdocs build --strict -f docs/mkdocs.yml
+  deploy:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - run: pip install -e . mkdocs-material
+      - run: python docs/build.py
+      - run: mkdocs gh-deploy --force -f docs/mkdocs.yml
