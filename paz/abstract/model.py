@@ -1,7 +1,7 @@
 from collections import namedtuple
 from typing import Callable
 
-from paz.abstract.tree import Tree
+from paz.abstract.dag import DAG
 from paz.abstract.node import build_type, Node
 import paz
 
@@ -79,10 +79,10 @@ def get_non_root_nodes(nodes, sorted_node_names, input_node_names):
 def Model(inputs, outputs, name):
     output_names = [output_node.name for output_node in outputs]
     nodes = search_nodes(outputs)
-    tree = Tree([node.name for node in nodes], get_edges(nodes), name)
-    sorted_names = tree.sort_topologically()
+    dag = DAG([node.name for node in nodes], get_edges(nodes), name)
+    sorted_names = dag.sort_topologically()
     root_names = [node.name for node in inputs]
-    if set(tree.root_nodes()) != set(root_names):
+    if set(dag.root_nodes()) != set(root_names):
         raise ValueError(f"Not all inputs {inputs} are root {root_names}")
     Type = build_type(output_names)
     # non_root_nodes = [node for node in nodes if node.name not in root_names]

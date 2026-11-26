@@ -22,6 +22,16 @@ def test_shared_input():
     assert model(3.0).add == 9.0
 
 
+def test_deep_multi_input():
+    x, w = Input("x"), Input("w")
+    a = Node(increment, name="a")(x)
+    b = Node(increment, name="b")(a)
+    c = Node(increment, name="c")(b)
+    output = Node(add, name="output")(c, w)
+    model = Model([x, w], [output], "deep_multi_input")
+    assert model(1.0, 10.0).output == 14.0
+
+
 def test_diamond():
     x = Input("x")
     left = Node(double, name="left")(x)
