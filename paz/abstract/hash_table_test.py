@@ -591,6 +591,18 @@ def test_insert_parallel_with_duplicates_inserts_every_unique_item():
     assert jp.sum(table.table_occupancy) == 4
 
 
+def test_insert_parallel_is_jittable():
+    table = build(16, (2,))
+    items = build_batch([5, 1, 5, 2, 1, 3])
+    table, inserted_mask, flat_args = jax.jit(insert_parallel)(table, items)
+    found_args, found_flags = lookup_parallel(table, items)
+    is_first_occurrence = jp.array([True, True, False, True, False, True])
+    assert jp.all(inserted_mask == is_first_occurrence)
+    assert jp.all(found_flags)
+    assert jp.all(found_args == flat_args)
+    assert table.size == 4
+
+
 def insert_sequentially(table, items):
     inserted_flags = []
     for item_arg in range(get_batch_size(items)):

@@ -236,31 +236,16 @@ def unique_mask(pytrees, key=None):
     return mask, unique_args, inverse_args
 
 
-def _batch_update_table(table, items_to_insert, counters_for_insert):
-    """
-    Performs the final batch update on the table's arrays.
-    This simplified version assumes it only receives items that need to be inserted.
-    """
-    num_items_to_insert = get_batch_size(items_to_insert)
-    # If there's nothing to insert, return the table as is.
-    if num_items_to_insert == 0:
-        return table
-
-    insert_args = counters_for_insert.slot_arg
-    insert_flat_args = compute_flat_arg(counters_for_insert, table)
-
-    # Atomically update all table fields
-    new_args = table.args.at[insert_flat_args].set(items_to_insert.arg)
-    new_data = table.data.at[insert_flat_args].set(items_to_insert.data)
-
-    # Increment the occupancy count for each slot where an item was inserted
-    occupancy_increments = (
-        jp.zeros_like(table.table_occupancy).at[insert_args].add(1)
-    )
-    new_occupancy = table.table_occupancy + occupancy_increments
-
-    # The new size is simply the old size plus the number of items we received
-    new_size = table.size + num_items_to_insert
+def _batch_update_table(table, items, counters, inserted_mask):
+    """Writes the items selected by `inserted_mask` into the table arrays."""
+    flat_args = compute_flat_arg(counters, table)
+    # Items that are not inserted point past the table and are dropped.
+    flat_args = jp.where(inserted_mask, flat_args, len(table.args))
+    new_args = table.args.at[flat_args].set(items.arg, mode="drop")
+    new_data = table.data.at[flat_args].set(items.data, mode="drop")
+    increments = inserted_mask.astype(TABLE_ARG_DTYPE)
+    new_occupancy = table.table_occupancy.at[counters.slot_arg].add(increments)
+    new_size = table.size + jp.sum(inserted_mask, dtype=TABLE_SIZE_DTYPE)
 
     return table._replace(
         args=new_args,
@@ -420,23 +405,8 @@ def insert_parallel(table, items):
     )
 
     # 6. Update the table with ONLY the items that were actually inserted.
-    # THIS IS THE KEY FIX: We filter the items and counters *before* the update call.
-    # print("unique_inserted_mask", unique_inserted_mask)
-    # print("unique_items", unique_items)
-    items_to_insert = jax.tree_util.tree_map(
-        lambda x: x[unique_inserted_mask], unique_items
-    )
-    counters_for_insert = jax.tree_util.tree_map(
-        lambda x: x[unique_inserted_mask], final_counters_for_uniques
-    )
-    # items_to_insert = jax.tree_util.tree_map(
-    #     lambda x: x[unique_inserted_mask], unique_items
-    # )
-    # counters_for_insert = jax.tree_util.tree_map(
-    #     lambda x: x[unique_inserted_mask], final_counters_for_uniques
-    # )
-    # print("items_to_insert")
-    new_table = _batch_update_table(table, items_to_insert, counters_for_insert)
+    uniques = (unique_items, final_counters_for_uniques, unique_inserted_mask)
+    new_table = _batch_update_table(table, *uniques)
 
     # 7. Construct the final results for the original full batch by broadcasting.
     # print(items_to_insert)
