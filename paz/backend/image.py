@@ -219,8 +219,8 @@ def resize_opencv(image: jax.Array, size: tuple[int, int]) -> jax.Array:
 
 def scale(image, scale_factor, method="linear", antialias=False):
     H, W = get_size(image)
-    H_scaled = int(H * scale_factor)
-    W_scaled = int(W * scale_factor)
+    H_scaled = round(H * scale_factor)
+    W_scaled = round(W * scale_factor)
     return resize(image, (H_scaled, W_scaled), method, antialias)
 
 

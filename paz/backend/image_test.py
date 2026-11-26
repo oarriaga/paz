@@ -114,3 +114,10 @@ def test_denormalize_rounds_instead_of_truncating():
     assert np.array_equal(same, image)
     white = jp.full((2, 2, 3), 255, jp.uint8)
     assert np.all(np.asarray(paz.image.RGB_to_GRAY(white)) == 255)
+
+
+def test_resize_with_aspect_ratio_fills_a_square_target():
+    image = jp.ones((49, 49, 3))
+    resized = paz.image.resize_with_aspect_ratio(image, 512, 512)
+    assert resized.shape == (512, 512, 3)
+    assert np.all(np.asarray(resized) > 0)
