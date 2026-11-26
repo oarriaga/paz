@@ -48,7 +48,7 @@ def SSD300(
         raise ValueError("Invalid `base_weights`:", base_weights)
 
     if head_weights not in ["VOC", "FAT", None]:
-        raise ValueError("Invalid `base_weights`:", base_weights)
+        raise ValueError("Invalid `head_weights`:", head_weights)
 
     if (base_weights == "VGG") and (head_weights is not None):
         raise NotImplementedError("Invalid `base_weights` with head_weights")

@@ -41,7 +41,7 @@ def test_invalid_base_weights():
 
 def test_invalid_head_weights():
     """Test invalid head weights."""
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="head_weights"):
         SSD300(head_weights="INVALID")
 
 
