@@ -18,7 +18,7 @@ from .cylinder import compute_canonical_normals_cylinder
 from .cone import compute_canonical_normals_cone
 from .plane import compute_canonical_normals_plane
 
-from ..constants import EPSILON
+from ..constants import FARAWAY
 
 
 intersection_cases = [
@@ -95,39 +95,44 @@ def split(shape):
 
 
 def intersect(shape, ray_origins, ray_directions):
-    world_to_shape = jp.linalg.inv(shape.transform)
-    # world_to_shape = paz.SE3.invert(shape.transform)
-    rays_shape = transform_rays(world_to_shape, ray_origins, ray_directions)
-    intersections = jax.lax.switch(shape.type, intersection_cases, *rays_shape)
-    hit_mask, sorted_depths, depth = intersections
-    # transform world points
-    world_points = compute_points3D(ray_origins, ray_directions, depth)
-    # world_to_shape = jp.linalg.inv(shape.transform)
-    # world_to_shape = paz.SE3.invert(shape.transform)
-    shape_points = transform_points(world_to_shape, world_points)
-    # transform world normals
-    shape_normals = jax.lax.switch(shape.type, normal_cases, shape_points, sorted_depths)
-    world_normals = transform_points(world_to_shape.T, shape_normals)
-    world_normals = paz.algebra.normalize(world_normals)
-    # postprocess normals
-    eyes = compute_eyes(ray_directions)
-    world_normals = invert_inside_normals(eyes, world_normals)
-    return hit_mask, depth, world_points, world_normals, eyes
+    rays = ray_origins, ray_directions
+    hit_mask, roots, depth = compute_roots(shape, *rays)
+    return hit_mask, depth, *compute_surface(shape, roots, depth, *rays)
 
 
 def intersect_all(shape, ray_origins, ray_directions):
+    rays = ray_origins, ray_directions
+    hit_mask, roots, depth = compute_roots(shape, *rays)
+    return hit_mask, roots, *compute_surface(shape, roots, depth, *rays)
+
+
+def compute_roots(shape, ray_origins, ray_directions):
+    """Finds the hit mask, every root and the closest depth of a shape.
+
+    The roots are four rows of depths, in front of and behind the origin,
+    with `FARAWAY` where a row has no root.
+    """
     world_to_shape = jp.linalg.inv(shape.transform)
     rays_shape = transform_rays(world_to_shape, ray_origins, ray_directions)
-    intersections = jax.lax.switch(shape.type, intersection_cases, *rays_shape)
-    hit_mask, depths, depth = intersections
+    return jax.lax.switch(shape.type, intersection_cases, *rays_shape)
+
+
+def compute_surface(shape, roots, depth, ray_origins, ray_directions):
+    """Finds the points, normals and eyes of a shape at `depth`.
+
+    `depth` must be one of the `roots`, copied without change.
+    """
+    world_to_shape = jp.linalg.inv(shape.transform)
     world_points = compute_points3D(ray_origins, ray_directions, depth)
     shape_points = transform_points(world_to_shape, world_points)
-    shape_normals = jax.lax.switch(shape.type, normal_cases, shape_points, depths)
+    # Cylinder and cone normals read the hit feature from the row it is in.
+    hit_roots = jp.where(roots == depth[:, 0], roots, FARAWAY)
+    normal_args = shape.type, normal_cases, shape_points, hit_roots
+    shape_normals = jax.lax.switch(*normal_args)
     world_normals = transform_points(world_to_shape.T, shape_normals)
     world_normals = paz.algebra.normalize(world_normals)
     eyes = compute_eyes(ray_directions)
-    world_normals = invert_inside_normals(eyes, world_normals)
-    return hit_mask, depths, world_points, world_normals, eyes
+    return world_points, invert_inside_normals(eyes, world_normals), eyes
 
 
 def compute_eyes(ray_directions):

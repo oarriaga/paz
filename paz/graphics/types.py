@@ -28,7 +28,7 @@ TRIANGLE_NAMES += "materials patterns corner_normals"
 Triangles = namedtuple("Triangles", TRIANGLE_NAMES.split())
 
 COMPILED_NAMES = "shapes triangles lights mask shadow_mask triangle_mask "
-COMPILED_NAMES += "triangle_shadow_mask"
+COMPILED_NAMES += "triangle_shadow_mask csg_trees"
 CompiledScene = namedtuple("CompiledScene", COMPILED_NAMES.split())
 
 
@@ -104,9 +104,10 @@ class Scene(_SceneBase):
     def __new__(cls, nodes, parent_array=None):
         if not isinstance(nodes, list):
             raise TypeError("`nodes` must be a list of Shape or Group objects.")
-        node_types = (Shape, Group, Mesh)
+        node_types = (Shape, Group, Mesh, CSG)
         if not all(isinstance(node, node_types) for node in nodes):
-            raise TypeError("`nodes` must be Shape, Group or Mesh objects.")
+            message = "`nodes` must be Shape, Group, Mesh or CSG objects."
+            raise TypeError(message)
 
         if parent_array is None:
             parent_array = jp.full(len(nodes), -1)

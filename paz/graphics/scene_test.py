@@ -126,3 +126,55 @@ def test_compile_sorting(shape_256_A, shape_512, shape_256_B):
     assert shadow_mask_out[0] == False
     assert shadow_mask_out[1] == False
     assert shadow_mask_out[2] == True
+
+
+def test_nested_mask_expands_per_leaf(shape_256_A, shape_256_B):
+    group = paz.graphics.Group([shape_256_A, shape_256_B])
+    csg = paz.graphics.CSG(shape_256_A, group, paz.graphics.DIFFERENCE)
+    scene = paz.graphics.Scene([shape_256_B, csg, group])
+    mask = [True, [False, [True, False]], False]
+    expanded = paz.graphics.scene.expand_mask(mask, scene)
+    expected = jp.array([True, False, True, False, False, False])
+    assert jp.array_equal(expanded, expected)
+
+
+def test_nested_mask_length_must_match_children(shape_256_A, shape_256_B):
+    csg = paz.graphics.CSG(shape_256_A, shape_256_B, paz.graphics.UNION)
+    scene = paz.graphics.Scene([csg])
+    with pytest.raises(ValueError):
+        paz.graphics.scene.expand_mask([[True, False, True]], scene)
+
+
+def test_csg_leaves_follow_sorted_shapes(shape_256_A, shape_512, shape_256_B):
+    group = paz.graphics.Group([shape_512, shape_256_B])
+    csg = paz.graphics.CSG(shape_256_A, group, paz.graphics.DIFFERENCE)
+    scene = paz.graphics.Scene([shape_512, csg])
+    lights = [paz.graphics.PointLight(jp.ones(3), jp.zeros(3))]
+    compiled = paz.graphics.scene.compile(scene, lights, None)
+    # Sorting by pattern size puts both 512 shapes before the 256 ones.
+    union = paz.graphics.CSG(1, 3, paz.graphics.UNION)
+    expected = paz.graphics.CSG(2, union, paz.graphics.DIFFERENCE)
+    assert compiled.csg_trees == [expected]
+    assert compiled.shapes[2].type == shape_256_A.type
+    assert compiled.shapes[3].type == shape_256_B.type
+
+
+def test_compile_plain_scene_has_no_csg_trees(shape_256_A, shape_256_B):
+    scene = paz.graphics.Scene([shape_256_A, shape_256_B])
+    lights = [paz.graphics.PointLight(jp.ones(3), jp.zeros(3))]
+    assert paz.graphics.scene.compile(scene, lights, None).csg_trees == []
+
+
+def test_empty_group_keeps_masks_aligned(shape_256_A, shape_256_B):
+    nodes = [paz.graphics.Group([]), shape_256_A, shape_256_B]
+    mask = [True, False, True]
+    expanded = paz.graphics.scene.expand_mask(mask, paz.graphics.Scene(nodes))
+    assert jp.array_equal(expanded, jp.array([False, True]))
+
+
+def test_nested_mask_accepts_arrays(shape_256_A, shape_256_B):
+    csg = paz.graphics.CSG(shape_256_A, shape_256_B, paz.graphics.UNION)
+    scene = paz.graphics.Scene([csg, shape_256_A])
+    mask = [jp.array([True, False]), True]
+    expanded = paz.graphics.scene.expand_mask(mask, scene)
+    assert jp.array_equal(expanded, jp.array([True, False, True]))

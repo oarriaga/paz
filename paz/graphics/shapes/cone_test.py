@@ -1,4 +1,6 @@
+import jax
 import jax.numpy as jp
+import pytest
 
 from paz.graphics.constants import EPSILON, FARAWAY
 from paz.graphics.shapes.cone import compute_canonical_normals_cone
@@ -54,11 +56,19 @@ def test_intersection_hit_wall():
 
 
 def test_intersection_hit_cap():
+    origins = jp.array([[0.0, -5.0, 0.0]])
+    directions = jp.array([[0.0, 1.0, 0.0]])
+    hit_mask, _, depth = intersect_canonical_cone(origins, directions)
+    assert hit_mask[0]
+    assert jp.allclose(depth[0], 4.0)
+
+
+def test_intersection_hit_tip():
     origins = jp.array([[0.0, 5.0, 0.0]])
     directions = jp.array([[0.0, -1.0, 0.0]])
     hit_mask, _, depth = intersect_canonical_cone(origins, directions)
     assert hit_mask[0]
-    assert jp.allclose(depth[0], 6.0)
+    assert jp.allclose(depth[0], 5.0)
 
 
 def test_normal_on_cap():
@@ -141,3 +151,53 @@ def test_base_corner_ray_escapes_cap():
     point = jp.array([[0.9995, -1.0, 0.0]])
     directions = jp.array([[0.707, -0.707, 0.0]])
     assert_corner_escapes(compute_lower_cap_normals, point, directions)
+
+
+def test_ray_parallel_to_the_shell_hits_it():
+    origins = jp.array([[1.5, 0.0, 0.0]])
+    directions = jp.array([[-1.0, -1.0, 0.0]]) / jp.sqrt(2.0)
+    hit_mask, _, depth = intersect_canonical_cone(origins, directions)
+    assert hit_mask[0]
+    assert jp.allclose(depth[0], 0.75 * jp.sqrt(2.0), atol=1e-5)
+
+
+def test_ray_nearly_parallel_to_the_shell_has_an_accurate_depth():
+    origins = jp.array([[1.5, 0.0, 0.0]])
+    directions = jp.array([[-1.0, -1.001, 0.0]])
+    directions = directions / jp.linalg.norm(directions)
+    _, _, depth = intersect_canonical_cone(origins, directions)
+    x, y, _ = (origins + depth * directions)[0]
+    assert jp.allclose(jp.abs(x), -y, atol=1e-5)
+
+
+def test_ray_from_the_extended_shell_misses_above_the_tip():
+    origins = jp.array([[6.0, 6.0, 0.0]])
+    directions = jp.array([[-1.0, -1.0, 0.3]])
+    directions = directions / jp.linalg.norm(directions)
+    hit_mask, _, _ = intersect_canonical_cone(origins, directions)
+    assert not hit_mask[0]
+
+
+def compute_depth(origin, direction):
+    return intersect_canonical_cone(origin[None], direction[None])[2][0, 0]
+
+
+@pytest.mark.parametrize("slope", [0.0, 1e-20, -1e-20, 1e-9])
+def test_depth_gradient_is_finite_for_a_level_ray(slope):
+    rays = jp.array([-3.0, -0.5, 0.0]), jp.array([1.0, slope, 0.0])
+    gradients = jax.grad(compute_depth, argnums=(0, 1))(*rays)
+    assert all(bool(jp.all(jp.isfinite(gradient))) for gradient in gradients)
+
+
+@pytest.mark.parametrize("slope", [0.0, 1e-12, -1e-12, 1e-5])
+def test_depth_gradient_is_finite_for_a_vertical_ray(slope):
+    rays = jp.array([0.3, 5.0, 0.0]), jp.array([slope, -1.0, 0.0])
+    gradients = jax.grad(compute_depth, argnums=(0, 1))(*rays)
+    assert all(bool(jp.all(jp.isfinite(gradient))) for gradient in gradients)
+
+
+@pytest.mark.parametrize("slope", [0.0, 1e-12, -1e-12, 1e-5])
+def test_depth_gradient_is_finite_for_a_ray_parallel_to_the_shell(slope):
+    rays = jp.array([1.5, 0.0, 0.0]), jp.array([-1.0, -1.0, slope])
+    gradients = jax.grad(compute_depth, argnums=(0, 1))(*rays)
+    assert all(bool(jp.all(jp.isfinite(gradient))) for gradient in gradients)
