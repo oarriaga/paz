@@ -62,6 +62,10 @@ def EFFICIENTDET(
         raise NotImplementedError("Invalid `base_weights` with head_weights")
     if (base_weights is None) and (head_weights == "VOC"):
         raise NotImplementedError("Invalid `base_weights` with head_weights")
+    valid = [(None, None), ("COCO", None), ("COCO", "COCO"), ("VOC", "VOC")]
+    if (base_weights, head_weights) not in valid:
+        message = "Valid (base_weights, head_weights) are: %s" % valid
+        raise NotImplementedError(message)
 
     branches, middles, skips = EfficientNet_to_BiFPN(EfficientNet, FPN_num_filters)
     for _ in range(FPN_cell_repeats):

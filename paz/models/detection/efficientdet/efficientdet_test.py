@@ -1261,3 +1261,10 @@ def test_prior_boxes(model, aspect_ratios, num_boxes):
         prior_boxes.shape[0] == num_boxes
     ), "Incorrect number of anchor boxes"
     del model
+
+
+def test_efficientdet_rejects_unsupported_weights():
+    unsupported = [("VOC", None), ("COCO", "VOC"), ("VOC", "COCO")]
+    for base_weights, head_weights in unsupported:
+        with pytest.raises(NotImplementedError, match="Valid"):
+            EFFICIENTDETD0(21, base_weights, head_weights)
