@@ -105,3 +105,12 @@ def test_scale_with_aspect_ratio_returns_scaled_image():
     image = jp.ones((10, 20, 3))
     scaled = paz.image.scale_with_aspect_ratio(image, (2.0, 0.5))
     assert scaled.shape == (20, 10, 3)
+
+
+def test_denormalize_rounds_instead_of_truncating():
+    image = jax.random.randint(jax.random.PRNGKey(0), (16, 16, 3), 0, 256)
+    image = image.astype(jp.uint8)
+    same = paz.image.random_hue(jax.random.PRNGKey(0), image, max_delta=0.0)
+    assert np.array_equal(same, image)
+    white = jp.full((2, 2, 3), 255, jp.uint8)
+    assert np.all(np.asarray(paz.image.RGB_to_GRAY(white)) == 255)

@@ -257,7 +257,7 @@ def normalize(image):
 
 
 def denormalize(image):
-    return paz.cast(image * 255.0, jp.uint8)
+    return paz.cast(jp.round(image * 255.0), jp.uint8)
 
 
 def rgb_to_gray(image):
