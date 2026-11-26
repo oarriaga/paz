@@ -363,8 +363,10 @@ def apply_per_class_NMS(detections, num_classes, iou_thresh=0.45, top_k=200):
     suppressed = jax.vmap(paz.partial(apply_NMS, detections))(
         jp.arange(num_classes)
     )
+    num_boxes_per_class = suppressed.shape[1]
     suppressed = suppressed.reshape(-1, 5)
-    labels = jp.repeat(jp.arange(num_classes), top_k).astype("float32")
+    labels = jp.repeat(jp.arange(num_classes), num_boxes_per_class)
+    labels = labels.astype("float32")
     return jp.concatenate([suppressed, jp.expand_dims(labels, -1)], axis=-1)
 
 

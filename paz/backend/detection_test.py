@@ -18,7 +18,6 @@ def test_encode_decode():
     assert jp.allclose(decoded[:, :4], matched[:, :4], atol=1e-4)
 
 
-@pytest.mark.skip(reason="apply_NMS changed implementation")
 @pytest.mark.parametrize(
     "boxes_and_scores,iou_thresh,top_k,expected",
     [
@@ -62,9 +61,14 @@ def test_encode_decode():
     ],
 )
 def test_apply_NMS(boxes_and_scores, iou_thresh, top_k, expected):
-    selected_indices = apply_NMS(boxes_and_scores, iou_thresh, top_k)
-    assert len(selected_indices) == len(expected)
-    assert list(selected_indices) == expected
+    kept = apply_valid_NMS(boxes_and_scores, iou_thresh, top_k)
+    assert jp.allclose(kept, expected)
+
+
+def apply_valid_NMS(boxes_and_scores, iou_thresh, top_k):
+    suppressed = apply_NMS(boxes_and_scores, iou_thresh, top_k)
+    assert len(suppressed) == min(top_k, len(boxes_and_scores))
+    return paz.detection.remove_invalid(suppressed)
 
 
 @pytest.fixture
@@ -87,51 +91,70 @@ def boxes_and_scores():
     return detections
 
 
-@pytest.mark.skip(reason="apply_NMS changed implementation")
 def test_apply_nms_higher_threshold(boxes_and_scores):
     """Test higher IoU threshold keeps more boxes."""
-    selected_indices = apply_NMS(boxes_and_scores, 0.9, 200)
-    assert jp.allclose(selected_indices, jp.array([0, 1, 3, 2]))
+    kept = apply_valid_NMS(boxes_and_scores, 0.9, 200)
+    assert jp.allclose(kept, boxes_and_scores[jp.array([0, 1, 3, 2])])
 
 
-@pytest.mark.skip(reason="apply_NMS changed implementation")
 def test_apply_nms_lower_threshold(boxes_and_scores):
     """Test lower IoU threshold suppresses more boxes."""
-    selected_indices = apply_NMS(boxes_and_scores, 0.4, 200)
-    assert jp.allclose(selected_indices, jp.array([0, 3, 2]))
+    kept = apply_valid_NMS(boxes_and_scores, 0.4, 200)
+    assert jp.allclose(kept, boxes_and_scores[jp.array([0, 3, 2])])
 
 
-@pytest.mark.skip(reason="apply_NMS changed implementation")
 def test_apply_nms_top_k(boxes_and_scores):
     """Test top_k parameter limits initial candidates."""
-    selected_indices = apply_NMS(boxes_and_scores, 0.5, 2)
-    assert jp.allclose(selected_indices, jp.array([0]))
+    kept = apply_valid_NMS(boxes_and_scores, 0.5, 2)
+    assert jp.allclose(kept, boxes_and_scores[:1])
 
 
-@pytest.mark.skip(reason="apply_NMS changed implementation")
 def test_apply_nms_single_box():
     """Test single box returns itself."""
     boxes_and_scores = jp.array([[0, 0, 10, 10, 0.9]])
-    assert jp.allclose(apply_NMS(boxes_and_scores, 0.45, 400), jp.array([0]))
+    kept = apply_valid_NMS(boxes_and_scores, 0.45, 400)
+    assert jp.allclose(kept, boxes_and_scores)
 
 
-@pytest.mark.skip(reason="apply_NMS changed implementation")
 def test_apply_nms_no_overlap():
     """Test non-overlapping boxes all kept."""
     boxes_and_scores = jp.array(
         [[0, 0, 10, 10, 0.9], [20, 20, 30, 30, 0.8], [40, 40, 50, 50, 0.7]]
     )
-    selected = apply_NMS(boxes_and_scores, 0.1, 400)
-    assert jp.allclose(selected, jp.array([0, 1, 2]))
+    kept = apply_valid_NMS(boxes_and_scores, 0.1, 400)
+    assert jp.allclose(kept, boxes_and_scores)
 
 
-@pytest.mark.skip(reason="apply_NMS changed implementation")
 def test_apply_nms_identical_boxes():
     """Test identical boxes keep highest score."""
     boxes_and_scores = jp.array(
         [[0, 0, 10, 10, 0.7], [0, 0, 10, 10, 0.9], [0, 0, 10, 10, 0.8]]
     )
-    assert jp.allclose(apply_NMS(boxes_and_scores, 0.5, 400), jp.array([1]))
+    kept = apply_valid_NMS(boxes_and_scores, 0.5, 400)
+    assert jp.allclose(kept, boxes_and_scores[1:2])
+
+
+def test_apply_per_class_NMS_with_fewer_detections_than_top_k():
+    """Boxes 0 and 2 overlap; each class keeps its best scored one."""
+    boxes_and_class_scores = jp.array(
+        [
+            [0, 0, 10, 10, 0.1, 0.9],
+            [20, 20, 30, 30, 0.2, 0.8],
+            [0, 0, 10, 10, 0.3, 0.7],
+        ]
+    )
+    suppressed = paz.detection.apply_per_class_NMS(boxes_and_class_scores, 2)
+    assert suppressed.shape == (6, 6)
+    expected = jp.array(
+        [
+            [0, 0, 10, 10, 0.3, 0],
+            [20, 20, 30, 30, 0.2, 0],
+            [0, 0, 10, 10, 0.9, 1],
+            [20, 20, 30, 30, 0.8, 1],
+        ]
+    )
+    kept = paz.detection.remove_invalid(suppressed)
+    assert jp.allclose(kept, expected)
 
 
 @pytest.fixture
