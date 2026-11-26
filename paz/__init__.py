@@ -1,5 +1,11 @@
 __version__ = "0.3.0"
 
+import os
+
+# PAZ is JAX-only and Keras would otherwise pick its own default backend.
+# An explicit user setting is still respected.
+os.environ.setdefault("KERAS_BACKEND", "jax")
+
 from paz import datasets
 from paz.backend import draw
 from paz.backend import boxes
