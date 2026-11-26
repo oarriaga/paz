@@ -6,8 +6,10 @@ import pytest
 from keras import ops
 
 import paz
+from paz.models.foundation.whisper import model
 from paz.models.foundation.whisper.model import Whisper
 from paz.models.foundation.whisper.model import WhisperFrontend
+from paz.models.foundation.whisper.model import resolve_weights_path
 from paz.models.foundation.whisper.decoding import (
     KVDecoder, kv_decode, build_prompt_token_ids,
     extract_text_token_ids)
@@ -58,6 +60,33 @@ def test_frontend_feature_shape():
     waveform = ops.zeros((1, 16000), dtype="float32")
     features = frontend(waveform)
     assert features.shape[-1] == 80
+
+
+def test_unhosted_variant_raises_before_download(monkeypatch):
+    def fail_download(*args, **kwargs):
+        raise AssertionError("download attempted")
+
+    monkeypatch.setattr(model, "get_file", fail_download)
+    with pytest.raises(ValueError, match="whisper_tiny_multi"):
+        resolve_weights_path("whisper_tiny_multi", "encoder", None)
+
+
+def test_hosted_variant_reaches_download(monkeypatch):
+    requested = []
+
+    def record_download(asset, *args, **kwargs):
+        requested.append(asset)
+        raise ConnectionError("download stopped by test")
+
+    monkeypatch.setattr(model, "get_file", record_download)
+    with pytest.raises(ConnectionError):
+        resolve_weights_path("whisper_tiny_en", "encoder", None)
+    assert requested == ["whisper_tiny_en_encoder.weights.h5"]
+
+
+def test_unhosted_variant_resolves_local_path(tmp_path):
+    path = resolve_weights_path("whisper_tiny_multi", "encoder", tmp_path)
+    assert path == tmp_path / "whisper_tiny_multi" / "encoder.weights.h5"
 
 
 @pytest.mark.skipif(not has_assets(), reason="tokenizer assets not present")
