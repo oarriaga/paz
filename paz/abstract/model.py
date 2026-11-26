@@ -11,7 +11,7 @@ def search_nodes(output_nodes):
     while len(queue) != 0:
         node = queue.pop(0)
         queue.extend(node.edges)
-        if node not in [tree_nodes]:
+        if node not in tree_nodes:
             tree_nodes.append(node)
     return tree_nodes
 

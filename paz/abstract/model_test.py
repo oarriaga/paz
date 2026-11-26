@@ -1,24 +1,39 @@
-import os
-from jax import vmap
-from paz import Input, Node, Model
-import paz
+from paz.abstract.model import Model
+from paz.abstract.node import Input, Node
 
-image_path = Input("image_path")
-x = Node(paz.image.load)(image_path)
-x = Node(paz.image.scale, (0.5, 0.5))(x)
-x = Node(paz.image.normalize)(x)
-x = Node(paz.image.rgb_to_gray)(x)
-x = Node(lambda x: (x * 255).astype("uint8"), name="deprocess")(x)
-x = Node(paz.image.show)(x)
-preprocess = Model([image_path], [x], "preprocess")
 
-preprocess(os.path.join(os.path.expanduser("~"), "images/mars_volta.jpg"))
+def double(x):
+    return 2 * x
 
-# preprocess_batch = vmap(Model(image, x))
 
-# TODO
-# Fix node name creation with lambda function.
-# Have a nice pretty drawing for model pipeline.
-# Build tests
-# Test bounding box and image preprocessing i.e. two functions
-# Build sequential abstraction
+def increment(x):
+    return x + 1
+
+
+def add(x, y):
+    return x + y
+
+
+def test_shared_input():
+    x = Input("x")
+    y = Node(double)(x)
+    z = Node(add)(x, y)
+    model = Model([x], [z], "shared_input")
+    assert model(3.0).add == 9.0
+
+
+def test_diamond():
+    x = Input("x")
+    left = Node(double, name="left")(x)
+    right = Node(increment, name="right")(x)
+    output = Node(add, name="output")(left, right)
+    model = Model([x], [output], "diamond")
+    assert model(3.0).output == 10.0
+
+
+def test_multiple_outputs():
+    x = Input("x")
+    left = Node(double, name="left")(x)
+    right = Node(increment, name="right")(x)
+    outputs = Model([x], [left, right], "multiple_outputs")(3.0)
+    assert (outputs.left, outputs.right) == (6.0, 4.0)
