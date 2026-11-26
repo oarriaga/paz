@@ -1,244 +1,251 @@
-# (PAZ) Perception for Autonomous Systems
-[![Publish Website](https://github.com/oarriaga/paz/actions/workflows/publish-website.yml/badge.svg?branch=master)](https://github.com/oarriaga/paz/actions/workflows/publish-website.yml)
-[![Downloads](https://static.pepy.tech/personalized-badge/pypaz?period=total&units=international_system&left_color=grey&right_color=blue&left_text=Downloads)](https://pepy.tech/project/pypaz)
+# PAZ
 
-Hierarchical perception library in Python.
+PAZ is a perception library written in JAX on Keras 3: differentiable rendering, probabilistic programming, computer vision, foundation models, and robotics and control.
 
-## Selected examples:
-PAZ is used in the following examples (links to **real-time demos** and training scripts):
+[![Tests](https://github.com/oarriaga/paz/actions/workflows/python-package.yml/badge.svg?branch=master)](https://github.com/oarriaga/paz/actions/workflows/python-package.yml)
+[![PyPI](https://img.shields.io/pypi/v/pypaz.svg)](https://pypi.org/project/pypaz/)
+[![Documentation](https://img.shields.io/badge/docs-oarriaga.github.io%2Fpaz-blue.svg)](https://oarriaga.github.io/paz)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
-| [Probabilistic 2D keypoints](https://github.com/oarriaga/paz/tree/master/examples/probabilistic_keypoint_estimation)| [6D head-pose estimation](https://github.com/oarriaga/paz/tree/master/examples/pose_estimation)  | [Object detection](https://github.com/oarriaga/paz/tree/master/examples/object_detection)|
-|---------------------------|--------------------------| ------------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/probabilistic_keypoints.png" width="425"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/head_pose.png" width="440">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/object_detection.png" width="430">|
+<!-- hero image: scripts/readme/hero.py -->
 
-| [Emotion classifier](https://github.com/oarriaga/paz/tree/master/examples/face_classification) | [2D keypoint estimation](https://github.com/oarriaga/paz/tree/master/examples/keypoint_estimation)   | [Mask-RCNN (in-progress)](https://github.com/oarriaga/paz/tree/mask_rcnn/examples/mask_rcnn)  |
-|---------------------------|--------------------------| -----------------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/emotion.gif" width="250">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/keypoints.png" width="410">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/mask.png" width="400">|
+## Areas
 
-|[Semantic segmentation](https://github.com/oarriaga/paz/tree/master/examples/semantic_segmentation) | [Hand pose estimation](https://github.com/oarriaga/paz/tree/master/examples/hand_pose_estimation) |  [2D Human pose estimation](https://github.com/oarriaga/paz/tree/master/examples/human_pose_estimation_2D) |
-|---------------------------|-----------------------|-----------------|
-| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/semantic_segmentation.png" width="325">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/minimal_hand_example.jpg" width="330"> |<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/human_pose.gif" width="250"> |
-
-| [3D keypoint discovery](https://github.com/oarriaga/paz/tree/master/examples/discovery_of_latent_keypoints)     | [Hand closure detection](https://github.com/oarriaga/paz/tree/master/examples/hand_pose_estimation)  | [6D pose estimation](https://github.com/oarriaga/paz/tree/master/examples/pix2pose) |
-|---------------------------|-----------------------| --------------------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/discovery_keypoints.png" width="335"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/hand_closure_detection.gif" width="250">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/pix2pose_example.jpg" width="330"> |
-
-| [Implicit orientation](https://github.com/oarriaga/paz/tree/master/examples/implicit_orientation_learning)  | [Attention (STNs)](https://github.com/oarriaga/paz/tree/master/examples/spatial_transfomer_networks) | [Haar Cascade detector](https://github.com/oarriaga/paz/tree/master/examples/haar_cascade_detectors) |
-|---------------------------|-----------------------|-----------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/implicit_pose.png" width="335">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/attention.png" width="340"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/haar_cascades.png" width="330"> |
-
-| [Eigenfaces](https://github.com/oarriaga/paz/blob/master/examples/eigenfaces) |[Prototypical Networks](https://github.com/oarriaga/paz/tree/master/examples/prototypical_networks) | [3D Human pose estimation](https://github.com/oarriaga/paz/blob/master/examples/human_pose_estimation_3D) |
-|---------------------------|-----------------------|-----------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/eigenfaces.png" width="325">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/protonets.png" width="330">  | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/human_pose3D.gif" width="250"> |
-
-|[MAML](https://github.com/oarriaga/paz/blob/master/examples/maml)| | |
-|---------------------------|-----------------------|-----------------|
-|<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/maml.png" width="325"> | <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/your_example_here.png" width="330">| <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/blank.png" width="330"> |
-
-
-All models can be re-trained with your own data (except for Mask-RCNN, we are working on it [here](https://github.com/oarriaga/paz/tree/mask_rcnn)).
-
-## Table of Contents
-<!--ts-->
-* [Examples](#selected-examples)
-* [Installation](#installation)
-* [Documentation](#documentation)
-* [Hierarchical APIs](#hierarchical-apis)
-    * [High-level](#high-level) | [Mid-level](#mid-level) | [Low-level](#low-level)
-* [Additional functionality](#additional-functionality)
-    * [Implemented models](#models)
-* [Motivation](#motivation)
-* [Citation](#citation)
-* [Funding](#funding)
-<!--te-->
+| Area | What it offers | Subpackage | Example |
+|---|---|---|---|
+| Differentiable rendering | Ray tracing of shapes and meshes with Phong and Cook-Torrance shading, cameras, lights and patterns; renders are JAX functions that can be passed to `jax.grad`, `jax.jit` and `jax.vmap` | `paz.graphics` | [differentiable_shape_rendering](examples/differentiable_shape_rendering) |
+| Probabilistic programming | Priors, observables and probabilistic graphical models, Metropolis-Hastings sampling with adaptive tuners, bijector fitting, serialization | `paz.inference` | [probabilistic_programming](examples/probabilistic_programming) |
+| Computer vision | Image, box, keypoint and geometry functions; detection, classification, keypoint, pose and segmentation models; application factories that return a ready-to-call function | `paz.backend`, `paz.models`, `paz.applications` | [rf_detr](examples/rf_detr) |
+| Foundation models | Depth Anything 3, DINOv2, DINOv3, Florence-2, Gemma 4, SAM 2 and Whisper | `paz.models.foundation` | [sam2](examples/sam2) |
+| Robotics and control | FLOWER vision-language-action model, SONIC and GEAR-WBC humanoid controllers, PPO training for legged locomotion | `paz.models.foundation` (`flower`, `sonic`, `gear_wbc`) | [rl_gym](examples/rl_gym) |
 
 ## Installation
-PAZ has only **three** dependencies: [Tensorflow2.0](https://www.tensorflow.org/), [OpenCV](https://opencv.org/) and [NumPy](https://numpy.org/).
 
-To install PAZ with pypi run:
+```bash
+pip install pypaz
 ```
-pip install pypaz --user
+
+PAZ requires Python >= 3.10. `import paz` sets the Keras backend to JAX unless the `KERAS_BACKEND` environment variable is already set.
+
+Optional extras, installed with `pip install "pypaz[name]"`:
+
+| Extra | Adds | Used by |
+|---|---|---|
+| `weights` | `safetensors`, `huggingface_hub`, `keras_hub` | converting upstream checkpoints |
+| `datasets` | `gdown`, `kaggle`, `cityscapesscripts` | dataset download helpers |
+| `sonic` | `mujoco`, `onnx` | [examples/sonic](examples/sonic) |
+| `gear_wbc` | `mujoco`, `onnx`, `pygame` | [examples/gear_wbc](examples/gear_wbc) |
+| `learning_to_walk` | `mujoco`, `pygame`, `pyyaml`, `torch` | [examples/learning_to_walk](examples/learning_to_walk) |
+
+## Quickstart
+
+Pretrained weights are downloaded on first use and cached under `~/.keras/paz`.
+
+### Object detection
+
+```python
+import paz
+from paz.applications import DetectRFDETRNano
+
+detect = DetectRFDETRNano(0.5)
+image = paz.image.load("image.jpg")
+(boxes, labels, scores), drawn = detect(image)
+names = ["0"] + paz.datasets.labels("COCO_EFFICIENTDET")
+for label, score in zip(labels, scores):
+    print(names[label], float(score))
+paz.image.write("detections.png", drawn)
 ```
+
+### Differentiable rendering
+
+The gradient of a pixel loss with respect to a material color:
+
+```python
+import jax
+import jax.numpy as jp
+import paz
+from paz.graphics import Material, PointLight, Scene, Sphere
+
+shape = (32, 32)
+intrinsics = paz.graphics.camera.compute_intrinsics(jp.pi / 3.0, *shape)
+eye, up = jp.array([0.0, 0.0, 5.0]), jp.array([0.0, 1.0, 0.0])
+pose = paz.SE3.view_transform(eye, jp.zeros(3), up)
+lights = [PointLight(jp.ones(3), jp.array([0.0, 5.0, 5.0]))]
+
+def compute_loss(color):
+    scene = Scene([Sphere(jp.eye(4), Material(color=color))])
+    args = shape, intrinsics, pose, scene, None, lights, (1, 1), 1024
+    image, depth = paz.graphics.render(*args)
+    return jp.mean((image - 0.5) ** 2)
+
+gradient = jax.jit(jax.grad(compute_loss))(jp.array([0.8, 0.2, 0.1]))
+print(gradient)
+```
+
+### Probabilistic programming
+
+A normal prior over a mean, 20 observations, and four Metropolis-Hastings chains:
+
+```python
+import jax
+import jax.numpy as jp
+import paz
+
+def likelihood(mu):
+    return paz.distributions.Normal(jp.full(20, mu), 1.0)
+
+mu = paz.Prior(paz.distributions.Normal(0.0, 2.0), name="mu")
+x = paz.Observable(likelihood, name="x")(mu)
+model = paz.PGM([mu], [x], "normal_normal")
+key_data, key_infer = jax.random.split(jax.random.PRNGKey(0))
+observations = 3.0 + jax.random.normal(key_data, (20,))
+model.configure(num_chains=4, warmup=0.2, sigma=0.2)
+posterior = model.infer(key_infer, observations, num_samples=2000)
+print(posterior.samples.mu.mean(), posterior.samples.mu.std())
+```
+
+### Optimization
+
+`paz.optimization.minimize` runs any optax optimizer and returns the status, the parameters with the lowest loss, and the loss history:
+
+```python
+import jax.numpy as jp
+import optax
+import paz
+
+def compute_loss(parameters):
+    return jp.sum((parameters - jp.array([1.0, -3.0])) ** 2)
+
+parameters = jp.array([8.0, -2.0])
+optimizer = optax.adam(0.1)
+minimize = paz.optimization.minimize
+status, fitted, history = minimize(parameters, compute_loss, optimizer, 500)
+print(fitted, history.losses[-1])
+```
+
+### Foundation models
+
+Depth from one or more views with Depth Anything 3:
+
+```python
+import paz
+from paz.applications import EstimateDepthAnything3Small
+
+estimate = EstimateDepthAnything3Small()
+image = paz.image.load("image.jpg")
+outputs = estimate([image])
+depth, confidence, extrinsics, intrinsics, rays, ray_confidence = outputs
+print(depth.shape, float(depth.min()), float(depth.max()))
+```
+
+## Models
+
+Application factories are listed in [paz/applications/\_\_init\_\_.py](paz/applications/__init__.py).
+
+| Model | Task | Module | Example |
+|---|---|---|---|
+| SSD300, SSD512 | Object detection | [paz/models/detection/single_shot_detector](paz/models/detection/single_shot_detector) | [object_detection](examples/object_detection) |
+| EfficientDet D0-D7 | Object detection | [paz/models/detection/efficientdet](paz/models/detection/efficientdet) | [efficientdet](examples/efficientdet) |
+| RF-DETR Nano, Small, Medium, Base, Large | Object detection | [paz/models/detection/rf_detr](paz/models/detection/rf_detr) | [rf_detr](examples/rf_detr) |
+| PF-RPN | Class-agnostic object proposals | [paz/models/detection/pf_rpn](paz/models/detection/pf_rpn) | [pf_rpn](examples/pf_rpn) |
+| Haar cascades | Face and eye detection | [paz/models/detection/haar_cascade.py](paz/models/detection/haar_cascade.py) | [face_detection](examples/face_detection) |
+| MiniXception | Emotion and gender classification | [paz/models/classification/xception.py](paz/models/classification/xception.py) | [emotion_classifier](examples/emotion_classifier) |
+| Prototypical networks | Few-shot classification | [paz/models/classification/protonet.py](paz/models/classification/protonet.py) | [prototypical_networks](examples/prototypical_networks) |
+| KeypointNet2D | Face keypoints | [paz/models/keypoint/keypointnet.py](paz/models/keypoint/keypointnet.py) | [keypoint_estimation](examples/keypoint_estimation) |
+| Gaussian mixture keypoints | Keypoints with uncertainty | [paz/models/keypoint/gaussian_mixture.py](paz/models/keypoint/gaussian_mixture.py) | [probabilistic_keypoint_estimation](examples/probabilistic_keypoint_estimation) |
+| DetNet, IKNet | Hand keypoints and joint angles | [paz/models/keypoint/detnet.py](paz/models/keypoint/detnet.py), [iknet.py](paz/models/keypoint/iknet.py) | [hand_pose_estimation](examples/hand_pose_estimation) |
+| HigherHRNet | 2D human pose | [paz/models/pose_estimation/higher_hrnet.py](paz/models/pose_estimation/higher_hrnet.py) | [human_pose_estimation_2D](examples/human_pose_estimation_2D) |
+| SimpleBaselines | 3D human pose from 2D keypoints | [paz/models/keypoint/simplebaselines.py](paz/models/keypoint/simplebaselines.py) | [human_pose_estimation_3D](examples/human_pose_estimation_3D) |
+| UNet | Semantic segmentation | [paz/models/segmentation/unet.py](paz/models/segmentation/unet.py) | [semantic_segmentation](examples/semantic_segmentation) |
+| Spatial transformer network | Attention | [paz/models/attention/stn.py](paz/models/attention/stn.py) | [spatial_transformer_networks](examples/spatial_transformer_networks) |
+| Autoencoder | Representation learning | [paz/models/autoencoder/autoencoder.py](paz/models/autoencoder/autoencoder.py) | [implicit_orientation_learning](examples/implicit_orientation_learning) |
+| XFeat, LightGlue | Local features and matching | [paz/models/feature/xfeat](paz/models/feature/xfeat), [lightglue](paz/models/feature/lightglue) | |
+| PCA | Decomposition | [paz/models/decomposition/pca.py](paz/models/decomposition/pca.py) | [eigenfaces](examples/eigenfaces) |
+| K-means, DBSCAN | Clustering | [paz/models/clustering](paz/models/clustering) | |
+| Depth Anything 3 | Depth, rays and cameras from one or more views | [paz/models/foundation/depth_anything3](paz/models/foundation/depth_anything3) | [depth_anything3](examples/depth_anything3) |
+| DINOv2 | Image features | [paz/models/foundation/dinov2](paz/models/foundation/dinov2) | |
+| DINOv3 (weights not hosted yet) | Image features | [paz/models/foundation/dinov3](paz/models/foundation/dinov3) | |
+| Florence-2 | Multimodal encoder used by FLOWER | [paz/models/foundation/florence2](paz/models/foundation/florence2) | [flower](examples/flower) |
+| FLOWER | Vision-language-action policy | [paz/models/foundation/flower](paz/models/foundation/flower) | [flower](examples/flower) |
+| Gemma 4 | Text generation and image description | [paz/models/foundation/gemma4](paz/models/foundation/gemma4) | [gemma4](examples/gemma4) |
+| SAM 2 | Image segmentation and video tracking | [paz/models/foundation/sam2](paz/models/foundation/sam2) | [sam2](examples/sam2) |
+| Whisper (English variants) | Speech to text | [paz/models/foundation/whisper](paz/models/foundation/whisper) | [speech_to_text](examples/speech_to_text) |
+| SONIC | Humanoid whole-body control | [paz/models/foundation/sonic](paz/models/foundation/sonic) | [sonic](examples/sonic) |
+| GEAR-WBC | Humanoid lower-body control | [paz/models/foundation/gear_wbc](paz/models/foundation/gear_wbc) | [gear_wbc](examples/gear_wbc) |
+
+## Examples
+
+**Differentiable rendering:**
+[differentiable_rendering](examples/differentiable_rendering),
+[differentiable_shape_rendering](examples/differentiable_shape_rendering),
+[differentiable_mesh_rendering](examples/differentiable_mesh_rendering),
+[multi_view_mesh_optimization](examples/multi_view_mesh_optimization)
+
+**Probabilistic programming:**
+[probabilistic_programming](examples/probabilistic_programming),
+[probabilistic_keypoint_estimation](examples/probabilistic_keypoint_estimation)
+
+**Computer vision:**
+[object_detection](examples/object_detection),
+[efficientdet](examples/efficientdet),
+[rf_detr](examples/rf_detr),
+[pf_rpn](examples/pf_rpn),
+[face_detection](examples/face_detection),
+[hand_detection](examples/hand_detection),
+[emotion_classifier](examples/emotion_classifier),
+[imdb_classifier](examples/imdb_classifier),
+[keypoint_estimation](examples/keypoint_estimation),
+[hand_pose_estimation](examples/hand_pose_estimation),
+[head_pose_estimation_6D](examples/head_pose_estimation_6D),
+[human_pose_estimation_2D](examples/human_pose_estimation_2D),
+[human_pose_estimation_3D](examples/human_pose_estimation_3D),
+[pix2pose](examples/pix2pose),
+[implicit_orientation_learning](examples/implicit_orientation_learning),
+[semantic_segmentation](examples/semantic_segmentation),
+[unsupervised_part_segmentation](examples/unsupervised_part_segmentation),
+[plane_detection](examples/plane_detection),
+[structure_from_motion](examples/structure_from_motion),
+[eigenfaces](examples/eigenfaces)
+
+**Learning methods:**
+[prototypical_networks](examples/prototypical_networks),
+[model_agnostic_meta_learning](examples/model_agnostic_meta_learning),
+[spatial_transformer_networks](examples/spatial_transformer_networks),
+[action_scores](examples/action_scores)
+
+**Foundation models:**
+[depth_anything3](examples/depth_anything3),
+[sam2](examples/sam2),
+[gemma4](examples/gemma4),
+[speech_to_text](examples/speech_to_text),
+[remote](examples/remote)
+
+**Robotics and control:**
+[flower](examples/flower),
+[sonic](examples/sonic),
+[gear_wbc](examples/gear_wbc),
+[learning_to_walk](examples/learning_to_walk),
+[rl_gym](examples/rl_gym)
 
 ## Documentation
-Full documentation can be found [https://oarriaga.github.io/paz/](https://oarriaga.github.io/paz/).
 
-## Hierarchical APIs
-PAZ can be used with three different API levels which are there to be helpful for the user's specific application.
+Full documentation is at [https://oarriaga.github.io/paz](https://oarriaga.github.io/paz).
 
-## High-level
-Easy out-of-the-box prediction. For example, for detecting objects we can call the following pipeline:
+## Tests
 
-``` python
-from paz.applications import SSD512COCO
-
-detect = SSD512COCO()
-
-# apply directly to an image (numpy-array)
-inferences = detect(image)
+```bash
+pytest paz/ tests/
 ```
 
-<p align="center">
-<img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/object_detections_in_the_street.png" width="1000">
-</p>
+Tests that download pretrained weights are opt-in: they are skipped unless their environment variable is set, for example `GEMMA4_WEIGHTS_TEST=1`.
 
+## Contributing
 
+See `CONTRIBUTING.md`.
 
-There are multiple high-level functions a.k.a. ``pipelines`` already implemented in PAZ [here](https://github.com/oarriaga/paz/tree/master/paz/pipelines). Those functions are build using our mid-level API described now below.
+## Migrating from 0.2
 
-## Mid-level
-While the high-level API is useful for quick applications, it might not be flexible enough for your specific purpose. Therefore, in PAZ we can build high-level functions using our a mid-level API.
-
-### Mid-level: Sequential
-If your function is sequential you can construct a sequential function using ``SequentialProcessor``. In the example below we create a data-augmentation pipeline:
-
-``` python
-from paz.abstract import SequentialProcessor
-from paz import processors as pr
-
-augment = SequentialProcessor()
-augment.add(pr.RandomContrast())
-augment.add(pr.RandomBrightness())
-augment.add(pr.RandomSaturation())
-augment.add(pr.RandomHue())
-
-# you can now use this now as a normal function
-image = augment(image)
-```
-<p align="center">
-   <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/examples_of_image_augmentation.png" width="800">
-</p>
-
-You can also add **any function** not only those found in ``processors``. For example we can pass a numpy function to our original data-augmentation pipeline:
-
-``` python
-augment.add(np.mean)
-```
-There are multiple functions a.k.a. ``Processors`` already implemented in PAZ [here](https://github.com/oarriaga/paz/tree/master/paz/processors).
-
-Using these processors we can build more complex pipelines e.g. **data augmentation for object detection**: [``pr.AugmentDetection``](https://github.com/oarriaga/paz/blob/master/paz/pipelines/detection.py#L46)
-
-<p align="center">
-   <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/examples_of_object_detection_augmentation.png" width="800">
-</p>
-
-
-### Mid-level: Explicit
-Non-sequential pipelines can be also build by abstracting ``Processor``. In the example below we build a emotion classifier from **scratch** using our high-level and mid-level functions.
-
-``` python
-from paz.applications import HaarCascadeFrontalFace, MiniXceptionFER
-import paz.processors as pr
-
-class EmotionDetector(pr.Processor):
-    def __init__(self):
-        super(EmotionDetector, self).__init__()
-        self.detect = HaarCascadeFrontalFace(draw=False)
-        self.crop = pr.CropBoxes2D()
-        self.classify = MiniXceptionFER()
-        self.draw = pr.DrawBoxes2D(self.classify.class_names)
-
-    def call(self, image):
-        boxes2D = self.detect(image)['boxes2D']
-        cropped_images = self.crop(image, boxes2D)
-        for cropped_image, box2D in zip(cropped_images, boxes2D):
-            box2D.class_name = self.classify(cropped_image)['class_name']
-        return self.draw(image, boxes2D)
-
-detect = EmotionDetector()
-# you can now apply it to an image (numpy array)
-predictions = detect(image)
-```
-<p align="center">
-   <img src="https://raw.githubusercontent.com/oarriaga/altamira-data/master/images/emotion_classification_in_the_wild.png" width="800">
-</p>
-
-
-``Processors`` allow us to easily compose, compress and extract away parameters of functions. However, most processors are build using our low-level API (backend) shown next.
-
-## Low-level
-
-Mid-level processors are mostly built from small backend functions found in: [boxes](https://github.com/oarriaga/paz/blob/master/paz/backend/boxes.py), [cameras](https://github.com/oarriaga/paz/blob/master/paz/backend/camera.py), [images](https://github.com/oarriaga/paz/tree/master/paz/backend/image), [keypoints](https://github.com/oarriaga/paz/blob/master/paz/backend/keypoints.py) and [quaternions](https://github.com/oarriaga/paz/blob/master/paz/backend/quaternion.py).
-
-These functions can found in ``paz.backend``:
-
-``` python
-from paz.backend import boxes, camera, image, keypoints, quaternion
-```
-For example, you can use them in your scripts to load or show images:
-
-``` python
-from paz.backend.image import load_image, show_image
-
-image = load_image('my_image.png')
-show_image(image)
-```
-
-## Additional functionality
-
-* PAZ has [built-in messages](https://github.com/oarriaga/paz/blob/master/paz/abstract/messages.py) e.g. ``Pose6D`` for an easier data exchange with other frameworks such as [ROS](https://www.ros.org/).
-
-* There are custom [callbacks](https://github.com/oarriaga/paz/blob/master/paz/optimization/callbacks.py) e.g. MAP evaluation for object detectors while training.
-
-* PAZ comes with [data loaders](https://github.com/oarriaga/paz/tree/master/paz/datasets) for the multiple datasets:
-    [OpenImages](https://github.com/oarriaga/paz/blob/master/paz/datasets/open_images.py), [VOC](https://github.com/oarriaga/paz/blob/master/paz/datasets/voc.py), [YCB-Video](https://github.com/oarriaga/paz/blob/master/examples/object_detection/datasets/ycb_video.py), [FAT](https://github.com/oarriaga/paz/blob/master/paz/datasets/fat.py), [FERPlus](https://github.com/oarriaga/paz/blob/master/paz/datasets/ferplus.py), [FER2013](https://github.com/oarriaga/paz/blob/master/paz/datasets/fer.py), [CityScapes](https://github.com/oarriaga/paz/blob/master/paz/datasets/cityscapes.py).
-
-* We have an automatic [batch creation and dispatching wrappers](https://github.com/oarriaga/paz/blob/master/paz/abstract/sequence.py) for an easy connection between you ``pipelines`` and tensorflow generators. Please look at the [tutorials](https://github.com/oarriaga/paz/tree/master/examples/tutorials) for more information.
-
-### Models
-
-The following models are implemented in PAZ and they can be trained with your own data:
-
-| Task (link to implementation)    |Model (link to paper)  |
-|---------------------------:|-----------------------|
-|[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/ssd300.py)|[SSD-300](https://arxiv.org/abs/1512.02325)|
-|[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/ssd512.py)|[SSD-512](https://arxiv.org/abs/1512.02325)|
-|[Probabilistic keypoint est.](https://github.com/oarriaga/paz/blob/master/examples/probabilistic_keypoint_estimation/model.py) |[Gaussian Mixture CNN](https://www.robots.ox.ac.uk/~vgg/publications/2018/Neumann18a/)   |
-|[Detection and Segmentation](https://github.com/oarriaga/paz/tree/mask_rcnn/examples/mask_rcnn)  |[MaskRCNN (in progress)](https://arxiv.org/abs/1703.06870) |
-|[Keypoint estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/hrnet.py)|[HRNet](https://arxiv.org/abs/1908.07919)|
-|[Semantic segmentation](https://github.com/oarriaga/paz/blob/master/paz/models/segmentation/unet.py)|[U-NET](https://arxiv.org/abs/1505.04597)|
-|[6D Pose estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/keypointnet.py)          |[Pix2Pose](https://arxiv.org/abs/1908.07433)          |
-|[Implicit orientation](https://github.com/oarriaga/paz/blob/master/examples/implicit_orientation_learning/model.py)        |[AutoEncoder](https://arxiv.org/abs/1902.01275)            |
-|[Emotion classification](https://github.com/oarriaga/paz/blob/master/paz/models/classification/xception.py)       |[MiniXception](https://arxiv.org/abs/1710.07557)           |
-|[Discovery of Keypoints](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/keypointnet.py)      |[KeypointNet](https://arxiv.org/abs/1807.03146)            |
-|[Keypoint estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/keypointnet.py)  |[KeypointNet2D](https://arxiv.org/abs/1807.03146)|
-|[Attention](https://github.com/oarriaga/paz/blob/master/examples/spatial_transfomer_networks/STN.py)                   |[Spatial Transformers](https://arxiv.org/abs/1506.02025)   |
-|[Object detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/haar_cascade.py)            |[HaarCascades](https://link.springer.com/article/10.1023/B:VISI.0000013087.49260.fb)  |
-|[2D Human pose estimation](https://github.com/oarriaga/paz/blob/master/paz/models/pose_estimation/higher_hrnet.py)            |[HigherHRNet](https://arxiv.org/abs/1908.10357)  |
-|[3D Human pose estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/simplebaselines.py) | [Simple Baseline](https://arxiv.org/abs/1705.03098) |
-|[Hand pose estimation](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/detnet.py)            |[DetNet](https://vcai.mpi-inf.mpg.de/projects/2020-cvpr-hands/)  |
-|[Hand closure classification](https://github.com/oarriaga/paz/blob/master/paz/models/keypoint/iknet.py)            |[IKNet](https://vcai.mpi-inf.mpg.de/projects/2020-cvpr-hands/)  |
-|[Hand detection](https://github.com/oarriaga/paz/blob/master/paz/models/detection/ssd512.py)            |[SSD512](https://arxiv.org/abs/1512.02325)|
-|[Few-shot classification](https://github.com/oarriaga/paz/blob/master/paz/models/classification/protonet.py)| [Prototypical Networks](https://arxiv.org/abs/1703.05175)|
-|[Few-shot classification](https://github.com/oarriaga/paz/blob/master/examples/maml/maml.py)| [Model Agnostic Meta Learning (MAML)](https://arxiv.org/abs/1703.03400)|
-
-
-## Motivation
-Even though there are multiple high-level computer vision libraries in different deep learning frameworks, I felt there was not a consolidated deep learning library for robot-perception in my framework of choice (Keras).
-
-As a final remark, I would like to mention, that I feel that we might tend to forget the great effort and emotional status behind every (open-source) project.
-I feel it's easy to blurry a company name with the individuals behind their work, and we forget that there is someone feeling our criticism and our praise.
-Therefore, whatever good code you can find here, is all dedicated to the software-engineers and contributors of open-source projects like Pytorch, Tensorflow and Keras.
-You put your craft out there for all of us to use and appreciate, and we ought first to give you our thankful consideration.
-
-
-## Why the name **PAZ**?
-* The name PAZ satisfies it's theoretical definition by having it as an acronym for **Perception for Autonomous Systems** where the letter S is replaced for Z in order to indicate that for "System" we mean almost anything i.e. Z being a classical algebraic variable to indicate an unknown element.
-
-
-## Tests and coverage
-Continuous integration is managed trough [github actions](https://github.com/features/actions) using [pytest](https://docs.pytest.org/en/stable/).
-You can then check for the tests by running:
-```
-pytest tests
-```
-Test coverage can be checked using [coverage](https://coverage.readthedocs.io/en/coverage-5.2.1/).
-You can install coverage by calling: `pip install coverage --user`
-You can then check for the test coverage by running:
-```
-coverage run -m pytest tests/
-coverage report -m
-```
+PAZ 1.0 is a rewrite on JAX and Keras 3 and is not backward compatible with the TensorFlow-based 0.2 releases. See `CHANGELOG.md` for what changed.
 
 ## Citation
 If you use PAZ please consider citating it. You can also find our paper here [https://arxiv.org/abs/2010.14541](https://arxiv.org/abs/2010.14541).
