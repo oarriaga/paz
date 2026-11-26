@@ -64,7 +64,9 @@ def centroid_distance(points_a, points_b):
 
 def mean_nearest_neighbor_distance(points_a, points_b):
     nearest_squared = compute_nearest_squared_distances(points_a, points_b)
-    return jp.mean(jp.sqrt(nearest_squared))
+    is_zero = nearest_squared == 0.0
+    safe_squared = jp.where(is_zero, 1.0, nearest_squared)
+    return jp.mean(jp.where(is_zero, 0.0, jp.sqrt(safe_squared)))
 
 
 def chamfer_distance(points_a, points_b):

@@ -407,3 +407,12 @@ def test_compute_approx_emd_identical():
     points = jp.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
     distance = compute_approx_emd(points, points)
     assert float(distance) == pytest.approx(0.0)
+
+
+def test_chamfer_distance_gradient_is_finite_for_coincident_points():
+    points_a = jp.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
+    points_b = jp.array([[0.0, 0.0, 0.0], [1.0, 0.5, 0.0]])
+    gradient = jax.grad(chamfer_distance)(points_a, points_b)
+    expected = jp.array([[0.0, 0.0, 0.0], [0.0, -1.0, 0.0]])
+    assert jp.isclose(chamfer_distance(points_a, points_b), 0.5)
+    assert jp.allclose(gradient, expected)
