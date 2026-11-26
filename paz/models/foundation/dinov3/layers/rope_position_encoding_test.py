@@ -1,6 +1,8 @@
 import os
-import torch
 import pytest
+
+torch = pytest.importorskip("torch")
+
 import numpy as np
 
 from paz.models.foundation.dinov3.layers.rope_position_encoding import (

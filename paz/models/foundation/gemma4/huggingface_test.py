@@ -1,4 +1,3 @@
-import importlib
 import os
 
 os.environ.setdefault("KERAS_BACKEND", "jax")
@@ -15,7 +14,7 @@ from paz.models.foundation.gemma4.model import build_text_backbone_args
 pytest.importorskip("transformers")
 # transformers exposes models lazily; import the submodule directly so
 # pytest's import hook cannot shadow the attribute lookup.
-unified = importlib.import_module("transformers.models.gemma4_unified")
+unified = pytest.importorskip("transformers.models.gemma4_unified")
 torch = pytest.importorskip("torch")
 pytest.importorskip("safetensors")
 

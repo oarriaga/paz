@@ -1,9 +1,10 @@
 import os
-import torch
 import numpy as np
-import torch.nn as nn
 import jax.numpy as jnp
 import pytest
+
+torch = pytest.importorskip("torch")
+import torch.nn as nn
 
 from paz.models.foundation.dinov3.layers.ffn_layers import (
     Mlp,

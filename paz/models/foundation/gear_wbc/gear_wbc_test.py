@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 
 ort = pytest.importorskip("onnxruntime")
+pytest.importorskip("onnx")
 
 from paz.models.foundation.gear_wbc.conversion import port_weights
 from paz.models.foundation.gear_wbc.model import OBSERVATION_DIM

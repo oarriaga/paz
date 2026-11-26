@@ -1,9 +1,11 @@
 import os
 import pytest
-import torch
+
+torch = pytest.importorskip("torch")
+from torch import nn
+
 import numpy as np
 from keras.layers import LayerNormalization
-from torch import nn
 
 from paz.models.foundation.dinov3.layers.patch_embed import PatchEmbed
 from paz.models.foundation.dinov3.layers.torch_layers_for_testing import PT_PatchEmbed

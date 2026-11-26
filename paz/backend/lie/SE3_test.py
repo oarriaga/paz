@@ -188,7 +188,7 @@ def test_translation(so3_vector_A, translation_matrix_A):
 def test_xyz_rpy_to_SE3(SE3_matrix_from_radians, so3_vector_A, radians_vector):
     assert jp.allclose(
         SE3_matrix_from_radians,
-        SE3.xyz_rpy_to_SE3(so3_vector_A, radians_vector),
+        SE3.xyz_rpy_to_matrix(so3_vector_A, radians_vector),
     )
 
 
