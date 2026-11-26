@@ -49,7 +49,7 @@ def rectangle(image, top_left_point, bottom_right_point, color, thickness):
 
 
 def box(image, box, color=GREEN, thickness=2):
-    x_min, y_min, x_max, y_max = np.round(box[:4]).astype(int).tolist()
+    x_min, y_min, x_max, y_max = box[:4]
     return rectangle(image, (x_min, y_min), (x_max, y_max), color, thickness)
 
 
@@ -197,7 +197,6 @@ def boxes2D(
         cv2.putText(image, label, bottom_left, font, font_scale, label_color)
 
     image = np.ascontiguousarray(np.array(image, dtype=image.dtype))
-    boxes = np.round(boxes).astype(int)
     if class_args is None:
         class_args = [0] * len(boxes)
     for box, class_arg, score in zip(boxes, class_args, scores):
@@ -226,7 +225,7 @@ def keypoint(image, point, color=GREEN, radius=5):
 
 def keypoints(image, points, colors, radius):
     image = np.ascontiguousarray(np.array(image, dtype=image.dtype))
-    points = np.round(np.array(points)).astype(int)
+    points = np.array(points, dtype=points.dtype)
     for point, color in zip(points, colors):
         paz.draw.keypoint(image, point, color, radius)
     return image
