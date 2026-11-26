@@ -752,3 +752,11 @@ def test_exponential_has_no_mass_below_zero():
     log_survival = exponential.log_survival_function(values)
     assert jp.array_equal(log_survival, jp.zeros(2))
     assert exponential.mode() == 0.0
+
+
+def test_beta_log_prob_on_the_boundary_with_unit_concentration():
+    f = lambda value: jp.asarray(value, jp.float64)
+    alpha, beta = f([1.0, 1.0, 2.0]), f([1.0, 2.0, 1.0])
+    values = f([0.0, 0.0, 1.0])
+    expected = stats.beta(alpha, beta).logpdf(values)
+    assert_close(D.Beta(alpha, beta).log_prob(values), expected)

@@ -676,8 +676,8 @@ class Beta(_BetaBase, Distribution):
         alpha = to_float(self.concentration1, self.dtype)
         beta = to_float(self.concentration0, self.dtype)
         log_prob = (
-            (alpha - 1.0) * jp.log(values)
-            + (beta - 1.0) * jp.log1p(-values)
+            jsp_special.xlogy(alpha - 1.0, values)
+            + jsp_special.xlog1py(beta - 1.0, -values)
             - lbeta(alpha, beta)
         )
         if self.force_probs:
