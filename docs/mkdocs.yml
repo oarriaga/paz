@@ -1,0 +1,7 @@
+site_name: PAZ
+site_description: Perception for Autonomous Systems
+docs_dir: sources
+repo_name: oarriaga/paz
+repo_url: https://github.com/oarriaga/paz
+theme:
+  name: material

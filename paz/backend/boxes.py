@@ -78,13 +78,15 @@ def compute_centers(boxes):
 
 
 def to_center_form(boxes):
-    """Convert bounding boxes from corner to center form.
+    """Converts boxes from corner form to center form.
 
-    # Arguments:
-        boxes (array): Boxes in corner format [x_min, y_min, x_max, y_max]
+    # Arguments
+    - `boxes`: Array of shape `(num_boxes, 4)` in corner form
+      `[x_min, y_min, x_max, y_max]`.
 
-    # Returns:
-        array: Boxes in center format [center_x, center_y, width, height]
+    # Returns
+    Array of shape `(num_boxes, 4)` in center form
+    `[center_x, center_y, W, H]`.
     """
 
     center_x, center_y = compute_centers(boxes)
@@ -93,13 +95,15 @@ def to_center_form(boxes):
 
 
 def to_corner_form(boxes):
-    """Convert bounding boxes from center to corner form.
+    """Converts boxes from center form to corner form.
 
-    # Arguments:
-        Boxes: Array of boxes in center format ``[center_x, center_y, W, H]``.
+    # Arguments
+    - `boxes`: Array of shape `(num_boxes, 4)` in center form
+      `[center_x, center_y, W, H]`.
 
-    # Returns:
-        Boxes in corner format ``[x_min, y_min, x_max, y_max]``.
+    # Returns
+    Array of shape `(num_boxes, 4)` in corner form
+    `[x_min, y_min, x_max, y_max]`.
     """
     center_x, center_y, W, H = split(boxes)
     x_min = center_x - (W / 2.0)
@@ -197,11 +201,18 @@ def compute_IOUs(boxes_A, boxes_B):
     For each box (rows `boxes_A`) it computes the IOU to all `boxes_B`.
 
     # Arguments
-        boxes_A: Numpy array with shape `(num_boxes_A, 4)` in corner form.
-        boxes_B: Numpy array with shape `(num_boxes_B, 4)` in corner form.
+    - `boxes_A`: Array of shape `(num_boxes_A, 4)` in corner form.
+    - `boxes_B`: Array of shape `(num_boxes_B, 4)` in corner form.
 
     # Returns
-        Numpy array of shape `(num_boxes_A, num_boxes_B)`.
+    Array of shape `(num_boxes_A, num_boxes_B)`.
+
+    # Example
+    ```python
+    boxes_A = jp.array([[0.0, 0.0, 2.0, 2.0]])
+    boxes_B = jp.array([[0.0, 0.0, 2.0, 2.0], [1.0, 0.0, 3.0, 2.0]])
+    paz.boxes.compute_IOUs(boxes_A, boxes_B)  # [[1.0, 0.33333334]]
+    ```
     """
     xy_min = jp.maximum(boxes_A[:, None, 0:2], boxes_B[:, 0:2])
     xy_max = jp.minimum(boxes_A[:, None, 2:4], boxes_B[:, 2:4])
