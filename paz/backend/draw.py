@@ -105,6 +105,7 @@ def mosaic(images, shape=None, border=0, background=255):
         images: Array
     """
     # TODO add dtype check for images. Images should be uint8
+    images = np.asarray(images)
     if shape is None:
         large_size = math.ceil(math.sqrt(len(images)))
         small_size = round(math.sqrt(len(images)))
@@ -124,7 +125,8 @@ def mosaic(images, shape=None, border=0, background=255):
     if len(images) < (num_rows * num_cols):
         num_images, H, W, num_channels = images.shape
         pad_size = (num_rows * num_cols) - num_images
-        pad = np.full((pad_size, H, W, num_channels), background)
+        pad_shape = (pad_size, H, W, num_channels)
+        pad = np.full(pad_shape, background, dtype=images.dtype)
         images = np.concatenate([images, pad], axis=0)
     num_images, H, W, num_channels = images.shape
     total_rows = (num_rows * H) + ((num_rows - 1) * border)
