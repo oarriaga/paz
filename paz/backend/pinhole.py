@@ -267,7 +267,7 @@ def calibrate(images, chessboard_size):
             points2D.append(corners)
             points3D.append(object_points_3D)
 
-    shape = image.shape[::-1]
+    shape = image.shape[1::-1]
     parameters = cv2.calibrateCamera(points3D, points2D, shape, None, None)
     _, camera_matrix, distortion_coefficient, _, _ = parameters
     return camera_matrix, distortion_coefficient
