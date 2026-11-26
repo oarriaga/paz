@@ -1,9 +1,12 @@
 import numpy as np
+import pytest
 
 from paz.models.foundation.sonic.layout import compute_encoder_input_dim
 from paz.models.foundation.sonic.pretrained import SONIC
 from paz.models.foundation.sonic.pretrained import fetch_motion_assets
 from paz.models.foundation.sonic.pretrained import fetch_scene_assets
+
+pytestmark = pytest.mark.weights
 
 
 def test_pretrained_sonic_downloads_and_runs():

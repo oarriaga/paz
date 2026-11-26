@@ -1,8 +1,11 @@
 import numpy as np
+import pytest
 
 from paz.models.foundation.gear_wbc.model import ACTION_DIM
 from paz.models.foundation.gear_wbc.model import OBSERVATION_DIM
 from paz.models.foundation.gear_wbc.pretrained import GearWBC
+
+pytestmark = pytest.mark.weights
 
 
 def test_pretrained_gear_wbc_downloads_and_runs():

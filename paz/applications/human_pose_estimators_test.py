@@ -5,8 +5,6 @@ import pytest
 import paz
 from paz.applications import human_pose_estimators as estimators
 
-MODELS = os.path.expanduser("~/.keras/paz/models")
-WEIGHTS = os.path.join(MODELS, "higher_hrnet_paz_jax.weights.h5")
 VOC = "~/.keras/paz/datasets/VOC2007-test/VOCdevkit/VOC2007/JPEGImages"
 PORTRAIT_IMAGE = os.path.join(os.path.expanduser(VOC), "000368.jpg")
 
@@ -50,7 +48,7 @@ def test_portrait_keypoints_map_back_to_image():
     assert np.allclose(restored[:, :2], points[:, :2], atol=1e-2)
 
 
-@pytest.mark.skipif(not os.path.exists(WEIGHTS), reason="weights not cached")
+@pytest.mark.weights
 @pytest.mark.skipif(not os.path.exists(PORTRAIT_IMAGE), reason="no image")
 def test_portrait_image_detects_person_inside_image():
     image = np.array(paz.image.load(PORTRAIT_IMAGE))

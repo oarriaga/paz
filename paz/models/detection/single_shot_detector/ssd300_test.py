@@ -6,16 +6,11 @@ from keras.models import Model
 from paz.models.detection.single_shot_detector.ssd300 import SSD300
 
 
-def skip_if_missing(filename):
-    path = get_weights_path(filename)
-    return pytest.mark.skipif(not os.path.exists(path), reason="not cached")
-
-
 def get_weights_path(filename):
     return os.path.expanduser("~/.keras/paz/models/" + filename)
 
 
-@skip_if_missing("SSD300-VOC-VOC_weights.hdf5")
+@pytest.mark.weights
 def test_model_creation():
     """Test if SSD300 model is created successfully."""
     num_classes = 21
@@ -51,7 +46,7 @@ def test_incompatible_num_classes_with_weights():
         SSD300(num_classes=10, head_weights="VOC")
 
 
-@skip_if_missing("SSD300-VOC-VOC_weights.hdf5")
+@pytest.mark.weights
 def test_SSD300_VOC_VOC():
     """Test SSD300 with VOC-VOC weights."""
     try:
@@ -60,7 +55,7 @@ def test_SSD300_VOC_VOC():
         pytest.fail(f"SSD VOC-VOC loading failed: {valuerror}")
 
 
-@skip_if_missing("SSD300-FAT-FAT_weights.hdf5")
+@pytest.mark.weights
 def test_SSD300_FAT_FAT():
     """Test SSD300 with FAT-FAT weights."""
     try:
@@ -69,7 +64,7 @@ def test_SSD300_FAT_FAT():
         pytest.fail(f"SSD FAT-FAT loading failed: {e}")
 
 
-@skip_if_missing("SSD300-VGG-None_weights.hdf5")
+@pytest.mark.weights
 def test_SSD300_None_VGG():
     """Test SSD300 with None-VGG weights."""
     try:
@@ -78,7 +73,7 @@ def test_SSD300_None_VGG():
         pytest.fail(f"SSD None-VGG loading failed: {valuerror}")
 
 
-@skip_if_missing("SSD300-VOC-None_weights.hdf5")
+@pytest.mark.weights
 def test_SSD300_None_VOC():
     """Test SSD300 with None-VOC weights."""
     try:
@@ -129,12 +124,12 @@ def test_SSD30_None_FAT():
         SSD300(num_classes=2, base_weights="FAT", head_weights=None)
 
 
-@skip_if_missing("SSD300-VOC-None_weights.hdf5")
+@pytest.mark.weights
 def test_SSD300_VOC_None_loads_extra_layers_on_every_build():
     names = ["conv2d", "conv2d_1", "conv2d_2", "conv2d_3"]
+    models = [SSD300(21, "VOC", None) for _ in range(2)]
     with h5py.File(get_weights_path("SSD300-VOC-None_weights.hdf5")) as file:
         kernels = [file[name][name + "/kernel:0"][()] for name in names]
-    for _ in range(2):
-        model = SSD300(21, "VOC", None)
+    for model in models:
         for name, kernel in zip(names, kernels):
             assert np.allclose(model.get_layer(name).kernel, kernel)

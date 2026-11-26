@@ -393,6 +393,7 @@ def test_iknet_invalid_weights():
         IKNet(weights="invalid")
 
 
+@pytest.mark.weights
 def test_detnet_pretrained_weights_load():
     model = DetNet(weights="detnet")
     image, _ = build_inputs()
@@ -401,6 +402,7 @@ def test_detnet_pretrained_weights_load():
     assert tuple(np.asarray(uv).shape) == (21, 2)
 
 
+@pytest.mark.weights
 def test_iknet_pretrained_weights_load():
     model = IKNet(weights="iknet")
     _, keypoints = build_inputs()
@@ -408,6 +410,7 @@ def test_iknet_pretrained_weights_load():
     assert tuple(np.asarray(quaternions).shape) == (1, 21, 4)
 
 
+@pytest.mark.weights
 def test_detnet_pretrained_matches_compatibility_model(compatibility_outputs):
     image, _ = build_inputs()
     model = DetNet(weights="detnet")
@@ -418,6 +421,7 @@ def test_detnet_pretrained_matches_compatibility_model(compatibility_outputs):
     assert np.array_equal(np.asarray(uv), compatibility_outputs["detnet_uv"])
 
 
+@pytest.mark.weights
 def test_iknet_pretrained_matches_compatibility_model(compatibility_outputs):
     _, keypoints = build_inputs()
     model = IKNet(weights="iknet")
@@ -427,6 +431,7 @@ def test_iknet_pretrained_matches_compatibility_model(compatibility_outputs):
     )
 
 
+@pytest.mark.weights
 def test_detnet_port_weights_script(tmp_path):
     output_path = tmp_path / "detnet_paz_jax.weights.h5"
     script_path = Path("paz/models/keypoint/port_detnet_weights.py")
