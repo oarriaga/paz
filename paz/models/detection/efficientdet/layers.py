@@ -2,6 +2,7 @@ from keras.layers import Layer
 import keras
 
 
+@keras.saving.register_keras_serializable("paz.efficientdet")
 class GetDropConnect(Layer):
     """Dropout for model layers.
     DropConnect is similar to dropout, but instead of setting
@@ -40,7 +41,13 @@ class GetDropConnect(Layer):
         else:
             return features
 
+    def get_config(self):
+        config = super().get_config()
+        config.update({"survival_rate": self.survival_rate})
+        return config
 
+
+@keras.saving.register_keras_serializable("paz.efficientdet")
 class FuseFeature(Layer):
     """Fuse features from different resolutions and return a
     weighted sum. The resulting weighted sum is the fused feature.

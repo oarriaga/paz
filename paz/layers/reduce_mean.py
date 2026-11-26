@@ -1,6 +1,7 @@
 import keras
 
 
+@keras.saving.register_keras_serializable("layers")
 class ReduceMean(keras.layers.Layer):
     """Wraps tensorflow's `reduce_mean` function into a keras layer.
 
@@ -9,10 +10,15 @@ class ReduceMean(keras.layers.Layer):
         keepdims: Bool, whether to presere the dimension or not.
     """
 
-    def __init__(self, axes=[1, 2], keepdims=True):
+    def __init__(self, axes=[1, 2], keepdims=True, **kwargs):
         self.axes = axes
         self.keepdims = keepdims
-        super(ReduceMean, self).__init__()
+        super(ReduceMean, self).__init__(**kwargs)
 
     def call(self, x):
         return keras.ops.mean(x, axis=self.axes, keepdims=self.keepdims)
+
+    def get_config(self):
+        config = super().get_config()
+        config.update({"axes": self.axes, "keepdims": self.keepdims})
+        return config

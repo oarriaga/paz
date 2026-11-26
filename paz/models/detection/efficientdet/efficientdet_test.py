@@ -1,5 +1,7 @@
 import os
 import h5py
+import jax
+import keras
 import pytest
 from keras.layers import Conv2D, SeparableConv2D
 from keras.layers import Input, Flatten
@@ -1294,3 +1296,19 @@ def test_EFFICIENTDETD0_COCO_None_loads_base_weights():
     assert np.allclose(get_first_kernel(model, Conv2D), stem_kernel)
     assert np.allclose(get_first_kernel(model, SeparableConv2D), node_kernel)
     assert not np.allclose(get_first_kernel(untrained, Conv2D), stem_kernel)
+
+
+def test_EFFICIENTDETD0_save_and_load(tmp_path):
+    model = EFFICIENTDETD0(3, None, None, (128, 128, 3))
+    model.save(tmp_path / "model.keras")
+    loaded = keras.models.load_model(tmp_path / "model.keras")
+    image = np.random.rand(1, 128, 128, 3).astype("float32")
+    output = jax.jit(lambda x: model(x))(image)
+    loaded_output = jax.jit(lambda x: loaded(x))(image)
+    assert np.allclose(output, loaded_output, atol=1e-6)
+
+
+def test_get_drop_connect_config():
+    layer = GetDropConnect(survival_rate=0.8)
+    restored = GetDropConnect.from_config(layer.get_config())
+    assert restored.survival_rate == 0.8

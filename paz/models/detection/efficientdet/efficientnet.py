@@ -116,6 +116,7 @@ def scale_filters(filters, width_coefficient, depth_divisor):
     return scaled_filters
 
 
+@keras.saving.register_keras_serializable("paz.efficientdet")
 def kernel_initializer(shape, dtype=None):
     """Initialize convolutional kernel with
     zero centred Gaussian distribution.
