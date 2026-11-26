@@ -561,7 +561,8 @@ def make_random_plain_image(key, shape):
 def random_blur(key, image, kernel_size=9):
     """Applies Gaussian blur with probability one half (jittable)."""
     apply = jax.random.uniform(key, ()) < 0.5
-    blurred = paz.cast(apply_gaussian_blur(image, kernel_size), image.dtype)
+    blurred = apply_gaussian_blur(image, kernel_size).reshape(image.shape)
+    blurred = paz.cast(blurred, image.dtype)
     return jp.where(apply, blurred, image)
 
 

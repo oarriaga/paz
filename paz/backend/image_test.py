@@ -121,3 +121,14 @@ def test_resize_with_aspect_ratio_fills_a_square_target():
     resized = paz.image.resize_with_aspect_ratio(image, 512, 512)
     assert resized.shape == (512, 512, 3)
     assert np.all(np.asarray(resized) > 0)
+
+
+def test_random_blur_keeps_shape_of_2D_image():
+    image = jax.random.randint(jax.random.PRNGKey(0), (20, 20), 0, 256)
+    image = image.astype(jp.uint8)
+    blurred = paz.image.apply_gaussian_blur(image)[..., 0].astype(jp.uint8)
+    for seed in range(4):
+        output = paz.image.random_blur(jax.random.PRNGKey(seed), image)
+        assert output.shape == image.shape
+        is_blurred = np.array_equal(output, blurred)
+        assert is_blurred or np.array_equal(output, image)
