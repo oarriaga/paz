@@ -166,3 +166,31 @@ def test_mosaic_keeps_dtype_when_grid_is_not_full():
     assert np.all(mosaic[4:, 4:] == 255)
     assert np.all(mosaic[:4] == 0)
     assert paz.draw.mosaic(np.array(images)).dtype == np.uint8
+
+
+def test_boxes_accepts_float_coordinates():
+    image = np.zeros((32, 32, 3), np.uint8)
+    drawn = paz.draw.boxes(image, jp.array([[1.4, 2.6, 10.2, 12.3]]))
+    expected = cv2.rectangle(image.copy(), (1, 3), (10, 12), draw.GREEN, 2)
+    assert np.array_equal(drawn, expected)
+    drawn = paz.draw.box(image.copy(), jp.array([1.4, 2.6, 10.2, 12.3]))
+    assert np.array_equal(drawn, expected)
+
+
+def test_boxes2D_accepts_float_coordinates():
+    image = np.zeros((64, 64, 3), np.uint8)
+    args = jp.array([0]), jp.array([0.9]), ["a"], [(255, 0, 0)]
+    drawn = paz.draw.boxes2D(image, jp.array([[5.4, 30.6, 40.2, 50.3]]), *args)
+    expected = paz.draw.boxes2D(image, jp.array([[5, 31, 40, 50]]), *args)
+    assert expected.any()
+    assert np.array_equal(drawn, expected)
+
+
+def test_keypoints_accepts_float_coordinates():
+    image = np.zeros((32, 32, 3), np.uint8)
+    args = [(255, 0, 0)] * 2, 3
+    points = jp.array([[5.4, 5.6], [10.2, 20.3]])
+    drawn = paz.draw.keypoints(image, points, *args)
+    expected = paz.draw.keypoints(image, jp.array([[5, 6], [10, 20]]), *args)
+    assert expected.any()
+    assert np.array_equal(drawn, expected)
