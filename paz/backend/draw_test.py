@@ -156,3 +156,13 @@ def test_fill_polygon_matches_cv2():
     jax_mask = np.asarray((filled == 0).all(-1))
     reference_mask = (reference == 0).all(-1)
     assert (jax_mask == reference_mask).mean() > 0.95
+
+
+def test_mosaic_keeps_dtype_when_grid_is_not_full():
+    images = [np.zeros((4, 4, 3), np.uint8)] * 3
+    mosaic = paz.draw.mosaic(images)
+    assert mosaic.dtype == np.uint8
+    assert mosaic.shape == (8, 8, 3)
+    assert np.all(mosaic[4:, 4:] == 255)
+    assert np.all(mosaic[:4] == 0)
+    assert paz.draw.mosaic(np.array(images)).dtype == np.uint8

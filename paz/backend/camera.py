@@ -1,3 +1,5 @@
+import os
+
 import jax.numpy as jp
 import numpy as np
 import cv2
@@ -13,7 +15,7 @@ class Camera(object):
         self.identifier = identifier
         self.name = name
         self.intrinsics = intrinsics
-        self.distortion = None
+        self.distortion = distortion
         self._camera = None
 
     @property
@@ -59,7 +61,7 @@ class Camera(object):
     def read(self):
         image = self._camera.read()[1]
         if image is not None:
-            image = paz.image.BGR_to_RGB(self._camera.read()[1])
+            image = paz.image.BGR_to_RGB(image)
             image = np.ascontiguousarray(image)
         return image
         # return cv2.cvtColor(self._camera.read()[1], cv2.COLOR_BGR2RGB)
@@ -228,7 +230,7 @@ class VideoPlayer(object):
         """
 
         fourCC = cv2.VideoWriter_fourcc(*fourCC)
-        writer = cv2.VideoWriter(name, fourCC, fps, self.image_size)
+        writer = cv2.VideoWriter(name, fourCC, fps, self.image_size[::-1])
 
         video = cv2.VideoCapture(video_file_path)
         if video.isOpened() is False:
@@ -240,13 +242,13 @@ class VideoPlayer(object):
                 print("Frame not received. Exiting ...")
                 break
             if is_frame_received is True:
-                output = self.pipeline(frame)
+                output = self.pipeline(paz.image.BGR_to_RGB(frame))
                 if output is None:
                     continue
-                image = resize_image(output["image"], tuple(self.image_size))
-                show_image(image, "inference", wait=False)
-                image = convert_color_space(image, BGR2RGB)
-                writer.write(image)
+                image = output["image"]
+                image = paz.image.resize_opencv(image, self.image_size)
+                paz.image.show(image, "inference", wait=False)
+                writer.write(paz.to_numpy(paz.image.RGB_to_BGR(image)))
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break
 
@@ -264,17 +266,15 @@ class VideoPlayer(object):
         """
         self.camera.start()
         fourCC = cv2.VideoWriter_fourcc(*fourCC)
-        writer = cv2.VideoWriter(name, fourCC, fps, self.image_size)
+        writer = cv2.VideoWriter(name, fourCC, fps, self.image_size[::-1])
         while True:
             frame = self.camera.read()
             if frame is None:
                 print("Frame: None")
                 return None
-            frame = convert_color_space(frame, BGR2RGB)
-            image = resize_image(frame, tuple(self.image_size))
-            show_image(image, "frame", wait=False)
-            image = convert_color_space(image, BGR2RGB)
-            writer.write(image)
+            image = paz.image.resize_opencv(frame, self.image_size)
+            paz.image.show(image, "frame", wait=False)
+            writer.write(paz.to_numpy(paz.image.RGB_to_BGR(image)))
             if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
 
@@ -303,11 +303,11 @@ class VideoPlayer(object):
                 print("Frame not received. Exiting ...")
                 break
             if is_frame_received is True:
-                image = resize_image(frame, tuple(self.image_size))
+                image = paz.image.resize_opencv(frame, self.image_size)
                 image_path = os.path.join("./images", str(frame_arg) + ".jpg")
-                image = convert_color_space(image, BGR2RGB)
+                image = paz.image.BGR_to_RGB(image)
                 if frame_arg % frame_selection_arg == 0:
-                    write_image(image_path, image)
+                    paz.image.write(image_path, image)
                 frame_arg += 1
                 if cv2.waitKey(1) & 0xFF == ord("q"):
                     break

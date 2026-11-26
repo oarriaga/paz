@@ -1,4 +1,3 @@
-# TODO sort and remove boxes before sending to NMS
 import cv2
 import jax.numpy as jp
 import numpy as np

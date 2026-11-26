@@ -284,7 +284,7 @@ def flip_left_right(boxes, W):
         Numpy array of shape `(num_boxes, 4)`.
     """
     x_min, y_min, x_max, y_max = split(boxes)
-    return merge(x_max, y_min, x_min, y_max)
+    return merge(W - x_max, y_min, W - x_min, y_max)
 
 
 def append_class(boxes, class_arg):
@@ -315,7 +315,8 @@ def sample(key, H, W, H_min_scale=0.3, W_min_scale=0.3, num_boxes=15):
 
 
 def sample_negatives(key, boxes, H, W, box_size, num_boxes, num_trials):
-    negative_boxes = paz.boxes.sample(key, H, W, box_size, num_trials)
+    args = (key, H, W, box_size, box_size, num_trials)
+    negative_boxes = paz.boxes.sample(*args)
     ious = compute_IOUs(negative_boxes, boxes)
     mean_ious = jp.mean(ious, axis=1)
     # best_args = jp.argsort(mean_ious)[::-1]

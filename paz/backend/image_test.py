@@ -99,3 +99,36 @@ def test_random_photometric_stays_in_uint8_range():
     out = paz.image.random_photometric(jax.random.PRNGKey(2), image)
     assert out.dtype == jp.uint8
     assert int(out.min()) >= 0 and int(out.max()) <= 255
+
+
+def test_scale_with_aspect_ratio_returns_scaled_image():
+    image = jp.ones((10, 20, 3))
+    scaled = paz.image.scale_with_aspect_ratio(image, (2.0, 0.5))
+    assert scaled.shape == (20, 10, 3)
+
+
+def test_denormalize_rounds_instead_of_truncating():
+    image = jax.random.randint(jax.random.PRNGKey(0), (16, 16, 3), 0, 256)
+    image = image.astype(jp.uint8)
+    same = paz.image.random_hue(jax.random.PRNGKey(0), image, max_delta=0.0)
+    assert np.array_equal(same, image)
+    white = jp.full((2, 2, 3), 255, jp.uint8)
+    assert np.all(np.asarray(paz.image.RGB_to_GRAY(white)) == 255)
+
+
+def test_resize_with_aspect_ratio_fills_a_square_target():
+    image = jp.ones((49, 49, 3))
+    resized = paz.image.resize_with_aspect_ratio(image, 512, 512)
+    assert resized.shape == (512, 512, 3)
+    assert np.all(np.asarray(resized) > 0)
+
+
+def test_random_blur_keeps_shape_of_2D_image():
+    image = jax.random.randint(jax.random.PRNGKey(0), (20, 20), 0, 256)
+    image = image.astype(jp.uint8)
+    blurred = paz.image.apply_gaussian_blur(image)[..., 0].astype(jp.uint8)
+    for seed in range(4):
+        output = paz.image.random_blur(jax.random.PRNGKey(seed), image)
+        assert output.shape == image.shape
+        is_blurred = np.array_equal(output, blurred)
+        assert is_blurred or np.array_equal(output, image)

@@ -1,4 +1,5 @@
 import pytest
+import jax
 import jax.numpy as jp
 import paz
 import numpy as np
@@ -151,11 +152,10 @@ def test_denormalize_box():
     assert jp.array_equal(denorm_box, jp.array(expected))
 
 
-@pytest.mark.skip(reason="changed implementation")
 def test_flip_left_right():
     boxes = jp.array([[10.0, 20.0, 30.0, 40.0]])
     width = 100
-    flipped = flip_left_right(boxes, width)
+    flipped = paz.boxes.flip_left_right(boxes, width)
     expected = jp.array([[70.0, 20.0, 90.0, 40.0]])
     assert jp.allclose(flipped, expected)
 
@@ -268,3 +268,14 @@ def test_pad_with_custom_value():
     )
     assert result.shape == (4, 4), "Output shape is incorrect"
     np.testing.assert_array_equal(result, expected_output)
+
+
+def test_sample_negatives_picks_from_all_trials():
+    key = jax.random.PRNGKey(0)
+    boxes = jp.array([[10.0, 10.0, 50.0, 50.0]])
+    negatives = paz.boxes.sample_negatives(key, boxes, 100, 100, 0.3, 20, 50)
+    trials = paz.boxes.sample(key, 100, 100, 0.3, 0.3, 50)
+    mean_IOUs = jp.mean(paz.boxes.compute_IOUs(trials, boxes), axis=1)
+    expected = trials[jp.argsort(mean_IOUs)[:20]]
+    assert negatives.shape == (20, 4)
+    assert np.array_equal(negatives, expected)

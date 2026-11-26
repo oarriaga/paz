@@ -125,6 +125,5 @@ def find_mutual_nearest_neighbors(descriptors_a, descriptors_b, min_cosine=-1):
     backward = jp.argmax(similarity, axis=0)
     source = jp.arange(forward.shape[0])
     mutual = backward[forward] == source
-    if min_cosine > 0:
-        mutual = mutual & (jp.max(similarity, axis=1) > min_cosine)
+    mutual = mutual & (jp.max(similarity, axis=1) > min_cosine)
     return source[mutual], forward[mutual]

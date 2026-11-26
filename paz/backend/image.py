@@ -219,8 +219,8 @@ def resize_opencv(image: jax.Array, size: tuple[int, int]) -> jax.Array:
 
 def scale(image, scale_factor, method="linear", antialias=False):
     H, W = get_size(image)
-    H_scaled = int(H * scale_factor)
-    W_scaled = int(W * scale_factor)
+    H_scaled = round(H * scale_factor)
+    W_scaled = round(W * scale_factor)
     return resize(image, (H_scaled, W_scaled), method, antialias)
 
 
@@ -228,7 +228,7 @@ def scale_with_aspect_ratio(image, scale, method="linear", antialias=False):
     H, W = get_size(image)
     H_scaled = int(H * scale[0])
     W_scaled = int(W * scale[1])
-    resize(image, (H_scaled, W_scaled), method, antialias)
+    return resize(image, (H_scaled, W_scaled), method, antialias)
 
 
 def show(image, name="image", wait=True):
@@ -257,7 +257,7 @@ def normalize(image):
 
 
 def denormalize(image):
-    return paz.cast(image * 255.0, jp.uint8)
+    return paz.cast(jp.round(image * 255.0), jp.uint8)
 
 
 def rgb_to_gray(image):
@@ -561,7 +561,8 @@ def make_random_plain_image(key, shape):
 def random_blur(key, image, kernel_size=9):
     """Applies Gaussian blur with probability one half (jittable)."""
     apply = jax.random.uniform(key, ()) < 0.5
-    blurred = paz.cast(apply_gaussian_blur(image, kernel_size), image.dtype)
+    blurred = apply_gaussian_blur(image, kernel_size).reshape(image.shape)
+    blurred = paz.cast(blurred, image.dtype)
     return jp.where(apply, blurred, image)
 
 
