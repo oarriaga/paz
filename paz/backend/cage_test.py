@@ -36,10 +36,19 @@ def test_paz_exports_cage_backend():
 
 
 def build_torus_cage(scale):
-    args = {"major_sections": 32, "minor_sections": 16}
-    mesh = trimesh.creation.torus(1.0, 0.3, **args)
-    vertices = jp.array(scale * mesh.vertices, jp.float32)
-    return vertices, jp.array(mesh.faces)
+    major_angles = np.linspace(0, 2 * np.pi, 32, endpoint=False)[:, None]
+    minor_angles = np.linspace(0, 2 * np.pi, 16, endpoint=False)[None, :]
+    rings = 1.0 + (0.3 * np.cos(minor_angles))
+    x = rings * np.cos(major_angles)
+    y = rings * np.sin(major_angles)
+    z = 0.3 * np.sin(minor_angles) * np.ones_like(major_angles)
+    vertices = np.stack([x, y, z], axis=2).reshape(-1, 3)
+    a = np.arange(32 * 16).reshape(32, 16)
+    b = np.roll(a, -1, axis=0)
+    c = np.roll(b, -1, axis=1)
+    d = np.roll(a, -1, axis=1)
+    faces = np.stack([a, b, c, a, c, d], axis=2).reshape(-1, 3)
+    return jp.array(scale * vertices, jp.float32), jp.array(faces)
 
 
 def build_torus_points(scale):
