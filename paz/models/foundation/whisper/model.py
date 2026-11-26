@@ -245,7 +245,21 @@ def load_variant_weights(model, variant_name, model_kind, models_path=None):
 def resolve_weights_path(variant_name, model_kind, models_path):
     filename = "{}.weights.h5".format(model_kind)
     if models_path is not None:
-        return Path(models_path) / variant_name / filename
+        path = Path(models_path) / variant_name / filename
+    else:
+        path = download_weights(variant_name, filename)
+    return path
+
+
+def download_weights(variant_name, filename):
+    sizes = ("tiny", "base", "small", "medium")
+    hosted_variants = ["whisper_{}_en".format(size) for size in sizes]
+    if variant_name not in hosted_variants:
+        hosted = ", ".join(hosted_variants)
+        message = "Pretrained weights for '{}' are not hosted yet. "
+        message += "Hosted variants: {}. "
+        message += "Pass locally converted weights through `models_path`."
+        raise ValueError(message.format(variant_name, hosted))
     asset = "{}_{}".format(variant_name, filename)
     url = WHISPER_WEIGHTS_URL + asset
     return Path(get_file(asset, url, cache_subdir="paz/models/whisper"))
