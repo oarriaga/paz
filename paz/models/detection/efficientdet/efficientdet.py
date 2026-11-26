@@ -66,6 +66,10 @@ def EFFICIENTDET(
     if (base_weights, head_weights) not in valid:
         message = "Valid (base_weights, head_weights) are: %s" % valid
         raise NotImplementedError(message)
+    is_VOC = (base_weights, head_weights) == ("VOC", "VOC")
+    if is_VOC and (model_name != "efficientdet-d0"):
+        message = "VOC weights are only available for EfficientDet-D0"
+        raise NotImplementedError(message)
 
     branches, middles, skips = EfficientNet_to_BiFPN(EfficientNet, FPN_num_filters)
     for _ in range(FPN_cell_repeats):

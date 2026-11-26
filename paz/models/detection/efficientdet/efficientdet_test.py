@@ -1308,6 +1308,16 @@ def test_EFFICIENTDETD0_save_and_load(tmp_path):
     assert np.allclose(output, loaded_output, atol=1e-6)
 
 
+def test_VOC_weights_rejected_for_EFFICIENTDETD1(monkeypatch):
+    def fail_download(*args, **kwargs):
+        pytest.fail("get_file should not be called")
+
+    module = "paz.models.detection.efficientdet.efficientdet.get_file"
+    monkeypatch.setattr(module, fail_download)
+    with pytest.raises(NotImplementedError, match="EfficientDet-D0"):
+        EFFICIENTDETD1(21, "VOC", "VOC")
+
+
 def test_get_drop_connect_config():
     layer = GetDropConnect(survival_rate=0.8)
     restored = GetDropConnect.from_config(layer.get_config())
