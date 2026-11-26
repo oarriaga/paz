@@ -1,12 +1,18 @@
 import os
+import h5py
+import numpy as np
 import pytest
 from keras.models import Model
 from paz.models.detection.single_shot_detector.ssd300 import SSD300
 
 
 def skip_if_missing(filename):
-    path = os.path.expanduser("~/.keras/paz/models/" + filename)
+    path = get_weights_path(filename)
     return pytest.mark.skipif(not os.path.exists(path), reason="not cached")
+
+
+def get_weights_path(filename):
+    return os.path.expanduser("~/.keras/paz/models/" + filename)
 
 
 @skip_if_missing("SSD300-VOC-VOC_weights.hdf5")
@@ -121,3 +127,14 @@ def test_SSD30_None_FAT():
     """Test SSD300 with FAT-None weights."""
     with pytest.raises(NotImplementedError):
         SSD300(num_classes=2, base_weights="FAT", head_weights=None)
+
+
+@skip_if_missing("SSD300-VOC-None_weights.hdf5")
+def test_SSD300_VOC_None_loads_extra_layers_on_every_build():
+    names = ["conv2d", "conv2d_1", "conv2d_2", "conv2d_3"]
+    with h5py.File(get_weights_path("SSD300-VOC-None_weights.hdf5")) as file:
+        kernels = [file[name][name + "/kernel:0"][()] for name in names]
+    for _ in range(2):
+        model = SSD300(21, "VOC", None)
+        for name, kernel in zip(names, kernels):
+            assert np.allclose(model.get_layer(name).kernel, kernel)
