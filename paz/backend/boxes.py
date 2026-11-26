@@ -21,6 +21,17 @@ def merge(coordinate_0, coordinate_1, coordinate_2, coordinate_3):
 
 
 def compute_areas(boxes, keepdims=True):
+    """Computes the area of each box.
+
+    # Arguments
+    - `boxes`: Array of shape `(num_boxes, 4)` in corner form
+      `[x_min, y_min, x_max, y_max]`.
+    - `keepdims`: Boolean. If `True` the result keeps the last axis.
+
+    # Returns
+    Array of shape `(num_boxes, 1)` if `keepdims` is `True`, otherwise
+    `(num_boxes,)`.
+    """
     x_min, y_min, x_max, y_max = split(boxes, keepdims=keepdims)
     W = x_max - x_min
     H = y_max - y_min
@@ -38,11 +49,14 @@ def build_invalid(shape=(1, 4), value=-1):
 def square(boxes):
     """Makes boxes square with sides equal to the longest original side.
 
+    The shorter side is extended around the box center.
+
     # Arguments
-        box: Numpy array with shape `(4)` with point corner coordinates.
+    - `boxes`: Array of shape `(num_boxes, 4)` in corner form
+      `[x_min, y_min, x_max, y_max]`.
 
     # Returns
-        returns: List of box coordinates ints.
+    Integer array of shape `(num_boxes, 4)` in corner form.
     """
     x_min, y_min, x_max, y_max = split(boxes)
     center_x = (x_max + x_min) / 2.0
@@ -114,20 +128,34 @@ def to_corner_form(boxes):
 
 
 def pad_batch(ragged_boxes, size, value=-1):
-    """Pad boxes array to specified size with value.
+    """Pads each array of boxes to a fixed number of rows.
 
-    # Arguments:
-        boxes (list): List of lists containing `(num_boxes, 4)` box coordinates.
-        size (int): target size for padding.
-        value (int): Value to pad with.
+    # Arguments
+    - `ragged_boxes`: List of arrays of shape `(num_boxes, 4)`, where
+      `num_boxes` can differ between arrays.
+    - `size`: Integer. Number of rows of each padded array.
+    - `value`: Value of the padded rows.
 
-    # Returns:
-        Padded boxes with shape `(size, 4)`.
+    # Returns
+    Array of shape `(len(ragged_boxes), size, 4)`.
     """
     return jp.array([pad(box, size, value) for box in ragged_boxes])
 
 
 def pad(image_boxes, size, value=-1):
+    """Pads an array of boxes to a fixed number of rows.
+
+    Boxes beyond the first `size` rows are dropped.
+
+    # Arguments
+    - `image_boxes`: Array of shape `(num_boxes, 4)`.
+    - `size`: Integer. Number of rows of the output.
+    - `value`: Value of the padded rows.
+
+    # Returns
+    Array of shape `(size, 4)`. Rows after the last box are filled with
+    `value`, by default -1.
+    """
     image_boxes = image_boxes[:size]
     padding = ((0, size - len(image_boxes)), (0, 0))
     return jp.pad(image_boxes, padding, "constant", constant_values=value)
@@ -175,13 +203,12 @@ def compute_IOU(box_A, boxes_B):
     """Computes intersection over union between `box_A` and `boxes_B`.
 
     # Arguments
-        box_A: JAX Numpy array with shape `(4,)` representing a single box
-            in corner form (x_min, y_min, x_max, y_max).
-        boxes_B: JAX Numpy array with shape `(num_boxes_b, 4)` representing
-            multiple boxes in corner form.
+    - `box_A`: Array of shape `(4,)` in corner form
+      `[x_min, y_min, x_max, y_max]`.
+    - `boxes_B`: Array of shape `(num_boxes_B, 4)` in corner form.
 
     # Returns
-        JAX Numpy array of shape `(num_boxes_b,)` containing IoUs.
+    Array of shape `(num_boxes_B,)` with values in `[0, 1]`.
     """
     xy_min_inter = jp.maximum(box_A[0:2], boxes_B[:, 0:2])
     xy_max_inter = jp.minimum(box_A[2:4], boxes_B[:, 2:4])
@@ -245,11 +272,11 @@ def compute_generalized_IOUs(boxes_A, boxes_B):
     covers, so values run from -1 to 1.
 
     # Arguments
-        boxes_A: Array with shape `(num_boxes_A, 4)` in corner form.
-        boxes_B: Array with shape `(num_boxes_B, 4)` in corner form.
+    - `boxes_A`: Array of shape `(num_boxes_A, 4)` in corner form.
+    - `boxes_B`: Array of shape `(num_boxes_B, 4)` in corner form.
 
     # Returns
-        Array of shape `(num_boxes_A, num_boxes_B)`.
+    Array of shape `(num_boxes_A, num_boxes_B)`.
     """
     xy_min = jp.minimum(boxes_A[:, None, 0:2], boxes_B[:, 0:2])
     xy_max = jp.maximum(boxes_A[:, None, 2:4], boxes_B[:, 2:4])
@@ -275,13 +302,15 @@ def xywh_to_xyxy(boxes):
 
 
 def flip_left_right(boxes, W):
-    """Flips box coordinates from left-to-right and vice-versa.
+    """Flips boxes left and right inside an image of width `W`.
 
     # Arguments
-        boxes: Numpy array of shape `(num_boxes, 4)`.
+    - `boxes`: Array of shape `(num_boxes, 4)` in corner form
+      `[x_min, y_min, x_max, y_max]`.
+    - `W`: Image width in the same units as the box coordinates.
 
     # Returns
-        Numpy array of shape `(num_boxes, 4)`.
+    Array of shape `(num_boxes, 4)` in corner form.
     """
     x_min, y_min, x_max, y_max = split(boxes)
     return merge(W - x_max, y_min, W - x_min, y_max)
@@ -334,7 +363,17 @@ def normalize(boxes, H, W):
 
 
 def scale(boxes, scale_W, scale_H):
-    """Scales the width and height of a bounding box (xywh format)."""
+    """Scales the width and height of boxes around their centers.
+
+    # Arguments
+    - `boxes`: Array of shape `(num_boxes, 4)` in corner form
+      `[x_min, y_min, x_max, y_max]`.
+    - `scale_W`: Factor that multiplies the width of each box.
+    - `scale_H`: Factor that multiplies the height of each box.
+
+    # Returns
+    Array of shape `(num_boxes, 4)` in corner form.
+    """
     x_center, y_center, W, H = split(to_center_form(boxes))
     new_W = scale_W * W
     new_H = scale_H * H
@@ -352,7 +391,18 @@ def translate(boxes, x_offset, y_offset):
 
 
 def clip(boxes, H, W):
-    """Clips bounding box coordinates to image boundaries."""
+    """Clips box coordinates to the image boundaries.
+
+    # Arguments
+    - `boxes`: Array of shape `(num_boxes, 4)` in corner form
+      `[x_min, y_min, x_max, y_max]` in pixel coordinates.
+    - `H`: Image height in pixels.
+    - `W`: Image width in pixels.
+
+    # Returns
+    Array of shape `(num_boxes, 4)` with x coordinates in `[0, W - 1]` and
+    y coordinates in `[0, H - 1]`.
+    """
     x_min, y_min, x_max, y_max = split(boxes)
     x_min_clipped = jp.clip(x_min, 0, W - 1)
     y_min_clipped = jp.clip(y_min, 0, H - 1)
@@ -493,6 +543,17 @@ def match(boxes, prior_boxes, IOU_threshold=0.5):
 
 
 def remove_invalid(boxes, value=-1):
+    """Removes the boxes that have a negative coordinate.
+
+    This drops the rows added by `pad` with its default value -1.
+
+    # Arguments
+    - `boxes`: Array of shape `(num_boxes, 4)`.
+    - `value`: Not used.
+
+    # Returns
+    Array of shape `(num_valid_boxes, 4)`.
+    """
     # is_invalid_row_mask = jp.all(boxes == value, axis=1)
     is_invalid_row_mask = jp.any(boxes < 0.0, axis=1)
     is_valid_row_mask = jp.logical_not(is_invalid_row_mask)

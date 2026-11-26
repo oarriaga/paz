@@ -102,7 +102,21 @@ def pad(detections, size, mode="constant", constant_value=-1):
 
 
 def encode(matched, priors, variances=[0.1, 0.1, 0.2, 0.2], epislon=1e-8):
-    """Encode matched bounding boxes relative to prior boxes."""
+    """Encodes matched boxes as offsets relative to prior boxes.
+
+    # Arguments
+    - `matched`: Array of shape `(num_priors, 4 + num_columns)` with boxes
+      in corner form followed by the class columns.
+    - `priors`: Array of shape `(num_priors, 4)` in center form
+      `[center_x, center_y, W, H]`.
+    - `variances`: List of four floats that divide the encoded
+      `center_x`, `center_y`, `W` and `H`.
+    - `epislon`: Float added to the size ratios before the logarithm.
+
+    # Returns
+    Array of shape `(num_priors, 4 + num_columns)` with the encoded boxes
+    followed by the unchanged class columns.
+    """
 
     def encode_centers(boxes_center, priors, variances):
         """Encode center coordinates using priors and variances."""
@@ -133,7 +147,20 @@ def encode(matched, priors, variances=[0.1, 0.1, 0.2, 0.2], epislon=1e-8):
 
 
 def decode(predictions, priors, variances=[0.1, 0.1, 0.2, 0.2]):
-    """Decode predicted box parameters to actual coordinates."""
+    """Decodes predicted box offsets into boxes in corner form.
+
+    # Arguments
+    - `predictions`: Array of shape `(num_priors, 4 + num_columns)` with
+      encoded boxes followed by the class columns.
+    - `priors`: Array of shape `(num_priors, 4)` in center form
+      `[center_x, center_y, W, H]`.
+    - `variances`: List of four floats used in `encode`.
+
+    # Returns
+    Array of shape `(num_priors, 4 + num_columns)` with boxes in corner
+    form `[x_min, y_min, x_max, y_max]` followed by the unchanged class
+    columns.
+    """
 
     def decode_center_form_boxes(predictions, priors, variances):
         """Compute center-form boxes from predictions."""
@@ -225,6 +252,18 @@ def denormalize(detections, H, W):
 
 
 def clip(detections, H, W):
+    """Clips the box coordinates of detections to the image boundaries.
+
+    # Arguments
+    - `detections`: Array of shape `(num_detections, 4 + num_columns)` with
+      boxes in corner form in pixel coordinates in the first four columns.
+    - `H`: Image height in pixels.
+    - `W`: Image width in pixels.
+
+    # Returns
+    Array with the same shape with x coordinates in `[0, W - 1]` and y
+    coordinates in `[0, H - 1]`. The remaining columns are unchanged.
+    """
     boxes, scores = split(detections)
     boxes = paz.boxes.clip(boxes, H, W)
     return merge(boxes, scores)
@@ -265,6 +304,22 @@ def to_boxes2D(detections):
 
 
 def apply_NMS(detections, iou_thresh, top_k):
+    """Applies non-maximum suppression to scored boxes.
+
+    The `top_k` detections with the highest score are selected. A detection
+    is suppressed if its IOU with a kept detection of higher score is above
+    `iou_thresh`, or if its score is below 0.01.
+
+    # Arguments
+    - `detections`: Array of shape `(num_boxes, 5)` with rows
+      `[x_min, y_min, x_max, y_max, score]`.
+    - `iou_thresh`: Float. IOU above which a box is suppressed.
+    - `top_k`: Integer. Number of detections selected before suppression.
+
+    # Returns
+    Array of shape `(min(top_k, num_boxes), 5)` sorted by decreasing score.
+    The rows of suppressed detections are filled with -1.
+    """
     detections = paz.detection.select_top_k(detections, top_k)
     top_k_boxes = paz.detection.get_boxes(detections)
     top_k_boxes_args = jp.arange(len(top_k_boxes))
@@ -310,6 +365,24 @@ def apply_NMS(detections, iou_thresh, top_k):
 
 
 def apply_per_class_NMS(detections, num_classes, iou_thresh=0.45, top_k=200):
+    """Applies non-maximum suppression to each class separately.
+
+    For each class the `top_k` boxes with the highest score of that class
+    are selected. A box is suppressed if its IOU with a kept box of higher
+    score is above `iou_thresh`, or if its score is below 0.01.
+
+    # Arguments
+    - `detections`: Array of shape `(num_boxes, 4 + num_classes)` with boxes
+      in corner form followed by one score per class.
+    - `num_classes`: Integer. Number of classes.
+    - `iou_thresh`: Float. IOU above which a box is suppressed.
+    - `top_k`: Integer. Number of boxes selected per class.
+
+    # Returns
+    Array of shape `(num_classes * min(top_k, num_boxes), 6)` with rows
+    `[x_min, y_min, x_max, y_max, score, class_arg]`. The first five
+    columns of suppressed rows are filled with -1.
+    """
 
     def apply_NMS(detections, class_arg):
         class_detections = paz.detection.to_score(detections, class_arg)
@@ -461,6 +534,26 @@ def original_match(boxes_with_class_arg, prior_boxes, IOU_threshold=0.5):
 
 
 def match(boxes_with_class_arg, prior_boxes, IOU_threshold=0.5):
+    """Assigns a ground truth box to each prior box.
+
+    Each prior box gets the ground truth box with which it has the highest
+    IOU, and each ground truth box is assigned to its best prior box. Prior
+    boxes whose IOU is below `IOU_threshold` get the class argument 0.
+    Ground truth rows with a negative `x_min`, such as -1 padding rows, are
+    not assigned to their best prior box.
+
+    # Arguments
+    - `boxes_with_class_arg`: Array of shape `(num_boxes, 5)` with rows
+      `[x_min, y_min, x_max, y_max, class_arg]`.
+    - `prior_boxes`: Array of shape `(num_priors, 4)` in center form
+      `[center_x, center_y, W, H]`.
+    - `IOU_threshold`: Float. IOU below which a prior box is labeled with
+      the class argument 0.
+
+    # Returns
+    Array of shape `(num_priors, 5)` with boxes in corner form followed by
+    the class argument.
+    """
     prior_boxes = paz.boxes.to_corner_form(prior_boxes)
     IOUs = paz.boxes.compute_IOUs(boxes_with_class_arg, prior_boxes)
     per_prior_best_box = jp.argmax(IOUs, axis=0)
