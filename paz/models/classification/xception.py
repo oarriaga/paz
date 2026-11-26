@@ -139,17 +139,13 @@ def MiniXception(
     # base
     img_input = Input(input_shape)
     if preprocess is None:
-        x = Conv2D(
-            5,
-            (3, 3),
-            strides=(1, 1),
-            kernel_regularizer=regularization,
-            use_bias=False,
-        )(img_input)
+        x = img_input
     elif preprocess == "rescale":
         x = Rescaling(scale=1 / 127.5, offset=-1)(img_input)
     else:
-        raise ValueError("Preprocess must be None 'rescale' or 'normalize'")
+        raise ValueError("Preprocess must be None or 'rescale'")
+    stem = dict(kernel_regularizer=regularization, use_bias=False)
+    x = Conv2D(5, (3, 3), **stem)(x)
     x = BatchNormalization()(x)
     x = Activation("relu")(x)
     x = Conv2D(
