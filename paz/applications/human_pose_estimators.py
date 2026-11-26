@@ -78,12 +78,13 @@ def get_upper_multiple(value, multiple):
 
 def compute_transform_scale(image, size, factor):
     height, width = image.shape[:2]
-    height_resized, width_resized = size
+    width_resized, height_resized = size
     if height < width:
-        height_resized, width_resized = width_resized, height_resized
-    height, width = np.sort([height, width])
-    scale_height = height / factor
-    scale_width = (width_resized / height_resized) * scale_height
+        scale_height = height / factor
+        scale_width = (width_resized / height_resized) * scale_height
+    else:
+        scale_width = width / factor
+        scale_height = (height_resized / width_resized) * scale_width
     return np.array([scale_width, scale_height])
 
 
