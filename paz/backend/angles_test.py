@@ -3,6 +3,7 @@ import os
 os.environ.setdefault("KERAS_BACKEND", "jax")
 
 import numpy as np
+from scipy.spatial.transform import Rotation
 
 from paz.backend import angles
 from paz.datasets.hands import MPIIHandJoints
@@ -30,6 +31,24 @@ def test_compact_axis_angle_recovers_z_rotation():
     matrix = angles.quaternion_to_rotation_matrix(z_rotation_quaternion(theta))
     axis_angle = angles.rotation_matrix_to_compact_axis_angle(matrix)
     assert np.allclose(axis_angle, [0.0, 0.0, theta], atol=1e-6)
+
+
+def test_compact_axis_angle_is_zero_at_identity():
+    axis_angle = angles.rotation_matrix_to_compact_axis_angle(np.eye(3))
+    assert np.array_equal(axis_angle, np.zeros(3))
+
+
+def test_compact_axis_angle_is_finite_when_trace_exceeds_three():
+    rotation = np.eye(3) * (1.0 + 1e-12)
+    axis_angle = angles.rotation_matrix_to_compact_axis_angle(rotation)
+    assert np.array_equal(axis_angle, np.zeros(3))
+
+
+def test_compact_axis_angle_matches_scipy_rotation_vector():
+    rotation_vector = np.array([0.2, -0.4, 0.7])
+    rotation = Rotation.from_rotvec(rotation_vector).as_matrix()
+    axis_angle = angles.rotation_matrix_to_compact_axis_angle(rotation)
+    assert np.allclose(axis_angle, rotation_vector)
 
 
 def test_to_affine_matrix_structure():
