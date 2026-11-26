@@ -1,4 +1,7 @@
+import os
+import h5py
 import pytest
+from keras.layers import Conv2D, SeparableConv2D
 from keras.layers import Input, Flatten
 from keras.models import Model
 import numpy as np
@@ -1268,3 +1271,26 @@ def test_efficientdet_rejects_unsupported_weights():
     for base_weights, head_weights in unsupported:
         with pytest.raises(NotImplementedError, match="Valid"):
             EFFICIENTDETD0(21, base_weights, head_weights)
+
+
+def get_first_kernel(model, layer_type):
+    layers = [layer for layer in model.layers if isinstance(layer, layer_type)]
+    return np.array(layers[0].weights[0])
+
+
+def test_EFFICIENTDETD0_COCO_None_loads_base_weights():
+    filename = "efficientdet-d0-COCO-None_weights.hdf5"
+    path = os.path.expanduser("~/.keras/paz/models/" + filename)
+    if not os.path.exists(path):
+        pytest.skip("weights not cached")
+    stem = "efficientnet-b0/stem/conv2d"
+    node = "fpn_cells/cell_0/fnode0/op_after_combine5/conv"
+    with h5py.File(path) as file:
+        stem_kernel = file[stem][stem + "/kernel:0"][()]
+        node_kernel = file[node][node + "/depthwise_kernel:0"][()]
+    untrained = EFFICIENTDETD0(5, None, None)
+    model = EFFICIENTDETD0(5, "COCO", None)
+    assert model.output_shape == (None, 49104, 9)
+    assert np.allclose(get_first_kernel(model, Conv2D), stem_kernel)
+    assert np.allclose(get_first_kernel(model, SeparableConv2D), node_kernel)
+    assert not np.allclose(get_first_kernel(untrained, Conv2D), stem_kernel)

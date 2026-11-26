@@ -105,18 +105,15 @@ def EFFICIENTDET(
             model_filename, WEIGHT_PATH + model_filename, cache_subdir="paz/models"
         )
         print("Loading %s model weights" % weights_path)
-        finetunning_model_names = [
-            "efficientdet-d0-COCO-None_weights.hdf5",
-            "efficientdet-d1-COCO-None_weights.hdf5",
-            "efficientdet-d2-COCO-None_weights.hdf5",
-            "efficientdet-d3-COCO-None_weights.hdf5",
-            "efficientdet-d4-COCO-None_weights.hdf5",
-            "efficientdet-d5-COCO-None_weights.hdf5",
-            "efficientdet-d6-COCO-None_weights.hdf5",
-            "efficientdet-d7-COCO-None_weights.hdf5",
-        ]
-        by_name = True if model_filename in finetunning_model_names else False
-        model.load_weights(weights_path, by_name=by_name)
+        if head_weights is None:
+            # The file stores an untrained 21 class head, and loading by
+            # position needs a model with it. The base layers are shared.
+            args = (num_dims, aspect_ratios, num_scales, FPN_num_filters)
+            args = (*args, box_class_repeats, survival_rate)
+            stored_head = build_detector_head(middles, 21, *args)
+            Model(image, stored_head).load_weights(weights_path)
+        else:
+            model.load_weights(weights_path)
 
     image_shape = list(image.shape[1:3])
     model.prior_boxes = build_anchors(
