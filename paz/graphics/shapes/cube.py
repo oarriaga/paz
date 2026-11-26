@@ -31,11 +31,11 @@ def intersect_canonical_cube(ray_origins, ray_directions):
     depth_min = jp.maximum(x_depth_min, jp.maximum(y_depth_min, z_depth_min))
     depth_max = jp.minimum(x_depth_max, jp.minimum(y_depth_max, z_depth_max))
 
-    hit_mask = jp.logical_and((depth_min > EPSILON), (depth_min < FARAWAY))
+    depth = jp.where(depth_min > EPSILON, depth_min, depth_max)
+    hit_mask = jp.logical_and((depth > EPSILON), (depth < FARAWAY))
     max_bigger_than_min = depth_max > depth_min
     hit_mask = jp.logical_and(hit_mask, max_bigger_than_min)
 
-    depth = depth_min
     hit_mask = jp.squeeze(hit_mask, 1)
 
     depth = jp.squeeze(depth, axis=1)
