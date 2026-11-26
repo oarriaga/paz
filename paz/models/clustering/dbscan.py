@@ -53,7 +53,7 @@ def propagate_labels_one_step(labels, adjacency):
     return jnp.minimum(labels, min_neighbor_label)
 
 
-def find_connected_components(adjacency, max_iterations=100):
+def find_connected_components(adjacency):
     """Find connected components using iterative label propagation."""
     n_points = adjacency.shape[0]
 
@@ -61,7 +61,7 @@ def find_connected_components(adjacency, max_iterations=100):
     labels = jnp.arange(n_points)
 
     # Iterate until convergence
-    for _ in range(max_iterations):
+    for _ in range(n_points):
         new_labels = propagate_labels_one_step(labels, adjacency)
         if jnp.all(new_labels == labels):
             break
