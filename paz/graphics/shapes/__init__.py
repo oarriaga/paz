@@ -111,8 +111,8 @@ def intersect(shape, ray_origins, ray_directions):
     world_normals = paz.algebra.normalize(world_normals)
     # postprocess normals
     eyes = compute_eyes(ray_directions)
-    world_normals = invert_inside_normals(eyes, world_normals)
-    return hit_mask, depth, world_points, world_normals, eyes
+    world_normals, is_inside = invert_inside_normals(eyes, world_normals)
+    return hit_mask, depth, world_points, world_normals, eyes, is_inside
 
 
 def intersect_all(shape, ray_origins, ray_directions):
@@ -126,7 +126,7 @@ def intersect_all(shape, ray_origins, ray_directions):
     world_normals = transform_points(world_to_shape.T, shape_normals)
     world_normals = paz.algebra.normalize(world_normals)
     eyes = compute_eyes(ray_directions)
-    world_normals = invert_inside_normals(eyes, world_normals)
+    world_normals, _ = invert_inside_normals(eyes, world_normals)
     return hit_mask, depths, world_points, world_normals, eyes
 
 
@@ -136,10 +136,9 @@ def compute_eyes(ray_directions):
 
 
 def invert_inside_normals(eyes, normals):
-    inside_mask = paz.algebra.dot(normals, eyes) < 0
-    inside_mask = jp.expand_dims(inside_mask, 1)
-    normals = jp.where(inside_mask, -normals, normals)
-    return normals
+    is_inside = paz.algebra.dot(normals, eyes) < 0
+    normals = jp.where(jp.expand_dims(is_inside, 1), -normals, normals)
+    return normals, is_inside
 
 
 def group_by_pattern_size(shapes_list):

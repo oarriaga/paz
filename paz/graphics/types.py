@@ -14,7 +14,7 @@ from paz.graphics.constants import (
     CYLINDRICAL_PATTERN,
 )
 
-HIT_NAMES = "hit_mask depth point normal eye primitive_index"
+HIT_NAMES = "hit_mask depth point normal eye is_inside primitive_index"
 Hit = namedtuple("Hit", HIT_NAMES.split())
 
 Surfaces = namedtuple("Surfaces", ["points", "normals", "eyes"])

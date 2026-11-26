@@ -20,28 +20,30 @@ def build_candidates(compiled, rays, triangle_hit):
     if triangle_hit is not None:
         rows.append(build_triangle_row(triangle_hit))
     joined = tuple(jp.concatenate(fields, axis=0) for fields in zip(*rows))
-    hit_masks, depths, points, normals, eyes = joined
-    return hit_masks, depths, Surfaces(points, normals, eyes)
+    hit_masks, depths, points, normals, eyes, is_inside = joined
+    return hit_masks, depths, Surfaces(points, normals, eyes), is_inside
 
 
 def intersect_shapes(shapes, rays, mask):
     merged = paz.graphics.shapes.field_merge(shapes, ["transform", "type"])
     intersect_fun = paz.lock(paz.graphics.shapes.intersect, *rays)
-    hit_masks, depths, points, normals, eyes = jax.vmap(intersect_fun)(merged)
+    hit_masks, *fields = jax.vmap(intersect_fun)(merged)
     hit_masks = jp.where(jp.expand_dims(mask, 1), hit_masks, False)
-    return hit_masks, depths, points, normals, eyes
+    return hit_masks, *fields
 
 
 def build_triangle_row(triangle_hit):
     depth = jp.expand_dims(triangle_hit.depth, -1)
+    normals, eyes = triangle_hit.normals, triangle_hit.eyes
+    is_inside = paz.algebra.dot(normals, eyes) < 0.0
     fields = triangle_hit.hit_mask, depth, triangle_hit.points
-    fields += triangle_hit.normals, triangle_hit.eyes
+    fields += normals, eyes, is_inside
     return tuple(jp.expand_dims(field, 0) for field in fields)
 
 
-def find_closest(hit_masks, depths, surfaces):
+def find_closest(hit_masks, depths, surfaces, is_inside):
     indices = find_closest_intersection_args(hit_masks, depths)
-    fields = hit_masks, depths, *surfaces
+    fields = hit_masks, depths, *surfaces, is_inside
     closest = tuple(take_closest(field, indices) for field in fields)
     return paz.graphics.Hit(*closest, indices)
 

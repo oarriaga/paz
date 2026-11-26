@@ -81,6 +81,6 @@ def test_inside_hit_normal_faces_ray_origin():
     origins = jp.array([[0.0, 0.0, 0.0]])
     directions = jp.array([[0.0, 0.0, -1.0]])
     args = paz.graphics.Cube(), origins, directions
-    hit_mask, _, _, normals, _ = paz.graphics.shapes.intersect(*args)
+    hit_mask, _, _, normals, _, _ = paz.graphics.shapes.intersect(*args)
     assert hit_mask[0]
     assert jp.allclose(normals[0], jp.array([0.0, 0.0, 1.0]), atol=1e-4)

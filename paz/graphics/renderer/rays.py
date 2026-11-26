@@ -24,8 +24,8 @@ def bounce(state, step_arg, compiled, shadows, face_chunk):
     hit_args = compiled, state.rays, face_chunk
     triangle_hit = intersect.compute_triangle_hit(*hit_args)
     candidates = intersect.build_candidates(compiled, state.rays, triangle_hit)
-    hit_masks, depths, surfaces = candidates
-    closest = intersect.find_closest(hit_masks, depths, surfaces)
+    _, _, surfaces, _ = candidates
+    closest = intersect.find_closest(*candidates)
     state = update_first_hit(state, closest, step_arg)
     state = update_active_mask(state, closest)
     color_args = compiled, closest, surfaces, shadows, triangle_hit

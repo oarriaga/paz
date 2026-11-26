@@ -6,7 +6,7 @@ BOUNCE_ORIGIN_EPSILON = 1e-2
 
 
 def compute_bounce(directions, closest, refractive_index, material):
-    args = directions, closest.normal, refractive_index
+    args = directions, closest, refractive_index
     terms = compute_refraction_terms(*args, material.refractive_indices)
     normal, eye, n_1, n_2, n_ratio = terms
     reflectance = compute_reflectance(normal, eye, n_1, n_2)
@@ -14,17 +14,17 @@ def compute_bounce(directions, closest, refractive_index, material):
     return compute_new_rays(*ray_args), n_2, reflectance
 
 
-def compute_refraction_terms(directions, normal, n_1, refractive_indices):
+def compute_refraction_terms(directions, closest, n_1, refractive_indices):
     eye = -directions
-    normal, is_inside = flip_normal_if_inside(eye, normal)
-    # TODO why 1.0 hardcoded
-    n_2 = jp.where(is_inside, 1.0, refractive_indices)
+    normal = flip_normal_to_eye(eye, closest.normal)
+    # A ray leaving a surface enters air: nested media are not tracked.
+    n_2 = jp.where(closest.is_inside, 1.0, refractive_indices)
     return normal, eye, n_1, n_2, n_1 / n_2
 
 
-def flip_normal_if_inside(eye, normal):
-    is_inside = jp.sum(normal * eye, axis=-1) < 0.0
-    return jp.where(jp.expand_dims(is_inside, -1), -normal, normal), is_inside
+def flip_normal_to_eye(eye, normal):
+    is_back_facing = jp.sum(normal * eye, axis=-1) < 0.0
+    return jp.where(jp.expand_dims(is_back_facing, -1), -normal, normal)
 
 
 def compute_reflectance(normal, eye, n_1, n_2):

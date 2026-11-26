@@ -93,7 +93,7 @@ def test_rotated_intersection_keeps_wall_normal():
         ray_direction = jp.array([[-1.0, 0.0, 0.0]])
         args = shape, ray_origin, ray_direction
         intersection = paz.graphics.shapes.intersect(*args)
-        hit_mask, _, hit_point, world_normals, _ = intersection
+        hit_mask, _, hit_point, world_normals, _, _ = intersection
         assert hit_mask[0]
         assert jp.allclose(hit_point, world_point, atol=1e-5)
         assert world_normals[0, 0] > 0.95
@@ -116,7 +116,7 @@ def test_rotated_oblique_cap_hit_keeps_cap_normal():
         ray_direction = rays[1][6456:6457]
         args = shape, ray_origin, ray_direction
         intersection = paz.graphics.shapes.intersect(*args)
-        hit_mask, _, hit_point, world_normals, _ = intersection
+        hit_mask, _, hit_point, world_normals, _, _ = intersection
         inverse_transpose = jp.linalg.inv(transform).T
         cap_normal = jp.array([[0.0, 1.0, 0.0]])
         expected = paz.algebra.transform_points(inverse_transpose, cap_normal)
