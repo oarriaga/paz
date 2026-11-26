@@ -359,10 +359,11 @@ def DetectMiniXception(classify, names, box_scale, draw):
 
     def call(image):
         boxes = paz.detection.get_boxes(detect(image))
+        boxes = paz.boxes.remove_invalid(boxes)
         boxes = paz.boxes.square(boxes)
         boxes = paz.boxes.scale(boxes, box_scale, box_scale)
+        boxes = paz.boxes.clip(boxes, *paz.image.get_size(image))
         boxes = paz.cast(boxes, "int32")
-        boxes = paz.boxes.remove_invalid(boxes)
         scores, labels = [], []
         for box in boxes:
             score = classify(paz.image.crop(image, box))

@@ -126,10 +126,11 @@ def HeadPoseKeypointNet2D32(camera, box_scale=1.2, draw=None):
 
     def call(image):
         boxes = paz.detection.get_boxes(detect(image))
+        boxes = paz.boxes.remove_invalid(boxes)
         boxes = paz.boxes.square(boxes)
         boxes = paz.boxes.scale(boxes, box_scale, box_scale)
+        boxes = paz.boxes.clip(boxes, *paz.image.get_size(image))
         boxes = paz.cast(boxes, "int32")
-        boxes = paz.boxes.remove_invalid(boxes)
         poses6D = []
         for box in boxes:
             keypoints = estimate_keypoints(paz.image.crop(image, box))

@@ -2,6 +2,7 @@ import jax.numpy as jp
 import numpy as np
 
 import paz
+from paz.applications.detectors import DetectMiniXception
 from paz.applications.detectors import EfficientDet
 
 
@@ -31,3 +32,23 @@ def test_EfficientDet_keeps_boxes_cut_by_image_border():
     assert sorted(labels.tolist()) == [0, 1, 2]
     assert boxes.min() >= 0
     assert boxes.max() <= 511
+
+
+def build_fake_face_detector(draw):
+    """Detects one face next to the left border, padded like Haar cascades."""
+    detections = jp.array([[8, 21, 142, 155, 0], [-1, -1, -1, -1, 0]])
+    return lambda image: detections
+
+
+def classify_as_second_class(image):
+    return jp.array([0.1, 0.9])
+
+
+def test_DetectMiniXception_keeps_face_at_image_border(monkeypatch):
+    name = "HaarCascadeFrontalFaceDetector"
+    monkeypatch.setattr(paz.models, name, build_fake_face_detector)
+    args = (classify_as_second_class, ["a", "b"], 1.2, False)
+    detect = DetectMiniXception(*args)
+    boxes, labels, scores = detect(np.zeros((180, 200, 3), "uint8"))
+    assert boxes.tolist() == [[0, 7, 155, 168]]
+    assert labels.tolist() == [1]
