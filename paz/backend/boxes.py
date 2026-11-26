@@ -304,7 +304,8 @@ def sample(key, H, W, H_min_scale=0.3, W_min_scale=0.3, num_boxes=15):
 
 
 def sample_negatives(key, boxes, H, W, box_size, num_boxes, num_trials):
-    negative_boxes = paz.boxes.sample(key, H, W, box_size, num_trials)
+    args = (key, H, W, box_size, box_size, num_trials)
+    negative_boxes = paz.boxes.sample(*args)
     ious = compute_IOUs(negative_boxes, boxes)
     mean_ious = jp.mean(ious, axis=1)
     # best_args = jp.argsort(mean_ious)[::-1]
