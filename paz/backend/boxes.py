@@ -273,7 +273,7 @@ def flip_left_right(boxes, W):
         Numpy array of shape `(num_boxes, 4)`.
     """
     x_min, y_min, x_max, y_max = split(boxes)
-    return merge(x_max, y_min, x_min, y_max)
+    return merge(W - x_max, y_min, W - x_min, y_max)
 
 
 def append_class(boxes, class_arg):

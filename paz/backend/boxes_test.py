@@ -151,11 +151,10 @@ def test_denormalize_box():
     assert jp.array_equal(denorm_box, jp.array(expected))
 
 
-@pytest.mark.skip(reason="changed implementation")
 def test_flip_left_right():
     boxes = jp.array([[10.0, 20.0, 30.0, 40.0]])
     width = 100
-    flipped = flip_left_right(boxes, width)
+    flipped = paz.boxes.flip_left_right(boxes, width)
     expected = jp.array([[70.0, 20.0, 90.0, 40.0]])
     assert jp.allclose(flipped, expected)
 

@@ -1059,3 +1059,12 @@ def test_augment_detection_is_jit_vmap_stable():
     assert out_detections.shape == (6, 8, 5)
     assert bool(jp.all(jp.isfinite(out_images)))
     assert augment._cache_size() == 1
+
+
+def test_random_flip_left_right_keeps_box_on_object():
+    image = jp.zeros((50, 100, 3)).at[20:40, 10:30].set(1.0)
+    detections = jp.array([[10.0, 20.0, 30.0, 40.0, 1.0]])
+    image, flipped = paz.detection.random_flip_left_right(image, detections)
+    assert jp.allclose(flipped, jp.array([[70.0, 20.0, 90.0, 40.0, 1.0]]))
+    assert jp.all(image[20:40, 70:90] == 1.0)
+    assert float(image.sum()) == 20 * 20 * 3
