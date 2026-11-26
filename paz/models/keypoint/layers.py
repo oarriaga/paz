@@ -66,11 +66,11 @@ class ExpectedValue2D(Layer):
 
     def build(self, input_shape):
         self.num_keypoints = input_shape[1]
-        self.feature_map_size = input_shape[2]
+        self.feature_map_size = input_shape[2:4]
         super(ExpectedValue2D, self).build(input_shape)
 
     def call(self, x):
-        range_x, range_y = self.meshgrid(self.feature_map_size)
+        range_x, range_y = self.meshgrid(*self.feature_map_size)
         expected_x = ops.sum(x * range_x, axis=self.axes)
         expected_y = ops.sum(x * range_y, axis=self.axes)
         keypoints_stack = ops.stack([expected_x, expected_y], -1)
@@ -80,8 +80,9 @@ class ExpectedValue2D(Layer):
     def compute_output_shape(self, input_shape):
         return (input_shape[0], self.num_keypoints, 2)
 
-    def meshgrid(self, feature_map_size):
+    def meshgrid(self, H, W):
         """Returns a meshgrid ranging from [-1, 1] in x, y axes."""
-        r = ops.arange(0.5, feature_map_size, 1) / (feature_map_size / 2) - 1
-        range_x, range_y = ops.meshgrid(r, -r)
+        x = ops.arange(0.5, W, 1) / (W / 2) - 1
+        y = ops.arange(0.5, H, 1) / (H / 2) - 1
+        range_x, range_y = ops.meshgrid(x, -y)
         return ops.cast(range_x, "float32"), ops.cast(range_y, "float32")
