@@ -566,3 +566,26 @@ def test_jit_compilation_full(small_image_shape, camera_pose):
 
     image, depth = jitted_render()
     assert image.shape == (small_image_shape[0], small_image_shape[1], 3)
+
+
+def compute_glass_gradients(build_shape, num_bounces):
+    lights = [PointLight(jp.ones(3), jp.array([0.0, 10.0, 5.0]))]
+    floor = Plane(SE3.translation(jp.array([0.0, -1.0, 0.0])))
+    up = jp.array([0.0, 1.0, 0.0])
+
+    def loss(refractive_index, eye):
+        glass = Material(transparency=0.9, refractive_index=refractive_index)
+        scene = Scene([build_shape(jp.eye(4), glass), floor])
+        pose = SE3.view_transform(eye, jp.zeros(3), up)
+        args = (16, 16), pose, scene, lights
+        return jp.mean(render_scene(*args, num_bounces=num_bounces)[0])
+
+    gradient = jax.jit(jax.grad(loss, argnums=(0, 1)))
+    return gradient(1.5, jp.array([0.3, 1.0, 6.0]))
+
+
+@pytest.mark.parametrize("build_shape", [Sphere, Cube])
+@pytest.mark.parametrize("num_bounces", [3, 4])
+def test_glass_gradients_are_finite(build_shape, num_bounces):
+    gradients = compute_glass_gradients(build_shape, num_bounces)
+    assert all(jp.all(jp.isfinite(gradient)) for gradient in gradients)

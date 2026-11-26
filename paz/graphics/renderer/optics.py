@@ -40,7 +40,10 @@ def compute_reflectance(normal, eye, n_1, n_2):
 def compute_transmission_cosines(eye, normal, n_ratio):
     cos_incident = jp.sum(eye * normal, axis=-1)
     sin_transmit_squared = (n_ratio**2) * (1.0 - (cos_incident**2))
-    cos_transmit = jp.sqrt(jp.maximum(0.0, 1.0 - sin_transmit_squared))
+    is_transmitted = sin_transmit_squared < 1.0
+    safe_sin_squared = jp.where(is_transmitted, sin_transmit_squared, 0.0)
+    cos_transmit = jp.sqrt(1.0 - safe_sin_squared)
+    cos_transmit = jp.where(is_transmitted, cos_transmit, 0.0)
     return cos_incident, sin_transmit_squared, cos_transmit
 
 
