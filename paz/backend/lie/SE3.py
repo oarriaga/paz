@@ -107,7 +107,8 @@ def to_affine_matrix(rotation_matrix, translation):
 
 def exp_position(theta, omega_matrix, position_vector):
     first_order = jp.eye(3) * theta
-    odds_powers = (1 - jp.cos(theta)) * omega_matrix
+    # 1 - cos(theta) without the cancellation at small angles
+    odds_powers = 2.0 * jp.sin(0.5 * theta) ** 2 * omega_matrix
     even_powers = (theta - jp.sin(theta)) * jp.dot(omega_matrix, omega_matrix)
     exponential_position = first_order + odds_powers + even_powers
     return divide(jp.dot(exponential_position, position_vector), theta)
@@ -217,43 +218,32 @@ def ad(twist):
     return cross_operator
 
 
-def case_log_0(SE3_matrix):
-    return jp.r_[
-        jp.c_[
-            jp.zeros((3, 3)),
-            [SE3_matrix[0, 3], SE3_matrix[1, 3], SE3_matrix[2, 3]],
-        ],
-        [[0, 0, 0, 0]],
-    ]
+def compute_log_position_ratio(theta_squared):
+    """Coefficient `(1 - (theta / 2) cot(theta / 2)) / theta^2`.
 
-    omega = jp.zeros((3, 3))
-    se3_matrix = jp.concatenate([omega, SE3_matrix[:3, 3]], axis=1)
-    se3_matrix = jp.concatenate([se3_matrix, jp.zeros((1, 4))])
-    return se3_matrix
-
-
-def case_log_1(SE3_matrix):
-    rotation, position = split(SE3_matrix)
-    omega_matrix = SO3.log(rotation)  # return [w]*theta
-    theta = jp.arccos((jp.trace(rotation) - 1) / 2.0)
-    omega = omega_matrix / theta
-
-    term_0 = (1.0 / theta) * jp.eye(3)
-    term_1 = -0.5 * omega
-    cotangent = 1.0 / jp.tan(0.5 * theta)
-    term_2 = ((1.0 / theta) - (0.5 * cotangent)) * (omega @ omega)
-    G_inverse = term_0 + term_1 + term_2
-    v = G_inverse @ to_column_vector(position)
-    se3_matrix = jp.concatenate([omega_matrix, v * theta], axis=1)
-    se3_matrix = jp.concatenate([se3_matrix, jp.zeros((1, 4))])
-    return se3_matrix
+    It multiplies `W^2` in the inverse of the matrix that maps the
+    linear velocity to the position. The ratio is `0 / 0` at `theta = 0`
+    but has the limit `1 / 12`. Near zero a Taylor series replaces the
+    singular ratio so value and gradient stay finite.
+    """
+    use_taylor = theta_squared < 1e-2
+    safe = jp.where(use_taylor, 1.0, theta_squared)
+    half_cotangent = SO3.compute_sinc(safe) / SO3.compute_versine_ratio(safe)
+    exact = (1.0 - 0.5 * half_cotangent) / safe
+    taylor = 1.0 / 12.0 + theta_squared / 720.0 + theta_squared**2 / 30240.0
+    return jp.where(use_taylor, taylor, exact)
 
 
 def log(SE3_matrix):
     rotation, position = split(SE3_matrix)
-    omega = SO3.log(rotation)
-    choose_0 = jp.allclose(omega, jp.zeros((3, 3)))
-    return jp.where(choose_0, case_log_0(SE3_matrix), case_log_1(SE3_matrix))
+    omega_matrix = SO3.log(rotation)
+    omega = SO3.vee(omega_matrix)
+    ratio = compute_log_position_ratio(jp.dot(omega, omega))
+    even_powers = ratio * jp.dot(omega_matrix, omega_matrix)
+    position_inverse = jp.eye(3) - 0.5 * omega_matrix + even_powers
+    linear_velocity = position_inverse @ to_column_vector(position)
+    se3_matrix = jp.concatenate([omega_matrix, linear_velocity], axis=1)
+    return jp.concatenate([se3_matrix, jp.zeros((1, 4))])
 
 
 def Log(SE3_matrix):
