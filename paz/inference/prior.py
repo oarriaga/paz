@@ -8,6 +8,18 @@ from paz.inference.utils import compute_inverse_state, squeeze_pytree
 
 
 def Prior(distribution, bijector=None, name=None):
+    """Builds a root variable of a `PGM` from a distribution.
+
+    # Arguments
+    - `distribution`: A `paz.distributions` distribution.
+    - `bijector`: Bijector between forward and inverse samples. `None`
+      uses the identity.
+    - `name`: String or `None`. `None` builds a name from `distribution`.
+
+    # Returns
+    `Variable` with `sample(key, num_samples=1)`, `log_prob` and their
+    inverse-space versions `sample_inverse` and `log_prob_inverse`.
+    """
     if not isinstance(distribution, Distribution):
         raise ValueError("Invalid distribution type")
     node_name = name if name is not None else build_prior_name(distribution)

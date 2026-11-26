@@ -17,6 +17,16 @@ Marginal = namedtuple("Marginal", ["log_prob", "sample"])
 
 
 def marginalize(pgm, names):
+    """Builds a `PGM` with a discrete prior summed out of its observed child.
+
+    # Arguments
+    - `pgm`: `PGM` with a discrete prior that has an observed child.
+    - `names`: List with the name of the one discrete prior to sum out.
+
+    # Returns
+    `PGM` named `{pgm.name}_marg_{node.name}` without the discrete prior
+    in its inputs.
+    """
     node = find_discrete_node(pgm, names)
     child = find_observed_child(pgm, node)
     parents = merge_parents(node, child)

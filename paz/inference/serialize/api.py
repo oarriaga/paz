@@ -5,6 +5,14 @@ from .serde import _find_serde, _serde_for_type
 
 
 def save(obj, path, format="paz", overwrite=False):
+    """Saves a serializable inference object to the directory `path`.
+
+    # Arguments
+    - `obj`: Object to save.
+    - `path`: String. Directory to write.
+    - `format`: String. Only `"paz"` is supported.
+    - `overwrite`: Bool passed to the writer.
+    """
     if format != "paz":
         raise ValueError(f"Unknown format '{format}'")
     serde = _find_serde(obj)
@@ -13,6 +21,17 @@ def save(obj, path, format="paz", overwrite=False):
 
 
 def load(path, format=None, device=None):
+    """Loads an object written by `save` from the directory `path`.
+
+    # Arguments
+    - `path`: String. Directory that contains `manifest.json`.
+    - `format`: String or `None`. `None` infers it from `path`; only
+      `"paz"` is supported.
+    - `device`: Passed to the reader.
+
+    # Returns
+    The loaded object.
+    """
     if format is None:
         format = _infer_format(path)
     if format != "paz":

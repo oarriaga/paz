@@ -7,6 +7,18 @@ from paz.inference.utils import compute_inverse_state
 
 
 def Latent(distribution_fn, bijector=None, name=None):
+    """Builds an unobserved variable whose distribution depends on parents.
+
+    # Arguments
+    - `distribution_fn`: Function from the parent values to a distribution.
+    - `bijector`: Bijector between forward and inverse samples. `None`
+      uses the identity.
+    - `name`: String or `None`. `None` builds a name from
+      `distribution_fn`.
+
+    # Returns
+    Function that takes the parent variables and returns a `Variable`.
+    """
     if not callable(distribution_fn):
         raise ValueError(f"Input {distribution_fn} must be a callable")
     node_name = name if name is not None else build_latent_name(distribution_fn)
