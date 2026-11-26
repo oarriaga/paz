@@ -57,32 +57,136 @@ def overlay_objects(image, masks):
 
 
 def TrackSAMHieraTiny2(draw=None):
+    """Builds a SAM 2 Hiera Tiny video object tracker.
+
+    # Arguments
+    - `draw`: `None` overlays every object mask on its frame. A callable is
+      called as `draw(image, masks)`. Any other value, such as `False`,
+      disables drawing.
+
+    # Returns
+    Generator function `track(images, prompts)`. Without drawing it yields
+    `(frame, masks)` per frame, with `frame` the frame index and `masks` the
+    boolean masks of every object. With drawing it yields
+    `(frame, masks, drawn_image)`.
+    """
     return SAM(paz.models.SAMHieraTiny2Video(), draw)
 
 
 def TrackSAMHieraSmall2(draw=None):
+    """Builds a SAM 2 Hiera Small video object tracker.
+
+    # Arguments
+    - `draw`: `None` overlays every object mask on its frame. A callable is
+      called as `draw(image, masks)`. Any other value, such as `False`,
+      disables drawing.
+
+    # Returns
+    Generator function `track(images, prompts)`. Without drawing it yields
+    `(frame, masks)` per frame, with `frame` the frame index and `masks` the
+    boolean masks of every object. With drawing it yields
+    `(frame, masks, drawn_image)`.
+    """
     return SAM(paz.models.SAMHieraSmall2Video(), draw)
 
 
 def TrackSAMHieraBasePlus2(draw=None):
+    """Builds a SAM 2 Hiera Base+ video object tracker.
+
+    # Arguments
+    - `draw`: `None` overlays every object mask on its frame. A callable is
+      called as `draw(image, masks)`. Any other value, such as `False`,
+      disables drawing.
+
+    # Returns
+    Generator function `track(images, prompts)`. Without drawing it yields
+    `(frame, masks)` per frame, with `frame` the frame index and `masks` the
+    boolean masks of every object. With drawing it yields
+    `(frame, masks, drawn_image)`.
+    """
     return SAM(paz.models.SAMHieraBasePlus2Video(), draw)
 
 
 def TrackSAMHieraLarge2(draw=None):
+    """Builds a SAM 2 Hiera Large video object tracker.
+
+    # Arguments
+    - `draw`: `None` overlays every object mask on its frame. A callable is
+      called as `draw(image, masks)`. Any other value, such as `False`,
+      disables drawing.
+
+    # Returns
+    Generator function `track(images, prompts)`. Without drawing it yields
+    `(frame, masks)` per frame, with `frame` the frame index and `masks` the
+    boolean masks of every object. With drawing it yields
+    `(frame, masks, drawn_image)`.
+    """
     return SAM(paz.models.SAMHieraLarge2Video(), draw)
 
 
 def TrackSAMHieraTiny21(draw=None):
+    """Builds a SAM 2.1 Hiera Tiny video object tracker.
+
+    # Arguments
+    - `draw`: `None` overlays every object mask on its frame. A callable is
+      called as `draw(image, masks)`. Any other value, such as `False`,
+      disables drawing.
+
+    # Returns
+    Generator function `track(images, prompts)`. Without drawing it yields
+    `(frame, masks)` per frame, with `frame` the frame index and `masks` the
+    boolean masks of every object. With drawing it yields
+    `(frame, masks, drawn_image)`.
+    """
     return SAM(paz.models.SAMHieraTiny21Video(), draw)
 
 
 def TrackSAMHieraSmall21(draw=None):
+    """Builds a SAM 2.1 Hiera Small video object tracker.
+
+    # Arguments
+    - `draw`: `None` overlays every object mask on its frame. A callable is
+      called as `draw(image, masks)`. Any other value, such as `False`,
+      disables drawing.
+
+    # Returns
+    Generator function `track(images, prompts)`. Without drawing it yields
+    `(frame, masks)` per frame, with `frame` the frame index and `masks` the
+    boolean masks of every object. With drawing it yields
+    `(frame, masks, drawn_image)`.
+    """
     return SAM(paz.models.SAMHieraSmall21Video(), draw)
 
 
 def TrackSAMHieraBasePlus21(draw=None):
+    """Builds a SAM 2.1 Hiera Base+ video object tracker.
+
+    # Arguments
+    - `draw`: `None` overlays every object mask on its frame. A callable is
+      called as `draw(image, masks)`. Any other value, such as `False`,
+      disables drawing.
+
+    # Returns
+    Generator function `track(images, prompts)`. Without drawing it yields
+    `(frame, masks)` per frame, with `frame` the frame index and `masks` the
+    boolean masks of every object. With drawing it yields
+    `(frame, masks, drawn_image)`.
+    """
     return SAM(paz.models.SAMHieraBasePlus21Video(), draw)
 
 
 def TrackSAMHieraLarge21(draw=None):
+    """Builds a SAM 2.1 Hiera Large video object tracker.
+
+    # Arguments
+    - `draw`: `None` overlays every object mask on its frame. A callable is
+      called as `draw(image, masks)`. Any other value, such as `False`,
+      disables drawing.
+
+    # Returns
+    Generator function `track(images, prompts)`. Without drawing it yields
+    `(frame, masks)` per frame, with `frame` the frame index and `masks` the
+    boolean masks of every object. With drawing it yields
+    `(frame, masks, drawn_image)`.
+    """
     return SAM(paz.models.SAMHieraLarge21Video(), draw)

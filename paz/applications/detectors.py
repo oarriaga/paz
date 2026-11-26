@@ -48,6 +48,28 @@ def SSD(model, score_thresh, prior_boxes, variances, apply_NMS, draw):
 
 
 def SSD300VOC(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
+    """Builds an SSD300 detector with VOC weights and a 300x300 input.
+
+    # Arguments
+    - `score_thresh`: Score threshold used to filter detections.
+    - `IOU_thresh`: IOU threshold of the per-class non-maximum suppression.
+    - `top_k`: `top_k` passed to `paz.detection.apply_per_class_NMS`.
+    - `draw`: `None` draws with `paz.draw.boxes2D` and the class names. A
+      callable is called as `draw(image, boxes, labels, scores)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image of shape `(H, W, 3)`. Without drawing it returns
+    `(boxes, labels, scores)`, with `boxes` an `int32` array of shape
+    `(num_boxes, 4)` in pixel coordinates of the input image. With drawing it
+    returns `((boxes, labels, scores), drawn_image)`.
+
+    # Example
+    ```python
+    detect = paz.applications.SSD300VOC()
+    (boxes, labels, scores), drawn_image = detect(image)
+    ```
+    """
     model = paz.models.detection.SSD300(21, "VOC", "VOC", (300, 300, 3))
     boxes = paz.models.detection.single_shot_detector.build_prior_boxes("VOC")
     names = paz.datasets.labels("VOC")
@@ -61,6 +83,22 @@ def SSD300VOC(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
 
 
 def SSD512COCO(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
+    """Builds an SSD512 detector with COCO weights and a 512x512 input.
+
+    # Arguments
+    - `score_thresh`: Score threshold used to filter detections.
+    - `IOU_thresh`: IOU threshold of the per-class non-maximum suppression.
+    - `top_k`: `top_k` passed to `paz.detection.apply_per_class_NMS`.
+    - `draw`: `None` draws with `paz.draw.boxes2D` and the class names. A
+      callable is called as `draw(image, boxes, labels, scores)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image of shape `(H, W, 3)`. Without drawing it returns
+    `(boxes, labels, scores)`, with `boxes` an `int32` array of shape
+    `(num_boxes, 4)` in pixel coordinates of the input image. With drawing it
+    returns `((boxes, labels, scores), drawn_image)`.
+    """
     model = paz.models.detection.SSD512(81, "COCO", "COCO", (512, 512, 3))
     boxes = paz.models.detection.single_shot_detector.build_prior_boxes("COCO")
     names = paz.datasets.labels("COCO")
@@ -74,6 +112,22 @@ def SSD512COCO(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
 
 
 def SSD512HandDetection(score_thresh=0.40, IOU_thresh=0.45, top_k=100, draw=None):  # fmt: skip
+    """Builds an SSD512 hand detector with OIV6Hand weights and a 512x512 input.
+
+    # Arguments
+    - `score_thresh`: Score threshold used to filter detections.
+    - `IOU_thresh`: IOU threshold of the per-class non-maximum suppression.
+    - `top_k`: `top_k` passed to `paz.detection.apply_per_class_NMS`.
+    - `draw`: `None` draws with `paz.draw.boxes2D` and the class names. A
+      callable is called as `draw(image, boxes, labels, scores)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image of shape `(H, W, 3)`. Without drawing it returns
+    `(boxes, labels, scores)`, with `boxes` an `int32` array of shape
+    `(num_boxes, 4)` in pixel coordinates of the input image. With drawing it
+    returns `((boxes, labels, scores), drawn_image)`.
+    """
     model = paz.models.detection.SSD512(2, "OIV6Hand", "OIV6Hand", (512, 512, 3))  # fmt: skip
     boxes = paz.models.detection.single_shot_detector.build_prior_boxes("COCO")
     names = ["hand"]
@@ -87,6 +141,22 @@ def SSD512HandDetection(score_thresh=0.40, IOU_thresh=0.45, top_k=100, draw=None
 
 
 def SSD512YCBVideo(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
+    """Builds an SSD512 detector with YCBVideo weights and a 512x512 input.
+
+    # Arguments
+    - `score_thresh`: Score threshold used to filter detections.
+    - `IOU_thresh`: IOU threshold of the per-class non-maximum suppression.
+    - `top_k`: `top_k` passed to `paz.detection.apply_per_class_NMS`.
+    - `draw`: `None` draws with `paz.draw.boxes2D` and the class names. A
+      callable is called as `draw(image, boxes, labels, scores)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image of shape `(H, W, 3)`. Without drawing it returns
+    `(boxes, labels, scores)`, with `boxes` an `int32` array of shape
+    `(num_boxes, 4)` in pixel coordinates of the input image. With drawing it
+    returns `((boxes, labels, scores), drawn_image)`.
+    """
     model = paz.models.detection.SSD512(22, "COCO", "YCBVideo", (512, 512, 3))
     build = paz.models.detection.single_shot_detector.build_prior_boxes
     boxes = build("YCBVideo")
@@ -101,6 +171,22 @@ def SSD512YCBVideo(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
 
 
 def SSD300FAT(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
+    """Builds an SSD300 detector with FAT weights and a 300x300 input.
+
+    # Arguments
+    - `score_thresh`: Score threshold used to filter detections.
+    - `IOU_thresh`: IOU threshold of the per-class non-maximum suppression.
+    - `top_k`: `top_k` passed to `paz.detection.apply_per_class_NMS`.
+    - `draw`: `None` draws with `paz.draw.boxes2D` and the class names. A
+      callable is called as `draw(image, boxes, labels, scores)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image of shape `(H, W, 3)`. Without drawing it returns
+    `(boxes, labels, scores)`, with `boxes` an `int32` array of shape
+    `(num_boxes, 4)` in pixel coordinates of the input image. With drawing it
+    returns `((boxes, labels, scores), drawn_image)`.
+    """
     model = paz.models.detection.SSD300(22, "FAT", "FAT", (300, 300, 3))
     build = paz.models.detection.single_shot_detector.build_prior_boxes
     boxes = build("FAT")
@@ -115,34 +201,138 @@ def SSD300FAT(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):
 
 
 def EFFICIENTDETD0COCO(**kwargs):
+    """Builds an EfficientDet-D0 detector with COCO weights.
+
+    # Arguments
+    - `kwargs`: Forwarded to `EfficientDet`: `score_thresh` (default `0.60`),
+      `nms_thresh` (default `0.45`), `top_k` (default `200`) and `draw`
+      (default `None`).
+
+    # Returns
+    Callable taking an image of shape `(H, W, 3)`. With the default `draw` it
+    returns `((boxes, labels, scores), drawn_image)`, with `boxes` in pixel
+    coordinates of the input image. With a non-callable `draw` such as `False`
+    it returns `(boxes, labels, scores)`.
+    """
     return EfficientDetCOCO(paz.models.EFFICIENTDETD0, **kwargs)
 
 
 def EFFICIENTDETD1COCO(**kwargs):
+    """Builds an EfficientDet-D1 detector with COCO weights.
+
+    # Arguments
+    - `kwargs`: Forwarded to `EfficientDet`: `score_thresh` (default `0.60`),
+      `nms_thresh` (default `0.45`), `top_k` (default `200`) and `draw`
+      (default `None`).
+
+    # Returns
+    Callable taking an image of shape `(H, W, 3)`. With the default `draw` it
+    returns `((boxes, labels, scores), drawn_image)`, with `boxes` in pixel
+    coordinates of the input image. With a non-callable `draw` such as `False`
+    it returns `(boxes, labels, scores)`.
+    """
     return EfficientDetCOCO(paz.models.EFFICIENTDETD1, **kwargs)
 
 
 def EFFICIENTDETD2COCO(**kwargs):
+    """Builds an EfficientDet-D2 detector with COCO weights.
+
+    # Arguments
+    - `kwargs`: Forwarded to `EfficientDet`: `score_thresh` (default `0.60`),
+      `nms_thresh` (default `0.45`), `top_k` (default `200`) and `draw`
+      (default `None`).
+
+    # Returns
+    Callable taking an image of shape `(H, W, 3)`. With the default `draw` it
+    returns `((boxes, labels, scores), drawn_image)`, with `boxes` in pixel
+    coordinates of the input image. With a non-callable `draw` such as `False`
+    it returns `(boxes, labels, scores)`.
+    """
     return EfficientDetCOCO(paz.models.EFFICIENTDETD2, **kwargs)
 
 
 def EFFICIENTDETD3COCO(**kwargs):
+    """Builds an EfficientDet-D3 detector with COCO weights.
+
+    # Arguments
+    - `kwargs`: Forwarded to `EfficientDet`: `score_thresh` (default `0.60`),
+      `nms_thresh` (default `0.45`), `top_k` (default `200`) and `draw`
+      (default `None`).
+
+    # Returns
+    Callable taking an image of shape `(H, W, 3)`. With the default `draw` it
+    returns `((boxes, labels, scores), drawn_image)`, with `boxes` in pixel
+    coordinates of the input image. With a non-callable `draw` such as `False`
+    it returns `(boxes, labels, scores)`.
+    """
     return EfficientDetCOCO(paz.models.EFFICIENTDETD3, **kwargs)
 
 
 def EFFICIENTDETD4COCO(**kwargs):
+    """Builds an EfficientDet-D4 detector with COCO weights.
+
+    # Arguments
+    - `kwargs`: Forwarded to `EfficientDet`: `score_thresh` (default `0.60`),
+      `nms_thresh` (default `0.45`), `top_k` (default `200`) and `draw`
+      (default `None`).
+
+    # Returns
+    Callable taking an image of shape `(H, W, 3)`. With the default `draw` it
+    returns `((boxes, labels, scores), drawn_image)`, with `boxes` in pixel
+    coordinates of the input image. With a non-callable `draw` such as `False`
+    it returns `(boxes, labels, scores)`.
+    """
     return EfficientDetCOCO(paz.models.EFFICIENTDETD4, **kwargs)
 
 
 def EFFICIENTDETD5COCO(**kwargs):
+    """Builds an EfficientDet-D5 detector with COCO weights.
+
+    # Arguments
+    - `kwargs`: Forwarded to `EfficientDet`: `score_thresh` (default `0.60`),
+      `nms_thresh` (default `0.45`), `top_k` (default `200`) and `draw`
+      (default `None`).
+
+    # Returns
+    Callable taking an image of shape `(H, W, 3)`. With the default `draw` it
+    returns `((boxes, labels, scores), drawn_image)`, with `boxes` in pixel
+    coordinates of the input image. With a non-callable `draw` such as `False`
+    it returns `(boxes, labels, scores)`.
+    """
     return EfficientDetCOCO(paz.models.EFFICIENTDETD5, **kwargs)
 
 
 def EFFICIENTDETD6COCO(**kwargs):
+    """Builds an EfficientDet-D6 detector with COCO weights.
+
+    # Arguments
+    - `kwargs`: Forwarded to `EfficientDet`: `score_thresh` (default `0.60`),
+      `nms_thresh` (default `0.45`), `top_k` (default `200`) and `draw`
+      (default `None`).
+
+    # Returns
+    Callable taking an image of shape `(H, W, 3)`. With the default `draw` it
+    returns `((boxes, labels, scores), drawn_image)`, with `boxes` in pixel
+    coordinates of the input image. With a non-callable `draw` such as `False`
+    it returns `(boxes, labels, scores)`.
+    """
     return EfficientDetCOCO(paz.models.EFFICIENTDETD6, **kwargs)
 
 
 def EFFICIENTDETD7COCO(**kwargs):
+    """Builds an EfficientDet-D7 detector with COCO weights.
+
+    # Arguments
+    - `kwargs`: Forwarded to `EfficientDet`: `score_thresh` (default `0.60`),
+      `nms_thresh` (default `0.45`), `top_k` (default `200`) and `draw`
+      (default `None`).
+
+    # Returns
+    Callable taking an image of shape `(H, W, 3)`. With the default `draw` it
+    returns `((boxes, labels, scores), drawn_image)`, with `boxes` in pixel
+    coordinates of the input image. With a non-callable `draw` such as `False`
+    it returns `(boxes, labels, scores)`.
+    """
     return EfficientDetCOCO(paz.models.EFFICIENTDETD7, **kwargs)
 
 
@@ -154,6 +344,22 @@ def EfficientDetCOCO(build_model, **kwargs):
 
 
 def EFFICIENTDETD0VOC(score_thresh=0.60, IOU_thresh=0.45, top_k=200, draw=None):  # fmt: skip
+    """Builds an EfficientDet-D0 detector with VOC weights.
+
+    # Arguments
+    - `score_thresh`: Score threshold used to filter detections.
+    - `IOU_thresh`: IOU threshold of the per-class non-maximum suppression.
+    - `top_k`: `top_k` passed to `paz.detection.apply_per_class_NMS`.
+    - `draw`: `None` draws with `paz.draw.boxes2D` and the class names. A
+      callable is called as `draw(image, boxes, labels, scores)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image of shape `(H, W, 3)`. Without drawing it returns
+    `(boxes, labels, scores)`, with `boxes` an `int32` array of shape
+    `(num_boxes, 4)` in pixel coordinates of the input image. With drawing it
+    returns `((boxes, labels, scores), drawn_image)`.
+    """
     names = paz.datasets.labels("VOC")
     model = paz.models.EFFICIENTDETD0(len(names) + 1, "VOC", "VOC")
     boxes = model.prior_boxes
@@ -223,22 +429,92 @@ def scale_boxes(detections, scale):
 
 
 def DetectRFDETRNano(score_thresh=0.50, draw=None):
+    """Builds an RF-DETR Nano detector with COCO weights.
+
+    # Arguments
+    - `score_thresh`: Score threshold used to filter detections.
+    - `draw`: `None` draws with `paz.draw.boxes2D` and the class names. A
+      callable is called as `draw(image, boxes, labels, scores)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image of shape `(H, W, 3)`. Without drawing it returns
+    `(boxes, labels, scores)`, with `boxes` an `int32` array of shape
+    `(num_boxes, 4)` in pixel coordinates of the input image. With drawing it
+    returns `((boxes, labels, scores), drawn_image)`.
+    """
     return DetectRFDETRCOCO(paz.models.RFDETRNano, score_thresh, draw)
 
 
 def DetectRFDETRSmall(score_thresh=0.50, draw=None):
+    """Builds an RF-DETR Small detector with COCO weights.
+
+    # Arguments
+    - `score_thresh`: Score threshold used to filter detections.
+    - `draw`: `None` draws with `paz.draw.boxes2D` and the class names. A
+      callable is called as `draw(image, boxes, labels, scores)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image of shape `(H, W, 3)`. Without drawing it returns
+    `(boxes, labels, scores)`, with `boxes` an `int32` array of shape
+    `(num_boxes, 4)` in pixel coordinates of the input image. With drawing it
+    returns `((boxes, labels, scores), drawn_image)`.
+    """
     return DetectRFDETRCOCO(paz.models.RFDETRSmall, score_thresh, draw)
 
 
 def DetectRFDETRMedium(score_thresh=0.50, draw=None):
+    """Builds an RF-DETR Medium detector with COCO weights.
+
+    # Arguments
+    - `score_thresh`: Score threshold used to filter detections.
+    - `draw`: `None` draws with `paz.draw.boxes2D` and the class names. A
+      callable is called as `draw(image, boxes, labels, scores)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image of shape `(H, W, 3)`. Without drawing it returns
+    `(boxes, labels, scores)`, with `boxes` an `int32` array of shape
+    `(num_boxes, 4)` in pixel coordinates of the input image. With drawing it
+    returns `((boxes, labels, scores), drawn_image)`.
+    """
     return DetectRFDETRCOCO(paz.models.RFDETRMedium, score_thresh, draw)
 
 
 def DetectRFDETRBase(score_thresh=0.50, draw=None):
+    """Builds an RF-DETR Base detector with COCO weights.
+
+    # Arguments
+    - `score_thresh`: Score threshold used to filter detections.
+    - `draw`: `None` draws with `paz.draw.boxes2D` and the class names. A
+      callable is called as `draw(image, boxes, labels, scores)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image of shape `(H, W, 3)`. Without drawing it returns
+    `(boxes, labels, scores)`, with `boxes` an `int32` array of shape
+    `(num_boxes, 4)` in pixel coordinates of the input image. With drawing it
+    returns `((boxes, labels, scores), drawn_image)`.
+    """
     return DetectRFDETRCOCO(paz.models.RFDETRBase, score_thresh, draw)
 
 
 def DetectRFDETRLarge(score_thresh=0.50, draw=None):
+    """Builds an RF-DETR Large detector with COCO weights.
+
+    # Arguments
+    - `score_thresh`: Score threshold used to filter detections.
+    - `draw`: `None` draws with `paz.draw.boxes2D` and the class names. A
+      callable is called as `draw(image, boxes, labels, scores)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image of shape `(H, W, 3)`. Without drawing it returns
+    `(boxes, labels, scores)`, with `boxes` an `int32` array of shape
+    `(num_boxes, 4)` in pixel coordinates of the input image. With drawing it
+    returns `((boxes, labels, scores), drawn_image)`.
+    """
     return DetectRFDETRCOCO(paz.models.RFDETRLarge, score_thresh, draw)
 
 
@@ -338,6 +614,20 @@ def draw_proposals(image, boxes, scores):
 
 
 def DetectMiniXceptionFER(box_scale=1.2, draw=None):
+    """Detects faces and classifies each one with MiniXception FER.
+
+    # Arguments
+    - `box_scale`: Factor that scales each squared face box before cropping.
+    - `draw`: `None` draws with `paz.draw.boxes2D` and the class names. A
+      callable is called as `draw(image, boxes, labels, scores)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image of shape `(H, W, 3)`. Without drawing it returns
+    `(boxes, labels, scores)`: the `int32` face boxes in pixel coordinates of
+    the input image, and the highest scoring class index and its score for
+    each box. With drawing it returns `((boxes, labels, scores), drawn_image)`.
+    """
     # TODO add buffer window prediction
     classify = paz.applications.ClassifyMiniXceptionFER()
     names = paz.datasets.labels("FER")
@@ -345,12 +635,43 @@ def DetectMiniXceptionFER(box_scale=1.2, draw=None):
 
 
 def DetectMiniXceptionIMDB(box_scale=1.2, draw=None):
+    """Detects faces and classifies each one with MiniXception IMDB.
+
+    # Arguments
+    - `box_scale`: Factor that scales each squared face box before cropping.
+    - `draw`: `None` draws with `paz.draw.boxes2D` and the class names. A
+      callable is called as `draw(image, boxes, labels, scores)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image of shape `(H, W, 3)`. Without drawing it returns
+    `(boxes, labels, scores)`: the `int32` face boxes in pixel coordinates of
+    the input image, and the highest scoring class index and its score for
+    each box. With drawing it returns `((boxes, labels, scores), drawn_image)`.
+    """
     classify = paz.applications.ClassifyMiniXceptionIMDB()
     names = paz.datasets.labels("IMDB")
     return DetectMiniXception(classify, names, box_scale, draw)
 
 
 def DetectMiniXception(classify, names, box_scale, draw):
+    """Detects faces with a Haar cascade and classifies each face crop.
+
+    # Arguments
+    - `classify`: Callable taking a cropped face image and returning class
+      scores.
+    - `names`: List of class names used for drawing.
+    - `box_scale`: Factor that scales each squared face box before cropping.
+    - `draw`: `None` draws with `paz.draw.boxes2D` and the class names. A
+      callable is called as `draw(image, boxes, labels, scores)`. Any other
+      value, such as `False`, disables drawing.
+
+    # Returns
+    Callable taking an image of shape `(H, W, 3)`. Without drawing it returns
+    `(boxes, labels, scores)`: the `int32` face boxes in pixel coordinates of
+    the input image, and the highest scoring class index and its score for
+    each box. With drawing it returns `((boxes, labels, scores), drawn_image)`.
+    """
     detect = paz.models.HaarCascadeFrontalFaceDetector(draw=None)
     colors = paz.draw.lincolor(len(names))
     if draw is None:
