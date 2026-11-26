@@ -1,6 +1,7 @@
 import jax.numpy as jp
 
 import paz
+from paz.graphics.constants import BACKGROUND_COLOR
 
 
 def postprocess(hit_masks, depths, colors, world_to_camera, rays, H, W):
@@ -36,7 +37,9 @@ def select_colors(depths, colors):
     return colors
 
 
-def to_color_image(hit_mask, colors, height, width, background_color=1):
+def to_color_image(
+    hit_mask, colors, height, width, background_color=BACKGROUND_COLOR
+):
     image = jp.where(hit_mask, colors.T, background_color)
     image = image.reshape((3, height, width))
     image = jp.clip(image[:], 0, 1)

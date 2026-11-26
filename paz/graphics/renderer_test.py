@@ -589,3 +589,24 @@ def compute_glass_gradients(build_shape, num_bounces):
 def test_glass_gradients_are_finite(build_shape, num_bounces):
     gradients = compute_glass_gradients(build_shape, num_bounces)
     assert all(jp.all(jp.isfinite(gradient)) for gradient in gradients)
+
+
+def render_lone_sphere(image_shape, camera_pose, material, num_bounces):
+    scene = Scene([Sphere(jp.eye(4), material)])
+    lights = [PointLight(jp.ones(3), jp.array([0.0, 5.0, 5.0]))]
+    args = image_shape, camera_pose, scene, lights
+    render = jax.jit(lambda: render_scene(*args, num_bounces=num_bounces))
+    return render()[0]
+
+
+def test_refracted_rays_leaving_scene_show_background(camera_pose):
+    invisible = Material(jp.zeros(3), 0.0, 0.0, 0.0, 200.0, 0.0, 1.0, 1.0)
+    image = render_lone_sphere((32, 32), camera_pose, invisible, 4)
+    assert jp.allclose(image[16, 16], 1.0, atol=1e-4)
+    assert jp.allclose(image[0, 0], 1.0, atol=1e-4)
+
+
+def test_reflected_rays_leaving_scene_show_background(camera_pose):
+    mirror = Material(jp.zeros(3), 0.0, 0.0, 0.0, 200.0, 1.0)
+    image = render_lone_sphere((32, 32), camera_pose, mirror, 2)
+    assert jp.allclose(image, 1.0, atol=1e-4)

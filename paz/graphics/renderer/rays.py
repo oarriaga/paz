@@ -5,6 +5,7 @@ import jax.numpy as jp
 
 import paz
 
+from paz.graphics.constants import BACKGROUND_COLOR
 from paz.graphics.renderer import intersect, material, optics, shade
 
 STATE_NAMES = "color depth hit_mask throughput active_mask "
@@ -27,6 +28,7 @@ def bounce(state, step_arg, compiled, shadows, face_chunk):
     _, _, surfaces, _ = candidates
     closest = intersect.find_closest(*candidates)
     state = update_first_hit(state, closest, step_arg)
+    state = add_escaped_background(state, closest)
     state = update_active_mask(state, closest)
     color_args = compiled, closest, surfaces, shadows, triangle_hit
     colors = shade.compute_hit_colors(*color_args, face_chunk)
@@ -76,6 +78,13 @@ def update_first_hit(state, closest, step_arg):
     else:
         depth, hit_mask = state.depth, state.hit_mask
     return state._replace(depth=depth, hit_mask=hit_mask)
+
+
+def add_escaped_background(state, closest):
+    is_escaped = state.active_mask & ~closest.hit_mask
+    background = state.throughput * BACKGROUND_COLOR
+    color = state.color + jp.expand_dims(is_escaped, -1) * background
+    return state._replace(color=color)
 
 
 def update_active_mask(state, closest):
