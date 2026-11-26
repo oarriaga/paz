@@ -611,3 +611,15 @@ def test_insert_finds_items_in_any_geometry(num_tables, capacity_multiplier):
     assert jp.all(inserted_flags)
     assert jp.all(found_flags)
     assert table.size == 8
+
+
+def test_insert_into_full_table_reports_not_inserted():
+    table = build(4, (2,))
+    capacity = len(table.args)
+    items = build_batch(range(capacity + 4))
+    table, inserted_flags = insert_sequentially(table, items)
+    _, found_flags = lookup_parallel(table, items)
+    assert jp.all(found_flags == inserted_flags)
+    assert table.size == jp.sum(inserted_flags)
+    assert table.size <= capacity
+    assert jp.all(table.table_occupancy <= table.num_tables)

@@ -174,19 +174,24 @@ def _lookup(table, item):
         key, counter = jax.lax.cond(found, identity, _next_probe, key, counter)
         return key, counter, found
 
+    def has_slots_left(key):
+        num_visited_slots = key - table.key
+        return num_visited_slots < table.sub_table_size
+
     def continue_search(state):
-        _, counter, item_was_found = state
+        key, counter, item_was_found = state
         num_occupants = table.table_occupancy[counter.slot_arg]
         is_in_empty_slot = counter.table_arg >= num_occupants
-        return jp.logical_and(~item_was_found, ~is_in_empty_slot)
+        is_searching = jp.logical_and(~item_was_found, ~is_in_empty_slot)
+        return jp.logical_and(is_searching, has_slots_left(key))
 
     state = (table.key, Counter(slot_arg, TABLE_ARG_DTYPE(0)), False)
-    _, counter, found = jax.lax.while_loop(continue_search, next_probe, state)
-    return counter, found
+    key, counter, found = jax.lax.while_loop(continue_search, next_probe, state)
+    return counter, found, has_slots_left(key)
 
 
 def lookup(table, item):
-    counter, found = _lookup(table, item)
+    counter, found, _ = _lookup(table, item)
     return compute_flat_arg(counter, table), found
 
 
@@ -211,9 +216,10 @@ def insert(table, item):
             size=size,
         )
 
-    counter, found = _lookup(table, item)
-    table = jax.lax.cond(found, do_nothing, insert, table, counter)
-    return table, jp.logical_not(found), compute_flat_arg(counter, table)
+    counter, found, has_slots_left = _lookup(table, item)
+    inserted = jp.logical_and(~found, has_slots_left)
+    table = jax.lax.cond(inserted, insert, do_nothing, table, counter)
+    return table, inserted, compute_flat_arg(counter, table)
 
 
 def unique_mask(pytrees, key=None):
