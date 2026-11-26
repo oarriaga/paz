@@ -26,8 +26,6 @@ KNOWN_BROKEN = {
     "object_detection/compute_MAP.py",
     "object_detection/demo_image.py",
     "object_detection/efficientdet.py",
-    "pyramid_detector/detector.py",
-    "pyramid_detector/pyramid.py",
 }
 
 

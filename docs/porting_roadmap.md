@@ -153,7 +153,7 @@ H36M loader), **Minimal Hand** (DetNet/IKNet keypoint + IK losses),
   `paz/applications/*`, `paz/datasets/*`, `examples/*` (non-foundation),
   `docs/porting_roadmap.md`.
 - **Owned by foundation (do not touch):** `paz/models/foundation/**`,
-  `examples/{gemma3,gemma4,speech_to_text}`.
+  `examples/{gemma4,speech_to_text}`.
 - **Shared registries** (`paz/models/__init__.py`, `paz/applications/__init__.py`,
   `paz/__init__.py`, `pyproject.toml`): edit append-only to keep merges trivial.
 - **GPU:** pin domain verification (incl. TF reference subprocesses) to CPU,
