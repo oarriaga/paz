@@ -338,7 +338,8 @@ def test_describe_package_uses_version_of_installed_package():
 
 def test_build_name_depends_on_x64():
     leaves, tree = jax.tree.flatten({"x": jp.ones(2)})
-    program_key = (tree, tuple(jax.typeof(leaf) for leaf in leaves), ())
+    types = tuple(caching.describe_leaf(leaf) for leaf in leaves)
+    program_key = (tree, types, ())
     name = caching.build_name(scale_pair, program_key, "")
     try:
         jax.config.update("jax_enable_x64", True)
