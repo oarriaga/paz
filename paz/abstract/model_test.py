@@ -47,3 +47,11 @@ def test_multiple_outputs():
     right = Node(increment, name="right")(x)
     outputs = Model([x], [left, right], "multiple_outputs")(3.0)
     assert (outputs.left, outputs.right) == (6.0, 4.0)
+
+
+def test_node_builder_called_twice_keeps_separate_edges():
+    x, w = Input("x"), Input("w")
+    build_node = Node(double)
+    node_x, node_w = build_node(x), build_node(w)
+    assert [edge.name for edge in node_x.edges] == ["x"]
+    assert [edge.name for edge in node_w.edges] == ["w"]
