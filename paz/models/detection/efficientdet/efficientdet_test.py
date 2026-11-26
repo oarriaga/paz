@@ -1,4 +1,9 @@
+import os
+import h5py
+import jax
+import keras
 import pytest
+from keras.layers import Conv2D, SeparableConv2D
 from keras.layers import Input, Flatten
 from keras.models import Model
 import numpy as np
@@ -1261,3 +1266,49 @@ def test_prior_boxes(model, aspect_ratios, num_boxes):
         prior_boxes.shape[0] == num_boxes
     ), "Incorrect number of anchor boxes"
     del model
+
+
+def test_efficientdet_rejects_unsupported_weights():
+    unsupported = [("VOC", None), ("COCO", "VOC"), ("VOC", "COCO")]
+    for base_weights, head_weights in unsupported:
+        with pytest.raises(NotImplementedError, match="Valid"):
+            EFFICIENTDETD0(21, base_weights, head_weights)
+
+
+def get_first_kernel(model, layer_type):
+    layers = [layer for layer in model.layers if isinstance(layer, layer_type)]
+    return np.array(layers[0].weights[0])
+
+
+def test_EFFICIENTDETD0_COCO_None_loads_base_weights():
+    filename = "efficientdet-d0-COCO-None_weights.hdf5"
+    path = os.path.expanduser("~/.keras/paz/models/" + filename)
+    if not os.path.exists(path):
+        pytest.skip("weights not cached")
+    stem = "efficientnet-b0/stem/conv2d"
+    node = "fpn_cells/cell_0/fnode0/op_after_combine5/conv"
+    with h5py.File(path) as file:
+        stem_kernel = file[stem][stem + "/kernel:0"][()]
+        node_kernel = file[node][node + "/depthwise_kernel:0"][()]
+    untrained = EFFICIENTDETD0(5, None, None)
+    model = EFFICIENTDETD0(5, "COCO", None)
+    assert model.output_shape == (None, 49104, 9)
+    assert np.allclose(get_first_kernel(model, Conv2D), stem_kernel)
+    assert np.allclose(get_first_kernel(model, SeparableConv2D), node_kernel)
+    assert not np.allclose(get_first_kernel(untrained, Conv2D), stem_kernel)
+
+
+def test_EFFICIENTDETD0_save_and_load(tmp_path):
+    model = EFFICIENTDETD0(3, None, None, (128, 128, 3))
+    model.save(tmp_path / "model.keras")
+    loaded = keras.models.load_model(tmp_path / "model.keras")
+    image = np.random.rand(1, 128, 128, 3).astype("float32")
+    output = jax.jit(lambda x: model(x))(image)
+    loaded_output = jax.jit(lambda x: loaded(x))(image)
+    assert np.allclose(output, loaded_output, atol=1e-6)
+
+
+def test_get_drop_connect_config():
+    layer = GetDropConnect(survival_rate=0.8)
+    restored = GetDropConnect.from_config(layer.get_config())
+    assert restored.survival_rate == 0.8

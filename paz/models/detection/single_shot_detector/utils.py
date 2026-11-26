@@ -37,15 +37,15 @@ def create_multibox_head(
             each convolutional layer.
     """
     classification_layers, regression_layers = [], []
+    kwargs = {"padding": "same", "kernel_regularizer": l2(l2_loss)}
     for layer_arg, base_layer in enumerate(tensors):
         if l2_norm:
             base_layer = Conv2DNormalization(20)(base_layer)
 
         # classification leaf -------------------------------------------------
         num_kernels = num_priors[layer_arg] * num_classes
-        class_leaf = Conv2D(
-            num_kernels, 3, padding="same", kernel_regularizer=l2(l2_loss)
-        )(base_layer)
+        name = "classification_leaf_%d" % layer_arg
+        class_leaf = Conv2D(num_kernels, 3, name=name, **kwargs)(base_layer)
         if batch_norm:
             class_leaf = BatchNormalization()(class_leaf)
         class_leaf = Flatten()(class_leaf)
@@ -53,9 +53,8 @@ def create_multibox_head(
 
         # regression leaf -----------------------------------------------------
         num_kernels = num_priors[layer_arg] * num_regressions
-        regress_leaf = Conv2D(
-            num_kernels, 3, padding="same", kernel_regularizer=l2(l2_loss)
-        )(base_layer)
+        name = "regression_leaf_%d" % layer_arg
+        regress_leaf = Conv2D(num_kernels, 3, name=name, **kwargs)(base_layer)
         if batch_norm:
             regress_leaf = BatchNormalization()(regress_leaf)
 

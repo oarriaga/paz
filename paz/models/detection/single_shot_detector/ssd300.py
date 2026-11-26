@@ -48,7 +48,7 @@ def SSD300(
         raise ValueError("Invalid `base_weights`:", base_weights)
 
     if head_weights not in ["VOC", "FAT", None]:
-        raise ValueError("Invalid `base_weights`:", base_weights)
+        raise ValueError("Invalid `head_weights`:", head_weights)
 
     if (base_weights == "VGG") and (head_weights is not None):
         raise NotImplementedError("Invalid `base_weights` with head_weights")
@@ -249,6 +249,7 @@ def SSD300(
         padding="same",
         activation="relu",
         kernel_regularizer=l2(l2_loss),
+        name="conv2d",
     )(fc7)
     conv6_1z = ZeroPadding2D()(conv6_1)
     conv6_2 = Conv2D(
@@ -268,6 +269,7 @@ def SSD300(
         padding="same",
         activation="relu",
         kernel_regularizer=l2(l2_loss),
+        name="conv2d_1",
     )(conv6_2)
     conv7_1z = ZeroPadding2D()(conv7_1)
     conv7_2 = Conv2D(
@@ -287,6 +289,7 @@ def SSD300(
         padding="same",
         activation="relu",
         kernel_regularizer=l2(l2_loss),
+        name="conv2d_2",
     )(conv7_2)
     conv8_2 = Conv2D(
         256,
@@ -305,6 +308,7 @@ def SSD300(
         padding="same",
         activation="relu",
         kernel_regularizer=l2(l2_loss),
+        name="conv2d_3",
     )(conv8_2)
     conv9_2 = Conv2D(
         256,

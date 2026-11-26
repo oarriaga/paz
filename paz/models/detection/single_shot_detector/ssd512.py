@@ -57,9 +57,6 @@ def SSD512(
     if (base_weights is None) and (head_weights is not None):
         raise NotImplementedError("Invalid `base_weights` with head_weights")
 
-    # if (base_weights == "COCO") and (head_weights is None):
-    #     raise NotImplementedError("Invalid `base_weights` with head_weights")
-
     if (num_classes != 81) and (head_weights == "COCO"):
         raise ValueError("Invalid `head_weights` with given `num_classes`")
 
