@@ -217,6 +217,9 @@ def test_sample_position_does_not_reuse_rotation_key(sample_key):
     assert not jp.allclose(position, reused_key_position)
 
 
+VIEW_CAMERA_ORIGINS = [[0.0, 0.0, 5.0], [3.0, 4.0, 5.0], [0.0, 5.0, 0.01]]
+
+
 def exp_of_vector(se3_vector):
     return SE3.exp(SE3.hat(se3_vector))
 
@@ -252,3 +255,16 @@ def test_Log_works_under_jit_and_vmap():
     recovered = jax.jit(jax.vmap(Log_of_exp))(se3_vectors)
     assert jp.allclose(recovered, se3_vectors, atol=1e-5)
 
+
+@pytest.mark.parametrize("camera_origin", VIEW_CAMERA_ORIGINS)
+def test_view_transform_is_rigid_and_looks_at_target(camera_origin):
+    camera_origin = jp.array(camera_origin)
+    target, world_up = jp.array([0.5, 0.0, -0.5]), jp.array([0.0, 1.0, 0.0])
+    view_transform = SE3.view_transform(camera_origin, target, world_up)
+    rotation, _ = SE3.split(view_transform)
+    distance = jp.linalg.norm(target - camera_origin)
+    target_in_camera = view_transform @ jp.append(target, 1.0)
+    expected = jp.array([0.0, 0.0, -distance, 1.0])
+    assert jp.allclose(rotation @ rotation.T, jp.eye(3), atol=1e-5)
+    assert jp.isclose(jp.linalg.det(rotation), 1.0, atol=1e-5)
+    assert jp.allclose(target_in_camera, expected, atol=1e-5)

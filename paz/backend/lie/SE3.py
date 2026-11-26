@@ -293,6 +293,7 @@ def view_transform(camera_origin, target_origin, world_up):
     camera_forward = camera_forward / jp.linalg.norm(camera_forward)
     world_up = world_up / jp.linalg.norm(world_up)
     camera_left = jp.cross(camera_forward, world_up)
+    camera_left = camera_left / jp.linalg.norm(camera_left)
     left_x, left_y, left_z = camera_left
     up_x, up_y, up_z = jp.cross(camera_left, camera_forward)
     x_forward, y_forward, z_forward = camera_forward
