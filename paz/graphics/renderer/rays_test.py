@@ -84,3 +84,18 @@ def test_glass_cube_exit_direction_equals_entry_direction():
     exit_direction, refractive_index = trace(scene, origin, direction, 2)
     assert jp.allclose(exit_direction, direction, atol=1e-4)
     assert jp.allclose(refractive_index, 1.0)
+
+
+def test_glass_cube_reflects_under_total_internal_reflection():
+    scene = build_glass_scene(Cube)
+    sine = jp.sqrt(0.5)
+    origin, direction = jp.array([-1.5, 3.0, 0.0]), jp.array([sine, -sine, 0.0])
+    transmitted_sine = sine / 1.5
+    transmitted_cosine = jp.sqrt(1.0 - transmitted_sine**2)
+    expected = jp.array([-transmitted_sine, -transmitted_cosine, 0.0])
+    reflected, refractive_index = trace(scene, origin, direction, 2)
+    assert jp.allclose(reflected, expected, atol=1e-4)
+    assert jp.allclose(refractive_index, 1.5)
+    exit_direction, refractive_index = trace(scene, origin, direction, 3)
+    assert jp.allclose(exit_direction, jp.array([-sine, -sine, 0.0]), atol=1e-4)
+    assert jp.allclose(refractive_index, 1.0)

@@ -49,7 +49,10 @@ def compute_transmission_cosines(eye, normal, n_ratio):
 
 def compute_new_rays(normal, eye, n_ratio, point, transparencies):
     is_transparent = transparencies > 0.0
-    do_reflect = jp.expand_dims(~is_transparent, -1)
+    cosines = compute_transmission_cosines(eye, normal, n_ratio)
+    _, sin_transmit_squared, _ = cosines
+    is_total_reflection = sin_transmit_squared > 1.0
+    do_reflect = jp.expand_dims(~is_transparent | is_total_reflection, -1)
     reflection = paz.graphics.geometry.reflect(-eye, normal)
     refraction = compute_refractive_direction(eye, normal, n_ratio)
     direction = jp.where(do_reflect, reflection, refraction)
