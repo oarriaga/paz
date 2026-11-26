@@ -27,7 +27,7 @@ def crop(image, box):
 def to_RGB(depth):
     min_depth = jp.min(depth)
     max_depth = jp.max(depth)
-    normalized_depth = depth - min_depth / (max_depth - min_depth)
+    normalized_depth = (depth - min_depth) / (max_depth - min_depth)
     return (255 * normalized_depth).astype("uint8")
 
 
