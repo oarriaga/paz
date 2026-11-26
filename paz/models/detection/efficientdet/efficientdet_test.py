@@ -80,19 +80,6 @@ def get_EfficientNet_hyperparameters():
     return efficientnet_hyperparameters
 
 
-@pytest.mark.parametrize(
-    ("image_size, scaling_coefficients, output_shape"),
-    [
-        (512, (1.0, 1.0, 0.8), (1, 256, 256, 32)),
-        (640, (1.0, 1.1, 0.8), (1, 320, 320, 32)),
-        (768, (1.1, 1.2, 0.7), (1, 384, 384, 32)),
-        (896, (1.2, 1.4, 0.7), (1, 448, 448, 40)),
-        (1024, (1.4, 1.8, 0.6), (1, 512, 512, 48)),
-        (1280, (1.6, 2.2, 0.6), (1, 640, 640, 48)),
-        (1280, (1.8, 2.6, 0.5), (1, 640, 640, 56)),
-        (1536, (1.8, 2.6, 0.5), (1, 768, 768, 56)),
-    ],
-)
 def get_test_images(image_size, batch_size=1):
     """Generates a simple mock image.
 
@@ -212,25 +199,10 @@ def test_efficientdet_models(model_fn):
     assert model.prior_boxes is not None
 
 
-# Parameterize the test over all model functions.
-@pytest.mark.parametrize(
-    "model_fn",
-    [
-        EFFICIENTDETD0,
-        EFFICIENTDETD1,
-        EFFICIENTDETD2,
-        EFFICIENTDETD3,
-        EFFICIENTDETD4,
-        EFFICIENTDETD5,
-        EFFICIENTDETD6,
-        EFFICIENTDETD7,
-        EFFICIENTDETD7x,
-    ],
-)
 def count_params(weights):
     """Count the total number of scalars composing the weights."""
     unique_weights = {id(w): w for w in weights}.values()
-    weight_shapes = [w.shape.as_list() for w in unique_weights]
+    weight_shapes = [w.shape for w in unique_weights]
     standardized_weight_shapes = [
         [0 if w_i is None else w_i for w_i in w] for w in weight_shapes
     ]
@@ -484,14 +456,14 @@ def test_efficientnet_bottleneck_block(
 @pytest.mark.parametrize(
     ("input_shape, dtype, target_shape, is_training"),
     [
-        ((1, 1), np.float64, (1, 1, 1, 1), True),
-        ((5, 5), np.float64, (5, 1, 5, 5), True),
-        ((3, 5), np.float64, (3, 1, 3, 5), True),
-        ((5, 3), np.float64, (5, 1, 5, 3), True),
-        ((1, 1), np.float64, (1, 1), False),
-        ((5, 5), np.float64, (5, 5), False),
-        ((3, 5), np.float64, (3, 5), False),
-        ((5, 3), np.float64, (5, 3), False),
+        ((1, 1), np.float32, (1, 1, 1, 1), True),
+        ((5, 5), np.float32, (5, 1, 5, 5), True),
+        ((3, 5), np.float32, (3, 1, 3, 5), True),
+        ((5, 3), np.float32, (5, 1, 5, 3), True),
+        ((1, 1), np.float32, (1, 1), False),
+        ((5, 5), np.float32, (5, 5), False),
+        ((3, 5), np.float32, (3, 5), False),
+        ((5, 3), np.float32, (5, 3), False),
     ],
 )
 def test_drop_connect(input_shape, dtype, target_shape, is_training):
