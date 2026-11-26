@@ -12,6 +12,20 @@ from paz.inference.utils import squeeze_pytree
 
 
 def MCMCPosterior(states, infos, config, latent_space, sample_predictive=None):
+    """Builds a posterior from the states of Markov chains.
+
+    # Arguments
+    - `states`: Chain states. The leaves of `states.position` have shape
+      `(num_samples, num_chains, ...)`.
+    - `infos`: Chain infos with the field `is_accepted`.
+    - `config`: Inference settings, stored in the posterior.
+    - `latent_space`: Latent space of the model.
+    - `sample_predictive`: `None` or a function `(key, forward_samples)`.
+
+    # Returns
+    Namedtuple with `sample(key, num_samples=1)`, `sample_inverse`,
+    `diagnostics`, `as_density` and the stored chain samples.
+    """
     inverse_samples = states.position
     inverse_log_probs = states.log_density
 

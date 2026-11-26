@@ -14,6 +14,22 @@ from paz.inference.utils import validate_space
 
 
 def infer(key, data, model, method, sample_predictive=None, **kwargs):
+    """Samples the posterior of `model` given `data`.
+
+    # Arguments
+    - `key`: JAX PRNG key.
+    - `data`: Observations passed to `model.log_prob_inverse`.
+    - `model`: `PGM`.
+    - `method`: String. Only `"mh"` (Metropolis-Hastings) is implemented.
+    - `sample_predictive`: `None` or a function `(key, forward_samples)`
+      used by the posterior to sample.
+    - `kwargs`: Method settings. `"mh"` requires `num_samples` and
+      accepts `num_chains`, `sigma`, `warmup`, `init`, `space`, `tuner`,
+      `tune`, `progress` and `callbacks`.
+
+    # Returns
+    `MCMCPosterior`.
+    """
     if method is None:
         raise ValueError("method is required")
     method = method.lower()

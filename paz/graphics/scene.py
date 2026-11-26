@@ -182,6 +182,18 @@ def sort_by_group(shapes, mask, shadow_mask):
 
 
 def compile(scene, lights, mask, shadow_mask=None):
+    """Flattens a scene and its lights into a `CompiledScene`.
+
+    # Arguments
+    - `scene`: `paz.graphics.Scene`.
+    - `lights`: A `PointLight`, an `AreaLight` or a list of them.
+    - `mask`: `None` to select every node, or one boolean per top-level
+      scene node. The value of a group applies to all of its shapes.
+    - `shadow_mask`: `None` or a mask with the same form as `mask`.
+
+    # Returns
+    `paz.graphics.CompiledScene`.
+    """
     flat_scene = flatten_scene(scene)
     lights = prepare_lights(lights)
     mask = prepare_mask(mask, len(flat_scene), scene)
