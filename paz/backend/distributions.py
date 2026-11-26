@@ -624,13 +624,18 @@ class TruncatedNormal(_TruncatedNormalBase, Distribution):
         std_low, std_high = _standardized_bounds(
             self.loc, self.scale, self.low, self.high
         )
-        low_cdf = normal_cdf(std_low)
-        high_cdf = normal_cdf(std_high)
+        # The normal cdf rounds to one in the upper tail, so an interval
+        # above the mean is sampled through its mirror image.
+        is_low_positive = std_low >= 0
+        low_cdf = normal_cdf(jp.where(is_low_positive, -std_high, std_low))
+        high_cdf = normal_cdf(jp.where(is_low_positive, -std_low, std_high))
         shape = build_sample_shape(num_samples) + self.batch_shape
         uniforms = jax.random.uniform(
             seed, shape, dtype=self.dtype, minval=low_cdf, maxval=high_cdf
         )
-        return self.loc + self.scale * normal_icdf(uniforms)
+        draws = normal_icdf(uniforms)
+        draws = jp.where(is_low_positive, -draws, draws)
+        return self.loc + self.scale * draws
 
 
 _BetaBase = namedtuple(
@@ -2333,6 +2338,7 @@ def _require_seed(seed):
 
 
 def _standardized_bounds(loc, scale, low, high):
+    low, high = jp.asarray(low), jp.asarray(high)
     return (low - loc) / scale, (high - loc) / scale
 
 

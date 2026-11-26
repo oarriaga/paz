@@ -174,5 +174,4 @@ def normal_log_cdf(values):
 
 
 def normal_icdf(values):
-    values = to_float(values)
-    return jp.sqrt(2.0) * jsp_special.erfinv(2.0 * values - 1.0)
+    return jsp_special.ndtri(to_float(values))

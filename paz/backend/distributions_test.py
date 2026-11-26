@@ -726,3 +726,18 @@ def test_transformed_cumulative_is_jittable_over_the_bijector():
 
     expected = stats.norm(0.0, 1.4).cdf(0.3)
     assert_close(jax.jit(compute_cdf)(-2.0, 0.3), expected, rtol=1e-6)
+
+
+def test_truncated_normal_moments_accept_python_floats():
+    truncated = D.TruncatedNormal(0.5, 1.3, -1.0, 2.0)
+    reference = stats.truncnorm(-1.5 / 1.3, 1.5 / 1.3, 0.5, 1.3)
+    assert_moments(truncated, reference, MOMENTS)
+
+
+def test_truncated_normal_samples_the_upper_tail_in_single_precision():
+    f = lambda value: jp.asarray(value, jp.float32)
+    truncated = D.TruncatedNormal(f(0.0), f(1.0), f(6.0), f(9.0))
+    samples = truncated.sample(2000, seed=KEY)
+    expected_mean = stats.truncnorm(6.0, 9.0).mean()
+    assert jp.all((samples >= 6.0) & (samples <= 9.0))
+    assert jp.isclose(samples.mean(), expected_mean, atol=0.02)
