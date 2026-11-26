@@ -35,7 +35,7 @@ classifiers = [
 ]
 dependencies = [
     "numpy>=1.26",
-    "opencv-python>=4.8",
+    "opencv-python>=4.8,<5",
     "keras>=3",
     "jax",
     "matplotlib",
