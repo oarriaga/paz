@@ -571,3 +571,20 @@ def test_insert_parallel_with_duplicate_in_batch_updates_size_correctly(
     )  # Contains a duplicate
     new_table, _, _ = insert_parallel(empty_table, items_to_insert)
     assert new_table.size == 2
+
+
+def build_batch(item_args):
+    item_args = jp.array(item_args, dtype=jp.uint32)
+    return Item(item_args, jp.stack([item_args, item_args + 1], axis=1))
+
+
+def test_insert_parallel_with_duplicates_inserts_every_unique_item():
+    table = build(16, (2,))
+    items = build_batch([5, 1, 5, 2, 1, 3])
+    table, inserted_mask, _ = insert_parallel(table, items)
+    _, found_flags = lookup_parallel(table, build_batch([1, 2, 3, 5]))
+    is_first_occurrence = jp.array([True, True, False, True, False, True])
+    assert jp.all(inserted_mask == is_first_occurrence)
+    assert jp.all(found_flags)
+    assert table.size == 4
+    assert jp.sum(table.table_occupancy) == 4

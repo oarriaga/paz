@@ -416,7 +416,10 @@ def insert_parallel(table, items):
     )
 
     # 3. Determine which of the unique items need to be inserted.
-    unique_inserted_mask = jp.logical_not(unique_found_mask)
+    # jp.unique pads the unique items up to the batch size with copies.
+    is_padding = jp.arange(num_unique_items) >= jp.sum(unique_item_mask)
+    found_or_padding = jp.logical_or(unique_found_mask, is_padding)
+    unique_inserted_mask = jp.logical_not(found_or_padding)
 
     # 4. Prepare initial state FOR UNIQUE ITEMS ONLY.
     unique_items_uint32 = jax.vmap(pytree_to_uint32)(unique_items)
@@ -446,14 +449,11 @@ def insert_parallel(table, items):
     # THIS IS THE KEY FIX: We filter the items and counters *before* the update call.
     # print("unique_inserted_mask", unique_inserted_mask)
     # print("unique_items", unique_items)
-    which_items_to_insert = jp.logical_and(
-        unique_inserted_mask, unique_item_mask
-    )
     items_to_insert = jax.tree_util.tree_map(
-        lambda x: x[which_items_to_insert], unique_items
+        lambda x: x[unique_inserted_mask], unique_items
     )
     counters_for_insert = jax.tree_util.tree_map(
-        lambda x: x[which_items_to_insert], final_counters_for_uniques
+        lambda x: x[unique_inserted_mask], final_counters_for_uniques
     )
     # items_to_insert = jax.tree_util.tree_map(
     #     lambda x: x[unique_inserted_mask], unique_items
