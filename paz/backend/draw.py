@@ -49,11 +49,35 @@ def rectangle(image, top_left_point, bottom_right_point, color, thickness):
 
 
 def box(image, box, color=GREEN, thickness=2):
+    """Draws a box on an image.
+
+    # Arguments
+    - `image`: Numpy array of shape `(H, W, 3)`. It is modified in place.
+    - `box`: List with the integer pixel coordinates
+      `[x_min, y_min, x_max, y_max]` in its first four elements.
+    - `color`: RGB color as three integers.
+    - `thickness`: Integer. Line thickness in pixels.
+
+    # Returns
+    The numpy array `image` with the box drawn.
+    """
     x_min, y_min, x_max, y_max = box[:4]
     return rectangle(image, (x_min, y_min), (x_max, y_max), color, thickness)
 
 
 def boxes(image, boxes, colors=GREEN, thickness=2):
+    """Draws boxes on a copy of an image.
+
+    # Arguments
+    - `image`: Array of shape `(H, W, 3)`.
+    - `boxes`: Integer array of shape `(num_boxes, 4)` in corner form
+      `[x_min, y_min, x_max, y_max]` in pixel coordinates.
+    - `colors`: A single RGB color, or a list with one RGB color per box.
+    - `thickness`: Integer. Line thickness in pixels.
+
+    # Returns
+    Numpy array of shape `(H, W, 3)` with the boxes drawn.
+    """
     image = np.ascontiguousarray(np.array(image, dtype=image.dtype))
     if np.ndim(colors) == 1:
         colors = [colors] * len(boxes)
@@ -100,9 +124,21 @@ def triangle(image, center, size, color):
 
 
 def mosaic(images, shape=None, border=0, background=255):
-    """Makes a mosaic of the images.
+    """Arranges images of equal size in a grid.
+
     # Arguments
-        images: Array
+    - `images`: Array of shape `(num_images, H, W, C)`.
+    - `shape`: Tuple `(num_rows, num_columns)`. One of the two can be -1 and
+      is then computed from the number of images. If `None` a grid close to
+      a square is used. A grid with fewer cells than images raises a
+      `ValueError`.
+    - `border`: Integer. Number of pixels between images.
+    - `background`: Value used for the borders and the empty cells.
+
+    # Returns
+    Numpy array with the dtype of `images` and shape
+    `(num_rows * H + (num_rows - 1) * border,
+    num_columns * W + (num_columns - 1) * border, C)`.
     """
     # TODO add dtype check for images. Images should be uint8
     images = np.asarray(images)
@@ -178,6 +214,25 @@ def boxes2D(
     label_color=WHITE,
     font=cv2.FONT_HERSHEY_DUPLEX,
 ):
+    """Draws boxes with a class name and score label on a copy of an image.
+
+    # Arguments
+    - `image`: Array of shape `(H, W, 3)`.
+    - `boxes`: Integer array of shape `(num_boxes, 4)` in corner form
+      `[x_min, y_min, x_max, y_max]` in pixel coordinates.
+    - `class_args`: Integer class argument of each box. If `None` all boxes
+      use the class argument 0.
+    - `scores`: Score of each box in `[0, 1]`. It is shown as a percentage.
+    - `names`: Class names indexed by class argument.
+    - `colors`: RGB colors indexed by class argument.
+    - `thickness`: Integer. Line thickness in pixels.
+    - `font_scale`: Float. Scale of the label text.
+    - `label_color`: RGB color of the label text.
+    - `font`: OpenCV font of the label text.
+
+    # Returns
+    Numpy array of shape `(H, W, 3)` with the boxes and labels drawn.
+    """
 
     def draw_box2D(image, box, class_arg, score):
         color = colors[class_arg]
@@ -205,17 +260,16 @@ def boxes2D(
 
 
 def keypoint(image, point, color=GREEN, radius=5):
-    """Draws a circle in image.
+    """Draws a filled circle with a black outline on an image.
 
     # Arguments
-        image: Numpy array of shape ``[H, W, 3]``.
-        point: List of length two indicating ``(y, x)``
-            openCV coordinates.
-        color: List of length three indicating RGB color of point.
-        radius: Integer indicating the radius of the point to be drawn.
+    - `image`: Numpy array of shape `(H, W, 3)`. It is modified in place.
+    - `point`: Two integers with the `(x, y)` pixel coordinates.
+    - `color`: RGB color as three integers.
+    - `radius`: Integer. Radius of the circle in pixels.
 
     # Returns
-        Numpy array with shape ``[H, W, 3]``. Image with circle.
+    The numpy array `image` with the circle drawn.
     """
     cv2.circle(image, tuple(point), radius, (0, 0, 0), cv2.FILLED)
     inner_radius = int(0.8 * radius)
@@ -224,6 +278,18 @@ def keypoint(image, point, color=GREEN, radius=5):
 
 
 def keypoints(image, points, colors, radius):
+    """Draws keypoints on a copy of an image.
+
+    # Arguments
+    - `image`: Array of shape `(H, W, 3)`.
+    - `points`: Integer array of shape `(num_points, 2)` with `(x, y)`
+      pixel coordinates.
+    - `colors`: List with one RGB color per point.
+    - `radius`: Integer. Radius of each keypoint in pixels.
+
+    # Returns
+    Numpy array of shape `(H, W, 3)` with the keypoints drawn.
+    """
     image = np.ascontiguousarray(np.array(image, dtype=image.dtype))
     points = np.array(points, dtype=points.dtype)
     for point, color in zip(points, colors):
@@ -425,7 +491,20 @@ def overlay_masks(image, class_map, colors, alpha=0.5):
 
 
 def text(image, message, point, scale=0.7, color=WHITE, thickness=2):
-    """Draws a text message on an image at the given (x, y) point."""
+    """Draws a text message on a copy of an image.
+
+    # Arguments
+    - `image`: Array of shape `(H, W, 3)`.
+    - `message`: String to draw.
+    - `point`: Two integers with the `(x, y)` pixel coordinates of the
+      bottom-left corner of the text.
+    - `scale`: Float. Font scale.
+    - `color`: RGB color as three integers.
+    - `thickness`: Integer. Thickness of the text lines in pixels.
+
+    # Returns
+    Numpy array of shape `(H, W, 3)` with the text drawn.
+    """
     image = np.array(image)
     font = cv2.FONT_HERSHEY_DUPLEX
     cv2.putText(image, message, point, font, scale, color, thickness)

@@ -40,23 +40,50 @@ def flip_left_right(image):
     """Flips an image left and right.
 
     # Arguments
-        image: Array of shape `(H, W, C)`.
+    - `image`: Array of shape `(H, W, C)`.
 
     # Returns
-        Flipped image array.
+    Flipped image array of shape `(H, W, C)`.
     """
     return image[:, ::-1]
 
 
 def BGR_to_RGB(image_BGR):
+    """Converts a BGR image to RGB by reversing the last axis.
+
+    # Arguments
+    - `image_BGR`: Array of shape `(..., 3)`.
+
+    # Returns
+    Array with the same shape and dtype as `image_BGR`.
+    """
     return image_BGR[..., ::-1]
 
 
 def RGB_to_BGR(image_RGB):
+    """Converts an RGB image to BGR by reversing the last axis.
+
+    # Arguments
+    - `image_RGB`: Array of shape `(..., 3)`.
+
+    # Returns
+    Array with the same shape and dtype as `image_RGB`.
+    """
     return image_RGB[..., ::-1]
 
 
 def load(filepath, flag=COLOR):
+    """Loads an image from a file.
+
+    # Arguments
+    - `filepath`: String or `Path` of the image file.
+    - `flag`: One of `paz.image.COLOR`, `paz.image.GRAY` or
+      `paz.image.DEPTH`. Any other value raises a `ValueError`.
+
+    # Returns
+    JAX array of shape `(H, W, 3)` in RGB order for `COLOR`, and of shape
+    `(H, W, 1)` for `GRAY` and `DEPTH`.
+    """
     filepath = str(Path(filepath))
     image = jp.array(cv2.imread(filepath, flag))
     if flag == COLOR:
@@ -71,6 +98,16 @@ def load(filepath, flag=COLOR):
 
 
 def write(filepath, image):
+    """Writes an RGB image to a file.
+
+    # Arguments
+    - `filepath`: String or `Path` of the output file. The extension sets
+      the image format.
+    - `image`: RGB array of shape `(H, W, 3)`.
+
+    # Returns
+    The value returned by `cv2.imwrite`: `True` if the image was written.
+    """
     filepath = str(Path(filepath))
     image = RGB_to_BGR(image)
     image = np.ascontiguousarray(paz.to_numpy(image))
@@ -87,6 +124,17 @@ def decode_JPEG(encoded_image):
 
 
 def resize(image, size, method="linear", antialias=False):
+    """Resizes an image to the given size.
+
+    # Arguments
+    - `image`: Array of shape `(H, W, C)`.
+    - `size`: Tuple `(H_new, W_new)`.
+    - `method`: Interpolation method passed to `jax.image.resize`.
+    - `antialias`: Boolean passed to `jax.image.resize`.
+
+    # Returns
+    Array of shape `(H_new, W_new, C)`.
+    """
     # TODO change to split size into H, W
     return jax.image.resize(image, (*size, image.shape[-1]), method, antialias)
 
@@ -232,13 +280,14 @@ def scale_with_aspect_ratio(image, scale, method="linear", antialias=False):
 
 
 def show(image, name="image", wait=True):
-    """Shows RGB image in an external window.
+    """Shows an RGB image in an external window.
 
     # Arguments
-        image: Numpy array
-        name: String indicating the window name.
-        wait: Boolean. If ''True'' window stays open until user presses a key.
-            If ''False'' windows closes immediately.
+    - `image`: RGB array of dtype `uint8`. Any other dtype raises a
+      `ValueError`.
+    - `name`: String with the window name.
+    - `wait`: Boolean. If `True` the window stays open until the user
+      presses `q`. If `False` the function returns immediately.
     """
     image = paz.to_numpy(image)
     if image.dtype != np.uint8:
@@ -253,14 +302,38 @@ def show(image, name="image", wait=True):
 
 
 def normalize(image):
+    """Divides an image by 255.
+
+    # Arguments
+    - `image`: Array with values in `[0, 255]`.
+
+    # Returns
+    Array with values in `[0, 1]`.
+    """
     return image / 255.0
 
 
 def denormalize(image):
+    """Multiplies an image by 255, rounds it and casts it to `uint8`.
+
+    # Arguments
+    - `image`: Array with values in `[0, 1]`.
+
+    # Returns
+    Array of dtype `uint8` with the same shape as `image`.
+    """
     return paz.cast(jp.round(image * 255.0), jp.uint8)
 
 
 def rgb_to_gray(image):
+    """Converts an RGB image to grayscale with a weighted channel sum.
+
+    # Arguments
+    - `image`: RGB array of shape `(..., 3)`.
+
+    # Returns
+    Array of shape `(..., 1)` in the value range of `image`.
+    """
     rgb_weights = jp.array([0.2989, 0.5870, 0.1140])
     grayscale = jp.tensordot(image, rgb_weights, axes=(-1, -1))
     grayscale = jp.expand_dims(grayscale, axis=-1)
@@ -268,6 +341,14 @@ def rgb_to_gray(image):
 
 
 def RGB_to_GRAY(image):
+    """Converts an RGB image with values in `[0, 255]` to grayscale.
+
+    # Arguments
+    - `image`: RGB array of shape `(..., 3)` with values in `[0, 255]`.
+
+    # Returns
+    Array of shape `(..., 1)` and dtype `uint8`.
+    """
     image = normalize(image)
     image = rgb_to_gray(image)
     image = denormalize(image)
@@ -742,7 +823,22 @@ def comput_aspect_ratio(image):
 
 
 def resize_with_aspect_ratio(image, H, W, method="linear", antialias=False):
-    """Resizes to fit within a target size and pads it to that exact size."""
+    """Resizes an image to fit a target size and pads it to that size.
+
+    The image is scaled by a single factor so that it fits within `(H, W)`
+    without changing its aspect ratio. The remaining rows at the bottom and
+    columns at the right are filled with zeros.
+
+    # Arguments
+    - `image`: Array of shape `(H_image, W_image, C)`.
+    - `H`: Integer. Height of the output.
+    - `W`: Integer. Width of the output.
+    - `method`: Interpolation method passed to `jax.image.resize`.
+    - `antialias`: Boolean passed to `jax.image.resize`.
+
+    # Returns
+    Array of shape `(H, W, C)`.
+    """
 
     def _resize_with_aspect_ratio(image, H, W, method, antialias):
         """Resize to fit within a given size while maintaining aspect ratio."""
