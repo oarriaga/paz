@@ -266,7 +266,6 @@ def _resolve_insert_conflicts(
     # This is the main body function for the while_loop.
     def find_valid_slots(loop_state):
         keys, counters, needs_new_slot_mask = loop_state
-        num_items = get_batch_size(counters)
 
         def get_next_probe(key, counter, item_uint32):
             next_ctr_same_slot = Counter(
@@ -303,47 +302,10 @@ def _resolve_insert_conflicts(
             needs_new_slot_mask, keys, counters, items_uint32
         )
 
-        # --- CORRECTED JIT-SAFE TIE-BREAKING ---
-        proposed_flat_args = compute_flat_arg(next_counters, table)
+        mask = _needs_new_slot(table, next_counters, inserted_mask)
+        return next_keys, next_counters, mask
 
-        # Get the first-occurrence index for each value.
-        _vals, first_indices, inverse_indices = jp.unique(
-            proposed_flat_args,
-            return_index=True,
-            return_inverse=True,
-            size=num_items,
-        )
-
-        # An item is the first occurrence if its own index in the array equals the
-        # canonical "first_index" for its value. This avoids boolean masking.
-        is_first_occurrence_mask = (
-            jp.arange(num_items) == first_indices[inverse_indices]
-        )
-
-        has_conflict = jp.logical_not(is_first_occurrence_mask)
-        overflowed = next_counters.table_arg >= table.num_tables
-
-        new_needs_new_slot_mask = jp.logical_and(
-            inserted_mask, jp.logical_or(overflowed, has_conflict)
-        )
-        return next_keys, next_counters, new_needs_new_slot_mask
-
-    # Initial conflict check before the loop starts
-    initial_flat_args = compute_flat_arg(initial_counters, table)
-    num_initial_items = get_batch_size(initial_counters)
-
-    # CORRECTED JIT-SAFE initial conflict check
-    _i_vals, i_first_indices, i_inverse_indices = jp.unique(
-        initial_flat_args,
-        return_index=True,
-        return_inverse=True,
-        size=num_initial_items,
-    )
-    initial_is_first_mask = (
-        jp.arange(num_initial_items) == i_first_indices[i_inverse_indices]
-    )
-    initial_has_conflict = jp.logical_not(initial_is_first_mask)
-    initial_needs_new_slot = jp.logical_and(inserted_mask, initial_has_conflict)
+    needs_new_slot = _needs_new_slot(table, initial_counters, inserted_mask)
 
     def _continue_if_conflicts(state):
         _keys, _counters, needs_new_slot_mask = state
@@ -353,9 +315,25 @@ def _resolve_insert_conflicts(
     _final_keys, final_counters, _ = jax.lax.while_loop(
         cond_fun=_continue_if_conflicts,
         body_fun=find_valid_slots,
-        init_val=(initial_keys, initial_counters, initial_needs_new_slot),
+        init_val=(initial_keys, initial_counters, needs_new_slot),
     )
     return final_counters
+
+
+def _needs_new_slot(table, counters, inserted_mask):
+    item_args = jp.arange(get_batch_size(counters))
+    overflowed = counters.table_arg >= table.num_tables
+    claims_position = jp.logical_and(inserted_mask, ~overflowed)
+    flat_args = compute_flat_arg(counters, table)
+    # Items that claim no position get distinct ones past the table.
+    no_claim_args = len(table.args) + item_args
+    flat_args = jp.where(claims_position, flat_args, no_claim_args)
+    unique_kwargs = {"return_index": True, "return_inverse": True}
+    unique = jp.unique(flat_args, size=len(item_args), **unique_kwargs)
+    _, first_args, inverse_args = unique
+    has_conflict = item_args != first_args[inverse_args]
+    overflowed_or_conflict = jp.logical_or(overflowed, has_conflict)
+    return jp.logical_and(inserted_mask, overflowed_or_conflict)
 
 
 def insert_parallel(table, items):

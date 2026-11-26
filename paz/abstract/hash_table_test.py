@@ -603,6 +603,26 @@ def test_insert_parallel_is_jittable():
     assert table.size == 4
 
 
+def test_insert_parallel_into_full_slot_finds_item(table_with_full_slot):
+    table = table_with_full_slot["table"]
+    item = table_with_full_slot["non_inserted_item"]
+    table, inserted_mask, _ = insert_parallel(table, stack_items([item]))
+    _, found = lookup(table, item)
+    assert jp.all(inserted_mask)
+    assert found
+    assert jp.all(table.table_occupancy <= table.num_tables)
+
+
+def test_insert_parallel_new_item_colliding_with_existing(empty_table):
+    existing_item, new_item = find_colliding_items(empty_table)
+    table, _, _ = insert(empty_table, existing_item)
+    items = stack_items([existing_item, new_item])
+    table, inserted_mask, _ = insert_parallel(table, items)
+    _, found_flags = lookup_parallel(table, items)
+    assert jp.all(inserted_mask == jp.array([False, True]))
+    assert jp.all(found_flags)
+
+
 def insert_sequentially(table, items):
     inserted_flags = []
     for item_arg in range(get_batch_size(items)):
