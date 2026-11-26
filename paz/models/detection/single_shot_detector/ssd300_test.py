@@ -1,8 +1,15 @@
+import os
 import pytest
-from paz.models.detection.ssd300 import SSD300
 from keras.models import Model
+from paz.models.detection.single_shot_detector.ssd300 import SSD300
 
 
+def skip_if_missing(filename):
+    path = os.path.expanduser("~/.keras/paz/models/" + filename)
+    return pytest.mark.skipif(not os.path.exists(path), reason="not cached")
+
+
+@skip_if_missing("SSD300-VOC-VOC_weights.hdf5")
 def test_model_creation():
     """Test if SSD300 model is created successfully."""
     num_classes = 21
@@ -38,6 +45,7 @@ def test_incompatible_num_classes_with_weights():
         SSD300(num_classes=10, head_weights="VOC")
 
 
+@skip_if_missing("SSD300-VOC-VOC_weights.hdf5")
 def test_SSD300_VOC_VOC():
     """Test SSD300 with VOC-VOC weights."""
     try:
@@ -46,6 +54,7 @@ def test_SSD300_VOC_VOC():
         pytest.fail(f"SSD VOC-VOC loading failed: {valuerror}")
 
 
+@skip_if_missing("SSD300-FAT-FAT_weights.hdf5")
 def test_SSD300_FAT_FAT():
     """Test SSD300 with FAT-FAT weights."""
     try:
@@ -54,6 +63,7 @@ def test_SSD300_FAT_FAT():
         pytest.fail(f"SSD FAT-FAT loading failed: {e}")
 
 
+@skip_if_missing("SSD300-VGG-None_weights.hdf5")
 def test_SSD300_None_VGG():
     """Test SSD300 with None-VGG weights."""
     try:
@@ -62,6 +72,7 @@ def test_SSD300_None_VGG():
         pytest.fail(f"SSD None-VGG loading failed: {valuerror}")
 
 
+@skip_if_missing("SSD300-VOC-None_weights.hdf5")
 def test_SSD300_None_VOC():
     """Test SSD300 with None-VOC weights."""
     try:
