@@ -322,8 +322,8 @@ def make_branch_anchors(strides_y, strides_x, branch_arg, branches,
 
 def compute_translation_centers(strides_y, strides_x, branch_arg, branches):
     feature_H, feature_W = branches[branch_arg].shape[1:3]
-    center_x = (np.arange(0, feature_H) + 0.5) * strides_x[0]
-    center_y = (np.arange(0, feature_W) + 0.5) * strides_y[0]
+    center_x = (np.arange(0, feature_W) + 0.5) * strides_x[0]
+    center_y = (np.arange(0, feature_H) + 0.5) * strides_y[0]
     center_x, center_y = np.meshgrid(center_x, center_y)
     center_x = center_x.reshape(-1, 1)
     center_y = center_y.reshape(-1, 1)
