@@ -175,16 +175,18 @@ def solve_quadratic(a, b, c):
     """
     discriminator = (b**2) - (4.0 * a * c)
     valid_mask = discriminator > 0  # TODO why is >= bad for auto-diff
-    discriminator = jp.where(valid_mask, discriminator, 1e-4)
-    sqrt_discriminator = jp.sqrt(discriminator)
-    solution_A = (-b - sqrt_discriminator) / (2.0 * a)
-    solution_B = (-b + sqrt_discriminator) / (2.0 * a)
-    # sign_b = jp.where(b >= 0.0, 1.0, -1.0)
-    # q = -0.5 * (b + sign_b * sqrt_discriminator)
-    # safe_q = jp.where(q == 0.0, 1.0, q)
-    # safe_a = jp.where(a == 0.0, 1.0, a)
-    # solution_A = q / safe_a
-    # solution_B = c / safe_q
+    safe_discriminator = jp.where(valid_mask, discriminator, 1.0)
+    sqrt_discriminator = jp.sqrt(safe_discriminator)
+    sqrt_discriminator = jp.where(valid_mask, sqrt_discriminator, 0.0)
+    # q avoids subtracting nearly equal numbers when b**2 >> 4 * a * c
+    is_b_positive = b >= 0.0
+    q = -0.5 * (b + jp.where(is_b_positive, 1.0, -1.0) * sqrt_discriminator)
+    safe_q = jp.where(q == 0.0, 1.0, q)
+    safe_a = jp.where(a == 0.0, 1.0, a)
+    solution_q = c / safe_q
+    solution_a = jp.where(a == 0.0, solution_q, q / safe_a)
+    solution_A = jp.where(is_b_positive, solution_a, solution_q)
+    solution_B = jp.where(is_b_positive, solution_q, solution_a)
     return solution_A, solution_B, valid_mask
 
 
