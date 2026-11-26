@@ -1,7 +1,7 @@
 # IMDB face attribute classifier
 
 Two-class face attribute classification with mini_XCEPTION, trained on the
-IMDB face dataset (`man` / `woman` labels). This mirrors the emotion
+IMDB face dataset (`woman` / `man` labels). This mirrors the emotion
 (`emotion_classifier`) example: a small Xception is run on grayscale face
 crops, then composed with the Haar-cascade face detector for per-face
 classification.

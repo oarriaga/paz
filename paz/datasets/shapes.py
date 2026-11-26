@@ -16,9 +16,9 @@ def get_class_names():
 def sample_shape(H, W, class_names, offset=20):
     name = np.random.choice(class_names)
     color = tuple(np.random.randint(0, 255, size=3).tolist())
-    center_x = np.random.randint(offset, W - offset - 1)
-    center_y = np.random.randint(offset, H - offset - 1)
     size = np.random.randint(offset, H // 4)
+    center_x = np.random.randint(size, W - size)
+    center_y = np.random.randint(size, H - size)
     box = build_bounding_box(center_x, center_y, size)
     return Shape(name, color, box, (center_x, center_y), size)
 

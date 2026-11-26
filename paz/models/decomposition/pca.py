@@ -28,7 +28,7 @@ def trim_components(eigenvalues, eigenvectors, num_components):
     return eigenvalues[:num_components], eigenvectors[:num_components]
 
 
-def fit(x, num_components, total_variance=None):
+def fit(x, num_components):
     mean = compute_mean(x)
     x = subtract_mean(x, mean)
 
@@ -37,16 +37,18 @@ def fit(x, num_components, total_variance=None):
     # covariance_matrix = compute_feature_covariance_matrix(x)
     # values, vectors = compute_eigenvectors(covariance_matrix)
     values, vectors = trim_components(values, vectors, num_components)
-    return paz.NamedTuple("PCAState", mean=mean, variances=values, base=vectors)
+    variances = values**2 / (len(x) - 1)
+    state = dict(mean=mean, variances=variances, base=vectors)
+    return paz.NamedTuple("PCAState", **state)
 
 
 def fit_randomized(x, num_components, rng, n_iter=5):
     n_samples, n_features = x.shape
-    means = jp.mean(x, axis=0, keepdims=True)
+    means = compute_mean(x)
     x = x - means
 
     # Generate n_features normal vectors of the given size
-    size = jp.minimum(2 * num_components, n_features)
+    size = min(2 * num_components, n_samples, n_features)
     Q = jax.random.normal(rng, shape=(n_features, size))
 
     def step_fn(q, _):

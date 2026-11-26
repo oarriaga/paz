@@ -1,10 +1,7 @@
 import pytest
 import numpy as np
-from paz.models.classification.protonet import (
-    ProtoEmbedding,
-    ProtoNet,
-    compute_pairwise_distances,
-)
+from paz.models.classification.protonet import ProtoEmbedding, ProtoNet
+from paz.layers.compute_pairwise_distances import compute_pairwise_distances
 
 
 def parametrize(Model, model_args, output_shape, params, static_params):
@@ -53,7 +50,7 @@ test_protonet = parametrize(
 
 def test_pairwise_distances_zero():
     a = np.random.rand(10, 32)
-    distances = compute_pairwise_distances(a, a).numpy()
+    distances = np.asarray(compute_pairwise_distances(a, a))
     assert np.allclose(np.diag(distances), 0.0)
     assert distances.shape == (10, 10)
 
@@ -61,7 +58,7 @@ def test_pairwise_distances_zero():
 def test_pairwise_distances_positivity():
     a = np.random.rand(7, 100)
     b = np.random.rand(8, 100)
-    distances = compute_pairwise_distances(a, b).numpy()
+    distances = np.asarray(compute_pairwise_distances(a, b))
     assert np.all(distances > 0)
     assert distances.shape == (7, 8)
 
@@ -69,8 +66,8 @@ def test_pairwise_distances_positivity():
 def test_pairwise_distances_symmetry():
     a = np.random.rand(30, 5)
     b = np.random.rand(15, 5)
-    distances_AB = compute_pairwise_distances(a, b).numpy()
-    distances_BA = compute_pairwise_distances(b, a).numpy()
+    distances_AB = np.asarray(compute_pairwise_distances(a, b))
+    distances_BA = np.asarray(compute_pairwise_distances(b, a))
     assert np.allclose(distances_AB, distances_BA.T)
     assert distances_AB.shape == (30, 15)
     assert distances_BA.shape == (15, 30)
@@ -79,7 +76,7 @@ def test_pairwise_distances_symmetry():
 def test_pairwise_distances_with_values_to_zero():
     a = np.array([[1.0, 1.0, 1.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]])
     b = np.array([[0.0, 0.0, 0.0]])
-    values = compute_pairwise_distances(a, b).numpy()
+    values = np.asarray(compute_pairwise_distances(a, b))
     distances = np.array([[1.0], [1.0 / 3.0], [2.0 / 3.0]])
     assert np.allclose(values, distances)
 
@@ -87,7 +84,7 @@ def test_pairwise_distances_with_values_to_zero():
 def test_pairwise_distances_with_values_to_negative():
     a = np.array([[1.0, 1.0, 1.0], [1.0, 0.0, 0.0], [1.0, 1.0, 0.0]])
     b = np.array([[-1.0, -1.0, -1.0]])
-    values = compute_pairwise_distances(a, b).numpy()
+    values = np.asarray(compute_pairwise_distances(a, b))
     distances = np.array([[4.0], [2.0], [3.0]])
     assert np.allclose(values, distances)
 
@@ -108,7 +105,7 @@ def count_params(weights):
     """
     unique_weights = {id(w): w for w in weights}.values()
     unique_weights = [w for w in unique_weights if hasattr(w, "shape")]
-    weight_shapes = [w.shape.as_list() for w in unique_weights]
+    weight_shapes = [list(w.shape) for w in unique_weights]
     standardized_weight_shapes = [
         [0 if w_i is None else w_i for w_i in w] for w in weight_shapes
     ]

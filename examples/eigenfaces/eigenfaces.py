@@ -13,7 +13,7 @@ EigenfaceState = namedtuple("EigenfaceState", _fields)
 def build(images, total_variance=0.95):
     face_vectors = _build_face_vectors(images)
     pca_state = paz.PCA.fit(face_vectors, min(face_vectors.shape))
-    eigenvalues = _compute_eigenvalues(pca_state.variances, len(face_vectors))
+    eigenvalues = pca_state.variances
     num_components = _compute_num_components(eigenvalues, total_variance)
     face_shape = _normalize_shape(images.shape[1:])
     return _pack_state(pca_state, eigenvalues, num_components, face_shape)
@@ -102,12 +102,6 @@ def _crop_single_face(image, detect_face):
 def _normalize_shape(face_shape):
     face_shape = tuple(int(dim) for dim in face_shape)
     return (*face_shape, 1) if len(face_shape) == 2 else face_shape
-
-
-def _compute_eigenvalues(singular_values, num_samples):
-    denominator = max(num_samples - 1, 1)
-    singular_values = jp.array(singular_values, dtype=jp.float32)
-    return (singular_values**2) / denominator
 
 
 def _compute_num_components(eigenvalues, total_variance):
