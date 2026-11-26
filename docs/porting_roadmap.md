@@ -39,14 +39,12 @@ the bottom.
 | **EfficientDet-D0 VOC** | ✅ | v0.16 | efficientdet | ✅ persons + table |
 | **ClassifyHandClosure** (open/closed) | ✅ | reuses v0.1+v0.14 | — | ✅ open/close |
 | **IMDB face attribute** (`ClassifyMiniXceptionIMDB`) | ✅ | v0.22 | imdb_classifier | ✅ fresh download + faces |
-| EfficientPose (model) | model only | **not hosted** | — | architecture only |
 | STN, ProtoNet, Xception, PCA, kNN/DBSCAN, MAML, eigenfaces | ✅ | n/a | various | ✅ |
 
 ## Done (training scripts)
 | Script | Verified | Data dependency |
 |---|---|---|
 | SSD (`object_detection/train.py`) | pre-existing | VOC |
-| **EfficientPose** (`efficientpose/train.py`) | ✅ `--smoke` (loss≈5.7) | LINEMOD + `.ply` |
 | **Action scores** (`action_scores/train_classifier.py`) | ✅ synthetic | FER |
 | **Hand detection** (`hand_detection/train.py`) | wired (reuses SSD pipeline) | Open Images V6 |
 | **MiniXception FER** (`emotion_classifier/train.py`) | ✅ synthetic | FER |
@@ -58,11 +56,6 @@ the bottom.
 ## Still missing / not yet ported
 
 ### Tier 1 — high value
-- **EfficientPose inference app** (`EstimateEfficientPose`): the model + training
-  are ported, but there is **no inference application** (decode 6D pose, draw
-  cube) and **no pretrained weights are hosted** (404 everywhere). Needs either
-  a trained checkpoint (run `efficientpose/train.py` on LINEMOD) or an uploaded
-  weights file. Also pending: 6D-aware geometric augmentation + ADD eval callback.
 - **Pix2Pose** (`examples/pix2pose`): 6D object pose via pixel-wise 3D coords +
   GAN; includes the **DOPE** model. Multiple train + demo scripts. Not started.
   Bridges toward the future differentiable-rendering direction.
@@ -108,9 +101,6 @@ H36M loader), **Minimal Hand** (DetNet/IKNet keypoint + IK losses),
 **EfficientDet** (focal + smooth-L1, anchor matching).
 
 ## Implementation notes (selected)
-- **EfficientPose:** model reuses the EfficientDet backbone/blocks + pose head;
-  the 6D transformation/ADD loss is `paz.losses.MultiPoseLoss` (jit-friendly
-  fixed-K positive selection). Box loss reused from `paz.losses.multibox`.
 - **Human pose 3D 6D stage:** `paz.backend.poses` adds `project_to_image`,
   bone-ratio translation init, `scipy.least_squares` reprojection solve, and
   `human_pose3D_to_pose6D`; `EstimateHumanPose(solver, camera_intrinsics)` runs
