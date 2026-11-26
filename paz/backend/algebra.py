@@ -128,7 +128,7 @@ def normalize(vectors, axis=-1, keepdims=True):
         normalized vectors: Array (num_vectors, 3)
     """
     norms = compute_norms(vectors, axis=axis, keepdims=keepdims)
-    vectors = vectors / (norms + 1e-5)
+    vectors = vectors / jp.where(norms == 0.0, 1.0, norms)
     return vectors
 
 

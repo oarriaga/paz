@@ -62,3 +62,9 @@ def test_solve_quadratic_gradient_is_finite_without_real_roots():
     assert jp.isfinite(jax.grad(solve)(1.0))
     assert jp.isfinite(jax.grad(solve)(3.0))
     assert jp.isclose(jax.grad(solve)(0.0), 0.5)
+
+
+def test_normalize_returns_unit_vectors_for_small_norms():
+    vectors = jp.array([[3.0, 4.0, 0.0], [1e-5, 0.0, 0.0], [0.0, 0.0, 0.0]])
+    norms = jp.linalg.norm(algebra.normalize(vectors), axis=-1)
+    assert jp.allclose(norms, jp.array([1.0, 1.0, 0.0]))

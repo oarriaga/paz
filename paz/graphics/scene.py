@@ -253,7 +253,6 @@ def build_corner_normals(meshes, vertices):
 
 
 # Corner normals stay unnormalized so the hit normalizes exactly once.
-# paz.algebra.normalize divides by norm + 1e-5, so it is not idempotent.
 def build_mesh_corner_normals(mesh, vertices):
     if mesh.vertex_normals is None:
         corner_normals = repeat_face_normals(vertices, mesh.faces)
