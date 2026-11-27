@@ -11,7 +11,7 @@ and ``reference.npz``, the tensors of one upstream forward pass:
 - ``class_logits``, ``confidence`` and ``boxes``: the head outputs of the
   last decoder layer, before ranking
 
-    PFRPN_REFERENCE=~/pfrpn-ref/reference pytest paz/models/detection/pf_rpn
+    PFRPN_REFERENCE=~/pfrpn-ref/reference pytest tests/models/detection/pf_rpn
 """
 import os
 

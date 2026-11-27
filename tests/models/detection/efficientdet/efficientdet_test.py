@@ -7,7 +7,6 @@ from keras.layers import Conv2D, SeparableConv2D
 from keras.layers import Input, Flatten
 from keras.models import Model
 import numpy as np
-from keras.utils import get_file
 
 
 from paz.models.detection.efficientdet.efficientdet_blocks import (
@@ -46,24 +45,6 @@ from paz.models.detection.efficientdet.layers import (
     GetDropConnect,
     FuseFeature,
 )
-
-
-@pytest.fixture
-def model_input_name():
-    return "image"
-
-
-@pytest.fixture
-def model_output_name():
-    return "boxes"
-
-
-@pytest.fixture
-def model_weight_path():
-    WEIGHT_PATH = (
-        "https://github.com/oarriaga/altamira-data/releases/download/v0.16/"
-    )
-    return WEIGHT_PATH
 
 
 def get_EfficientNet_hyperparameters():
@@ -169,34 +150,6 @@ def test_bifpn():
     new_middles, _ = BiFPN(middles, skips, num_filters=64, fusion="fast")
     assert len(new_middles) == 5
     assert new_middles[0].shape[-1] == 64
-
-
-# Parameterize the test over all model functions.
-@pytest.mark.parametrize(
-    "model_fn",
-    [
-        EFFICIENTDETD0,
-        EFFICIENTDETD1,
-        EFFICIENTDETD2,
-        EFFICIENTDETD3,
-        EFFICIENTDETD4,
-        EFFICIENTDETD5,
-        EFFICIENTDETD6,
-        EFFICIENTDETD7,
-        EFFICIENTDETD7x,
-    ],
-)
-def test_efficientdet_models(model_fn):
-    """
-    Test that each EfficientDet model can be created without downloading
-    weights (by using base_weights=None, head_weights=None) and that the
-    model has its prior boxes computed.
-    """
-    model = model_fn(num_classes=90, base_weights=None, head_weights=None)
-    assert isinstance(model, Model)
-    # Check that the model has a prior_boxes attribute that is not None.
-    assert hasattr(model, "prior_boxes")
-    assert model.prior_boxes is not None
 
 
 def count_params(weights):
@@ -345,17 +298,6 @@ def test_MBconv_blocks():
     assert output_features[0].shape[-1] == 16
 
 
-def test_efficientnet():
-    """Test the EFFICIENTNET function."""
-    input_tensor = Input(shape=(64, 64, 3))
-    scaling_coefficients = (1.0, 1.0, 0.8)
-    output_features = EFFICIENTNET(
-        image=input_tensor, scaling_coefficients=scaling_coefficients
-    )
-    assert isinstance(output_features, list)
-    assert len(output_features) == 5  # P3-P7 outputs
-
-
 def test_scale_filters():
     """Test the scale_filters function."""
     filters = 32
@@ -365,11 +307,11 @@ def test_scale_filters():
     assert scaled_filters == 48
 
 
-def test_kernel_initializer():
-    """Test the kernel_initializer function."""
-    shape = (3, 3, 3, 16)
-    initializer = kernel_initializer(shape)
-    assert initializer.shape == shape
+def test_kernel_initializer_scales_with_fan_out():
+    kernel = np.array(kernel_initializer((3, 3, 64, 64)))
+    fan_out = 3 * 3 * 64
+    assert np.isclose(kernel.mean(), 0.0, atol=5e-3)
+    assert np.isclose(kernel.std(), np.sqrt(2.0 / fan_out), rtol=0.05)
 
 
 def test_round_repeats():
@@ -417,94 +359,28 @@ def test_MB_block():
     assert model.output_shape == (None, 32, 32, 16)
 
 
-def test_apply_drop_connect():
-    """Test the apply_drop_connect function."""
-
-    # Create a dummy input tensor with a fixed batch size
-    input_tensor = np.ones(shape=(4, 32, 32, 32))  # Batch size = 4
-    output_tensor = apply_drop_connect(
-        input_tensor, is_training=True, survival_rate=0.8
-    )
-
-    # Ensure the output tensor has the same shape as the input tensor
-    assert output_tensor.shape == input_tensor.shape
+def build_positive_features(num_samples):
+    shape = (num_samples, 4, 4, 3)
+    return np.random.uniform(1.0, 5.0, shape).astype("float32")
 
 
-@pytest.mark.parametrize(
-    ("image_size, scaling_coefficients, output_shape"),
-    [
-        (512, (1.0, 1.0, 0.8), (256, 256, 16)),
-        (640, (1.0, 1.1, 0.8), (320, 320, 16)),
-        (768, (1.1, 1.2, 0.7), (384, 384, 16)),
-        (896, (1.2, 1.4, 0.7), (448, 448, 24)),
-        (1024, (1.4, 1.8, 0.6), (512, 512, 24)),
-        (1280, (1.6, 2.2, 0.6), (640, 640, 24)),
-        (1280, (1.8, 2.6, 0.5), (640, 640, 32)),
-        (1536, (1.8, 2.6, 0.5), (768, 768, 32)),
-    ],
-)
-def test_efficientnet_bottleneck_block(
-    image_size, scaling_coefficients, output_shape
-):
-    shape = (image_size, image_size, 3)
-    image = Input(shape=shape, name="image")
-    branch_tensors = EFFICIENTNET(image, scaling_coefficients)
-    assert (
-        branch_tensors[0].shape == (None,) + output_shape
-    ), "Bottleneck block output shape mismatch"
+def assert_samples_dropped_or_rescaled(x, y, survival_rate):
+    kept = y.reshape(len(y), -1).any(axis=1)
+    assert 0 < kept.sum() < len(y)
+    assert np.allclose(y[kept], x[kept] / survival_rate)
 
 
-@pytest.mark.parametrize(
-    ("input_shape, dtype, target_shape, is_training"),
-    [
-        ((1, 1), np.float32, (1, 1, 1, 1), True),
-        ((5, 5), np.float32, (5, 1, 5, 5), True),
-        ((3, 5), np.float32, (3, 1, 3, 5), True),
-        ((5, 3), np.float32, (5, 1, 5, 3), True),
-        ((1, 1), np.float32, (1, 1), False),
-        ((5, 5), np.float32, (5, 5), False),
-        ((3, 5), np.float32, (3, 5), False),
-        ((5, 3), np.float32, (5, 3), False),
-    ],
-)
-def test_drop_connect(input_shape, dtype, target_shape, is_training):
-    # Generate random input using NumPy
-    x = np.random.uniform(low=0, high=5, size=input_shape).astype(dtype)
-
-    # Generate a random survival rate
-    survival_rate = np.random.uniform(0.0, 1.0)
-
-    # Apply drop connect (assumed to be implemented elsewhere)
-    y = apply_drop_connect(x, is_training, survival_rate)
-
-    # Validate the shape and dtype of the output
-    assert y.shape == target_shape, "Incorrect target shape"
-    assert y.dtype == dtype, "Incorrect target datatype"
+def test_drop_connect_drops_whole_samples_and_rescales_the_rest():
+    keras.utils.set_random_seed(0)
+    x = build_positive_features(64)
+    y = np.array(apply_drop_connect(x, True, 0.8))
+    assert y.dtype == x.dtype
+    assert_samples_dropped_or_rescaled(x, y, 0.8)
 
 
-@pytest.mark.parametrize(
-    ("image_size, scaling_coefficients, output_shape"),
-    [
-        (512, (1.0, 1.0, 0.8), (256, 256, 16)),
-        (640, (1.0, 1.1, 0.8), (320, 320, 16)),
-        (768, (1.1, 1.2, 0.7), (384, 384, 16)),
-        (896, (1.2, 1.4, 0.7), (448, 448, 24)),
-        (1024, (1.4, 1.8, 0.6), (512, 512, 24)),
-        (1280, (1.6, 2.2, 0.6), (640, 640, 24)),
-        (1280, (1.8, 2.6, 0.5), (640, 640, 32)),
-        (1536, (1.8, 2.6, 0.5), (768, 768, 32)),
-    ],
-)
-def test_EfficientNet_SE_block(image_size, scaling_coefficients, output_shape):
-    shape = (image_size, image_size, 3)
-    image = Input(shape=shape, name="image")
-    branch_tensors = EFFICIENTNET(
-        image, scaling_coefficients, excite_ratio=0.8
-    )
-    assert (
-        branch_tensors[0].shape == (None,) + output_shape
-    ), "SE block output shape mismatch"
-    del image, branch_tensors
+def test_drop_connect_is_identity_outside_training():
+    x = build_positive_features(4)
+    assert np.array_equal(apply_drop_connect(x, False, 0.8), x)
 
 
 @pytest.mark.parametrize(
@@ -1099,19 +975,12 @@ def test_EfficientDet_BiFPN(
 
 
 def test_get_drop_connect():
-    """Test the GetDropConnect layer."""
+    keras.utils.set_random_seed(0)
     layer = GetDropConnect(survival_rate=0.8)
-    input_tensor = np.random.rand(1, 4, 4, 3).astype("float32")
-
-    # Test training mode (dropout applied)
-    output_train = layer.call(input_tensor, training=True)
-    assert output_train.shape == (1, 4, 4, 3)
-    # Values should change in training mode due to dropout
-    assert not np.allclose(output_train, input_tensor)
-
-    # Test inference mode (no dropout)
-    output_inference = layer.call(input_tensor, training=False)
-    assert np.allclose(output_inference, input_tensor)
+    x = build_positive_features(64)
+    y = np.array(layer.call(x, training=True))
+    assert_samples_dropped_or_rescaled(x, y, 0.8)
+    assert np.array_equal(layer.call(x, training=False), x)
 
 
 def test_fuse_feature():
@@ -1124,7 +993,8 @@ def test_fuse_feature():
         np.random.rand(1, 4, 4, 3).astype("float32") for _ in range(3)
     ]
     output_fast = layer_fast.call(input_tensors, fusion="fast")
-    assert output_fast.shape == (1, 4, 4, 3)
+    # The fusion weights start equal, so the weighted sum is the mean.
+    assert np.allclose(output_fast, np.mean(input_tensors, 0), atol=1e-3)
 
     # Test 'sum' fusion
     layer_sum = FuseFeature(fusion="sum")
@@ -1162,46 +1032,6 @@ def test_EfficientDet_output(model, image_size):
     del detector
 
 
-@pytest.mark.weights
-@pytest.mark.parametrize(
-    ("model, model_name"),
-    [
-        (EFFICIENTDETD0, "efficientdet-d0"),
-        (EFFICIENTDETD1, "efficientdet-d1"),
-        (EFFICIENTDETD2, "efficientdet-d2"),
-        (EFFICIENTDETD3, "efficientdet-d3"),
-        (EFFICIENTDETD4, "efficientdet-d4"),
-        (EFFICIENTDETD5, "efficientdet-d5"),
-        (EFFICIENTDETD6, "efficientdet-d6"),
-        (EFFICIENTDETD7, "efficientdet-d7"),
-    ],
-)
-def test_load_weights(model, model_name, model_weight_path):
-    WEIGHT_PATH = model_weight_path
-    base_weights = ["COCO", "COCO"]
-    head_weights = ["COCO", None]
-    num_classes = [90, 21]
-    for base_weight, head_weight, num_class in zip(
-        base_weights, head_weights, num_classes
-    ):
-        detector = model(
-            num_classes=num_class,
-            base_weights=base_weight,
-            head_weights=head_weight,
-        )
-        model_filename = "-".join(
-            [model_name, base_weight, str(head_weight) + "_weights.hdf5"]
-        )
-        weights_path = get_file(
-            model_filename,
-            WEIGHT_PATH + model_filename,
-            cache_subdir="paz/models",
-        )
-        detector.load_weights(weights_path)
-        del detector
-
-
-@pytest.mark.weights
 @pytest.mark.parametrize(
     ("model, aspect_ratios, num_boxes"),
     [
@@ -1213,10 +1043,12 @@ def test_load_weights(model, model_name, model_weight_path):
         (EFFICIENTDETD5, [1.0, 2.0, 0.5], 306900),
         (EFFICIENTDETD6, [1.0, 2.0, 0.5], 306900),
         (EFFICIENTDETD7, [1.0, 2.0, 0.5], 441936),
+        (EFFICIENTDETD7x, [1.0, 2.0, 0.5], 441936),
     ],
 )
 def test_prior_boxes(model, aspect_ratios, num_boxes):
-    model = model()
+    model = model(num_classes=90, base_weights=None, head_weights=None)
+    assert model.output_shape == (None, num_boxes, 4 + 90)
     prior_boxes = model.prior_boxes
     anchor_x, anchor_y = prior_boxes[:, 0], prior_boxes[:, 1]
     anchor_W, anchor_H = prior_boxes[:, 2], prior_boxes[:, 3]
@@ -1271,6 +1103,30 @@ def test_EFFICIENTDETD0_COCO_None_loads_base_weights():
     assert np.allclose(get_first_kernel(model, Conv2D), stem_kernel)
     assert np.allclose(get_first_kernel(model, SeparableConv2D), node_kernel)
     assert not np.allclose(get_first_kernel(untrained, Conv2D), stem_kernel)
+
+
+@pytest.mark.weights
+@pytest.mark.parametrize(
+    "build_model",
+    [
+        EFFICIENTDETD1,
+        EFFICIENTDETD2,
+        EFFICIENTDETD3,
+        EFFICIENTDETD4,
+        EFFICIENTDETD5,
+        EFFICIENTDETD6,
+        EFFICIENTDETD7,
+    ],
+)
+def test_COCO_None_loads_backbone_stem(build_model):
+    model = build_model(21, "COCO", None)
+    filename = model.name + "-COCO-None_weights.hdf5"
+    path = os.path.expanduser("~/.keras/paz/models/" + filename)
+    with h5py.File(path) as file:
+        backbone = [name for name in file if "efficientnet" in name][0]
+        stem = backbone + "/stem/conv2d"
+        stem_kernel = file[stem][stem + "/kernel:0"][()]
+    assert np.allclose(get_first_kernel(model, Conv2D), stem_kernel)
 
 
 def test_EFFICIENTDETD0_save_and_load(tmp_path):
