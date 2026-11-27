@@ -1,5 +1,3 @@
-import pytest
-
 from paz.inference import naming
 
 

@@ -2,7 +2,7 @@ import pytest
 import jax
 import jax.numpy as jp
 
-from .hash_table import (
+from paz.abstract.hash_table import (
     build,
     get_batch_size,
     lookup,
