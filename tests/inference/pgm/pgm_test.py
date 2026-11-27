@@ -1,0 +1,748 @@
+import jax
+import jax.numpy as jp
+import pytest
+
+import paz
+from paz.inference.prior import Prior
+from paz.inference.observable import Observable
+from paz.inference.latent import Latent
+from paz.inference.pgm import PGM
+from paz.inference.types import NodeState
+
+
+# =============================================================================
+# Test Fixtures: Model Builders
+# =============================================================================
+
+
+def build_single_prior_model():
+    """Model: x ~ Normal(0, 1)"""
+    x = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
+    return PGM([x], [x], "single_prior")
+
+
+def build_single_prior_with_bijector_model():
+    """Model: x ~ Uniform(0.1, 1.0) with sigmoid bijector"""
+    low, high = 0.1, 1.0
+    affine = [paz.bijectors.Shift(low), paz.bijectors.Scale(high - low)]
+    bijector = paz.bijectors.Chain(affine + [paz.bijectors.Sigmoid()])
+    x = Prior(paz.distributions.Uniform(low, high), bijector=bijector, name="x")
+    return PGM([x], [x], "single_prior_bijector"), bijector, (low, high)
+
+
+def build_three_priors_one_observable_model():
+    """Model: Bayesian linear regression
+    mean ~ Normal(0, 1)
+    bias ~ Normal(0, 1)
+    stdv ~ Uniform(0.001, 0.3) with bijector
+    y ~ Normal(mean * X + bias, stdv)
+    """
+    X = jp.linspace(0, 1, 50)
+    observations = 0.5 * X + 0.1
+
+    def Likelihood(X):
+        def apply(mean, bias, stdv):
+            prediction = jax.vmap(lambda x: mean * x + bias)(X)
+            return paz.distributions.Normal(prediction, stdv)
+        return apply
+
+    mean = Prior(paz.distributions.Normal(0.0, 1.0), name="mean")
+    bias = Prior(paz.distributions.Normal(0.0, 1.0), name="bias")
+    low, high = 0.001, 0.3
+    affine = [paz.bijectors.Shift(low), paz.bijectors.Scale(high - low)]
+    bijector = paz.bijectors.Chain(affine + [paz.bijectors.Sigmoid()])
+    uniform = paz.distributions.Uniform(low, high)
+    stdv = Prior(uniform, bijector=bijector, name="stdv")
+    y = Observable(Likelihood(X), name="y_pred")(mean, bias, stdv)
+    data = {"y_pred": observations}
+    return (
+        PGM([mean, bias, stdv], [y], "linear_regression"),
+        data,
+        bijector,
+        (low, high),
+    )
+
+
+def build_hierarchical_model():
+    """Model: Hierarchical normal
+    mu ~ Normal(0, 1)
+    sigma ~ Uniform(0.1, 2.0) with bijector
+    x ~ Normal(mu, sigma)  [latent]
+    y ~ Normal(x, 0.1)     [observable]
+    """
+    observation = jp.array(1.5)
+
+    low, high = 0.1, 2.0
+    affine = [paz.bijectors.Shift(low), paz.bijectors.Scale(high - low)]
+    bijector = paz.bijectors.Chain(affine + [paz.bijectors.Sigmoid()])
+
+    mu = Prior(paz.distributions.Normal(0.0, 1.0), name="mu")
+    uniform = paz.distributions.Uniform(low, high)
+    sigma = Prior(uniform, bijector=bijector, name="sigma")
+
+    def x_distribution(mu, sigma):
+        return paz.distributions.Normal(mu, sigma)
+
+    x = Latent(x_distribution, name="x")(mu, sigma)
+
+    def y_distribution(x):
+        return paz.distributions.Normal(x, 0.1)
+
+    y = Observable(y_distribution, name="y")(x)
+    data = {"y": observation}
+    return PGM([mu, sigma], [y], "hierarchical"), data, bijector, (low, high)
+
+
+def build_two_observables_model():
+    """Model: Two observables sharing priors
+    mean ~ Normal(0, 1)
+    stdv ~ Uniform(0.1, 1.0) with bijector
+    y1 ~ Normal(mean, stdv)
+    y2 ~ Normal(mean + 1, stdv)
+    """
+    obs1 = jp.array([0.5, 0.6, 0.7])
+    obs2 = jp.array([1.5, 1.6, 1.7])
+
+    low, high = 0.1, 1.0
+    affine = [paz.bijectors.Shift(low), paz.bijectors.Scale(high - low)]
+    bijector = paz.bijectors.Chain(affine + [paz.bijectors.Sigmoid()])
+
+    mean = Prior(paz.distributions.Normal(0.0, 1.0), name="mean")
+    uniform = paz.distributions.Uniform(low, high)
+    stdv = Prior(uniform, bijector=bijector, name="stdv")
+
+    def likelihood1(mean, stdv):
+        return paz.distributions.Normal(mean, stdv)
+
+    def likelihood2(mean, stdv):
+        return paz.distributions.Normal(mean + 1, stdv)
+
+    y1 = Observable(likelihood1, name="y1")(mean, stdv)
+    y2 = Observable(likelihood2, name="y2")(mean, stdv)
+    data = {"y1": obs1, "y2": obs2}
+    return (
+        PGM([mean, stdv], [y1, y2], "two_observables"),
+        data,
+        bijector,
+        (low, high),
+    )
+
+
+def build_vector_latent_model(num_groups):
+    """Model: Vector latent depends on scalar parents."""
+    observation = jp.zeros((num_groups,))
+
+    mu = Prior(paz.distributions.Normal(0.0, 1.0), name="mu")
+    sigma = Prior(paz.distributions.Normal(1.0, 0.2), name="sigma")
+
+    def x_distribution(mu, sigma):
+        return paz.distributions.Independent(
+            paz.distributions.Normal(jp.full(num_groups, mu), sigma),
+            reinterpreted_batch_ndims=1,
+        )
+
+    x = Latent(x_distribution, name="x")(mu, sigma)
+
+    def y_distribution(x):
+        return paz.distributions.Normal(x, 1.0)
+
+    y = Observable(y_distribution, name="y")(x)
+    data = {"y": observation}
+    return PGM([mu, sigma], [y], "vector_latent"), data
+
+
+def build_multi_parent_observable_model():
+    """Model: Observable depends on two latent parents."""
+    observation = jp.array(0.0)
+
+    mu1 = Prior(paz.distributions.Normal(0.0, 1.0), name="mu1")
+    mu2 = Prior(paz.distributions.Normal(0.0, 1.0), name="mu2")
+
+    def x_distribution(mu1):
+        return paz.distributions.Normal(mu1, 1.0)
+
+    def z_distribution(mu2):
+        return paz.distributions.Normal(mu2, 1.0)
+
+    x = Latent(x_distribution, name="x")(mu1)
+    z = Latent(z_distribution, name="z")(mu2)
+
+    def y_distribution(x, z):
+        return paz.distributions.Normal(x + z, 1.0)
+
+    y = Observable(y_distribution, name="y")(x, z)
+    data = {"y": observation}
+    return PGM([mu1, mu2], [y], "multi_parent"), data
+
+
+def evaluate_joint(model, params, data=None):
+    prior_state = model.prior.log_prob_inverse(params)
+    if data is None:
+        return prior_state
+    likelihood_state = model.likelihood.log_prob_inverse(params, data)
+    log_prob = dict(prior_state.log_prob)
+    log_prob.update(likelihood_state.log_prob)
+    log_prob_sum = prior_state.log_prob_sum + likelihood_state.log_prob_sum
+    return NodeState(prior_state.sample, log_prob, log_prob_sum)
+
+
+# =============================================================================
+# Tests: sample_inverse shapes
+# =============================================================================
+
+
+def test_sample_inverse_single_prior_single_sample_shape():
+    model = build_single_prior_model()
+    key = jax.random.PRNGKey(0)
+    samples = model.sample_inverse(key, num_samples=1)
+    assert samples.x.shape == (), f"Expected scalar, got {samples.x.shape}"
+
+
+def test_sample_inverse_single_prior_multiple_samples_shape():
+    model = build_single_prior_model()
+    key = jax.random.PRNGKey(0)
+    for n in [2, 4, 10]:
+        samples = model.sample_inverse(key, num_samples=n)
+        assert samples.x.shape == (n,), f"Expected ({n},), got {samples.x.shape}"
+
+
+def test_sample_inverse_three_priors_single_sample_shape():
+    model, _, _, _ = build_three_priors_one_observable_model()
+    key = jax.random.PRNGKey(0)
+    samples = model.sample_inverse(key, num_samples=1)
+    assert samples.mean.shape == (), f"Expected scalar, got {samples.mean.shape}"
+    assert samples.bias.shape == (), f"Expected scalar, got {samples.bias.shape}"
+    assert samples.stdv.shape == (), f"Expected scalar, got {samples.stdv.shape}"
+
+
+def test_pgm_fit_default_not_implemented():
+    model = build_single_prior_model()
+    key = jax.random.PRNGKey(0)
+    with pytest.raises(NotImplementedError):
+        model.fit(key, jp.array(0.0), method="em")
+
+
+def test_sample_inverse_hierarchical_model_shape():
+    model, _, _, _ = build_hierarchical_model()
+    key = jax.random.PRNGKey(0)
+    for n in [1, 4]:
+        samples = model.sample_inverse(key, num_samples=n)
+        expected = () if n == 1 else (n,)
+        assert samples.mu.shape == expected, f"mu: expected {expected}, got {samples.mu.shape}"
+        assert samples.sigma.shape == expected, f"sigma: expected {expected}, got {samples.sigma.shape}"
+        assert samples.x.shape == expected, f"x: expected {expected}, got {samples.x.shape}"
+
+
+# =============================================================================
+# Tests: sample_inverse returns only latent variables (not observables)
+# =============================================================================
+
+
+def test_sample_inverse_excludes_observables():
+    model, _, _, _ = build_three_priors_one_observable_model()
+    key = jax.random.PRNGKey(0)
+    samples = model.sample_inverse(key)
+    assert hasattr(samples, "mean")
+    assert hasattr(samples, "bias")
+    assert hasattr(samples, "stdv")
+    assert not hasattr(samples, "y_pred"), "sample_inverse should not include observables"
+
+
+def test_sample_inverse_hierarchical_includes_latent():
+    model, _, _, _ = build_hierarchical_model()
+    key = jax.random.PRNGKey(0)
+    samples = model.sample_inverse(key)
+    assert hasattr(samples, "mu")
+    assert hasattr(samples, "sigma")
+    assert hasattr(samples, "x"), "sample_inverse should include latent variable x"
+    assert not hasattr(samples, "y"), "sample_inverse should not include observable y"
+
+
+# =============================================================================
+# Tests: sample_inverse returns unconstrained values
+# =============================================================================
+
+
+def test_sample_inverse_returns_unconstrained_values():
+    model, bijector, (low, high) = build_single_prior_with_bijector_model()
+    key = jax.random.PRNGKey(42)
+    samples = model.sample_inverse(key, num_samples=1000)
+    assert samples.x.min() < low, "Unconstrained samples should go below low bound"
+    assert samples.x.max() > high, "Unconstrained samples should go above high bound"
+
+
+def test_sample_inverse_stdv_unconstrained():
+    model, _, bijector, (low, high) = build_three_priors_one_observable_model()
+    key = jax.random.PRNGKey(42)
+    samples = model.sample_inverse(key, num_samples=1000)
+    assert samples.stdv.min() < low, "Unconstrained stdv should go below low bound"
+    assert samples.stdv.max() > high, "Unconstrained stdv should go above high bound"
+
+
+# =============================================================================
+# Tests: sample_forward shapes and constrained values
+# =============================================================================
+
+
+def test_sample_forward_single_prior_shape():
+    model = build_single_prior_model()
+    key = jax.random.PRNGKey(0)
+    samples = model.sample(key, num_samples=1)
+    assert samples.x.shape == ()
+    samples = model.sample(key, num_samples=4)
+    assert samples.x.shape == (4,)
+
+
+def test_sample_forward_three_priors_includes_observable():
+    model, _, _, _ = build_three_priors_one_observable_model()
+    key = jax.random.PRNGKey(0)
+    samples = model.sample(key)
+    assert hasattr(samples, "mean")
+    assert hasattr(samples, "bias")
+    assert hasattr(samples, "stdv")
+    assert hasattr(samples, "y_pred"), "sample_forward should include observables"
+
+
+def test_sample_forward_returns_constrained_values():
+    model, bijector, (low, high) = build_single_prior_with_bijector_model()
+    key = jax.random.PRNGKey(42)
+    samples = model.sample(key, num_samples=1000)
+    assert samples.x.min() >= low, f"Constrained samples should be >= {low}"
+    assert samples.x.max() <= high, f"Constrained samples should be <= {high}"
+
+
+def test_sample_forward_stdv_constrained():
+    model, _, bijector, (low, high) = build_three_priors_one_observable_model()
+    key = jax.random.PRNGKey(42)
+    samples = model.sample(key, num_samples=1000)
+    assert samples.stdv.min() >= low, f"Constrained stdv should be >= {low}"
+    assert samples.stdv.max() <= high, f"Constrained stdv should be <= {high}"
+
+
+# =============================================================================
+# Tests: joint log_prob structure
+# =============================================================================
+
+
+def test_joint_log_prob_is_dict():
+    model, data, _, _ = build_three_priors_one_observable_model()
+    key = jax.random.PRNGKey(0)
+    params = model.sample_inverse(key)
+    state = evaluate_joint(model, params, data)
+    assert isinstance(state.log_prob, dict)
+    assert "mean" in state.log_prob
+    assert "bias" in state.log_prob
+    assert "stdv" in state.log_prob
+    assert "y_pred" in state.log_prob
+
+
+def test_joint_log_prob_sum_equals_sum_of_log_probs():
+    model, data, _, _ = build_three_priors_one_observable_model()
+    key = jax.random.PRNGKey(0)
+    params = model.sample_inverse(key)
+    state = evaluate_joint(model, params, data)
+    expected_sum = sum(state.log_prob.values())
+    assert jp.isclose(state.log_prob_sum, expected_sum), \
+        f"log_prob_sum {state.log_prob_sum} != sum {expected_sum}"
+
+
+# =============================================================================
+# Tests: likelihood data mapping
+# =============================================================================
+
+
+def test_likelihood_missing_observation_raises():
+    model, _, _, _ = build_three_priors_one_observable_model()
+    key = jax.random.PRNGKey(0)
+    params = model.sample_inverse(key)
+    with pytest.raises(ValueError):
+        model.likelihood.log_prob_inverse(params, {})
+
+
+# =============================================================================
+# Tests: log_prob_inverse returns constrained samples
+# =============================================================================
+
+
+def test_log_prob_inverse_returns_constrained_sample():
+    model, bijector, (low, high) = build_single_prior_with_bijector_model()
+    key = jax.random.PRNGKey(42)
+    for _ in range(100):
+        key, subkey = jax.random.split(key)
+        params = model.sample_inverse(subkey)
+        state = model.prior.log_prob_inverse(params)
+        assert low <= state.sample.x <= high, \
+            f"sample {state.sample.x} not in [{low}, {high}]"
+
+
+def test_log_prob_inverse_returns_constrained_stdv():
+    model, data, bijector, (low, high) = build_three_priors_one_observable_model()
+    key = jax.random.PRNGKey(42)
+    for _ in range(100):
+        key, subkey = jax.random.split(key)
+        params = model.sample_inverse(subkey)
+        state = model.prior.log_prob_inverse(params)
+        assert low <= state.sample.stdv <= high, \
+            f"stdv {state.sample.stdv} not in [{low}, {high}]"
+
+
+# =============================================================================
+# Tests: log_prob remains finite (no NaN/inf) - regression test for bug
+# =============================================================================
+
+
+def test_log_prob_no_nan_single_prior_with_bijector():
+    model, _, _ = build_single_prior_with_bijector_model()
+    key = jax.random.PRNGKey(42)
+    for _ in range(100):
+        key, subkey = jax.random.split(key)
+        params = model.sample_inverse(subkey)
+        state = evaluate_joint(model, params)
+        assert jp.isfinite(state.log_prob_sum), \
+            f"log_prob_sum is not finite: {state.log_prob_sum}"
+
+
+def test_log_prob_no_nan_three_priors():
+    model, data, _, _ = build_three_priors_one_observable_model()
+    key = jax.random.PRNGKey(42)
+    for _ in range(100):
+        key, subkey = jax.random.split(key)
+        params = model.sample_inverse(subkey)
+        state = evaluate_joint(model, params, data)
+        assert jp.isfinite(state.log_prob_sum), \
+            f"log_prob_sum is not finite: {state.log_prob_sum}, params={params}"
+
+
+def test_log_prob_no_nan_hierarchical():
+    model, data, _, _ = build_hierarchical_model()
+    key = jax.random.PRNGKey(42)
+    for _ in range(100):
+        key, subkey = jax.random.split(key)
+        params = model.sample_inverse(subkey)
+        state = evaluate_joint(model, params, data)
+        assert jp.isfinite(state.log_prob_sum), \
+            f"log_prob_sum is not finite: {state.log_prob_sum}, params={params}"
+
+
+def test_log_prob_no_nan_two_observables():
+    model, data, _, _ = build_two_observables_model()
+    key = jax.random.PRNGKey(42)
+    for _ in range(100):
+        key, subkey = jax.random.split(key)
+        params = model.sample_inverse(subkey)
+        state = evaluate_joint(model, params, data)
+        assert jp.isfinite(state.log_prob_sum), \
+            f"log_prob_sum is not finite: {state.log_prob_sum}, params={params}"
+
+
+def test_log_prob_no_nan_multi_parent_observable():
+    model, data = build_multi_parent_observable_model()
+    key = jax.random.PRNGKey(42)
+    for _ in range(100):
+        key, subkey = jax.random.split(key)
+        params = model.sample_inverse(subkey)
+        state = evaluate_joint(model, params, data)
+        assert jp.isfinite(state.log_prob_sum), \
+            f"log_prob_sum is not finite: {state.log_prob_sum}"
+
+
+# =============================================================================
+# Tests: vmap over log_prob works (required for MCMC)
+# =============================================================================
+
+
+def test_vmap_log_prob_single_prior():
+    model = build_single_prior_model()
+    key = jax.random.PRNGKey(0)
+    positions = model.sample_inverse(key, num_samples=4)
+    log_density_fn = lambda params: model.prior.log_prob_inverse(
+        params
+    ).log_prob_sum
+    log_densities = jax.vmap(log_density_fn)(positions)
+    assert log_densities.shape == (4,)
+    assert jp.all(jp.isfinite(log_densities))
+
+
+def test_vmap_log_prob_three_priors():
+    model, data, _, _ = build_three_priors_one_observable_model()
+    key = jax.random.PRNGKey(0)
+    positions = model.sample_inverse(key, num_samples=4)
+    log_density_fn = lambda params: evaluate_joint(
+        model, params, data
+    ).log_prob_sum
+    log_densities = jax.vmap(log_density_fn)(positions)
+    assert log_densities.shape == (4,)
+    assert jp.all(jp.isfinite(log_densities)), f"NaN in log_densities: {log_densities}"
+
+
+def test_vmap_log_prob_hierarchical():
+    model, data, _, _ = build_hierarchical_model()
+    key = jax.random.PRNGKey(0)
+    positions = model.sample_inverse(key, num_samples=4)
+    log_density_fn = lambda params: evaluate_joint(
+        model, params, data
+    ).log_prob_sum
+    log_densities = jax.vmap(log_density_fn)(positions)
+    assert log_densities.shape == (4,)
+    assert jp.all(jp.isfinite(log_densities)), f"NaN in log_densities: {log_densities}"
+
+
+# =============================================================================
+# Tests: Bijector Jacobian correction is applied
+# =============================================================================
+
+
+def test_log_prob_inverse_includes_jacobian_correction():
+    """Verify that log_prob includes the Jacobian correction from bijector."""
+    low, high = 0.1, 1.0
+    affine = [paz.bijectors.Shift(low), paz.bijectors.Scale(high - low)]
+    bijector = paz.bijectors.Chain(affine + [paz.bijectors.Sigmoid()])
+    distribution = paz.distributions.Uniform(low, high)
+    x = Prior(distribution, bijector=bijector, name="x")
+    model = PGM([x], [x], "test")
+
+    key = jax.random.PRNGKey(42)
+    unconstrained = model.sample_inverse(key)
+    state = model.prior.log_prob_inverse(unconstrained)
+
+    constrained = bijector(unconstrained.x)
+    log_prob_without_jacobian = distribution.log_prob(constrained)
+    jacobian = bijector.forward_log_det_jacobian(unconstrained.x)
+    log_prob_with_jacobian = log_prob_without_jacobian + jacobian
+
+    assert jp.isclose(state.log_prob["x"], log_prob_with_jacobian), \
+        f"Jacobian not applied: {state.log_prob['x']} != {log_prob_with_jacobian}"
+
+
+# =============================================================================
+# Tests: Observable receives constrained parameters - regression test for bug
+# =============================================================================
+
+
+def test_observable_receives_constrained_stdv():
+    """
+    Regression test: Observable must receive constrained (positive) stdv,
+    not unconstrained (possibly negative) value.
+    """
+    X = jp.array([0.0, 1.0])
+    observations = jp.array([0.1, 0.6])
+
+    def Likelihood(X):
+        def apply(stdv):
+            return paz.distributions.Normal(X, stdv)
+        return apply
+
+    low, high = 0.1, 1.0
+    affine = [paz.bijectors.Shift(low), paz.bijectors.Scale(high - low)]
+    bijector = paz.bijectors.Chain(affine + [paz.bijectors.Sigmoid()])
+    uniform = paz.distributions.Uniform(low, high)
+    stdv = Prior(uniform, bijector=bijector, name="stdv")
+    y = Observable(Likelihood(X), name="y")(stdv)
+    data = {"y": observations}
+    model = PGM([stdv], [y], "test")
+
+    key = jax.random.PRNGKey(42)
+    for _ in range(100):
+        key, subkey = jax.random.split(key)
+        params = model.sample_inverse(subkey)
+        if params.stdv < 0:
+            state = evaluate_joint(model, params, data)
+            assert jp.isfinite(state.log_prob_sum), \
+                f"NaN when unconstrained stdv={params.stdv} (should be transformed)"
+
+
+# =============================================================================
+# Tests: sample_inverse preserves batch dimension - regression test for bug
+# =============================================================================
+
+
+def test_sample_inverse_batch_not_overwritten():
+    """
+    Regression test: sample_inverse with num_samples > 1 should return
+    arrays with shape (num_samples,), not scalars.
+    """
+    model, _, _, _ = build_three_priors_one_observable_model()
+    key = jax.random.PRNGKey(0)
+
+    for n in [2, 4, 8]:
+        samples = model.sample_inverse(key, num_samples=n)
+        assert samples.mean.shape == (n,), \
+            f"mean shape {samples.mean.shape} != ({n},) - batch was overwritten"
+        assert samples.bias.shape == (n,), \
+            f"bias shape {samples.bias.shape} != ({n},) - batch was overwritten"
+        assert samples.stdv.shape == (n,), \
+            f"stdv shape {samples.stdv.shape} != ({n},) - batch was overwritten"
+
+
+def test_sample_inverse_multi_parent_batch_preserved():
+    model, _ = build_multi_parent_observable_model()
+    key = jax.random.PRNGKey(0)
+    for n in [2, 4, 8]:
+        samples = model.sample_inverse(key, num_samples=n)
+        assert samples.mu1.shape == (n,), f"mu1 shape {samples.mu1.shape} != ({n},)"
+        assert samples.mu2.shape == (n,), f"mu2 shape {samples.mu2.shape} != ({n},)"
+        assert samples.x.shape == (n,), f"x shape {samples.x.shape} != ({n},)"
+        assert samples.z.shape == (n,), f"z shape {samples.z.shape} != ({n},)"
+
+
+def test_sample_inverse_vector_latent_batch_preserved():
+    model, _ = build_vector_latent_model(num_groups=5)
+    key = jax.random.PRNGKey(0)
+    for n in [2, 4, 8]:
+        samples = model.sample_inverse(key, num_samples=n)
+        assert samples.mu.shape == (n,), f"mu shape {samples.mu.shape} != ({n},)"
+        assert samples.sigma.shape == (n,), f"sigma shape {samples.sigma.shape} != ({n},)"
+        assert samples.x.shape == (n, 5), (
+            f"x shape {samples.x.shape} != ({n}, 5)"
+        )
+
+
+def test_sample_inverse_vector_latent_single_sample_shape():
+    model, _ = build_vector_latent_model(num_groups=3)
+    key = jax.random.PRNGKey(0)
+    samples = model.sample_inverse(key, num_samples=1)
+    assert samples.mu.shape == (), f"mu shape {samples.mu.shape} != ()"
+    assert samples.sigma.shape == (), f"sigma shape {samples.sigma.shape} != ()"
+    assert samples.x.shape == (3,), f"x shape {samples.x.shape} != (3,)"
+
+
+# =============================================================================
+# Tests: Different random keys produce different samples
+# =============================================================================
+
+
+def test_different_keys_different_samples():
+    model = build_single_prior_model()
+    key1 = jax.random.PRNGKey(0)
+    key2 = jax.random.PRNGKey(1)
+    samples1 = model.sample_inverse(key1)
+    samples2 = model.sample_inverse(key2)
+    assert samples1.x != samples2.x, "Different keys should produce different samples"
+
+
+def test_same_key_same_samples():
+    model = build_single_prior_model()
+    key = jax.random.PRNGKey(42)
+    samples1 = model.sample_inverse(key)
+    samples2 = model.sample_inverse(key)
+    assert samples1.x == samples2.x, "Same key should produce same samples"
+
+
+# =============================================================================
+# Tests: Model with multiple observables
+# =============================================================================
+
+
+def test_two_observables_sample_forward_shape():
+    model, _, _, _ = build_two_observables_model()
+    key = jax.random.PRNGKey(0)
+    samples = model.sample(key)
+    assert hasattr(samples, "mean")
+    assert hasattr(samples, "stdv")
+    assert hasattr(samples, "y1")
+    assert hasattr(samples, "y2")
+
+
+def test_two_observables_log_prob():
+    model, data, _, _ = build_two_observables_model()
+    key = jax.random.PRNGKey(0)
+    params = model.sample_inverse(key)
+    state = model.likelihood.log_prob_inverse(params, data)
+    assert "y1" in state.log_prob
+    assert "y2" in state.log_prob
+    assert jp.isfinite(state.log_prob["y1"])
+    assert jp.isfinite(state.log_prob["y2"])
+
+
+# =============================================================================
+# Tests: Edge cases
+# =============================================================================
+
+
+def test_extreme_unconstrained_values():
+    """Test that extreme unconstrained values don't cause NaN."""
+    model, bijector, (low, high) = build_single_prior_with_bijector_model()
+    from collections import namedtuple
+    Sample = namedtuple("Sample", ["x"])
+
+    extreme_values = [-10.0, -5.0, 0.0, 5.0, 10.0]
+    for val in extreme_values:
+        params = Sample(x=jp.array(val))
+        state = model.prior.log_prob_inverse(params)
+        assert jp.isfinite(state.log_prob_sum), \
+            f"NaN for extreme unconstrained value {val}"
+        assert low <= state.sample.x <= high, \
+            f"Constrained value {state.sample.x} out of bounds for input {val}"
+
+
+def test_log_prob_with_manual_params():
+    """Test log_prob with manually constructed parameters."""
+    model, data, _, _ = build_three_priors_one_observable_model()
+    from collections import namedtuple
+    Sample = namedtuple("Sample", ["mean", "bias", "stdv"])
+
+    params = Sample(mean=jp.array(0.5), bias=jp.array(0.1), stdv=jp.array(0.0))
+    state = evaluate_joint(model, params, data)
+    assert jp.isfinite(state.log_prob_sum)
+    assert state.sample.stdv > 0, "stdv should be transformed to positive"
+
+
+# =============================================================================
+# Tests: joint log density (log prior + log likelihood)
+# =============================================================================
+
+
+def build_normal_normal_model():
+    """Model: x ~ Normal(0, 1), y ~ Normal(x, 1)"""
+    x = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
+
+    def y_distribution(x):
+        return paz.distributions.Normal(x, 1.0)
+
+    y = Observable(y_distribution, name="y")(x)
+    return PGM([x], [y], "normal_normal")
+
+
+def compute_standard_normal_log_pdf(value):
+    return -0.5 * jp.log(2.0 * jp.pi) - 0.5 * value**2
+
+
+def test_pgm_log_prob_matches_hand_computed_normal_normal():
+    model = build_normal_normal_model()
+    samples = model.latent_space.Sample(jp.array(0.5))
+    log_density = model.log_prob(samples, {"y": jp.array(1.0)})
+    prior = compute_standard_normal_log_pdf(0.5)
+    likelihood = compute_standard_normal_log_pdf(1.0 - 0.5)
+    assert jp.isclose(log_density, prior + likelihood)
+
+
+def test_pgm_log_prob_inverse_equals_prior_plus_likelihood():
+    model, data, _, _ = build_three_priors_one_observable_model()
+    params = model.sample_inverse(jax.random.PRNGKey(0))
+    log_density = model.log_prob_inverse(params, data)
+    expected = evaluate_joint(model, params, data)
+    assert jp.isclose(log_density, expected.log_prob_sum)
+
+
+def test_pgm_log_prob_inverse_adds_jacobian_to_log_prob():
+    model, data, bijector, _ = build_three_priors_one_observable_model()
+    params = model.sample_inverse(jax.random.PRNGKey(1))
+    forward_params = model.prior.log_prob_inverse(params).sample
+    inverse_log_density = model.log_prob_inverse(params, data)
+    forward_log_density = model.log_prob(forward_params, data)
+    jacobian = bijector.forward_log_det_jacobian(params.stdv)
+    difference = inverse_log_density - forward_log_density
+    # forward path round-trips stdv through the sigmoid chain in float32
+    assert jp.isclose(difference, jacobian, rtol=1e-4)
+
+
+def test_pgm_log_prob_inverse_is_jittable_and_differentiable():
+    model, data, _, _ = build_three_priors_one_observable_model()
+    params = model.sample_inverse(jax.random.PRNGKey(2))
+
+    def compute_log_density(params):
+        return model.log_prob_inverse(params, data)
+
+    value, gradients = jax.jit(jax.value_and_grad(compute_log_density))(params)
+    assert jp.isfinite(value)
+    assert all(jp.isfinite(leaf) for leaf in jax.tree.leaves(gradients))
