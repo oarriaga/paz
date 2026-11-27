@@ -8,7 +8,7 @@ from paz.models.foundation.dinov3.layers.attention import (
     SelfAttention,
     CausalSelfAttention,
 )
-from paz.models.foundation.dinov3.layers.torch_layers_for_testing import (
+from torch_layers_for_testing import (
     PT_SelfAttention,
     PT_CausalSelfAttention,
 )
@@ -245,7 +245,7 @@ def test_dinov3_pretrained_weights_match():
     Tests the Keras SelfAttention layer by loading weights from a pre-trained
     DINOv3 PyTorch model and verifying the outputs match.
     """
-    from paz.models.foundation.dinov3.models.torch_vision_transformer_for_testing import (
+    from torch_vision_transformer_for_testing import (
         PT_vit_small,
     )
 

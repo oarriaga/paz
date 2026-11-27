@@ -15,7 +15,7 @@ from paz.models.foundation.dinov3.layers.block import (
     CausalSelfAttentionBlock,
 )
 
-from paz.models.foundation.dinov3.layers.torch_layers_for_testing import (
+from torch_layers_for_testing import (
     PT_SelfAttention,
     PT_CausalSelfAttention,
     PT_Mlp,
@@ -278,7 +278,7 @@ def test_block_training_mode(block_class, dim, num_heads, drop_rate):
 @pytest.mark.skipif(not dinov3_files_exist, reason="DINOv3 model/weights not found.")
 def test_dinov3_block_pretrained_weights_match():
     """Validates the Keras SelfAttentionBlock against pre-trained DINOv3 weights."""
-    from paz.models.foundation.dinov3.models.torch_vision_transformer_for_testing import (
+    from torch_vision_transformer_for_testing import (
         PT_vit_small,
     )
 
@@ -351,7 +351,7 @@ def test_dinov3_block_pretrained_weights_match():
 @pytest.mark.skipif(not dinov3_files_exist, reason="DINOv3 model/weights not found.")
 def test_dinov3_causal_block_pretrained_weights_match():
     """Validates the Keras CausalSelfAttentionBlock against pre-trained DINOv3 weights."""
-    from paz.models.foundation.dinov3.models.torch_vision_transformer_for_testing import (
+    from torch_vision_transformer_for_testing import (
         PT_vit_small,
     )
 

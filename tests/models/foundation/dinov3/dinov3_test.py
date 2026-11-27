@@ -15,12 +15,12 @@ from paz.models.foundation.dinov3.models.vision_transformer import (
 )
 from paz.models.foundation.dinov3.models import convnext
 
-from paz.models.foundation.dinov3.models.torch_vision_transformer_for_testing import (
+from torch_vision_transformer_for_testing import (
     PT_vit_small,
     PT_vit_base,
     PT_vit_large,
 )
-from paz.models.foundation.dinov3.models.torch_convnext_for_testing import (
+from torch_convnext_for_testing import (
     PT_get_convnext_arch,
 )
 

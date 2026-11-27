@@ -9,7 +9,7 @@ from paz.models.foundation.dinov3.layers.rope_position_encoding import (
     RopePositionEmbedding,
 )
 
-from paz.models.foundation.dinov3.layers.torch_layers_for_testing import (
+from torch_layers_for_testing import (
     PT_RopePositionEmbedding,
 )
 

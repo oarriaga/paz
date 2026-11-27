@@ -8,7 +8,7 @@ import numpy as np
 from keras.layers import LayerNormalization
 
 from paz.models.foundation.dinov3.layers.patch_embed import PatchEmbed
-from paz.models.foundation.dinov3.layers.torch_layers_for_testing import PT_PatchEmbed
+from torch_layers_for_testing import PT_PatchEmbed
 
 
 def port_weights(torch_model, keras_model):

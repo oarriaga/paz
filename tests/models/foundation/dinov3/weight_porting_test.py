@@ -6,7 +6,7 @@ torch = pytest.importorskip("torch")
 import numpy as np
 import keras
 from paz.models.foundation.dinov3.models.vision_transformer import vit_small
-from paz.models.foundation.dinov3.models.torch_vision_transformer_for_testing import (
+from torch_vision_transformer_for_testing import (
     PT_vit_small,
 )
 from paz.models.foundation.dinov3.port_dino_weights_from_torch_to_keras import (

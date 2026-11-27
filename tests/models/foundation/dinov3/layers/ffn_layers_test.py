@@ -11,7 +11,7 @@ from paz.models.foundation.dinov3.layers.ffn_layers import (
     SwiGLUFFN,
 )
 
-from paz.models.foundation.dinov3.layers.torch_layers_for_testing import (
+from torch_layers_for_testing import (
     PT_Mlp,
     PT_SwiGLUFFN,
 )

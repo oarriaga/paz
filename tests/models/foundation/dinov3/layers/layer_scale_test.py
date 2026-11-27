@@ -6,7 +6,7 @@ torch = pytest.importorskip("torch")
 import numpy as np
 
 from paz.models.foundation.dinov3.layers.layer_scale import LayerScale
-from paz.models.foundation.dinov3.layers.torch_layers_for_testing import PT_LayerScale
+from torch_layers_for_testing import PT_LayerScale
 
 
 def port_weights(torch_model, keras_model):

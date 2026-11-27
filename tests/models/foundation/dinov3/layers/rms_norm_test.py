@@ -9,7 +9,7 @@ import keras
 from keras import ops
 
 from paz.models.foundation.dinov3.layers.rms_norm import RMSNorm
-from paz.models.foundation.dinov3.layers.torch_layers_for_testing import PT_RMSNorm
+from torch_layers_for_testing import PT_RMSNorm
 
 
 @pytest.fixture
