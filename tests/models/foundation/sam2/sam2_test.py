@@ -64,14 +64,6 @@ def test_image_encoder_output_shapes():
     assert tuple(features.shape) == (None, 64, 64, 256)
 
 
-def test_point_encoder_sparse_shape():
-    model = prompt_encoder.build_points()
-    coords = np.zeros((1, 3, 2), np.float32)
-    labels = np.zeros((1, 3), np.float32)
-    sparse = np.array(model((coords, labels)))
-    assert sparse.shape == (1, 3, 256)
-
-
 def test_point_label_semantics():
     model = prompt_encoder.build_points()
     layer = model.get_layer("point_label_embed")

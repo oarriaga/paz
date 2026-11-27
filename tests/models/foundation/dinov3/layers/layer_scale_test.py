@@ -1,4 +1,3 @@
-import os
 import pytest
 
 torch = pytest.importorskip("torch")
@@ -98,51 +97,3 @@ def test_keras_trainability(params):
     assert keras_ls.trainable_weights[0].name.startswith(
         "gamma"
     ), f"Trainable weight name should be 'gamma', but got '{keras_ls.trainable_weights[0].name}'"
-
-
-DINO_REPO_PATH = ""  # Not needed
-DINO_WEIGHT_PATH = "/path/that/does/not/exist/dinov3_vits16_pretrain.pth"
-dinov3_files_exist = os.path.isfile(DINO_WEIGHT_PATH)
-
-
-@pytest.mark.skipif(
-    not dinov3_files_exist, reason="DINOv3 local model/weight files not found."
-)
-def test_dinov3_pretrained_weights_match(params):
-    """
-    Tests LayerScale by loading weights from a pre-trained DINOv3 model
-    and verifying the outputs match the original PyTorch layer.
-    """
-    # 1. Load the full pre-trained DINOv3 model
-    dinov3_model = torch.hub.load(
-        DINO_REPO_PATH, "dinov3_vits16", source="local", weights=DINO_WEIGHT_PATH
-    )
-    dinov3_model.eval()
-
-    # 2. Extract a real LayerScale module from the first block
-    torch_pretrained_ls = dinov3_model.blocks[0].ls1
-    PRETRAINED_DIM = torch_pretrained_ls.gamma.shape[0]
-
-    # 3. Initialize the Keras layer
-    keras_ls_pretrained = LayerScale(dimension=PRETRAINED_DIM)
-
-    # 4. Prepare a matching random input
-    x_torch_pretrained = torch.rand(params["BATCH"], params["SEQ_LEN"], PRETRAINED_DIM)
-    x_keras_pretrained = x_torch_pretrained.cpu().numpy()
-
-    # 5. Build Keras layer and port the pre-trained weights
-    _ = keras_ls_pretrained(x_keras_pretrained)
-    port_weights(torch_pretrained_ls, keras_ls_pretrained)
-
-    # 6. Get outputs and compare
-    torch_out_pretrained = (
-        torch_pretrained_ls(x_torch_pretrained).detach().cpu().numpy()
-    )
-    keras_out_pretrained = keras_ls_pretrained(x_keras_pretrained)
-
-    np.testing.assert_allclose(
-        torch_out_pretrained,
-        keras_out_pretrained,
-        atol=1e-6,
-        err_msg="Pre-trained DINOv3 weights test failed.",
-    )

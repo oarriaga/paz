@@ -1,4 +1,3 @@
-import os
 import pytest
 
 torch = pytest.importorskip("torch")
@@ -139,63 +138,3 @@ def test_flatten_embedding_false(params, input_data):
     expected_w = p["IMG_SIZE"] // p["PATCH_SIZE"]
     assert keras_out.shape == (p["BATCH_SIZE"], expected_h, expected_w, p["EMBED_DIM"])
     np.testing.assert_allclose(torch_out, keras_out, atol=1e-5)
-
-
-DINO_REPO_PATH = ""  # Not needed
-DINO_WEIGHT_PATH = "/path/that/does/not/exist/dinov3_vits16_pretrain.pth"
-dinov3_files_exist = os.path.isfile(DINO_WEIGHT_PATH)
-
-
-@pytest.mark.skipif(
-    not dinov3_files_exist, reason="DINOv3 local model/weight files not found."
-)
-def test_dinov3_pretrained_weights_match(params):
-    """Tests the layer by loading weights from a pre-trained DINOv3 model."""
-    # 1. Load the pre-trained DINOv3 model
-    dinov3_model = torch.hub.load(
-        DINO_REPO_PATH, "dinov3_vits16", source="local", weights=DINO_WEIGHT_PATH
-    )
-    dinov3_model.eval()
-    torch_pretrained_pe = dinov3_model.patch_embed
-
-    # 2. Configure the Keras layer to match the pre-trained model
-    conv_has_bias = torch_pretrained_pe.proj.bias is not None
-    keras_norm_layer = None
-    if isinstance(torch_pretrained_pe.norm, nn.LayerNorm):
-        epsilon = torch_pretrained_pe.norm.eps
-        keras_norm_layer = lambda **kwargs: LayerNormalization(
-            epsilon=epsilon, **kwargs
-        )
-
-    keras_pe_pretrained = PatchEmbed(
-        img_size=torch_pretrained_pe.img_size,
-        patch_size=torch_pretrained_pe.patch_size,
-        in_channels=torch_pretrained_pe.in_chans,
-        embed_dim=torch_pretrained_pe.embed_dim,
-        norm_layer=keras_norm_layer,
-        flatten_embedding=torch_pretrained_pe.flatten_embedding,
-        use_bias=conv_has_bias,
-    )
-
-    # 3. Create identical random input data
-    img_h, img_w = torch_pretrained_pe.img_size
-    x_keras_pretrained = np.random.rand(
-        params["BATCH_SIZE"], img_h, img_w, torch_pretrained_pe.in_chans
-    ).astype("float32")
-    x_torch_pretrained = torch.from_numpy(
-        np.transpose(x_keras_pretrained, (0, 3, 1, 2))
-    )
-
-    # 4. Build Keras model, port weights, and compare outputs
-    _ = keras_pe_pretrained(x_keras_pretrained)
-    port_weights(torch_pretrained_pe, keras_pe_pretrained)
-
-    torch_out = torch_pretrained_pe(x_torch_pretrained).detach().cpu().numpy()
-    keras_out = np.array(keras_pe_pretrained(x_keras_pretrained))
-
-    np.testing.assert_allclose(
-        torch_out,
-        keras_out,
-        atol=1e-5,
-        err_msg="Final outputs with DINOv3 weights do not match.",
-    )

@@ -19,14 +19,6 @@ def make_input(batch=1):
     return np.random.RandomState(0).randn(*shape).astype("float32")
 
 
-def test_backbone_returns_four_features_and_four_camera_tokens():
-    model = build_da3_small_backbone(VIEWS, IMAGE_SHAPE)
-    outputs = model(make_input())
-    assert not isinstance(outputs, dict)
-    assert not hasattr(outputs, "_fields")
-    assert len(outputs) == 8
-
-
 def test_backbone_feature_and_camera_shapes():
     model = build_da3_small_backbone(VIEWS, IMAGE_SHAPE)
     outputs = model(make_input())

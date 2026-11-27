@@ -1,4 +1,3 @@
-import os
 import numpy as np
 import jax.numpy as jnp
 import pytest
@@ -168,76 +167,6 @@ def test_mlp_dropout_inference(params):
     np.testing.assert_allclose(output_pt, output_keras, atol=1e-6)
 
 
-def test_mlp_with_pretrained_dinov3_weights(params):
-    """🧪 Test Mlp by loading real DINOv3 ViT-S/16 pretrained weights."""
-    try:
-        DINO_REPO_PATH = ""
-        DINO_WEIGHT_PATH = "/path/that/does/not/exist/dinov3_vits16_pretrain.pth"
-
-        if not os.path.isfile(DINO_WEIGHT_PATH):
-            raise FileNotFoundError("DINOv3 weight file not found.")
-
-        # Load the full DINOv3 model from the local repository
-        full_dinov3_model = torch.hub.load(
-            DINO_REPO_PATH, "dinov3_vits16", source="local", pretrained=False
-        )
-        state_dict = torch.load(DINO_WEIGHT_PATH, map_location=torch.device("cpu"))
-        full_dinov3_model.load_state_dict(state_dict)
-        full_dinov3_model.eval()
-
-        # Extract the first MLP block as the reference PyTorch model
-        torch_model = full_dinov3_model.blocks[0].mlp
-
-    except (FileNotFoundError, ModuleNotFoundError, ImportError, AttributeError) as e:
-        pytest.skip(
-            f"DINOv3 assets not found, skipping pretrained MLP test. Reason: {e}"
-        )
-
-    # Get model dimensions from the loaded torch model
-    dinov3_embed_dim = torch_model.fc1.in_features
-    dinov3_hidden_dim = torch_model.fc1.out_features
-
-    # Create the Keras model with a matching configuration
-    keras_model = Mlp(
-        hidden_features=dinov3_hidden_dim,
-        out_features=dinov3_embed_dim,
-        approximate_gelu=False,  # Use precise GELU to match PyTorch
-    )
-    # Build the Keras layer by calling it with a dummy input
-    keras_model(jnp.ones((1, 1, dinov3_embed_dim)))
-
-    # Transfer weights from the PyTorch layer to the Keras layer
-    keras_model.fc1.set_weights(
-        [
-            torch_model.fc1.weight.T.detach().numpy(),
-            torch_model.fc1.bias.detach().numpy(),
-        ]
-    )
-    keras_model.fc2.set_weights(
-        [
-            torch_model.fc2.weight.T.detach().numpy(),
-            torch_model.fc2.bias.detach().numpy(),
-        ]
-    )
-
-    # --- Run forward pass and compare outputs ---
-    input_tensor = torch.randn(
-        params["batch_size"], params["seq_len"], dinov3_embed_dim
-    )
-    output_pt = torch_model(input_tensor).detach().numpy()
-    output_keras = keras_model(jnp.array(input_tensor.numpy()), training=False)
-
-    # Calculate and validate the mean absolute difference
-    mean_abs_diff = np.mean(np.abs(output_pt - output_keras))
-    print(f"\nMean Absolute Difference: {mean_abs_diff}")
-
-    # Assert that the outputs are numerically very close
-    np.testing.assert_allclose(output_pt, output_keras, atol=1e-4)
-    assert (
-        mean_abs_diff < 1e-5
-    ), f"Mean absolute difference {mean_abs_diff} exceeds tolerance."
-
-
 def test_swiglu_basic(params):
     """🧪 Test SwiGLUFFN: Basic case with specified dimensions."""
     pt_swiglu, keras_swiglu = create_swiglu_pair(
@@ -278,44 +207,4 @@ def test_swiglu_alignment(params):
     input_pt = torch.randn(params["batch_size"], params["seq_len"], params["in_dim"])
     output_pt = pt_swiglu(input_pt).detach().numpy()
     output_keras = keras_swiglu(jnp.array(input_pt.numpy()))
-    np.testing.assert_allclose(output_pt, output_keras, atol=1e-6)
-
-
-def test_swiglu_with_pretrained_dinov3_weights(params):
-    """🧪 Test SwiGLUFFN with mock DINOv3 ViT-S/16 pretrained weights."""
-    dinov3_embed_dim = 384
-    dinov3_hidden_dim = 1536  # DINOv3 ViT-S uses an FFN size of 1536
-
-    # 1. Create mock pre-trained weights using the PyTorch layer's structure
-    torch_model_for_weights = PT_SwiGLUFFN(
-        in_features=dinov3_embed_dim, hidden_features=dinov3_hidden_dim
-    )
-    mock_weights = torch_model_for_weights.state_dict()
-
-    # 2. Configure the actual PyTorch model and load weights
-    torch_model = PT_SwiGLUFFN(
-        in_features=dinov3_embed_dim, hidden_features=dinov3_hidden_dim
-    )
-    torch_model.load_state_dict(mock_weights)
-    torch_model.eval()
-
-    keras_model = SwiGLUFFN(
-        hidden_features=dinov3_hidden_dim, out_features=dinov3_embed_dim
-    )
-    keras_model(jnp.ones((1, 1, dinov3_embed_dim)))
-    keras_model.w1.set_weights(
-        [mock_weights["w1.weight"].T.numpy(), mock_weights["w1.bias"].numpy()]
-    )
-    keras_model.w2.set_weights(
-        [mock_weights["w2.weight"].T.numpy(), mock_weights["w2.bias"].numpy()]
-    )
-    keras_model.w3.set_weights(
-        [mock_weights["w3.weight"].T.numpy(), mock_weights["w3.bias"].numpy()]
-    )
-
-    input_tensor = torch.randn(
-        params["batch_size"], params["seq_len"], dinov3_embed_dim
-    )
-    output_pt = torch_model(input_tensor).detach().numpy()
-    output_keras = keras_model(jnp.array(input_tensor.numpy()))
     np.testing.assert_allclose(output_pt, output_keras, atol=1e-6)

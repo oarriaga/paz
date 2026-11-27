@@ -1,4 +1,3 @@
-import os
 import pytest
 
 torch = pytest.importorskip("torch")
@@ -231,68 +230,3 @@ def test_value_error_on_invalid_heads(params):
     """Tests that a ValueError is raised if `dim` is not divisible by `num_heads`."""
     with pytest.raises(ValueError, match="must be divisible by"):
         SelfAttention(dim=params["DIM"], num_heads=7)
-
-
-DINO_WEIGHT_PATH = "/path/that/does/not/exist/dinov3_vits16_pretrain.pth"
-dinov3_files_exist = os.path.isfile(DINO_WEIGHT_PATH)
-
-
-@pytest.mark.skipif(
-    not dinov3_files_exist, reason="DINOv3 local model/weight files not found."
-)
-def test_dinov3_pretrained_weights_match():
-    """
-    Tests the Keras SelfAttention layer by loading weights from a pre-trained
-    DINOv3 PyTorch model and verifying the outputs match.
-    """
-    from torch_vision_transformer_for_testing import (
-        PT_vit_small,
-    )
-
-    model_kwargs = {
-        "img_size": 224,
-        "patch_size": 16,
-        "ffn_layer": "mlp",
-        "untie_cls_and_patch_norms": False,
-        "norm_layer": "layernorm",
-        "layerscale_init": 1e-6,
-        "n_storage_tokens": 4,
-        "pos_embed_rope_dtype": "float32",
-    }
-    dinov3_model_local = PT_vit_small(**model_kwargs)
-    state_dict = torch.load(DINO_WEIGHT_PATH, map_location=torch.device("cpu"))
-    dinov3_model_local.load_state_dict(state_dict, strict=False)
-    dinov3_model_local.eval()
-
-    torch_pretrained_attn = dinov3_model_local.blocks[0].attn
-    PRETRAINED_DIM = dinov3_model_local.embed_dim
-    PRETRAINED_NUM_HEADS = torch_pretrained_attn.num_heads
-    QKV_BIAS = torch_pretrained_attn.qkv.bias is not None
-    PROJ_BIAS = torch_pretrained_attn.proj.bias is not None
-
-    keras_attn_pretrained = SelfAttention(
-        dim=PRETRAINED_DIM,
-        num_heads=PRETRAINED_NUM_HEADS,
-        qkv_bias=QKV_BIAS,
-        proj_bias=PROJ_BIAS,
-    )
-
-    BATCH_SIZE = 2
-    NUM_TOKENS = 201
-    x_torch_pretrained = torch.rand(BATCH_SIZE, NUM_TOKENS, PRETRAINED_DIM)
-    x_keras_pretrained = x_torch_pretrained.numpy()
-
-    _ = keras_attn_pretrained(np.zeros_like(x_keras_pretrained, dtype="float32"))
-    port_weights(torch_pretrained_attn, keras_attn_pretrained)
-
-    torch_out_pretrained = torch_pretrained_attn(x_torch_pretrained).detach().numpy()
-    keras_out_pretrained = np.array(
-        keras_attn_pretrained(x_keras_pretrained, rope=None, training=False)
-    )
-
-    np.testing.assert_allclose(
-        torch_out_pretrained,
-        keras_out_pretrained,
-        atol=1e-5,
-        err_msg="Keras output with DINOv3 weights does not match PyTorch output.",
-    )

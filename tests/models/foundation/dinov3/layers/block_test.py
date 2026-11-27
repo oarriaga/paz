@@ -1,4 +1,3 @@
-import os
 import numpy as np
 from functools import partial
 import keras
@@ -22,68 +21,6 @@ from torch_layers_for_testing import (
     PT_SelfAttentionBlock,
     PT_CausalSelfAttentionBlock,
 )
-
-
-def transfer_weights_pt_to_pt_causal(pt_ref_block, pt_causal_block):
-    """
-    Helper to transfer weights from a reference PT SelfAttentionBlock to a
-    PT CausalSelfAttentionBlock. This function is specific and not redundant.
-    """
-    with torch.no_grad():
-        pt_causal_block.attention_norm.weight.data = (
-            pt_ref_block.norm1.weight.detach().clone()
-        )
-        pt_causal_block.attention_norm.bias.data = (
-            pt_ref_block.norm1.bias.detach().clone()
-        )
-        pt_causal_block.ffn_norm.weight.data = (
-            pt_ref_block.norm2.weight.detach().clone()
-        )
-        pt_causal_block.ffn_norm.bias.data = pt_ref_block.norm2.bias.detach().clone()
-        pt_causal_block.attention.qkv.weight.data = (
-            pt_ref_block.attn.qkv.weight.detach().clone()
-        )
-        if (
-            pt_ref_block.attn.qkv.bias is not None
-            and pt_causal_block.attention.qkv.bias is not None
-        ):
-            pt_causal_block.attention.qkv.bias.data = (
-                pt_ref_block.attn.qkv.bias.detach().clone()
-            )
-        pt_causal_block.attention.proj.weight.data = (
-            pt_ref_block.attn.proj.weight.detach().clone()
-        )
-        if (
-            pt_ref_block.attn.proj.bias is not None
-            and pt_causal_block.attention.proj.bias is not None
-        ):
-            pt_causal_block.attention.proj.bias.data = (
-                pt_ref_block.attn.proj.bias.detach().clone()
-            )
-        pt_causal_block.feed_forward.fc1.weight.data = (
-            pt_ref_block.mlp.fc1.weight.detach().clone()
-        )
-        if (
-            pt_ref_block.mlp.fc1.bias is not None
-            and pt_causal_block.feed_forward.fc1.bias is not None
-        ):
-            pt_causal_block.feed_forward.fc1.bias.data = (
-                pt_ref_block.mlp.fc1.bias.detach().clone()
-            )
-        pt_causal_block.feed_forward.fc2.weight.data = (
-            pt_ref_block.mlp.fc2.weight.detach().clone()
-        )
-        if (
-            pt_ref_block.mlp.fc2.bias is not None
-            and pt_causal_block.feed_forward.fc2.bias is not None
-        ):
-            pt_causal_block.feed_forward.fc2.bias.data = (
-                pt_ref_block.mlp.fc2.bias.detach().clone()
-            )
-        if not isinstance(pt_ref_block.ls1, nn.Identity):
-            pt_causal_block.ls1.gamma.data = pt_ref_block.ls1.gamma.detach().clone()
-        if not isinstance(pt_ref_block.ls2, nn.Identity):
-            pt_causal_block.ls2.gamma.data = pt_ref_block.ls2.gamma.detach().clone()
 
 
 def transfer_weights_generic(keras_block, pt_block, layer_name_map):
@@ -116,10 +53,6 @@ def transfer_weights_generic(keras_block, pt_block, layer_name_map):
 
         if weights_to_set:
             keras_layer.set_weights(weights_to_set)
-
-
-DINO_WEIGHT_PATH = "/path/that/does/not/exist/dinov3_vits16_pretrain.pth"
-dinov3_files_exist = os.path.isfile(DINO_WEIGHT_PATH)
 
 
 @pytest.mark.parametrize(
@@ -273,146 +206,6 @@ def test_block_training_mode(block_class, dim, num_heads, drop_rate):
     assert train_output.shape == np_input.shape
     assert not np.allclose(train_output, eval_output)
     print(f"Training mode test passed for {block_class.__name__}")
-
-
-@pytest.mark.skipif(not dinov3_files_exist, reason="DINOv3 model/weights not found.")
-def test_dinov3_block_pretrained_weights_match():
-    """Validates the Keras SelfAttentionBlock against pre-trained DINOv3 weights."""
-    from torch_vision_transformer_for_testing import (
-        PT_vit_small,
-    )
-
-    model_kwargs = {
-        "img_size": 224,
-        "patch_size": 16,
-        "ffn_layer": "mlp",
-        "untie_cls_and_patch_norms": False,
-        "norm_layer": "layernorm",
-        "layerscale_init": 1e-6,
-        "n_storage_tokens": 4,
-        "pos_embed_rope_dtype": "float32",
-    }
-    dinov3_model = PT_vit_small(**model_kwargs)
-    state_dict = torch.load(DINO_WEIGHT_PATH, map_location=torch.device("cpu"))
-    dinov3_model.load_state_dict(state_dict, strict=False)
-    dinov3_model.eval()
-    torch_block = dinov3_model.blocks[0]
-
-    PRETRAINED_DIM = dinov3_model.embed_dim
-    PRETRAINED_NUM_HEADS = torch_block.attn.num_heads
-    QKV_BIAS = torch_block.attn.qkv.bias is not None
-    MLP_RATIO = torch_block.mlp.fc1.out_features / PRETRAINED_DIM
-    INIT_VALUES = (
-        torch_block.ls1.init_values
-        if not isinstance(torch_block.ls1, nn.Identity)
-        else None
-    )
-
-    keras_block = SelfAttentionBlock(
-        dim=PRETRAINED_DIM,
-        num_heads=PRETRAINED_NUM_HEADS,
-        mlp_ratio=MLP_RATIO,
-        qkv_bias=QKV_BIAS,
-        init_values=INIT_VALUES,
-        drop=0.0,
-        attn_drop=0.0,
-        drop_path=0.0,
-    )
-
-    x_torch = torch.rand(2, 201, PRETRAINED_DIM)
-    x_keras = x_torch.numpy()
-    _ = keras_block(np.zeros_like(x_keras, dtype="float32"))
-
-    layer_map = {
-        "norm1": "norm1",
-        "norm2": "norm2",
-        "attn.qkv": "attn.qkv",
-        "attn.proj": "attn.proj",
-        "mlp.fc1": "mlp.fc1",
-        "mlp.fc2": "mlp.fc2",
-    }
-    if INIT_VALUES:
-        layer_map.update({"ls1": "ls1", "ls2": "ls2"})
-    transfer_weights_generic(keras_block, torch_block, layer_map)
-
-    torch_out = torch_block(x_torch).detach().numpy()
-    keras_out = keras_block(x_keras, training=False)
-    if hasattr(keras_out, "to_numpy"):
-        keras_out = keras_out.to_numpy()
-
-    mean_abs_diff = np.mean(np.abs(torch_out - keras_out))
-    print(f"\nPre-trained SelfAttentionBlock Mean Absolute Difference: {mean_abs_diff}")
-    np.testing.assert_allclose(torch_out, keras_out, atol=1e-3)
-    assert (
-        mean_abs_diff < 1e-5
-    ), f"Mean absolute difference {mean_abs_diff} exceeds tolerance."
-
-
-@pytest.mark.skipif(not dinov3_files_exist, reason="DINOv3 model/weights not found.")
-def test_dinov3_causal_block_pretrained_weights_match():
-    """Validates the Keras CausalSelfAttentionBlock against pre-trained DINOv3 weights."""
-    from torch_vision_transformer_for_testing import (
-        PT_vit_small,
-    )
-
-    model_kwargs = {
-        "img_size": 224,
-        "patch_size": 16,
-        "ffn_layer": "mlp",
-        "untie_cls_and_patch_norms": False,
-        "norm_layer": "layernorm",
-        "layerscale_init": 1e-6,
-        "n_storage_tokens": 4,
-        "pos_embed_rope_dtype": "float32",
-    }
-    dinov3_model = PT_vit_small(**model_kwargs)
-    state_dict = torch.load(DINO_WEIGHT_PATH, map_location=torch.device("cpu"))
-    dinov3_model.load_state_dict(state_dict, strict=False)
-    dinov3_model.eval()
-    ref_block = dinov3_model.blocks[0]
-
-    dim = dinov3_model.embed_dim
-    heads = ref_block.attn.num_heads
-    qkv_bias = ref_block.attn.qkv.bias is not None
-    mlp_ratio = ref_block.mlp.fc1.out_features / dim
-    init_values = (
-        ref_block.ls1.init_values if hasattr(ref_block.ls1, "init_values") else None
-    )
-
-    pt_causal_block = PT_CausalSelfAttentionBlock(
-        dim, heads, mlp_ratio, init_values, norm_layer=partial(nn.LayerNorm, eps=1e-6)
-    )
-    pt_causal_block.attention = PT_CausalSelfAttention(dim, heads, qkv_bias=qkv_bias)
-    transfer_weights_pt_to_pt_causal(ref_block, pt_causal_block)
-    pt_causal_block.eval()
-
-    keras_block = CausalSelfAttentionBlock(
-        dim, heads, mlp_ratio, init_values, qkv_bias=qkv_bias
-    )
-    np_input = np.random.rand(2, 201, dim).astype("float32")
-    _ = keras_block(np_input)
-
-    layer_map = {
-        "attention_norm": "attention_norm",
-        "ffn_norm": "ffn_norm",
-        "attention.qkv": "attention.qkv",
-        "attention.proj": "attention.proj",
-        "feed_forward.fc1": "feed_forward.fc1",
-        "feed_forward.fc2": "feed_forward.fc2",
-    }
-    if init_values:
-        layer_map.update({"ls1": "ls1", "ls2": "ls2"})
-    transfer_weights_generic(keras_block, pt_causal_block, layer_map)
-
-    pt_output = pt_causal_block(torch.from_numpy(np_input)).detach().numpy()
-    keras_output = np.asarray(keras_block(np_input, training=False))
-    mean_abs_diff = np.mean(np.abs(pt_output - keras_output))
-
-    print(
-        f"\nPre-trained CausalSelfAttentionBlock Mean Absolute Difference: {mean_abs_diff}"
-    )
-    np.testing.assert_allclose(pt_output, keras_output, atol=1e-4)
-    assert mean_abs_diff < 1e-5
 
 
 @pytest.mark.parametrize(
