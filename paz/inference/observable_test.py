@@ -3,6 +3,7 @@ import jax.numpy as jp
 import pytest
 
 import paz
+from paz.inference.latent import Latent
 from paz.inference.observable import Observable
 
 
@@ -47,3 +48,16 @@ def test_observable_sample_shape_batch():
     obs = Observable(likelihood, name="y")(jp.array(0.0))
     sample = obs.sample(jax.random.PRNGKey(0), 4, jp.array(0.0))
     assert sample.shape == (4,)
+
+
+def test_observable_builder_called_twice_keeps_separate_edges():
+    def likelihood(mu):
+        return paz.distributions.Normal(mu, 1.0)
+
+    parent_a = Latent(lambda: paz.distributions.Normal(0.0, 1.0), name="a")()
+    parent_b = Latent(lambda: paz.distributions.Normal(0.0, 1.0), name="b")()
+    build_observable = Observable(likelihood, name="y")
+    observable_a = build_observable(parent_a)
+    observable_b = build_observable(parent_b)
+    assert [edge.name for edge in observable_a.edges] == ["a"]
+    assert [edge.name for edge in observable_b.edges] == ["b"]

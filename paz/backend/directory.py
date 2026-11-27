@@ -44,6 +44,8 @@ def find_latest(wildcard):
         path = Path(filename)
         if path.is_dir():
             filepaths.append(filename)
+    if len(filepaths) == 0:
+        raise FileNotFoundError(f"No directory matches '{wildcard}'")
     return max(filepaths, key=lambda p: Path(p).stat().st_mtime)
 
 

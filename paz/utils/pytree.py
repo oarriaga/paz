@@ -1,3 +1,4 @@
+import builtins
 import json
 import pickle
 from pathlib import Path
@@ -30,7 +31,7 @@ def print_leaf(node_name, node, prefix="", connector="└── "):
     shape_str = f"{COLORS.OKGREEN}{node.shape}{COLORS.ENDC}"
     dtype_str = f"{COLORS.OKCYAN}{node.dtype}{COLORS.ENDC}"
     types = f"{shape_str} {dtype_str}"
-    print(f"{title}: {types}")
+    builtins.print(f"{title}: {types}")
 
 
 def _traverse_and_print(node_name, node, prefix="", is_last=True):
@@ -41,14 +42,13 @@ def _traverse_and_print(node_name, node, prefix="", is_last=True):
         else:
             value_str = f"{COLORS.OKGREEN}{node}{COLORS.ENDC}"
             type_str = f"{COLORS.OKCYAN}{type(node).__name__}{COLORS.ENDC}"
-            print(
-                f"{prefix}{connector}{COLORS.BOLD}{node_name}{COLORS.ENDC}: {value_str} ({type_str})"
-            )
+            title = f"{prefix}{connector}{COLORS.BOLD}{node_name}{COLORS.ENDC}"
+            builtins.print(f"{title}: {value_str} ({type_str})")
         return
 
     # It's a container, print its name and recurse
     type_str = get_node_type_name(node)
-    print(
+    builtins.print(
         f"{prefix}{connector}{COLORS.BOLD}{node_name}{COLORS.ENDC} {type_str}"
     )
 
@@ -72,7 +72,8 @@ def _traverse_and_print(node_name, node, prefix="", is_last=True):
 
 def print(tree):
     type_name = get_node_type_name(tree)
-    print(f"{COLORS.HEADER}{COLORS.BOLD}{type_name}{COLORS.ENDC}")
+    header = f"{COLORS.HEADER}{COLORS.BOLD}{type_name}{COLORS.ENDC}"
+    builtins.print(header)
 
     if hasattr(tree, "_asdict"):
         children = list(tree._asdict().items())
@@ -81,7 +82,7 @@ def print(tree):
     elif isinstance(tree, (list, tuple)):
         children = list(enumerate(tree))
     else:
-        print("└── (Leaf Node)")
+        builtins.print("└── (Leaf Node)")
         _traverse_and_print(type_name, tree)
         return
 

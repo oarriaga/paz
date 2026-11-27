@@ -80,7 +80,7 @@ def load_csv(filepath):
     try:
         with open(filepath, mode="r", newline="") as filedata:
             reader = csv.reader(filedata)
-            header = build_header_names(next(reader, None))
+            header = build_header_names(next(reader, []))
             data = initialize_data(header)
             for row_arg, row_values in enumerate(reader, 1):
                 check_column_size(row_arg, row_values, len(header))

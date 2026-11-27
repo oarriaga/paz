@@ -3,6 +3,8 @@ import tempfile
 import time
 from pathlib import Path
 
+import pytest
+
 from paz.backend import directory
 
 
@@ -376,3 +378,9 @@ def test_size_includes_nested_files():
 
         result = directory.size(tmpdir)
         assert result == len(content1) + len(content2)
+
+
+def test_find_latest_raises_naming_the_unmatched_pattern(tmp_path):
+    wildcard = str(tmp_path / "nomatch*")
+    with pytest.raises(FileNotFoundError, match="nomatch"):
+        directory.find_latest(wildcard)

@@ -25,7 +25,6 @@ def Latent(distribution_fn, bijector=None, name=None):
 
     Sample = SampleType([node_name])
     bijector = bijectors.Identity() if bijector is None else bijector
-    edges = []
 
     def log_prob(forward_sample, *args):
         distribution = distribution_fn(*args)
@@ -52,8 +51,7 @@ def Latent(distribution_fn, bijector=None, name=None):
         return sample
 
     def call(*args):
-        for arg in args:
-            edges.append(arg)
+        edges = list(args)
         return Variable(
             log_prob,
             log_prob_inverse,

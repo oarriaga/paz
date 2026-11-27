@@ -20,7 +20,6 @@ def Observable(distribution_fn, name=None):
 
     node_name = name if name is not None else build_name(distribution_fn)
     Sample = SampleType([node_name])
-    edges = []
 
     def log_prob(observation, *args):
         distribution = distribution_fn(*args)
@@ -35,9 +34,7 @@ def Observable(distribution_fn, name=None):
         return sample
 
     def call(*args):
-        for arg in args:
-            edges.append(arg)
-
+        edges = list(args)
         return Variable(log_prob, None, sample, None, node_name, edges, None, distribution_fn, None)  # fmt: skip
 
     return call

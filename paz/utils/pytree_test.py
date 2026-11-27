@@ -32,3 +32,14 @@ def test_to_json_saves_serializable_pytree():
         loaded = json.load(open(filepath, "r"))
 
     assert loaded == {"array": [1, 2], "value": 3, "items": {"a": [[1.0, 2.0]]}}
+
+
+def test_print_shows_every_leaf(capsys):
+    utils_pytree.print({"a": jp.zeros(2), "b": [jp.ones((3, 4)), 7]})
+    lines = capsys.readouterr().out.splitlines()
+    assert len(lines) == 5
+    assert "dict" in lines[0]
+    assert "a" in lines[1] and "(2,)" in lines[1]
+    assert "b" in lines[2] and "list" in lines[2]
+    assert "(3, 4)" in lines[3]
+    assert "7" in lines[4] and "int" in lines[4]

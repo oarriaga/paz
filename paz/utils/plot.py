@@ -826,7 +826,8 @@ def corner(samples_dict, true_values=None, bins=30, figsize=None):
     num_params = len(names)
     if figsize is None:
         figsize = (2.5 * num_params, 2.5 * num_params)
-    fig, axes = plt.subplots(num_params, num_params, figsize=figsize)
+    kwargs = {"figsize": figsize, "squeeze": False}
+    fig, axes = plt.subplots(num_params, num_params, **kwargs)
     samples_arrays = {
         k: np.asarray(v).flatten() for k, v in samples_dict.items()
     }

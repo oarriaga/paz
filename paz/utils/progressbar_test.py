@@ -89,6 +89,12 @@ def test_show_stages_draws_waiting_stage_empty(capsys):
     assert last_frame.endswith("sample |----| 0/4")
 
 
+def test_show_stages_draws_started_stage_with_count_zero(capsys):
+    _, last_frame = show_two_stages(capsys, [(0, 0)])
+    assert last_frame.startswith("tune |----| 0/2 0% [")
+    assert last_frame.endswith("sample |----| 0/4")
+
+
 def test_show_stages_keeps_finished_stage_with_its_time(capsys):
     _, last_frame = show_two_stages(capsys, [(0, 2), (1, 2)])
     tune, sample = last_frame.split("  ")

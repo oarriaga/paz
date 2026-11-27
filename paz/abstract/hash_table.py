@@ -92,7 +92,7 @@ def pytree_to_uint32(pytree):
 
 def pytree_to_uint32_with_slot_arg(table, pytree):
     item_uint32 = pytree_to_uint32(pytree)
-    slot_arg = hash_to_slot_arg(table.key, item_uint32, table.num_slots)
+    slot_arg = hash_to_slot_arg(table.key, item_uint32, table.sub_table_size)
     return slot_arg, item_uint32
 
 
@@ -151,7 +151,8 @@ def _lookup(table, item):
 
         def next_slot(key, counter):
             new_key, zero_table_arg = key + 1, TABLE_ARG_DTYPE(0)
-            slot_arg = hash_to_slot_arg(new_key, query_uint32, table.num_slots)
+            hash_args = (new_key, query_uint32, table.sub_table_size)
+            slot_arg = hash_to_slot_arg(*hash_args)
             return new_key, Counter(slot_arg, zero_table_arg)
 
         def next_table(key, counter):
@@ -173,19 +174,24 @@ def _lookup(table, item):
         key, counter = jax.lax.cond(found, identity, _next_probe, key, counter)
         return key, counter, found
 
+    def has_slots_left(key):
+        num_visited_slots = key - table.key
+        return num_visited_slots < table.sub_table_size
+
     def continue_search(state):
-        _, counter, item_was_found = state
+        key, counter, item_was_found = state
         num_occupants = table.table_occupancy[counter.slot_arg]
         is_in_empty_slot = counter.table_arg >= num_occupants
-        return jp.logical_and(~item_was_found, ~is_in_empty_slot)
+        is_searching = jp.logical_and(~item_was_found, ~is_in_empty_slot)
+        return jp.logical_and(is_searching, has_slots_left(key))
 
     state = (table.key, Counter(slot_arg, TABLE_ARG_DTYPE(0)), False)
-    _, counter, found = jax.lax.while_loop(continue_search, next_probe, state)
-    return counter, found
+    key, counter, found = jax.lax.while_loop(continue_search, next_probe, state)
+    return counter, found, has_slots_left(key)
 
 
 def lookup(table, item):
-    counter, found = _lookup(table, item)
+    counter, found, _ = _lookup(table, item)
     return compute_flat_arg(counter, table), found
 
 
@@ -210,9 +216,10 @@ def insert(table, item):
             size=size,
         )
 
-    counter, found = _lookup(table, item)
-    table = jax.lax.cond(found, do_nothing, insert, table, counter)
-    return table, jp.logical_not(found), compute_flat_arg(counter, table)
+    counter, found, has_slots_left = _lookup(table, item)
+    inserted = jp.logical_and(~found, has_slots_left)
+    table = jax.lax.cond(inserted, insert, do_nothing, table, counter)
+    return table, inserted, compute_flat_arg(counter, table)
 
 
 def unique_mask(pytrees, key=None):
@@ -229,31 +236,16 @@ def unique_mask(pytrees, key=None):
     return mask, unique_args, inverse_args
 
 
-def _batch_update_table(table, items_to_insert, counters_for_insert):
-    """
-    Performs the final batch update on the table's arrays.
-    This simplified version assumes it only receives items that need to be inserted.
-    """
-    num_items_to_insert = get_batch_size(items_to_insert)
-    # If there's nothing to insert, return the table as is.
-    if num_items_to_insert == 0:
-        return table
-
-    insert_args = counters_for_insert.slot_arg
-    insert_flat_args = compute_flat_arg(counters_for_insert, table)
-
-    # Atomically update all table fields
-    new_args = table.args.at[insert_flat_args].set(items_to_insert.arg)
-    new_data = table.data.at[insert_flat_args].set(items_to_insert.data)
-
-    # Increment the occupancy count for each slot where an item was inserted
-    occupancy_increments = (
-        jp.zeros_like(table.table_occupancy).at[insert_args].add(1)
-    )
-    new_occupancy = table.table_occupancy + occupancy_increments
-
-    # The new size is simply the old size plus the number of items we received
-    new_size = table.size + num_items_to_insert
+def _batch_update_table(table, items, counters, inserted_mask):
+    """Writes the items selected by `inserted_mask` into the table arrays."""
+    flat_args = compute_flat_arg(counters, table)
+    # Items that are not inserted point past the table and are dropped.
+    flat_args = jp.where(inserted_mask, flat_args, len(table.args))
+    new_args = table.args.at[flat_args].set(items.arg, mode="drop")
+    new_data = table.data.at[flat_args].set(items.data, mode="drop")
+    increments = inserted_mask.astype(TABLE_ARG_DTYPE)
+    new_occupancy = table.table_occupancy.at[counters.slot_arg].add(increments)
+    new_size = table.size + jp.sum(inserted_mask, dtype=TABLE_SIZE_DTYPE)
 
     return table._replace(
         args=new_args,
@@ -274,7 +266,6 @@ def _resolve_insert_conflicts(
     # This is the main body function for the while_loop.
     def find_valid_slots(loop_state):
         keys, counters, needs_new_slot_mask = loop_state
-        num_items = get_batch_size(counters)
 
         def get_next_probe(key, counter, item_uint32):
             next_ctr_same_slot = Counter(
@@ -282,7 +273,7 @@ def _resolve_insert_conflicts(
             )
             new_key = key + 1
             new_slot_arg = hash_to_slot_arg(
-                new_key, item_uint32, table.num_slots
+                new_key, item_uint32, table.sub_table_size
             )
             new_table_arg = table.table_occupancy[new_slot_arg]
             next_ctr_new_slot = Counter(new_slot_arg, new_table_arg)
@@ -311,47 +302,10 @@ def _resolve_insert_conflicts(
             needs_new_slot_mask, keys, counters, items_uint32
         )
 
-        # --- CORRECTED JIT-SAFE TIE-BREAKING ---
-        proposed_flat_args = compute_flat_arg(next_counters, table)
+        mask = _needs_new_slot(table, next_counters, inserted_mask)
+        return next_keys, next_counters, mask
 
-        # Get the first-occurrence index for each value.
-        _vals, first_indices, inverse_indices = jp.unique(
-            proposed_flat_args,
-            return_index=True,
-            return_inverse=True,
-            size=num_items,
-        )
-
-        # An item is the first occurrence if its own index in the array equals the
-        # canonical "first_index" for its value. This avoids boolean masking.
-        is_first_occurrence_mask = (
-            jp.arange(num_items) == first_indices[inverse_indices]
-        )
-
-        has_conflict = jp.logical_not(is_first_occurrence_mask)
-        overflowed = next_counters.table_arg >= table.num_tables
-
-        new_needs_new_slot_mask = jp.logical_and(
-            inserted_mask, jp.logical_or(overflowed, has_conflict)
-        )
-        return next_keys, next_counters, new_needs_new_slot_mask
-
-    # Initial conflict check before the loop starts
-    initial_flat_args = compute_flat_arg(initial_counters, table)
-    num_initial_items = get_batch_size(initial_counters)
-
-    # CORRECTED JIT-SAFE initial conflict check
-    _i_vals, i_first_indices, i_inverse_indices = jp.unique(
-        initial_flat_args,
-        return_index=True,
-        return_inverse=True,
-        size=num_initial_items,
-    )
-    initial_is_first_mask = (
-        jp.arange(num_initial_items) == i_first_indices[i_inverse_indices]
-    )
-    initial_has_conflict = jp.logical_not(initial_is_first_mask)
-    initial_needs_new_slot = jp.logical_and(inserted_mask, initial_has_conflict)
+    needs_new_slot = _needs_new_slot(table, initial_counters, inserted_mask)
 
     def _continue_if_conflicts(state):
         _keys, _counters, needs_new_slot_mask = state
@@ -361,42 +315,25 @@ def _resolve_insert_conflicts(
     _final_keys, final_counters, _ = jax.lax.while_loop(
         cond_fun=_continue_if_conflicts,
         body_fun=find_valid_slots,
-        init_val=(initial_keys, initial_counters, initial_needs_new_slot),
+        init_val=(initial_keys, initial_counters, needs_new_slot),
     )
     return final_counters
 
 
-def _find_unique_items(items):
-    unique_item_mask, unique_indices, inverse_indices = unique_mask(items)
-    unique_items = jax.tree_util.tree_map(lambda x: x[unique_indices], items)
-    # num_unique_items = get_batch_size(unique_items)
-    return unique_items
-
-
-def new_insert_parallel(table, items):
-    items = _find_unique_items(items)
-    flat_args, found_mask = lookup_parallel(table, items)
-    which_items_to_insert = jp.logical_not(found_mask)
-    items_uint32 = jax.vmap(pytree_to_uint32)(items)
-    keys_for_items = jp.full((get_batch_size(items),), table.key, jp.uint32)
-    to_slot_args = jax.vmap(hash_to_slot_arg, in_axes=(None, 0, None))
-    slot_args_for_items = to_slot_args(table.key, items_uint32, table.num_slots)
-    table_args_for_items = table.table_occupancy[slot_args_for_items]
-    counters_for_items = Counter(slot_args_for_items, table_args_for_items)
-    counters_for_items = _resolve_insert_conflicts(
-        table,
-        keys_for_items,
-        counters_for_items,
-        items_uint32,
-        which_items_to_insert,
-    )
-
-    def mask(x):
-        return x[which_items_to_insert]
-
-    items_to_insert = jax.tree_util.tree_map(mask, items)
-    counters_for_insert = jax.tree_util.tree_map(mask, counters_for_items)
-    new_table = _batch_update_table(table, items_to_insert, counters_for_insert)
+def _needs_new_slot(table, counters, inserted_mask):
+    item_args = jp.arange(get_batch_size(counters))
+    overflowed = counters.table_arg >= table.num_tables
+    claims_position = jp.logical_and(inserted_mask, ~overflowed)
+    flat_args = compute_flat_arg(counters, table)
+    # Items that claim no position get distinct ones past the table.
+    no_claim_args = len(table.args) + item_args
+    flat_args = jp.where(claims_position, flat_args, no_claim_args)
+    unique_kwargs = {"return_index": True, "return_inverse": True}
+    unique = jp.unique(flat_args, size=len(item_args), **unique_kwargs)
+    _, first_args, inverse_args = unique
+    has_conflict = item_args != first_args[inverse_args]
+    overflowed_or_conflict = jp.logical_or(overflowed, has_conflict)
+    return jp.logical_and(inserted_mask, overflowed_or_conflict)
 
 
 def insert_parallel(table, items):
@@ -416,7 +353,10 @@ def insert_parallel(table, items):
     )
 
     # 3. Determine which of the unique items need to be inserted.
-    unique_inserted_mask = jp.logical_not(unique_found_mask)
+    # jp.unique pads the unique items up to the batch size with copies.
+    is_padding = jp.arange(num_unique_items) >= jp.sum(unique_item_mask)
+    found_or_padding = jp.logical_or(unique_found_mask, is_padding)
+    unique_inserted_mask = jp.logical_not(found_or_padding)
 
     # 4. Prepare initial state FOR UNIQUE ITEMS ONLY.
     unique_items_uint32 = jax.vmap(pytree_to_uint32)(unique_items)
@@ -425,7 +365,7 @@ def insert_parallel(table, items):
     )
     initial_slot_args_for_uniques = jax.vmap(
         hash_to_slot_arg, in_axes=(None, 0, None)
-    )(table.key, unique_items_uint32, table.num_slots)
+    )(table.key, unique_items_uint32, table.sub_table_size)
     initial_table_args_for_uniques = table.table_occupancy[
         initial_slot_args_for_uniques
     ]
@@ -443,26 +383,8 @@ def insert_parallel(table, items):
     )
 
     # 6. Update the table with ONLY the items that were actually inserted.
-    # THIS IS THE KEY FIX: We filter the items and counters *before* the update call.
-    # print("unique_inserted_mask", unique_inserted_mask)
-    # print("unique_items", unique_items)
-    which_items_to_insert = jp.logical_and(
-        unique_inserted_mask, unique_item_mask
-    )
-    items_to_insert = jax.tree_util.tree_map(
-        lambda x: x[which_items_to_insert], unique_items
-    )
-    counters_for_insert = jax.tree_util.tree_map(
-        lambda x: x[which_items_to_insert], final_counters_for_uniques
-    )
-    # items_to_insert = jax.tree_util.tree_map(
-    #     lambda x: x[unique_inserted_mask], unique_items
-    # )
-    # counters_for_insert = jax.tree_util.tree_map(
-    #     lambda x: x[unique_inserted_mask], final_counters_for_uniques
-    # )
-    # print("items_to_insert")
-    new_table = _batch_update_table(table, items_to_insert, counters_for_insert)
+    uniques = (unique_items, final_counters_for_uniques, unique_inserted_mask)
+    new_table = _batch_update_table(table, *uniques)
 
     # 7. Construct the final results for the original full batch by broadcasting.
     # print(items_to_insert)

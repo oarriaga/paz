@@ -114,3 +114,9 @@ def test_write_csv_row_flushes_before_closing(tmp_path):
     file.write_csv_row(log, Row(1, 0.5))
     assert file.load_csv(filepath) == {"iteration": [1.0], "loss": [0.5]}
     log.filedata.close()
+
+
+def test_load_csv_returns_no_columns_for_empty_file(tmp_path):
+    filepath = tmp_path / "empty.csv"
+    filepath.write_text("")
+    assert file.load_csv(filepath) == {}

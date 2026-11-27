@@ -4,6 +4,7 @@ import jax.numpy as jp
 
 from .hash_table import (
     build,
+    get_batch_size,
     lookup,
     Item,
     pytree_to_uint32_with_slot_arg,
@@ -571,3 +572,86 @@ def test_insert_parallel_with_duplicate_in_batch_updates_size_correctly(
     )  # Contains a duplicate
     new_table, _, _ = insert_parallel(empty_table, items_to_insert)
     assert new_table.size == 2
+
+
+def build_batch(item_args):
+    item_args = jp.array(item_args, dtype=jp.uint32)
+    return Item(item_args, jp.stack([item_args, item_args + 1], axis=1))
+
+
+def test_insert_parallel_with_duplicates_inserts_every_unique_item():
+    table = build(16, (2,))
+    items = build_batch([5, 1, 5, 2, 1, 3])
+    table, inserted_mask, _ = insert_parallel(table, items)
+    _, found_flags = lookup_parallel(table, build_batch([1, 2, 3, 5]))
+    is_first_occurrence = jp.array([True, True, False, True, False, True])
+    assert jp.all(inserted_mask == is_first_occurrence)
+    assert jp.all(found_flags)
+    assert table.size == 4
+    assert jp.sum(table.table_occupancy) == 4
+
+
+def test_insert_parallel_is_jittable():
+    table = build(16, (2,))
+    items = build_batch([5, 1, 5, 2, 1, 3])
+    table, inserted_mask, flat_args = jax.jit(insert_parallel)(table, items)
+    found_args, found_flags = lookup_parallel(table, items)
+    is_first_occurrence = jp.array([True, True, False, True, False, True])
+    assert jp.all(inserted_mask == is_first_occurrence)
+    assert jp.all(found_flags)
+    assert jp.all(found_args == flat_args)
+    assert table.size == 4
+
+
+def test_insert_parallel_into_full_slot_finds_item(table_with_full_slot):
+    table = table_with_full_slot["table"]
+    item = table_with_full_slot["non_inserted_item"]
+    table, inserted_mask, _ = insert_parallel(table, stack_items([item]))
+    _, found = lookup(table, item)
+    assert jp.all(inserted_mask)
+    assert found
+    assert jp.all(table.table_occupancy <= table.num_tables)
+
+
+def test_insert_parallel_new_item_colliding_with_existing(empty_table):
+    existing_item, new_item = find_colliding_items(empty_table)
+    table, _, _ = insert(empty_table, existing_item)
+    items = stack_items([existing_item, new_item])
+    table, inserted_mask, _ = insert_parallel(table, items)
+    _, found_flags = lookup_parallel(table, items)
+    assert jp.all(inserted_mask == jp.array([False, True]))
+    assert jp.all(found_flags)
+
+
+def insert_sequentially(table, items):
+    inserted_flags = []
+    for item_arg in range(get_batch_size(items)):
+        item = jax.tree_util.tree_map(lambda x: x[item_arg], items)
+        table, inserted, _ = insert(table, item)
+        inserted_flags.append(inserted)
+    return table, jp.array(inserted_flags)
+
+
+@pytest.mark.parametrize("num_tables", [1, 2, 3, 4])
+@pytest.mark.parametrize("capacity_multiplier", [2, 4])
+def test_insert_finds_items_in_any_geometry(num_tables, capacity_multiplier):
+    geometry = (num_tables, capacity_multiplier)
+    table = build(8, (2,), jp.uint32, jp.uint32, *geometry)
+    items = build_batch(range(8))
+    table, inserted_flags = insert_sequentially(table, items)
+    _, found_flags = lookup_parallel(table, items)
+    assert jp.all(inserted_flags)
+    assert jp.all(found_flags)
+    assert table.size == 8
+
+
+def test_insert_into_full_table_reports_not_inserted():
+    table = build(4, (2,))
+    capacity = len(table.args)
+    items = build_batch(range(capacity + 4))
+    table, inserted_flags = insert_sequentially(table, items)
+    _, found_flags = lookup_parallel(table, items)
+    assert jp.all(found_flags == inserted_flags)
+    assert table.size == jp.sum(inserted_flags)
+    assert table.size <= capacity
+    assert jp.all(table.table_occupancy <= table.num_tables)

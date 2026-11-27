@@ -78,3 +78,15 @@ def test_latent_sample_single_shape():
     latent = Latent(distribution_fn, name="x")()
     sample = latent.sample(jax.random.PRNGKey(1), 1, jp.array(0.0))
     assert sample.shape == ()
+
+
+def test_latent_builder_called_twice_keeps_separate_edges():
+    def distribution_fn(mu):
+        return paz.distributions.Normal(mu, 1.0)
+
+    parent_a = Latent(lambda: paz.distributions.Normal(0.0, 1.0), name="a")()
+    parent_b = Latent(lambda: paz.distributions.Normal(0.0, 1.0), name="b")()
+    build_latent = Latent(distribution_fn, name="z")
+    latent_a, latent_b = build_latent(parent_a), build_latent(parent_b)
+    assert [edge.name for edge in latent_a.edges] == ["a"]
+    assert [edge.name for edge in latent_b.edges] == ["b"]

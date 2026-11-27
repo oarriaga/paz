@@ -22,10 +22,9 @@ def Node(function, *args, name=None):
     name = function.__name__ if name is None else name
     locked_call = paz.lock(function, *args)
     Type = build_type([name])
-    edges = []
 
     def call(*node_args):
-        [edges.append(node_arg) for node_arg in node_args]
+        edges = list(node_args)
         return NodeState(lambda *args: Type(locked_call(*args)), name, edges)
 
     return call

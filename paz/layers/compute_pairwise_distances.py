@@ -3,15 +3,17 @@ from keras import ops
 
 
 def compute_pairwise_distances(x, y):
-    """Compute euclidean distance for each vector x with each vector y
+    """Compute the mean squared difference of each vector x with each vector y
 
     # Arguments:
         x: Tensor with shape `(n, vector_dim)`
         y: Tensor with shape `(m, vector_dim)`
 
     # Returns:
-        Tensor with shape `(n, m)` where each value pair n, m corresponds to
-        the distance between the vector `n` of `x` with the vector `m` of `y`
+        Tensor with shape `(n, m)` where each value pair n, m is the mean over
+        `vector_dim` of the squared differences between the vector `n` of `x`
+        and the vector `m` of `y`. This is the squared euclidean distance
+        divided by `vector_dim`, not the euclidean distance.
     """
     n = x.shape[0]
     m = y.shape[0]
