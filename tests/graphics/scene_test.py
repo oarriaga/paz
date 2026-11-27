@@ -84,48 +84,20 @@ def test_compute_bounces_mixed(shape_256_A):
 
 
 def test_compile_sorting(shape_256_A, shape_512, shape_256_B):
-    """Tests that compile sorts shapes and masks correctly."""
-    # Create scene with interleaved shapes: 256_A (0), 512 (1), 256_B (2)
+    """Shapes are grouped by pattern size and the masks follow them."""
     scene = paz.graphics.Scene([shape_256_A, shape_512, shape_256_B])
     lights = [paz.graphics.PointLight(jp.ones(3), jp.zeros(3))]
-    
-    # Masks reflect the indices
-    mask = jp.array([True, False, True]) 
-    shadow_mask = jp.array([False, True, False]) 
-
-    # Compile
+    mask = jp.array([True, False, True])
+    shadow_mask = jp.array([False, True, False])
     compiled = paz.graphics.scene.compile(scene, lights, mask, shadow_mask)
     shapes = compiled.shapes
-    mask_out = compiled.mask
-    shadow_mask_out = compiled.shadow_mask
-
-    # Expected grouping:
-    # (256, 256) group appears first because shape_256_A is first.
-    # Group should contain [shape_256_A, shape_256_B]
-    # (512, 512) group appears second.
-    # Group should contain [shape_512]
-    
     assert len(shapes) == 3
-    # Check shapes order
-    assert shapes[0].pattern.image.shape == (256, 256, 3)
-    assert shapes[1].pattern.image.shape == (256, 256, 3)
-    assert shapes[2].pattern.image.shape == (512, 512, 3)
-
-    # Check masks were reordered correctly
-    # shapes[0] is 256_A (original idx 0) -> mask True
-    # shapes[1] is 256_B (original idx 2) -> mask True
-    # shapes[2] is 512   (original idx 1) -> mask False
-    assert mask_out[0] == True
-    assert mask_out[1] == True
-    assert mask_out[2] == False
-    
-    # Check shadow masks were reordered correctly
-    # shapes[0] is 256_A (original idx 0) -> shadow_mask False
-    # shapes[1] is 256_B (original idx 2) -> shadow_mask False
-    # shapes[2] is 512   (original idx 1) -> shadow_mask True
-    assert shadow_mask_out[0] == False
-    assert shadow_mask_out[1] == False
-    assert shadow_mask_out[2] == True
+    assert shapes[0].type == paz.graphics.SPHERE
+    assert shapes[1].type == paz.graphics.CUBE
+    assert shapes[2].type == paz.graphics.PLANE
+    assert jp.array_equal(compiled.mask, jp.array([True, True, False]))
+    expected_shadow_mask = jp.array([False, False, True])
+    assert jp.array_equal(compiled.shadow_mask, expected_shadow_mask)
 
 
 def test_compile_rejects_mixed_shape_materials():

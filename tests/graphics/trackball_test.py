@@ -9,8 +9,8 @@ from paz.graphics import trackball
 @pytest.fixture
 def initial_state():
     """Provides a default TrackballState for tests."""
-    # FIX: The trackball expects a camera-to-world pose matrix.
-    # SE3.view_transform returns a world-to-camera matrix, so we must invert it.
+    # The trackball expects a camera-to-world pose; view_transform returns
+    # world-to-camera, so it is inverted.
     world_to_camera = SE3.view_transform(
         camera_origin=jp.array([0.0, 0.0, 5.0]),
         target_origin=jp.zeros(3),
@@ -23,7 +23,6 @@ def initial_state():
     )
 
 
-# The rest of the test functions remain the same as they were correct.
 def test_start_drag_creates_correct_data(initial_state):
     """Tests that start_drag correctly packages the initial drag data."""
     start_point = (100, 150)
@@ -31,9 +30,6 @@ def test_start_drag_creates_correct_data(initial_state):
     assert isinstance(drag_data, trackball.DragData)
     assert jp.allclose(drag_data.start_point, jp.array(start_point))
     assert drag_data.start_state == initial_state
-
-
-# ... (all 8 drag tests will now pass with the corrected fixture) ...
 
 
 def test_drag_rotate_changes_pose(initial_state):

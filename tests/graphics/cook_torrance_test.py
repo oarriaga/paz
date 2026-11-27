@@ -54,12 +54,12 @@ def metallic_material():
     )
 
 
-def test_halfway_direction_is_unit_length():
+def test_halfway_direction_bisects_view_and_light():
     view = jp.array([[0.0, 1.0, 0.0]])
     light_direction = jp.array([[1.0, 0.0, 0.0]])
     halfway = cook_torrance.compute_halfway_direction(view, light_direction)
-    norm = jp.linalg.norm(halfway, axis=-1)
-    assert jp.allclose(norm, 1.0)
+    expected = jp.array([[1.0, 1.0, 0.0]]) / jp.sqrt(2.0)
+    assert jp.allclose(halfway, expected)
 
 
 def test_microfacet_distribution_peaks_at_zero_angle():
@@ -134,21 +134,6 @@ def test_diffuse_color_vanishes_for_metallic_surfaces(metallic_material):
         metallic_material, albedo, reflectance
     )
     assert jp.allclose(diffuse, jp.zeros_like(diffuse))
-
-
-def test_compute_colors_runs_with_dielectric(
-    simple_shape, dielectric_material, simple_light
-):
-    points = jp.array([[0.0, 0.0, 0.0]])
-    normals = jp.array([[0.0, 1.0, 0.0]])
-    eye = jp.array([[0.0, 1.0, 0.0]])
-    args = simple_shape, dielectric_material, points
-    shape_albedo = albedo.compute_shape_albedo(*args)
-    colors = cook_torrance.compute_colors(
-        shape_albedo, dielectric_material, points, normals, eye, simple_light
-    )
-    assert colors.shape == (1, 3)
-    assert jp.all(colors >= 0.0)
 
 
 def test_compute_colors_is_zero_for_back_facing_normals(

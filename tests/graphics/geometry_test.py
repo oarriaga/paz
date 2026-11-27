@@ -82,13 +82,11 @@ def test_compute_points3D_calculates_correct_position():
     assert jp.allclose(points, expected)
 
 
-def test_compute_hits_to_light_is_normalized():
-    """Tests that the vector from hit to light is a unit vector."""
-    light_position = jp.array([10.0, 0.0, 0.0])
-    hits = jp.array([[5.0, 0.0, 0.0]])
+def test_compute_hits_to_light_is_unit_direction_to_light():
+    light_position = jp.array([10.0, 4.0, 0.0])
+    hits = jp.array([[7.0, 0.0, 0.0]])
     hits_to_light = geometry.compute_hits_to_light(light_position, hits)
-    norm = jp.linalg.norm(hits_to_light)
-    assert norm == approx(1.0, abs=1e-5)
+    assert jp.allclose(hits_to_light, jp.array([[0.6, 0.8, 0.0]]), atol=1e-6)
 
 
 def test_reflect_vector():

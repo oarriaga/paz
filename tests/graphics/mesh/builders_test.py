@@ -20,6 +20,7 @@ def test_build_cube():
     assert edges.shape[1] == 2
     assert len(vertices) == 8
     assert len(faces) == 12
+    assert jp.allclose(jp.abs(vertices), 0.5)
 
 
 def test_build_cube_faces_point_outward():

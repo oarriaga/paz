@@ -28,20 +28,20 @@ def test_extract_points():
     assert jp.allclose(C[0], vertices[1])
 
 
-def test_build_edges_shape():
+def test_build_edges_start_at_first_face_vertex():
     vertices, faces = make_triangle()
     edges_AC, edges_AB, points_A = build_edges(vertices, faces)
-    assert edges_AC.shape == (1, 1, 3)
-    assert edges_AB.shape == (1, 1, 3)
-    assert points_A.shape == (1, 1, 3)
+    assert jp.allclose(edges_AC, jp.array([[[1.0, 0.0, 0.0]]]))
+    assert jp.allclose(edges_AB, jp.array([[[0.0, 1.0, 0.0]]]))
+    assert jp.allclose(points_A, jp.zeros((1, 1, 3)))
 
 
-def test_compute_canonical_normals_direction():
+def test_compute_canonical_normals_follow_face_winding():
     vertices, faces = make_triangle()
     shape_points = jp.zeros((1, 4, 3))
     normals = compute_canonical_normals(vertices, faces, shape_points)
-    assert normals.shape == (1, 4, 3)
-    assert jp.abs(normals[0, 0, 2]) > 0.9
+    expected = jp.broadcast_to(jp.array([0.0, 0.0, -1.0]), (1, 4, 3))
+    assert jp.allclose(normals, expected, atol=1e-4)
 
 
 def test_compute_canonical_normals_floor_points_up():
@@ -60,26 +60,21 @@ def test_compute_canonical_normals_floor_points_up():
     assert jp.all(normals[:, 0, 1] > 0.9)
 
 
-def test_compute_position_shape():
+def test_compute_position_moves_each_ray_by_its_depth():
     origins = jp.array([[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]])
     directions = jp.array([[0.0, 0.0, 1.0], [0.0, 0.0, 1.0]])
     depths = jp.array([[[2.0], [3.0]], [[4.0], [5.0]]])
     positions = compute_position(origins, directions, depths)
-    assert positions.shape == (2, 2, 3)
+    first_face = [[0.0, 0.0, 2.0], [1.0, 0.0, 3.0]]
+    second_face = [[0.0, 0.0, 4.0], [1.0, 0.0, 5.0]]
+    assert jp.allclose(positions, jp.array([first_face, second_face]))
 
 
-def test_transform_points_shape():
-    points = jp.ones((3, 4, 3))
-    affine = jp.eye(4)
-    result = transform_points(affine, points)
-    assert result.shape == (3, 4, 3)
-
-
-def test_transform_points_identity():
-    points = jp.array([[[1.0, 2.0, 3.0]]])
-    affine = jp.eye(4)
-    result = transform_points(affine, points)
-    assert jp.allclose(result, points, atol=1e-5)
+def test_transform_points_applies_translation():
+    points = jp.array([[[1.0, 2.0, 3.0], [0.0, 0.0, 0.0]]])
+    offset = jp.array([10.0, -2.0, 0.5])
+    result = transform_points(paz.SE3.translation(offset), points)
+    assert jp.allclose(result, points + offset, atol=1e-5)
 
 
 def test_vertex_normals_of_a_sphere_point_outwards():

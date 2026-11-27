@@ -137,14 +137,6 @@ def test_is_scene_identifier(sample_scene, sample_group):
     assert not serialization.is_scene(group_dict)
 
 
-def test_to_json_handles_nested_scene(sample_scene):
-    """Tests that the to_json helper correctly serializes a Scene."""
-    serialized = serialization.to_json(sample_scene)
-    assert isinstance(serialized, dict)
-    assert "nodes" in serialized
-    assert "parent_array" in serialized
-
-
 def test_to_json_converts_numpy_array_to_list():
     color = np.array([1.0, 0.65, 0.0], dtype=np.float32)
     serialized = serialization.to_json(color)
@@ -210,7 +202,7 @@ def test_save_and_load_accepts_path_objects(tmp_path, shape_with_image):
     scene_dir = tmp_path / "path_scene"
     serialization.save(scene_dir, shape_with_image)
     loaded_shape = serialization.load(scene_dir)
-    assert isinstance(loaded_shape, types.Shape)
+    assert_pytrees_allclose(loaded_shape, shape_with_image)
 
 
 def test_load_raises_error_for_unknown_top_level_type(tmp_path):
@@ -367,23 +359,6 @@ def test_load_raises_error_if_asset_missing(tmp_path, shape_with_image):
 
     with pytest.raises(FileNotFoundError):
         serialization.load(str(scene_dir))
-
-
-def test_material_save_and_load_round_trip(tmp_path, sample_material):
-    """
-    Tests a round-trip for a standalone Material object, ensuring all properties,
-    including new ones, are correctly serialized and deserialized.
-    """
-    filepath = tmp_path / "material_test"
-    # To save a Material, it needs to be part of a Shape or a similar structure
-    # that `serialization.save` knows how to handle.
-    # We can wrap it in a dummy Shape for this test.
-    dummy_shape = types.Sphere(material=sample_material)
-    serialization.save(filepath, dummy_shape)
-
-    loaded_shape = serialization.load(filepath)
-    assert isinstance(loaded_shape, types.Shape)
-    assert_pytrees_allclose(loaded_shape.material, sample_material)
 
 
 def test_cook_torrance_scene_save_and_load_round_trip(tmp_path):

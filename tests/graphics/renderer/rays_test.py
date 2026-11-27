@@ -23,11 +23,13 @@ def test_initialize_state():
     num_rays = 10
     camera_rays = jp.zeros((num_rays, 3)), jp.ones((num_rays, 3))
     state = rays.initialize_state(camera_rays)
-    assert state.color.shape == (num_rays, 3)
-    assert state.throughput.shape == (num_rays, 3)
-    assert jp.all(state.refractive_index == 1.0)
-    assert state.depth.shape == (num_rays,)
-    assert state.hit_mask.dtype == bool
+    assert jp.array_equal(state.color, jp.zeros((num_rays, 3)))
+    assert jp.array_equal(state.throughput, jp.ones((num_rays, 3)))
+    assert jp.array_equal(state.refractive_index, jp.ones(num_rays))
+    faraway = jp.full(num_rays, paz.graphics.FARAWAY)
+    assert jp.array_equal(state.depth, faraway)
+    assert not jp.any(state.hit_mask)
+    assert jp.all(state.active_mask)
 
 
 def test_accumulate_color():
