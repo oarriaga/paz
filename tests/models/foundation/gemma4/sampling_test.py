@@ -27,13 +27,16 @@ def test_top_p_always_keeps_top_token():
     assert np.isfinite(out[0, 0]) and np.isinf(out[0, 1:]).all()
 
 
-def test_sample_shapes_and_range():
+def test_sample_draws_one_token_per_row_from_the_top_k():
     rng = np.random.default_rng(1)
-    logits = jnp.asarray(rng.standard_normal((8, 100)).astype("float32"))
-    args = SamplingArgs(temperature=0.8, top_k=20, top_p=0.95)
-    token = np.asarray(sample_logits(logits, jax.random.PRNGKey(7), args))
-    assert token.shape == (8,)
-    assert token.min() >= 0 and token.max() < 100
+    logits = rng.standard_normal((8, 100)).astype("float32")
+    args = SamplingArgs(temperature=0.8, top_k=5, top_p=1.0)
+    key = jax.random.PRNGKey(7)
+    tokens = np.asarray(sample_logits(jnp.asarray(logits), key, args))
+    top_tokens = np.argsort(logits, axis=-1)[:, -5:]
+    assert tokens.shape == (8,)
+    for token, allowed in zip(tokens, top_tokens):
+        assert token in allowed
 
 
 def test_sampling_rows_independent_and_seeded():

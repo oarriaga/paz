@@ -40,10 +40,18 @@ def test_encoder_block_mask_hides_keys():
     assert np.allclose(kept[:, :3], changed[:, :3], atol=1e-5)
 
 
-WEIGHTS_OFF = os.environ.get("FLOWER_WEIGHTS_TEST") != "1"
+def missing_weight_variables():
+    enabled = os.environ.get("FLOWER_WEIGHTS_TEST") == "1"
+    weights = os.environ.get("FLORENCE2_WEIGHTS")
+    fixtures = os.environ.get("FLORENCE2_FIXTURES")
+    return not (enabled and weights and fixtures)
 
 
-@pytest.mark.skipif(WEIGHTS_OFF, reason="needs converted FLOWER weights")
+SKIP_REASON = ("set FLOWER_WEIGHTS_TEST=1, FLORENCE2_WEIGHTS and "
+               "FLORENCE2_FIXTURES to run checkpoint parity")
+
+
+@pytest.mark.skipif(missing_weight_variables(), reason=SKIP_REASON)
 def test_encoder_hidden_states_match_torch_fixture():
     weights = os.environ["FLORENCE2_WEIGHTS"]
     fixtures = np.load(os.environ["FLORENCE2_FIXTURES"])

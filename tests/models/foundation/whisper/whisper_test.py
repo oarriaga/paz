@@ -20,7 +20,6 @@ from paz.applications.transcribers import build_transcript_printer
 ROOT = Path(__file__).resolve().parents[4]
 WEIGHTS_DIR = ROOT / "examples" / "speech_to_text" / "whisper_models"
 AUDIO_PATH = ROOT / "examples" / "speech_to_text" / "harvard.wav"
-ASSETS_DIR = Path(__file__).resolve().with_name("assets")
 
 HARVARD_TOKEN_IDS = [
     383, 39985, 8508, 286, 1468, 6099, 18459, 364, 13, 632, 2753, 4894, 284,
@@ -29,12 +28,9 @@ HARVARD_TOKEN_IDS = [
     22175, 389, 616, 4004, 13, 317, 1976, 395, 913]
 
 
-def has_weights():
-    return (WEIGHTS_DIR / "whisper_tiny_en" / "encoder.weights.h5").exists()
-
-
-def has_assets():
-    return (ASSETS_DIR / "tokenizer.json").exists()
+def has_local_weights_and_audio():
+    weights = WEIGHTS_DIR / "whisper_tiny_en" / "encoder.weights.h5"
+    return weights.exists() and AUDIO_PATH.exists()
 
 
 def preprocess(waveform, sample_rate):
@@ -89,13 +85,13 @@ def test_unhosted_variant_resolves_local_path(tmp_path):
     assert path == tmp_path / "whisper_tiny_multi" / "encoder.weights.h5"
 
 
-@pytest.mark.skipif(not has_assets(), reason="tokenizer assets not present")
+@pytest.mark.weights
 def test_prompt_and_stop_tokens_resolve_from_assets():
     assert build_prompt_token_ids() == [50257, 50357, 50362]
     assert find_special_token_id("<|endoftext|>") == 50256
 
 
-@pytest.mark.skipif(not has_assets(), reason="tokenizer assets not present")
+@pytest.mark.weights
 def test_transcript_printer_streams_full_text(capsys):
     stop_id = find_special_token_id("<|endoftext|>")
     print_token = build_transcript_printer(stop_id)
@@ -105,8 +101,11 @@ def test_transcript_printer_streams_full_text(capsys):
     assert streamed == decode_tokens(HARVARD_TOKEN_IDS)
 
 
-@pytest.mark.skipif(not (has_weights() and has_assets()),
-                    reason="whisper weights or tokenizer assets not present")
+LOCAL_REASON = "local whisper_tiny_en weights or harvard.wav not present"
+
+
+@pytest.mark.weights
+@pytest.mark.skipif(not has_local_weights_and_audio(), reason=LOCAL_REASON)
 def test_harvard_token_ids_match_snapshot():
     frontend, encoder, cross_model, decoder_step = Whisper(
         "whisper_tiny_en", weights="pretrained", models_path=str(WEIGHTS_DIR))

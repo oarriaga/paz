@@ -1,5 +1,5 @@
 import numpy as np
-from keras import ops
+from keras import Input, Model, ops
 
 from paz.models.transformers.attention import attend, kv_attend, build_cache
 from paz.models.transformers.attention import masked_attend
@@ -11,14 +11,26 @@ from paz.models.transformers.attention import compute_masked_attention
 from paz.models.transformers.attention import rms_normalize_query_key
 
 
-def test_attend_preserves_query_shape():
-    x = ops.zeros((1, 4, 16))
-    output = attend(x, x, 2, 8, 0.0, "attend_test")
-    assert tuple(output.shape) == (1, 4, 16)
+def build_random_tokens(shape, seed):
+    values = np.random.default_rng(seed).normal(size=shape)
+    return values.astype("float32")
+
+
+def test_attend_reorders_output_with_the_queries():
+    query = Input((4, 16), name="reorder_query")
+    value = Input((5, 16), name="reorder_value")
+    output = attend(query, value, 2, 8, 0.0, "reorder_test")
+    model = Model([query, value], output)
+    queries = build_random_tokens((1, 4, 16), 0)
+    values = build_random_tokens((1, 5, 16), 1)
+    order = [2, 0, 3, 1]
+    attended = np.array(model([queries, values]))
+    reordered = np.array(model([queries[:, order], values]))
+    assert not np.allclose(attended[:, 0], attended[:, 1], atol=1e-6)
+    assert np.allclose(reordered, attended[:, order], atol=1e-6)
 
 
 def test_masked_attend_ignores_masked_keys():
-    from keras import Input, Model
     x = Input((4, 16), name="masked_keys_x")
     mask = Input((4,), name="masked_keys_mask")
     y = masked_attend(x, x, mask, 2, 8, 0.0, "masked_keys_test")
@@ -33,13 +45,27 @@ def test_masked_attend_ignores_masked_keys():
     assert np.allclose(kept[:, :3], changed[:, :3], atol=1e-6)
 
 
-def test_kv_attend_cross_attention_shape():
-    encoder_output = ops.zeros((1, 5, 16))
-    cache = build_cache(encoder_output, None, 2, 8, "cross_test")
-    query = ops.zeros((1, 1, 16))
+def copy_weights_by_layer_name(source, target):
+    for layer in source.layers:
+        if layer.weights:
+            target.get_layer(layer.name).set_weights(layer.get_weights())
+
+
+def test_kv_attend_over_built_cache_matches_attend():
+    query = Input((3, 16), name="cross_query")
+    value = Input((5, 16), name="cross_value")
+    direct = attend(query, value, 2, 8, 0.0, "cross_test")
+    direct_model = Model([query, value], direct)
+    cache = build_cache(value, None, 2, 8, "cross_test")
     args = (query, cache, None, None, None, 2, 16, 0.0, "cross_test")
-    output, updated = kv_attend(*args)
-    assert tuple(output.shape) == (1, 1, 16)
+    cached, _ = kv_attend(*args)
+    cached_model = Model([query, value], cached)
+    copy_weights_by_layer_name(direct_model, cached_model)
+    queries = build_random_tokens((1, 3, 16), 2)
+    values = build_random_tokens((1, 5, 16), 3)
+    expected = np.array(direct_model([queries, values]))
+    output = np.array(cached_model([queries, values]))
+    assert np.allclose(output, expected, atol=1e-6)
 
 
 def test_split_recovers_fused_qkv_layout():
@@ -69,11 +95,14 @@ def test_compute_attention_matches_numpy():
     assert np.allclose(output, probabilities @ value, atol=1e-5)
 
 
-def test_merge_attention_heads_inverts_split_layout():
-    num_heads, head_dim = 2, 8
-    context = ops.zeros((1, num_heads, 4, head_dim))
-    merged = merge_attention_heads(context)
-    assert tuple(merged.shape) == (1, 4, num_heads * head_dim)
+def test_merge_attention_heads_concatenates_heads_per_token():
+    num_heads, num_tokens, head_dim = 2, 3, 4
+    size = num_heads * num_tokens * head_dim
+    context = np.arange(size, dtype="float32")
+    context = context.reshape(1, num_heads, num_tokens, head_dim)
+    merged = np.array(merge_attention_heads(ops.array(context)))
+    expected = np.concatenate([context[:, 0], context[:, 1]], axis=-1)
+    assert np.array_equal(merged, expected)
 
 
 def test_normalize_query_key_normalizes_over_head_dim():

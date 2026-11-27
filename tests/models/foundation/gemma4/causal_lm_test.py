@@ -23,11 +23,18 @@ def test_causal_lm_logits_are_raw_scores():
     assert abs(total - 1.0) > 0.1
 
 
-def test_causal_lm_soft_cap():
-    config = build_text_backbone_args(final_logit_soft_cap=30.0)
+def test_causal_lm_soft_cap_squashes_raw_logits_with_tanh():
+    config = build_text_backbone_args()
     model = Gemma4CausalLM(config)
-    logits = model(build_test_inputs())
-    assert bool(jp.all(jp.abs(logits) < 30.0))
+    inputs = build_test_inputs()
+    raw = model(inputs)
+    cap = float(jp.max(jp.abs(raw))) / 2.0
+    capped_model = Gemma4CausalLM(config._replace(final_logit_soft_cap=cap))
+    capped_model(inputs)
+    capped_model.set_weights(model.get_weights())
+    capped = capped_model(inputs)
+    assert float(jp.max(jp.abs(capped))) < cap
+    assert_close(capped, cap * jp.tanh(raw / cap), tol=1e-5)
 
 
 def test_causal_lm_save_and_load(tmp_path):

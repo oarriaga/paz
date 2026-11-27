@@ -10,16 +10,24 @@ def test_apply_at_position_zero_is_identity():
     np.testing.assert_allclose(output, x, atol=1e-5)
 
 
-def test_apply_preserves_shape():
+def test_apply_rotates_by_sequence_position_and_keeps_the_norm():
     x = np.random.RandomState(1).rand(2, 4, 6).astype("float32")
     output = np.asarray(rotary.apply(x, 10000.0, 1.0, 6))
-    assert output.shape == (2, 4, 6)
+    np.testing.assert_allclose(output[:, 0], x[:, 0], atol=1e-6)
+    assert not np.allclose(output[:, 1:], x[:, 1:], atol=1e-3)
+    source = np.linalg.norm(x, axis=-1)
+    rotated = np.linalg.norm(output, axis=-1)
+    np.testing.assert_allclose(rotated, source, atol=1e-5)
 
 
-def test_apply_partial_preserves_shape():
+def test_apply_partial_rotates_only_the_rotary_fraction():
+    # A 0.5 factor on 8 dims rotates the first 2 dims of each half.
     x = np.random.RandomState(2).rand(1, 3, 8).astype("float32")
     output = np.asarray(rotary.apply_partial(x, 10000.0, 1.0, 0.5))
-    assert output.shape == (1, 3, 8)
+    static, rotated = [2, 3, 6, 7], [0, 1, 4, 5]
+    np.testing.assert_array_equal(output[..., static], x[..., static])
+    changed = np.abs(output[:, 1:, rotated] - x[:, 1:, rotated])
+    assert changed.max() > 1e-3
 
 
 def test_apply_2d_at_position_zero_is_identity():

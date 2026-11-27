@@ -10,8 +10,7 @@ from paz.models.foundation.gemma4.vision import (
 from paz.models.foundation.gemma4.multimodal import build_multimodal_backbone
 from paz.models.foundation.gemma4.multimodal_decoding import (
     prefill_logits, generate, generate_eager, generate_sample, generate_batch,
-    generate_batch_greedy, build_prompt_rows, call_step, trim_to_stop,
-    as_token, build_text_generator, build_generator)
+    generate_batch_greedy, build_text_generator, build_generator)
 from paz.models.foundation.gemma4.sampling import SamplingArgs
 
 TEXT = build_text_backbone_args(num_layers=2, sliding_window_pattern=2)
@@ -78,37 +77,16 @@ def test_cached_multimodal_matches_full_sequence():
     assert float(np.max(np.abs(full - cached))) < 1e-4
 
 
-def reference_decode(model, image, prompt_ids, vision_indices, stop_id,
-                     max_tokens):
-    embeds, per_layer = build_prompt_rows(
-        model, image, prompt_ids, vision_indices)
-    length = embeds.shape[1]
-    cache = jp.asarray(model.build_cache(length + max_tokens))
-    positions = jp.arange(length, dtype="int32")[None]
-    logits, cache = call_step(model, embeds, cache, 0, positions, per_layer)
-    token = int(jp.argmax(logits[0, -1]))
-    out, index = [token], length
-    while token != stop_id and len(out) < max_tokens:
-        positions = jp.array([[index]], dtype="int32")
-        logits, cache = call_step(
-            model, model.backbone.token_embedding(as_token(token)), cache,
-            index, positions, None)
-        token = int(jp.argmax(logits[0, -1]))
-        out.append(token)
-        index += 1
-    return trim_to_stop(out, stop_id)
-
-
-def test_jitted_decode_matches_reference():
+def test_jitted_decode_with_vision_matches_eager_decode():
     multimodal = build_multimodal()
     model = causal_sharing(multimodal)
     tokens, grid, pixels, indices = build_inputs()
     image = image_embeddings(multimodal, pixels, grid)
     stop = int(TEXT.vocabulary_size - 1)
     args = (model, image, tokens[0], indices[0], stop, 5)
-    got = generate(*args)
-    assert len(got) >= 1
-    assert got == reference_decode(*args)
+    generated = generate(*args)
+    assert len(generated) >= 1
+    assert generated == generate_eager(*args)
 
 
 def build_text_model():

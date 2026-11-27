@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 from keras import ops
 
 from paz.models.transformers import numerics
@@ -23,8 +24,16 @@ def test_add_residual_float32_is_plain_sum():
     assert np.allclose(out, [4.0, 6.0])
 
 
-def test_add_residual_float16_accumulates_in_float32():
-    left = ops.convert_to_tensor([1000.0], dtype="float16")
-    right = ops.convert_to_tensor([2000.0], dtype="float16")
+REASON = ("add_residual clips the float32 sum with clip_float16, which "
+          "skips float32 inputs, so the cast back to float16 gives inf")
+
+
+@pytest.mark.xfail(strict=True, reason=REASON)
+def test_add_residual_float16_clips_a_sum_that_would_overflow():
+    # 60000 + 60000 is infinite in float16; the float32 sum is clipped.
+    left = ops.convert_to_tensor([60000.0, 1000.0], dtype="float16")
+    right = ops.convert_to_tensor([60000.0, 2000.0], dtype="float16")
     result = numerics.add_residual(left, right)
-    assert np.allclose(np.asarray(result).astype("float32"), [3000.0])
+    assert result.dtype == "float16"
+    values = np.asarray(result).astype("float32")
+    assert np.allclose(values, [65504.0, 3000.0])

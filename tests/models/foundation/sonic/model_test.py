@@ -1,7 +1,6 @@
 import numpy as np
 
 from paz.models.foundation.sonic.layout import ObservationSpan
-from paz.models.foundation.sonic.layout import compute_decoder_input_dim
 from paz.models.foundation.sonic.layout import compute_encoder_input_dim
 from paz.models.foundation.sonic.layout import compute_policy_tail_dim
 from paz.models.foundation.sonic.model import build_actor
@@ -11,25 +10,23 @@ from paz.models.foundation.sonic.model import compute_release_fsq
 from paz.models.foundation.sonic.model import compute_temporal_part
 
 
-def test_decoder_output_shape_matches_action_dim(toy_layout):
-    decoder = build_decoder(toy_layout)
-    x = np.zeros((1, compute_decoder_input_dim(toy_layout)), dtype="float32")
-    action = np.array(decoder(x, training=False))
-    assert action.shape == (1, toy_layout.action_dim)
-
-
-def test_actor_composes_encoder_and_decoder(toy_layout):
+def test_actor_decodes_encoder_tokens_followed_by_policy_tail(toy_layout):
     encoder = build_encoder(toy_layout)
     decoder = build_decoder(toy_layout)
     actor = build_actor(toy_layout, encoder, decoder)
-    inputs = {
-        "encoder_obs": np.zeros(
-            (1, compute_encoder_input_dim(toy_layout)), dtype="float32"),
-        "policy_obs_tail": np.zeros(
-            (1, compute_policy_tail_dim(toy_layout)), dtype="float32"),
-    }
+    random = np.random.default_rng(0)
+    encoder_dim = compute_encoder_input_dim(toy_layout)
+    tail_dim = compute_policy_tail_dim(toy_layout)
+    encoder_obs = random.normal(size=(1, encoder_dim)).astype("float32")
+    encoder_obs[0, 0] = 0
+    tail = random.normal(size=(1, tail_dim)).astype("float32")
+    inputs = {"encoder_obs": encoder_obs, "policy_obs_tail": tail}
     action = np.array(actor(inputs, training=False))
+    tokens = np.array(encoder(encoder_obs, training=False))
+    decoder_input = np.concatenate([tokens, tail], axis=-1)
+    expected = np.array(decoder(decoder_input, training=False))
     assert action.shape == (1, toy_layout.action_dim)
+    assert np.allclose(action, expected, atol=1e-6)
 
 
 def test_mode_routing_selects_matching_branch(toy_layout):

@@ -4,11 +4,15 @@ from keras import Input, Model
 from paz.models.transformers.embeddings.token import LearnableTokens
 
 
-def test_learnable_tokens_broadcasts_to_batch():
+def test_learnable_tokens_repeats_its_weight_for_every_batch_item():
     tokens = Input((5, 8))
-    output = LearnableTokens(1, 8, name="cls_token")(tokens)
+    output = LearnableTokens(2, 8, name="cls_token")(tokens)
     model = Model(tokens, output)
-    assert tuple(model(np.zeros((3, 5, 8), "float32")).shape) == (3, 1, 8)
+    weight = np.random.default_rng(0).normal(size=(2, 8)).astype("float32")
+    model.set_weights([weight])
+    reference = np.ones((3, 5, 8), "float32")
+    expected = np.broadcast_to(weight, (3, 2, 8))
+    assert np.array_equal(np.array(model(reference)), expected)
 
 
 def test_learnable_tokens_config_round_trips():

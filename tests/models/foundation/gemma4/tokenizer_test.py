@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from paz.models.foundation.gemma4.tokenizer import (
     Gemma4Tokenizer, build_answer_prompt_parts, build_prompt_parts)
 
@@ -83,12 +85,8 @@ def test_json_tokenizer_exposes_special_ids(tmp_path):
 def test_tokenizer_rejects_non_json_assets(tmp_path):
     path = tmp_path / "tokenizer.spm"
     path.write_text("stub", encoding="utf-8")
-    try:
+    with pytest.raises(ValueError, match="tokenizer.json only"):
         Gemma4Tokenizer(path)
-    except ValueError as error:
-        assert "tokenizer.json only" in str(error)
-        return
-    raise AssertionError("Gemma4Tokenizer should reject non-json assets")
 
 
 def test_prompt_parts_match_the_official_chat_templates():
