@@ -107,31 +107,12 @@ def test_to_corner_form(boxes_D_corner_form, boxes_D_center_form):
 
 
 @pytest.mark.skip(reason="changed implementation")
-def test_to_one_hot():
-    class_indices = jp.array([1, 3])
-    one_hot = to_one_hot(class_indices, 4)
-    expected = jp.array([[0, 1, 0, 0], [0, 0, 0, 1]])
-    assert jp.allclose(one_hot, expected)
-
-
-@pytest.mark.skip(reason="changed implementation")
 def test_make_box_square():
     box = (0, 0, 4, 2)
     square_box = paz.boxes.square(jp.array(box))
     # Expected to adjust y coordinates to match width
     expected = (0, -1, 4, 3)
     assert jp.array_equal(square_box, jp.array(expected))
-
-
-@pytest.mark.skip(reason="changed implementation")
-def test_offset():
-    coords = (10, 20, 30, 40)
-    offset_scales = (0.1, 0.1)
-    new_coords = offset(coords, offset_scales)
-    # x offset is (30-10)*0.1 = 2, y offset is (40-20)*0.1 = 2
-    # x_min -2, x_max +2; y_min -2, y_max +2
-    expected = (8, 18, 32, 42)
-    assert jp.array_equal(new_coords, jp.array(expected))
 
 
 @pytest.mark.skip(reason="changed implementation")

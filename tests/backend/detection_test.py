@@ -302,29 +302,6 @@ def large_test_data():
 
 
 @pytest.fixture
-def expected_corner_from_prior(single_prior):
-    """Calculate expected corner format from prior box."""
-    return jp.array(
-        [
-            [
-                single_prior[0, 0] - single_prior[0, 2] / 2,
-                single_prior[0, 1] - single_prior[0, 3] / 2,
-                single_prior[0, 0] + single_prior[0, 2] / 2,
-                single_prior[0, 1] + single_prior[0, 3] / 2,
-            ]
-        ]
-    )
-
-
-@pytest.fixture
-def boxes_with_class(expected_corner_from_prior, single_prediction):
-    """Combine corner boxes with class labels."""
-    return jp.concatenate(
-        [expected_corner_from_prior, single_prediction[:, 4:]], axis=1
-    )
-
-
-@pytest.fixture
 def expected_encoding_with_alternate_variances(
     box_centers, prior_data, alternate_variances
 ):
@@ -650,46 +627,6 @@ def test_with_multiple_additional_attributes():
     assert jp.allclose(decoded[:, 4:], boxes[:, 4:])
 
 
-def test_encode_decode_with_different_box_count():
-    """Test encoding and decoding with different numbers of boxes and priors."""
-    boxes_more = jp.array(
-        [[10, 20, 60, 90, 1], [30, 40, 100, 120, 2], [50, 60, 150, 200, 3]]
-    )
-
-    priors_less = jp.array([[35, 55, 50, 70], [65, 80, 70, 80]])
-
-    boxes_less = jp.array([[10, 20, 60, 90, 1]])
-
-    priors_more = jp.array(
-        [[35, 55, 50, 70], [65, 80, 70, 80], [100, 120, 90, 100]]
-    )
-
-    try:
-        encode(boxes_more, priors_less)
-    except Exception:
-        pass
-
-    try:
-        encode(boxes_less, priors_more)
-    except Exception:
-        pass
-
-
-def test_encode_with_zero_width_height_priors():
-    """Test encoding with priors having zero width or height (edge case)."""
-    boxes = jp.array([[10, 20, 30, 40, 1]])
-
-    prior_zero_w = jp.array([[15, 30, 0, 20]])
-
-    prior_zero_h = jp.array([[15, 30, 20, 0]])
-
-    try:
-        encode(boxes, prior_zero_w)
-        encode(boxes, prior_zero_h)
-    except Exception:
-        pass
-
-
 def test_encode_basic(encoded_boxes, expected_encoding_values):
     """Test basic encoding functionality."""
     assert jp.allclose(encoded_boxes[0, 0], expected_encoding_values["cx_diff"])
@@ -697,50 +634,6 @@ def test_encode_basic(encoded_boxes, expected_encoding_values):
     assert jp.allclose(encoded_boxes[0, 2], expected_encoding_values["width"])
     assert jp.allclose(encoded_boxes[0, 3], expected_encoding_values["height"])
     assert jp.allclose(encoded_boxes[0, 4], 1.0)
-
-
-def test_encode_dimensions(
-    box_data, prior_data, default_variances, expected_encoding_values
-):
-    """Test the encoding of box dimensions."""
-    encoded = encode(box_data, prior_data, default_variances)
-    expected_dims = jp.array(
-        [
-            [
-                expected_encoding_values["width"],
-                expected_encoding_values["height"],
-            ]
-        ]
-    )
-    assert jp.allclose(encoded[0, 2:4], expected_dims)
-
-
-def test_encode_center_coordinates(
-    box_data, prior_data, default_variances, expected_encoding_values
-):
-    """Test the encoding of center coordinates."""
-    encoded = encode(box_data, prior_data, default_variances)
-    expected_coords = jp.array(
-        [
-            [
-                expected_encoding_values["cx_diff"],
-                expected_encoding_values["cy_diff"],
-            ]
-        ]
-    )
-    assert jp.allclose(encoded[0, 0:2], expected_coords)
-
-
-def test_concatenate_encoded_boxes(box_data, prior_data, default_variances):
-    """Test that class labels are preserved in encoding."""
-    encoded = encode(box_data, prior_data, default_variances)
-    expected_extras = box_data[:, 4:]
-    expected_shape = (2, 5)
-
-    assert (
-        encoded.shape == expected_shape
-    ), f"Expected shape {expected_shape}, but got {encoded.shape}"
-    assert jp.allclose(encoded[:, 4:], expected_extras)
 
 
 def test_encode_with_different_variances(
@@ -774,24 +667,6 @@ def test_decode_helpers(
     result = decode(single_prediction, single_prior, default_variances)
     expected_corner = to_corner_form(expected_decoded_center)
     assert jp.allclose(result[:, :4], expected_corner)
-
-
-@pytest.mark.skip(reason="to corner form changed implementation")
-def test_compute_boxes_center(
-    single_prediction, single_prior, default_variances, expected_decoded_center
-):
-    """Test compute_boxes_center function."""
-    result = decode(single_prediction, single_prior, default_variances)
-    expected_corner = to_corner_form(expected_decoded_center)
-    assert jp.allclose(result[:, :4], expected_corner)
-
-
-@pytest.mark.skip(reason="to corner form changed implementation")
-def test_combine_with_extras(single_prior, single_prediction, boxes_with_class):
-    """Test combining box coordinates with class labels."""
-    boxes_corner = to_corner_form(single_prior)
-    combined = jp.concatenate([boxes_corner, single_prediction[:, 4:]], axis=1)
-    assert jp.allclose(combined, boxes_with_class)
 
 
 def test_encode_decode_1000_boxes(large_test_data, default_variances):

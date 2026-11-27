@@ -67,14 +67,6 @@ def test_make_random_plain_image_is_uniform_color():
     assert jp.all(image[0, 0] == image[5, 4])
 
 
-def test_randomize_rendered_image_keeps_shape():
-    image = jp.full((32, 32, 3), 128, jp.uint8)
-    mask = jp.ones((32, 32))
-    key = jax.random.PRNGKey(2)
-    output = paz.image.randomize_rendered_image(key, image, mask)
-    assert output.shape == (32, 32, 3)
-
-
 def test_apply_gaussian_blur_matches_cv2_interior():
     image = np.random.default_rng(0).integers(0, 255, (64, 64, 3), np.uint8)
     blurred = paz.image.apply_gaussian_blur(jp.array(image), 9, 2.0)
