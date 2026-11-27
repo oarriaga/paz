@@ -1,51 +1,28 @@
-import pytest
 import numpy as np
 from paz.models.classification.protonet import ProtoEmbedding, ProtoNet
 from paz.layers.compute_pairwise_distances import compute_pairwise_distances
 
 
-def parametrize(Model, model_args, output_shape, params, static_params):
-    """Builds test for model with a given parametrization
-
-    # Arguments:
-        Model: Keras model.
-        model_args: List with required model arguments for Model instantiation.
-        output_shape: List with expected model output shapes.
-        params: List of integers with `trainable` parameters.
-        static_params: List of integers with number of `non_trainable` params.
-
-    # Returns:
-        Parametrized test function.
-    """
-    parametrization = []
-    for args in zip(output_shape, params, static_params):
-        parametrization.append(args)
-    function_arguments = "outro_shape, parameters, static_parameters"
-
-    @pytest.mark.parametrize(function_arguments, parametrization)
-    def test(outro_shape, parameters, static_parameters):
-        model = Model(*model_args)
-        model_params = count_params(model.trainable_weights)
-        model_static_params = count_params(model.non_trainable_weights)
-        assert model_params == parameters
-        assert model_static_params == static_parameters
-        assert model.output_shape == outro_shape
-        del model
-
-    return test
+def count_parameters(weights):
+    return sum(int(np.prod(weight.shape)) for weight in weights)
 
 
-test_embedding = parametrize(
-    ProtoEmbedding, [(28, 28, 1), 4], [(None, 64)], [111_936], [512]
-)
+def test_embedding_has_the_published_size():
+    model = ProtoEmbedding((28, 28, 1), 4)
+    assert model.output_shape == (None, 64)
+    assert count_parameters(model.trainable_weights) == 111_936
+    assert count_parameters(model.non_trainable_weights) == 512
 
-test_protonet = parametrize(
-    ProtoNet,
-    [ProtoEmbedding((28, 28, 1), 4), 20, 5, 1, (28, 28, 1)],
-    [(20, 20)],
-    [111_936],
-    [512],
-)
+
+def test_protonet_assigns_support_images_to_their_own_class():
+    num_classes, image_shape = 5, (28, 28, 1)
+    embedding = ProtoEmbedding(image_shape, 4)
+    model = ProtoNet(embedding, num_classes, 1, 1, image_shape)
+    images = np.random.default_rng(0).random((num_classes, 1, *image_shape))
+    scores = np.asarray(model([images, images]))
+    assert scores.shape == (num_classes, num_classes)
+    assert np.allclose(scores.sum(axis=1), 1.0, atol=1e-5)
+    assert np.array_equal(scores.argmax(axis=1), np.arange(num_classes))
 
 
 def test_pairwise_distances_zero():
@@ -88,25 +65,3 @@ def test_pairwise_distances_with_values_to_negative():
     distances = np.array([[4.0], [2.0], [3.0]])
     assert np.allclose(values, distances)
 
-
-def count_params(weights):
-    """Count the total number of scalars composing the weights.
-    This function is taken from the repository of [Keras]
-    (https://github.com/keras-team/keras/blob/428ed9f03a0a0b2edc22d4ce29
-     001857f617227c/keras/utils/layer_utils.py#L107)
-    This is a patch and it should be removed eventually.
-
-    # Arguments:
-        weights: List, containing the weights
-            on which to compute params.
-
-    # Returns:
-        Int, the total number of scalars composing the weights.
-    """
-    unique_weights = {id(w): w for w in weights}.values()
-    unique_weights = [w for w in unique_weights if hasattr(w, "shape")]
-    weight_shapes = [list(w.shape) for w in unique_weights]
-    standardized_weight_shapes = [
-        [0 if w_i is None else w_i for w_i in w] for w in weight_shapes
-    ]
-    return int(sum(np.prod(p) for p in standardized_weight_shapes))

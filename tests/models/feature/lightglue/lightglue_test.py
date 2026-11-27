@@ -1,7 +1,5 @@
 import os
 
-os.environ.setdefault("KERAS_BACKEND", "jax")
-
 import numpy as np
 import jax.numpy as jp
 import pytest
@@ -12,28 +10,30 @@ WEIGHTS = os.environ.get("LIGHTERGLUE_WEIGHTS")
 REPO = os.environ.get("LIGHTGLUE_REPO")
 
 
-def numpy_filter(scores, threshold):
-    valid = scores[:-1, :-1]
-    match_0, match_1 = valid.argmax(1), valid.argmax(0)
-    mutual_0 = np.arange(len(match_0)) == match_1[match_0]
-    mutual_1 = np.arange(len(match_1)) == match_0[match_1]
-    strength_0 = np.where(mutual_0, np.exp(valid.max(1)), 0.0)
-    valid_0 = mutual_0 & (strength_0 > threshold)
-    valid_1 = mutual_1 & valid_0[match_1]
-    return (np.where(valid_0, match_0, -1), np.where(valid_1, match_1, -1),
-            strength_0, np.where(mutual_1, strength_0[match_1], 0.0))
+def build_scores():
+    # Rows 0 and 1 are mutual best matches of columns 0 and 2; row 2
+    # prefers column 0, which prefers row 0. The last row and column are
+    # the unmatched bins that filter_matches drops.
+    probabilities = [[0.9, 0.05, 0.05], [0.1, 0.2, 0.7], [0.6, 0.3, 0.05]]
+    return jp.pad(jp.log(jp.array(probabilities)), ((0, 1), (0, 1)))
 
 
-def test_filter_matches_matches_reference():
-    rng = np.random.default_rng(0)
-    scores = rng.standard_normal((80, 65)).astype(np.float32)
-    matches_0, matches_1, scores_0, scores_1 = numpy_filter(scores, 0.1)
-    mask_0, mask_1 = jp.ones(scores.shape[0] - 1), jp.ones(scores.shape[1] - 1)
-    ours = lightglue.filter_matches(jp.asarray(scores), mask_0, mask_1, 0.1)
-    assert np.array_equal(np.asarray(ours[0]), matches_0)
-    assert np.array_equal(np.asarray(ours[1]), matches_1)
-    assert np.allclose(np.asarray(ours[2]), scores_0, atol=1e-4)
-    assert np.allclose(np.asarray(ours[3]), scores_1, atol=1e-4)
+def test_filter_matches_keeps_mutual_matches_above_threshold():
+    args = build_scores(), jp.ones(3), jp.ones(3), 0.8
+    matches_0, matches_1, scores_0, scores_1 = lightglue.filter_matches(*args)
+    assert np.array_equal(matches_0, [0, -1, -1])
+    assert np.array_equal(matches_1, [0, -1, -1])
+    assert np.allclose(scores_0, [0.9, 0.7, 0.0], atol=1e-6)
+    assert np.allclose(scores_1, [0.9, 0.0, 0.7], atol=1e-6)
+
+
+def test_filter_matches_ignores_masked_keypoints():
+    mask_0 = jp.array([0.0, 1.0, 1.0])
+    args = build_scores(), mask_0, jp.ones(3), 0.5
+    matches_0, matches_1, scores_0, _ = lightglue.filter_matches(*args)
+    assert np.array_equal(matches_0, [-1, 2, -1])
+    assert np.array_equal(matches_1, [-1, -1, 1])
+    assert np.allclose(scores_0, [0.0, 0.7, 0.0], atol=1e-6)
 
 
 def test_rotate_half_is_quarter_turn():

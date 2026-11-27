@@ -1,9 +1,8 @@
 import json
 import os
 import subprocess
+import sys
 import textwrap
-
-os.environ["KERAS_BACKEND"] = "jax"
 
 import numpy as np
 import pytest
@@ -371,14 +370,24 @@ def run_compatibility_models():
     )
     env = dict(os.environ)
     env.pop("KERAS_BACKEND", None)
-    output = subprocess.check_output(
-        ["python", "-c", script], text=True, env=env
-    ).strip()
-    return json.loads(output.splitlines()[-1])
+    # The reference runs on CPU so it does not need a working cuDNN.
+    env["CUDA_VISIBLE_DEVICES"] = ""
+    command = [sys.executable, "-c", script]
+    output = subprocess.check_output(command, text=True, env=env)
+    return json.loads(output.strip().splitlines()[-1])
+
+
+def has_original_weights():
+    models_path = os.path.expanduser("~/.keras/paz/models")
+    names = ["detnet_weights.hdf5", "iknet_weight.hdf5"]
+    return all(os.path.exists(os.path.join(models_path, x)) for x in names)
 
 
 @pytest.fixture(scope="module")
 def compatibility_outputs():
+    pytest.importorskip("tensorflow")
+    if not has_original_weights():
+        pytest.skip("original TensorFlow weights not in ~/.keras/paz/models")
     return run_compatibility_models()
 
 
