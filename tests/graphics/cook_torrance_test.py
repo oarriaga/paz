@@ -54,12 +54,12 @@ def metallic_material():
     )
 
 
-def test_halfway_direction_is_unit_length():
+def test_halfway_direction_bisects_view_and_light():
     view = jp.array([[0.0, 1.0, 0.0]])
     light_direction = jp.array([[1.0, 0.0, 0.0]])
     halfway = cook_torrance.compute_halfway_direction(view, light_direction)
-    norm = jp.linalg.norm(halfway, axis=-1)
-    assert jp.allclose(norm, 1.0)
+    expected = jp.array([[1.0, 1.0, 0.0]]) / jp.sqrt(2.0)
+    assert jp.allclose(halfway, expected)
 
 
 def test_microfacet_distribution_peaks_at_zero_angle():

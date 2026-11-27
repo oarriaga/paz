@@ -318,53 +318,26 @@ def test_render_gradient_is_chunk_invariant(small_image_shape, camera_pose):
 
 def test_render_jit_compatible(small_image_shape, camera_pose):
     scene, lights = build_shaded_sphere_scene()
-
-    @jax.jit
-    def jitted_render():
-        return render_scene(
-            small_image_shape,
-            camera_pose,
-            scene,
-            lights,
-            tiles=(2, 2),
-            chunk_size=16,
-        )
-
-    image, depth = jitted_render()
-    assert image.shape == (small_image_shape[0], small_image_shape[1], 3)
-    assert depth.shape == small_image_shape
+    args = small_image_shape, camera_pose, scene, lights
+    kwargs = {"tiles": (2, 2), "chunk_size": 16}
+    jitted_render = jax.jit(lambda: render_scene(*args, **kwargs))
+    expected = render_scene(*args, **kwargs)
+    assert_render_matches(jitted_render(), expected)
 
 
-def test_render_shadows_logic(small_image_shape, camera_pose):
-    camera_pose_shadow = SE3.view_transform(
+def test_render_shadows_logic(small_image_shape):
+    camera_pose = SE3.view_transform(
         jp.array([0.0, 0.0, 10.0]),
         jp.array([0.0, 0.0, 0.0]),
         jp.array([0.0, 1.0, 0.0]),
     )
-    wall = Plane(
-        SE3.rotation_x(jp.pi / 2), Material(color=jp.array([1.0, 1.0, 1.0]))
-    )
-    blocker = Sphere(
-        SE3.translation(jp.array([0.0, 0.0, 2.0]))
-        @ SE3.scaling(jp.full(3, 0.5))
-    )
-    lights = [PointLight(jp.array([1.0, 1.0, 1.0]), jp.array([0.0, 0.0, 5.0]))]
-    scene_blocked = Scene([wall, blocker])
-    img_shadows_on, _ = render_scene(
-        small_image_shape,
-        camera_pose_shadow,
-        scene_blocked,
-        lights,
-        shadows=True,
-    )
-    img_shadows_off, _ = render_scene(
-        small_image_shape,
-        camera_pose_shadow,
-        scene_blocked,
-        lights,
-        shadows=False,
-    )
-    assert not jp.array_equal(img_shadows_on, img_shadows_off)
+    scene = build_shadow_snapshot_scene()
+    lights = [PointLight(jp.ones(3), jp.array([0.0, 0.0, 5.0]))]
+    args = small_image_shape, camera_pose, scene, lights
+    shadowed, _ = render_scene(*args, shadows=True)
+    lit, _ = render_scene(*args, shadows=False)
+    assert jp.all(shadowed <= lit + 1e-6)
+    assert jp.any(shadowed < lit - 0.1)
 
 
 def test_render_single_sphere_shadows_stay_local():
@@ -404,36 +377,24 @@ def test_render_single_sphere_shadows_stay_local():
     )
 
 
-def test_render_shadow_mask(small_image_shape, camera_pose):
-    camera_pose_shadow = SE3.view_transform(
+def test_render_shadow_mask(small_image_shape):
+    camera_pose = SE3.view_transform(
         jp.array([0.0, 0.0, 10.0]),
         jp.array([0.0, 0.0, 0.0]),
         jp.array([0.0, 1.0, 0.0]),
     )
-    wall = Plane(
-        SE3.rotation_x(jp.pi / 2), Material(color=jp.array([1.0, 1.0, 1.0]))
-    )
+    wall_material = Material(color=jp.array([1.0, 1.0, 1.0]))
+    wall = Plane(SE3.rotation_x(jp.pi / 2), wall_material)
     blocker = Sphere(SE3.translation(jp.array([0.0, 0.0, 2.0])))
-    lights = [PointLight(jp.array([1.0, 1.0, 1.0]), jp.array([5.0, 5.0, 5.0]))]
-    scene = Scene([wall, blocker])
-    shadow_mask = jp.array([True, False])
-    img_no_cast, _ = render_scene(
-        small_image_shape,
-        camera_pose_shadow,
-        scene,
-        lights,
-        shadows=True,
-        shadow_mask=shadow_mask,
-    )
-    img_cast, _ = render_scene(
-        small_image_shape,
-        camera_pose_shadow,
-        scene,
-        lights,
-        shadows=True,
-        shadow_mask=None,
-    )
-    assert not jp.array_equal(img_no_cast, img_cast)
+    lights = [PointLight(jp.ones(3), jp.array([5.0, 5.0, 5.0]))]
+    args = small_image_shape, camera_pose, Scene([wall, blocker]), lights
+    blocker_is_masked = jp.array([True, False])
+    kwargs = {"shadows": True, "shadow_mask": blocker_is_masked}
+    masked, _ = render_scene(*args, **kwargs)
+    shadowed, _ = render_scene(*args, shadows=True)
+    lit, _ = render_scene(*args, shadows=False)
+    assert jp.allclose(masked, lit, atol=1e-6)
+    assert jp.any(shadowed < lit - 0.1)
 
 
 def test_render_masked_objects(small_image_shape, camera_pose):
@@ -462,12 +423,16 @@ def test_render_masked_objects(small_image_shape, camera_pose):
 
 def test_render_masks_returns_shape_masks(small_image_shape, camera_pose):
     scene, lights = build_material_scene()
-    depth = 0.1, 10.0
     intrinsics = build_intrinsics(small_image_shape)
     args = small_image_shape, intrinsics, camera_pose, scene, lights
-    masks = renderer.render_masks(*args, depth, (2, 2), 16, num_objects=2)
+    masks = renderer.render_masks(*args, (0.1, 10.0), (2, 2), 16, 2)
     assert masks.shape == (2, small_image_shape[0], small_image_shape[1], 1)
-    assert jp.any(masks > 0.0)
+    render_args = small_image_shape, camera_pose, scene, lights
+    sphere_is_visible = jp.array([False, True, False])
+    _, sphere_depth = render_scene(*render_args, mask=sphere_is_visible)
+    assert jp.any(sphere_depth > 0.0)
+    assert jp.array_equal(masks[1, :, :, 0] > 0.0, sphere_depth > 0.0)
+    assert jp.all(masks[1][sphere_depth > 0.0] > 0.5)
 
 
 def render_shifted_sphere(camera_pose, shift):
@@ -492,58 +457,28 @@ def test_render_shifted_principal_point_moves_image(camera_pose):
 
 
 def test_max_bounces_effect(small_image_shape, camera_pose):
-    camera_pose_back = SE3.view_transform(
-        jp.array([0.0, 0.0, 5.0]),
-        jp.array([0.0, 0.0, 0.0]),
-        jp.array([0.0, 1.0, 0.0]),
-    )
-    mirror_mat = Material(
-        color=jp.array([0.0, 0.0, 0.0]),
-        reflective=1.0,
-        diffuse=0.0,
-        ambient=0.0,
-    )
-    red_mat = Material(color=jp.array([1.0, 0.0, 0.0]), ambient=1.0)
-    mirror = Sphere(SE3.scaling(jp.full(3, 2.0)), mirror_mat)
-    red_obj = Sphere(
-        SE3.translation(jp.array([0.0, 0.0, 10.0]))
-        @ SE3.scaling(jp.full(3, 2.0)),
-        red_mat,
-    )
-    scene = Scene([mirror, red_obj])
+    scene = build_bounce_snapshot_scene()
     lights = [PointLight(jp.ones(3), jp.array([0.0, 0.0, 5.0]))]
-    img_1b, _ = render_scene(
-        small_image_shape,
-        camera_pose_back,
-        scene,
-        lights,
-        num_bounces=1,
-    )
-    img_2b, _ = render_scene(
-        small_image_shape,
-        camera_pose_back,
-        scene,
-        lights,
-        num_bounces=2,
-    )
-    assert not jp.array_equal(img_1b, img_2b)
-    assert not jp.all(img_1b == 1.0)
+    args = small_image_shape, camera_pose, scene, lights
+    one_bounce, _ = render_scene(*args, num_bounces=1)
+    two_bounces, _ = render_scene(*args, num_bounces=2)
+    black, red = jp.zeros(3), jp.array([1.0, 0.0, 0.0])
+    assert jp.allclose(one_bounce[16, 16], black, atol=1e-4)
+    assert jp.allclose(two_bounces[16, 16], red, atol=1e-4)
 
 
 def test_scene_renderer_returns_uint8_frame(small_image_shape, camera_pose):
     material = Material(color=jp.array([1.0, 0.0, 0.0]))
-    sphere = Sphere(jp.eye(4), material)
-    scene = Scene([sphere])
-    render_frame = paz.graphics.scene_renderer(
-        scene,
-        small_image_shape[0],
-        small_image_shape[1],
-        build_intrinsics(small_image_shape),
-        shadows=True,
-    )
+    scene = Scene([Sphere(jp.eye(4), material)])
+    intrinsics = build_intrinsics(small_image_shape)
+    args = scene, *small_image_shape, intrinsics
+    render_frame = paz.graphics.scene_renderer(*args, shadows=True)
     image = render_frame(camera_pose)
     assert image.shape == (small_image_shape[0], small_image_shape[1], 3)
     assert image.dtype == jp.uint8
+    red, green, blue = image[16, 16]
+    assert red > 100 and green == 0 and blue == 0
+    assert jp.all(image[0, 0] == 255)
 
 
 def compute_glass_gradients(build_shape, num_bounces):

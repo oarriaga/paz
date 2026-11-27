@@ -15,6 +15,12 @@ from paz.graphics.mesh import (
     tile_render_binned_soft_mask,
 )
 
+# The multi-mesh goldens were written on GPU. On CPU one silhouette pixel
+# of the sphere mesh changes and the rest drifts just past the tolerances.
+IS_CPU = jax.default_backend() == "cpu"
+CPU_DRIFT = "multi-mesh goldens were written on GPU and do not match CPU"
+xfail_on_cpu = pytest.mark.xfail(IS_CPU, strict=True, reason=CPU_DRIFT)
+
 
 def build_intrinsics(y_FOV, image_shape):
     return paz.graphics.camera.compute_intrinsics(y_FOV, *image_shape)
@@ -71,7 +77,9 @@ def test_render_jit_compatible():
     args = args + ((1, 1), 1024)
     render_fn = jax.jit(render, static_argnums=(0, 6, 7))
     image, depth = render_fn(*args)
-    assert image.shape == (20, 20, 3)
+    expected_image, expected_depth = render(*args)
+    assert compute_max_abs_difference(image, expected_image) <= 1e-4
+    assert compute_max_abs_difference(depth, expected_depth) <= 1e-4
 
 
 def test_render_rect_tiles_match_single_tile():
@@ -99,8 +107,10 @@ def test_render_masks_returns_mesh_masks():
     shape, intrinsics, pose, scene, mask, lights = make_scene()
     args = shape, intrinsics, pose, scene, lights, (0.1, 10.0), (2, 2), 1024
     masks = paz.graphics.render_masks(*args)
+    _, depth = render_scene()
     assert masks.shape == (1, 20, 20, 1)
-    assert jp.any(masks > 0.0)
+    assert jp.any(depth > 0.0)
+    assert jp.array_equal(masks[0, :, :, 0] > 0.0, depth > 0.0)
 
 
 def test_render_gradient_through_vertices():
@@ -163,6 +173,7 @@ def render_multi_mesh(image_shape=(24, 24), tiles=(1, 1), chunk_size=1024):
     return render(*args, tiles, chunk_size)
 
 
+@xfail_on_cpu
 def test_multi_mesh_render_matches_snapshot():
     image, depth = render_multi_mesh()
     assert_snapshot(image, "mesh_multi_image.npy", 1e-3)
@@ -176,6 +187,7 @@ def test_multi_mesh_render_is_tile_invariant():
     assert compute_max_abs_difference(actual_depth, expected_depth) <= 1e-4
 
 
+@xfail_on_cpu
 def test_multi_mesh_render_masks_matches_snapshot():
     shape, intrinsics, pose, scene, _, lights = make_multi_mesh_scene()
     args = shape, intrinsics, pose, scene, lights, (0.1, 10.0), (1, 1), 1024
@@ -184,6 +196,7 @@ def test_multi_mesh_render_masks_matches_snapshot():
     assert_snapshot(masks, "mesh_multi_masks.npy", 1e-3)
 
 
+@xfail_on_cpu
 def test_multi_mesh_gradient_matches_snapshot():
     shape, intrinsics, pose, _, _, lights = make_multi_mesh_scene((12, 12))
     cube, sphere = build_cube_mesh(), build_sphere_mesh()
@@ -342,13 +355,17 @@ def test_scene_meshes_respect_mask():
 
 
 def test_scene_mixes_meshes_and_shapes():
-    shape, intrinsics, pose, _, _, lights = make_multi_mesh_scene()
     sphere = paz.graphics.Sphere(SE3.translation(jp.array([0.0, 0.0, 2.0])))
     scene = paz.graphics.Scene([build_cube_mesh(), sphere])
-    args = shape, intrinsics, pose, scene, None, lights
-    image, depth = paz.graphics.render(*args, (1, 1), 1024)
-    assert image.shape == (24, 24, 3)
-    assert jp.any(depth > 0)
+    depth = render_mesh_depth(scene, None)
+    mesh_depth = render_mesh_depth(scene, jp.array([True, False]))
+    shape_depth = render_mesh_depth(scene, jp.array([False, True]))
+    overlap = (mesh_depth > 0) & (shape_depth > 0)
+    nearest = jp.minimum(mesh_depth, shape_depth)
+    farthest = jp.maximum(mesh_depth, shape_depth)
+    assert jp.any(overlap) and jp.any((shape_depth > 0) & ~overlap)
+    expected = jp.where(overlap, nearest, farthest)
+    assert compute_max_abs_difference(depth, expected) <= 1e-4
 
 
 def build_cube_mesh_with_material(material):
@@ -486,3 +503,20 @@ def test_scene_rejects_meshes_with_mixed_material_types():
     with pytest.raises(ValueError, match="must all be of one type"):
         scene = paz.graphics.Scene([phong, build_cook_torrance_mesh()])
         paz.graphics.scene.compile(scene, [], None)
+
+
+def render_mesh_depth(scene, mask):
+    shape, intrinsics, pose, _, _, lights = make_multi_mesh_scene()
+    args = shape, intrinsics, pose, scene, mask, lights
+    return paz.graphics.render(*args, (1, 1), 1024)[1]
+
+
+@pytest.mark.xfail(strict=True, reason="a masked mesh still occludes meshes")
+def test_masked_mesh_does_not_occlude_visible_mesh():
+    # build_triangle_hit picks the closest triangle over all meshes and
+    # only then applies the node mask, leaving holes in the visible mesh.
+    cube, sphere = build_cube_mesh(), build_sphere_mesh()
+    scene = paz.graphics.Scene([cube, sphere])
+    depth = render_mesh_depth(scene, jp.array([True, False]))
+    expected = render_mesh_depth(paz.graphics.Scene([cube]), None)
+    assert compute_max_abs_difference(depth, expected) <= 1e-4

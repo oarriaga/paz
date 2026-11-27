@@ -202,7 +202,7 @@ def test_save_and_load_accepts_path_objects(tmp_path, shape_with_image):
     scene_dir = tmp_path / "path_scene"
     serialization.save(scene_dir, shape_with_image)
     loaded_shape = serialization.load(scene_dir)
-    assert isinstance(loaded_shape, types.Shape)
+    assert_pytrees_allclose(loaded_shape, shape_with_image)
 
 
 def test_load_raises_error_for_unknown_top_level_type(tmp_path):
