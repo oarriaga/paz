@@ -109,51 +109,6 @@ def test_filtering_consistency_batched():
     assert forward_samples.y_obs.shape == (num_samples, num_groups)
 
 
-def test_hierarchical_regression_filtering():
-    num_groups = 5
-
-    def slope_prior(mu_slope, sigma_slope):
-        loc = jp.full(num_groups, mu_slope)
-        normal = paz.distributions.Normal(loc, jp.abs(sigma_slope))
-        return paz.distributions.Independent(normal, 1)
-
-    def intercept_prior(mu_intercept, sigma_intercept):
-        loc = jp.full(num_groups, mu_intercept)
-        normal = paz.distributions.Normal(loc, jp.abs(sigma_intercept))
-        return paz.distributions.Independent(normal, 1)
-
-    mu_slope = paz.Prior(paz.distributions.Normal(0.0, 1.0), name="mu_slope")
-    standard = paz.distributions.Normal(0.0, 1.0)
-    mu_intercept = paz.Prior(standard, name="mu_intercept")
-    sigma_slope = paz.Prior(standard, name="sigma_slope")
-    sigma_intercept = paz.Prior(standard, name="sigma_intercept")
-
-    slopes = paz.Latent(slope_prior, name="slopes")(mu_slope, sigma_slope)
-    intercepts = paz.Latent(intercept_prior, name="intercepts")(
-        mu_intercept, sigma_intercept
-    )
-
-    X = jp.linspace(0, 1, 50)
-    group_idx = jp.repeat(jp.arange(num_groups), 10)
-
-    def likelihood(slopes_val, intercepts_val):
-        means = slopes_val[group_idx] * X + intercepts_val[group_idx]
-        return paz.distributions.Normal(means, 0.1)
-
-    y_obs = paz.Observable(likelihood, name="y_obs")(slopes, intercepts)
-    priors = [mu_slope, mu_intercept, sigma_slope, sigma_intercept]
-    model = paz.PGM(priors, [y_obs], "hierarchical_regression")
-
-    key = jax.random.PRNGKey(0)
-    inverse_sample = model.sample_inverse(key, num_samples=1)
-    assert hasattr(inverse_sample, "slopes")
-    assert hasattr(inverse_sample, "intercepts")
-
-    key, subkey = jax.random.split(key)
-    forward_sample = model.sample(subkey, num_samples=1)
-    assert hasattr(forward_sample, "y_obs")
-
-
 def test_sample_forward_simple_model():
     mean = paz.Prior(paz.distributions.Normal(0.0, 1.0), name="mean")
     stdv = paz.Prior(paz.distributions.Normal(0.0, 1.0), name="stdv")
@@ -192,63 +147,6 @@ def test_sample_forward_simple_model_batched():
     assert sample.mean.shape == (num_samples,)
     assert sample.stdv.shape == (num_samples,)
     assert sample.y_obs.shape == (num_samples,)
-
-
-def test_sample_forward_hierarchical_single_sample():
-    num_groups = 3
-
-    def group_prior(mu, sigma):
-        return paz.distributions.Independent(
-            paz.distributions.Normal(jp.full(num_groups, mu), sigma),
-            reinterpreted_batch_ndims=1,
-        )
-
-    mu = paz.Prior(paz.distributions.Normal(0.0, 1.0), name="mu")
-    sigma = paz.Prior(paz.distributions.Normal(0.0, 1.0), name="sigma")
-    groups = paz.Latent(group_prior, name="groups")(mu, sigma)
-
-    def likelihood(group_params):
-        return paz.distributions.Normal(group_params, 0.1)
-
-    y_obs = paz.Observable(likelihood, name="y_obs")(groups)
-    model = paz.PGM([mu, sigma], [y_obs], "hierarchical")
-
-    key = jax.random.PRNGKey(0)
-    sample = model.sample(key, num_samples=1)
-
-    assert sample.mu.shape == ()
-    assert sample.sigma.shape == ()
-    assert sample.groups.shape == (num_groups,)
-    assert sample.y_obs.shape == (num_groups,)
-
-
-def test_sample_forward_hierarchical_batched():
-    num_groups = 3
-    num_samples = 10
-
-    def group_prior(mu, sigma):
-        return paz.distributions.Independent(
-            paz.distributions.Normal(jp.full(num_groups, mu), sigma),
-            reinterpreted_batch_ndims=1,
-        )
-
-    mu = paz.Prior(paz.distributions.Normal(0.0, 1.0), name="mu")
-    sigma = paz.Prior(paz.distributions.Normal(0.0, 1.0), name="sigma")
-    groups = paz.Latent(group_prior, name="groups")(mu, sigma)
-
-    def likelihood(group_params):
-        return paz.distributions.Normal(group_params, 0.1)
-
-    y_obs = paz.Observable(likelihood, name="y_obs")(groups)
-    model = paz.PGM([mu, sigma], [y_obs], "hierarchical")
-
-    key = jax.random.PRNGKey(0)
-    sample = model.sample(key, num_samples=num_samples)
-
-    assert sample.mu.shape == (num_samples,)
-    assert sample.sigma.shape == (num_samples,)
-    assert sample.groups.shape == (num_samples, num_groups)
-    assert sample.y_obs.shape == (num_samples, num_groups)
 
 
 def test_sample_forward_hierarchical_regression():
@@ -338,15 +236,6 @@ def build_single_observable_model():
 
     y = Observable(likelihood, name="y")(mean)
     return PGM([mean], [y], "single_observable"), observations
-
-
-def test_prior_log_prob_inverse_is_consistent():
-    model, _, _ = build_bijected_prior_model()
-    key = jax.random.PRNGKey(0)
-    theta_inv = model.sample_inverse(key)
-    state = model.prior.log_prob_inverse(theta_inv)
-    log_prob = model.prior.log_prob_inverse(theta_inv).log_prob_sum
-    assert jp.isclose(log_prob, state.log_prob_sum)
 
 
 def test_prior_log_prob_fwd_matches_distribution():

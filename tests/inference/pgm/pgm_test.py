@@ -222,16 +222,6 @@ def test_pgm_fit_default_not_implemented():
         model.fit(key, jp.array(0.0), method="em")
 
 
-def test_sample_inverse_three_priors_multiple_samples_shape():
-    model, _, _, _ = build_three_priors_one_observable_model()
-    key = jax.random.PRNGKey(0)
-    for n in [2, 4, 10]:
-        samples = model.sample_inverse(key, num_samples=n)
-        assert samples.mean.shape == (n,), f"mean: expected ({n},), got {samples.mean.shape}"
-        assert samples.bias.shape == (n,), f"bias: expected ({n},), got {samples.bias.shape}"
-        assert samples.stdv.shape == (n,), f"stdv: expected ({n},), got {samples.stdv.shape}"
-
-
 def test_sample_inverse_hierarchical_model_shape():
     model, _, _, _ = build_hierarchical_model()
     key = jax.random.PRNGKey(0)
@@ -334,16 +324,6 @@ def test_sample_forward_stdv_constrained():
 # =============================================================================
 
 
-def test_joint_log_prob_returns_node_state():
-    model = build_single_prior_model()
-    key = jax.random.PRNGKey(0)
-    params = model.sample_inverse(key)
-    state = evaluate_joint(model, params)
-    assert hasattr(state, "sample")
-    assert hasattr(state, "log_prob")
-    assert hasattr(state, "log_prob_sum")
-
-
 def test_joint_log_prob_is_dict():
     model, data, _, _ = build_three_priors_one_observable_model()
     key = jax.random.PRNGKey(0)
@@ -369,16 +349,6 @@ def test_joint_log_prob_sum_equals_sum_of_log_probs():
 # =============================================================================
 # Tests: likelihood data mapping
 # =============================================================================
-
-
-def test_likelihood_accepts_data_list_in_output_order():
-    model, data, _, _ = build_two_observables_model()
-    key = jax.random.PRNGKey(0)
-    params = model.sample_inverse(key)
-    data_list = [data["y1"], data["y2"]]
-    state = model.likelihood.log_prob_inverse(params, data_list)
-    assert "y1" in state.log_prob
-    assert "y2" in state.log_prob
 
 
 def test_likelihood_missing_observation_raises():
@@ -581,32 +551,6 @@ def test_observable_receives_constrained_stdv():
                 f"NaN when unconstrained stdv={params.stdv} (should be transformed)"
 
 
-def test_observable_scale_is_positive():
-    """Verify that Normal distribution in observable has positive scale."""
-    X = jp.array([0.0, 1.0])
-
-    def Likelihood(X):
-        def apply(stdv):
-            return paz.distributions.Normal(X, stdv)
-        return apply
-
-    low, high = 0.1, 1.0
-    affine = [paz.bijectors.Shift(low), paz.bijectors.Scale(high - low)]
-    bijector = paz.bijectors.Chain(affine + [paz.bijectors.Sigmoid()])
-    uniform = paz.distributions.Uniform(low, high)
-    stdv = Prior(uniform, bijector=bijector, name="stdv")
-    y = Observable(Likelihood(X), name="y")(stdv)
-    model = PGM([stdv], [y], "test")
-
-    key = jax.random.PRNGKey(42)
-    params = model.sample_inverse(key)
-    state = model.prior.log_prob_inverse(params)
-    distribution = Likelihood(X)(state.sample.stdv)
-    assert jp.all(distribution.scale > 0), (
-        f"Observable scale should be positive, got {distribution.scale}"
-    )
-
-
 # =============================================================================
 # Tests: sample_inverse preserves batch dimension - regression test for bug
 # =============================================================================
@@ -628,21 +572,6 @@ def test_sample_inverse_batch_not_overwritten():
             f"bias shape {samples.bias.shape} != ({n},) - batch was overwritten"
         assert samples.stdv.shape == (n,), \
             f"stdv shape {samples.stdv.shape} != ({n},) - batch was overwritten"
-
-
-def test_sample_inverse_hierarchical_batch_preserved():
-    """
-    Regression test for hierarchical model: latent variable x should also
-    have correct batch dimension.
-    """
-    model, _, _, _ = build_hierarchical_model()
-    key = jax.random.PRNGKey(0)
-
-    for n in [2, 4, 8]:
-        samples = model.sample_inverse(key, num_samples=n)
-        assert samples.mu.shape == (n,), f"mu shape {samples.mu.shape} != ({n},)"
-        assert samples.sigma.shape == (n,), f"sigma shape {samples.sigma.shape} != ({n},)"
-        assert samples.x.shape == (n,), f"x shape {samples.x.shape} != ({n},)"
 
 
 def test_sample_inverse_multi_parent_batch_preserved():

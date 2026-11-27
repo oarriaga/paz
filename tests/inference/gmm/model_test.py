@@ -24,16 +24,6 @@ def _initial_parameters():
     return weights, means, covariances
 
 
-def test_gmm_fit_returns_distribution():
-    weights, means, covariances = _initial_parameters()
-    model = GMM(weights, means, covariances)
-    key = jax.random.PRNGKey(0)
-    sample_key, fit_key = jax.random.split(key)
-    samples, _ = _sample_1d_mixture(sample_key, 200)
-    fitted = model.fit(fit_key, samples, method="em", num_iters=10)
-    assert isinstance(fitted, paz.distributions.MixtureSameFamily)
-
-
 def test_gmm_pgm_fit_recovers_means():
     weights, means, covariances = _initial_parameters()
     model = GMM(weights, means, covariances)

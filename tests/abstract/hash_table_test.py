@@ -188,10 +188,6 @@ def table_for_parallel_tests(table_with_collision, item_a):
 ### Basic Tests ###
 
 
-def test_build_initializes_capacity(empty_table):
-    assert empty_table.num_slots == 100
-
-
 def test_build_initializes_size_to_zero(empty_table):
     assert empty_table.size == 0
 

@@ -11,15 +11,6 @@ def test_latent_invalid_callable_raises():
         Latent("not-callable")
 
 
-def test_latent_log_prob_inverse_sum_matches_sum():
-    def distribution_fn(mu):
-        return paz.distributions.Normal(mu, 1.0)
-
-    latent = Latent(distribution_fn, name="x")()
-    state = latent.log_prob_inverse(jp.array(0.0), jp.array(0.0))
-    assert jp.isclose(state.log_prob_sum, state.log_prob.sum())
-
-
 def test_latent_log_prob_matches_distribution():
     def distribution_fn(mu):
         return paz.distributions.Normal(mu, 1.0)

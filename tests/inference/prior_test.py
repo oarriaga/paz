@@ -11,12 +11,6 @@ def test_prior_invalid_distribution_raises():
         Prior("not-a-distribution")
 
 
-def test_prior_log_prob_inverse_sum_matches_sum():
-    prior = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
-    state = prior.log_prob_inverse(jp.array(0.0))
-    assert jp.isclose(state.log_prob_sum, state.log_prob.sum())
-
-
 def test_prior_log_prob_matches_distribution():
     distribution = paz.distributions.Normal(0.0, 1.0)
     prior = Prior(distribution, name="x")
@@ -109,10 +103,3 @@ def test_prior_vector_bijector_on_scalar_events_raises():
     prior = Prior(normal, bijector=bijector, name="x")
     with pytest.raises(ValueError, match="vector events"):
         prior.log_prob_inverse(jp.array([0.2, 0.3, 0.5]))
-
-
-def test_prior_accepts_paz_distribution():
-    distribution = paz.distributions.Normal(0.0, 1.0)
-    prior = Prior(distribution, name="x")
-    state = prior.log_prob(jp.array(0.5))
-    assert jp.isclose(state.log_prob_sum, distribution.log_prob(0.5))

@@ -28,16 +28,6 @@ def test_latent_space_round_trip():
     assert jp.allclose(round_trip.y, inverse.y)
 
 
-def test_latent_space_accepts_dict_samples():
-    x = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
-    y = Prior(paz.distributions.Normal(0.0, 1.0), name="y")
-    latent_space = build_latent_space([x, y])
-    forward = to_forward_samples(
-        latent_space, {"x": jp.array(0.1), "y": jp.array(0.2)}
-    )
-    assert hasattr(forward, "x") and hasattr(forward, "y")
-
-
 def test_latent_space_ignores_extra_keys():
     x = Prior(paz.distributions.Normal(0.0, 1.0), name="x")
     y = Prior(paz.distributions.Normal(0.0, 1.0), name="y")

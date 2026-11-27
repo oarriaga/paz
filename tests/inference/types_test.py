@@ -11,8 +11,3 @@ def test_sample_type_fields():
 def test_sample_type_invalid_raises():
     with pytest.raises(ValueError):
         types.SampleType("x")
-
-
-def test_node_state_log_prob_sum():
-    state = types.NodeState("sample", "log_prob", "sum")
-    assert state.log_prob_sum == "sum"

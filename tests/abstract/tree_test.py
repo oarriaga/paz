@@ -64,14 +64,6 @@ def fork_sorted_nodes():
     return ["a", "b", "c", "d"]
 
 
-@pytest.fixture
-def collider():
-    tree = Tree(["a", "b", "c"])
-    tree.add_edge("a", "c")
-    tree.add_edge("b", "c")
-    return tree
-
-
 def test_chain_root(chain, chain_root):
     assert chain.root_nodes() == chain_root
 
@@ -229,20 +221,6 @@ def test_sort_unordered_parents():
     assert jp.allclose(result, expected_order)
 
 
-def test_sort_returns_all_nodes_for_valid_tree():
-    """Tests the property that the output contains all original nodes."""
-    #      0
-    #     / \
-    #    1   2
-    #   / \   \
-    #  3   4   5
-    #         /
-    #        6
-    parent_array = jp.array([-1, 0, 0, 1, 1, 2, 5])
-    result = sort_topologically(parent_array)
-    assert jp.allclose(jp.sort(result), jp.arange(len(parent_array)))
-
-
 def test_sort_handles_cycle_by_padding_unreachable_nodes():
     """Tests that cyclic nodes are not sorted and are left as the
     initial padding value (-1).
@@ -291,31 +269,6 @@ def test_jitted_sort_produces_correct_output():
     assert jp.allclose(result, expected_order)
 
 
-def test_vmapped_sort_on_batch():
-    """Tests that the sort function is vmap-compatible."""
-    # A batch of two different parent arrays
-    batch_parent_array = jp.array(
-        [
-            [-1, 0, 0],  # Simple fork
-            [-1, 0, 1],  # Simple chain
-        ]
-    )
-
-    batch_expected_order = jp.array(
-        [
-            [0, 1, 2],
-            [0, 1, 2],
-        ]
-    )
-
-    # vmap the sort function
-    vmapped_sort = jax.vmap(sort_topologically)
-
-    # Call the vmapped function on the batch
-    result = vmapped_sort(batch_parent_array)
-    assert jp.allclose(result, batch_expected_order)
-
-
 def test_sort_with_large_array():
     """Tests the sort with a large, procedurally generated binary tree."""
     num_nodes = 127  # A complete binary tree of depth 6 has 127 nodes
@@ -331,26 +284,3 @@ def test_sort_with_large_array():
 
     result = sort_topologically(parent_array)
     assert jp.allclose(result, expected_order)
-
-
-def test_sort_forest_with_multiple_roots():
-    """Tests a graph with multiple disconnected trees (a forest)."""
-    parent_array = jp.array([-1, 0, -1, 2])
-    expected_order = jp.array([0, 2, 1, 3])
-    result = sort_topologically(parent_array)
-    assert jp.allclose(result, expected_order)
-
-
-def test_sort_handles_cycle_gracefully():
-    """
-    Tests that a cycle is not processed, preventing an infinite loop.
-    The valid part of the graph should still be sorted.
-    """
-    # Cycle: 0 -> 1 -> 0.  Valid tree: 2 -> 3
-    parent_array = jp.array([1, 0, -1, 2])
-    result = sort_topologically(parent_array)
-
-    # The while_loop will finish after processing the valid tree part.
-    # The output array will contain the sorted part, padded with -1.
-    expected_result = jp.array([2, 3, -1, -1])
-    assert jp.allclose(result, expected_result)

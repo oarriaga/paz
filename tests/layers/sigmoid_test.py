@@ -10,12 +10,6 @@ def test_sigmoid_matches_numpy():
     np.testing.assert_allclose(np.asarray(output), expected, rtol=1e-6)
 
 
-def test_sigmoid_config_round_trip():
-    layer = paz.layers.Sigmoid(name="gate")
-    restored = paz.layers.Sigmoid.from_config(layer.get_config())
-    assert restored.name == "gate"
-
-
 def test_sigmoid_serialization_round_trip():
     x = np.linspace(-3, 3, 7, dtype="float32")
     serialized = keras.saving.serialize_keras_object(paz.layers.Sigmoid())

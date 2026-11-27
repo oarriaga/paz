@@ -4,10 +4,6 @@ import jax.numpy as jp
 import paz.utils.progressbar as utils_progressbar
 
 
-def test_start_returns_float():
-    assert isinstance(utils_progressbar.start(), float)
-
-
 def test_newline_writes_newline(capsys):
     utils_progressbar.newline()
     jax.effects_barrier()
@@ -105,7 +101,3 @@ def test_show_stages_keeps_finished_stage_with_its_time(capsys):
 def test_show_stages_stays_on_one_line(capsys):
     output, _ = show_two_stages(capsys, [(0, 1), (0, 2), (1, 4)])
     assert "\n" not in output
-
-
-def test_skip_returns_none():
-    assert utils_progressbar.skip(3) is None

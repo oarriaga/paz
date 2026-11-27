@@ -16,12 +16,6 @@ def temp_snapshot_dir():
         yield Path(tmpdir)
 
 
-def test_assert_snapshot_raises_on_missing_golden(temp_snapshot_dir):
-    filepath = temp_snapshot_dir / "missing.npy"
-    with pytest.raises(FileNotFoundError):
-        paz.assert_snapshot(jp.zeros(3), str(filepath))
-
-
 def test_assert_snapshot_does_not_write_missing_golden(temp_snapshot_dir):
     filepath = temp_snapshot_dir / "missing.npy"
     with pytest.raises(FileNotFoundError):

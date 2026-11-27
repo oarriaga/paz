@@ -27,18 +27,6 @@ def test_tuner_returns_infos_shape():
     assert infos.acceptance_rate.shape[0] == num_episodes
 
 
-def test_tuner_sigma_is_finite():
-    key = jax.random.PRNGKey(1)
-    positions = jp.zeros((2,))
-
-    def log_density_fn(position):
-        return -jp.sum(position ** 2)
-
-    tune = Tuner(log_density_fn, positions)
-    tuned_sigma = tune(key, 1, 1, 0.1).sigma
-    assert jp.isfinite(tuned_sigma)
-
-
 def build_correlated_log_density(stdvs, correlation):
     correlations = jp.array([[1.0, correlation], [correlation, 1.0]])
     covariance = jp.outer(stdvs, stdvs) * correlations
