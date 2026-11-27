@@ -22,11 +22,7 @@ EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
 # Examples that use paz names the library no longer has. Each is fixed on
 # its own branch; delete the entry when the fix lands (strict xfail fails
 # the run when a listed file starts passing).
-KNOWN_BROKEN = {
-    "object_detection/compute_MAP.py",
-    "object_detection/demo_image.py",
-    "object_detection/efficientdet.py",
-}
+KNOWN_BROKEN = set()
 
 
 def find_scripts():

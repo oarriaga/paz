@@ -42,9 +42,7 @@ def identity(shape, dtype):
     return keras.ops.identity(2, dtype=dtype).flatten()
 
 
-def STN(
-    input_shape=(40, 40, 1), interpolation_size=(30, 30, 1), num_classes=10
-):
+def STN(input_shape=(40, 40, 1), interpolation_size=(30, 30), num_classes=10):
     image = Input(shape=input_shape)
     x = MaxPool2D(pool_size=(2, 2))(image)
     x = Conv2D(20, (5, 5))(x)

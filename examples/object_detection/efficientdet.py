@@ -14,7 +14,7 @@ def EFFICIENTDET(image, model, prior_boxes, score_thresh, IOU_thresh, top_k):
         image = paz.cast(image, "float32")
         image = paz.image.subtract_mean(image, jp.array(mean))
         image = paz.image.divide_by_std(image, jp.array(stdv))
-        image = paz.image.resize_pad_top_left(image, model_size, "linear")
+        image = paz.image.resize_with_aspect_ratio(image, *model_size)
         image = jp.expand_dims(image, axis=0)
         return image
 

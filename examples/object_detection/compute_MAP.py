@@ -18,7 +18,7 @@ def evaluate(images, boxes, class_args, pipeline, num_classes, IOU_thresh):
     class_to_match = {class_arg: [] for class_arg in range(num_classes)}
     iterator = zip(images, boxes, class_args)
     for true_image, true_boxes, true_class_args in iterator:
-        image = paz.load.image(true_image)
+        image = paz.image.load(true_image)
         pred_boxes, pred_class_args, pred_scores = pipeline(image)
         all_class_args = paz.classes.join([true_class_args, pred_class_args])
         for class_arg in np.unique(all_class_args):

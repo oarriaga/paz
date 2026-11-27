@@ -54,7 +54,8 @@ num_shapes = jp.prod(shape)
 mask = jp.ones((num_shapes,), dtype=bool)
 shapes = build_shapes(key, num_shapes, transforms)
 scene = paz.graphics.Scene(shapes)
-render_args = image_size, jp.pi / 3, world_to_camera
+intrinsics = paz.graphics.camera.compute_intrinsics(jp.pi / 3, H, W)
+render_args = image_size, intrinsics, world_to_camera
 render_kwargs = dict(lights=lights, tiles=(1, 1), chunk_size=1024)
 render = paz.partial(paz.graphics.render, *render_args, **render_kwargs)
 render = jax.jit(paz.partial(render, shadows=False))
