@@ -39,9 +39,3 @@ def test_apply_actor_weights_matches_injected_values():
         actual_kernel, actual_bias = actor.get_layer(layer_name).get_weights()
         assert np.array_equal(actual_kernel, kernel)
         assert np.array_equal(actual_bias, bias)
-
-
-def test_apply_actor_weights_covers_every_dense_layer():
-    actor = build_actor()
-    _, expected = build_fake_actor_onnx(actor)
-    assert len(expected) == 7

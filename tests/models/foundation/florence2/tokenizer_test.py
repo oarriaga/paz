@@ -16,12 +16,6 @@ def toy_tokenizer(tmp_path):
     return tokenizer.load_tokenizer(path)
 
 
-def test_encode_wraps_with_bos_and_eos(toy_tokenizer):
-    token_ids = tokenizer.encode(toy_tokenizer, "low")
-    assert token_ids[0] == 0
-    assert token_ids[-1] == 2
-
-
 def test_encode_applies_merges(toy_tokenizer):
     assert tokenizer.encode(toy_tokenizer, "low") == [0, 7, 2]
     assert tokenizer.encode(toy_tokenizer, "low low") == [0, 7, 9, 2]

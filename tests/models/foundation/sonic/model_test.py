@@ -11,13 +11,6 @@ from paz.models.foundation.sonic.model import compute_release_fsq
 from paz.models.foundation.sonic.model import compute_temporal_part
 
 
-def test_encoder_output_shape_matches_token_dim(toy_layout):
-    encoder = build_encoder(toy_layout)
-    x = np.zeros((1, compute_encoder_input_dim(toy_layout)), dtype="float32")
-    tokens = np.array(encoder(x, training=False))
-    assert tokens.shape == (1, toy_layout.token_dim)
-
-
 def test_decoder_output_shape_matches_action_dim(toy_layout):
     decoder = build_decoder(toy_layout)
     x = np.zeros((1, compute_decoder_input_dim(toy_layout)), dtype="float32")

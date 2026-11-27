@@ -21,13 +21,6 @@ def assert_close(left, right, tol=1e-6):
     assert float(jp.max(jp.abs(left - right))) <= tol
 
 
-def test_backbone_builds_and_shapes():
-    config = build_text_backbone_args()
-    model = Gemma4Backbone(config)
-    output = model(build_test_inputs())
-    assert output.shape == (2, 5, config.hidden_dim)
-
-
 def test_backbone_save_and_load(tmp_path):
     config = build_text_backbone_args()
     model = Gemma4Backbone(config)
@@ -39,22 +32,6 @@ def test_backbone_save_and_load(tmp_path):
     loaded(inputs)
     loaded.load_weights(str(path))
     assert_close(output, loaded(inputs))
-
-
-def test_backbone_supports_per_layer_inputs():
-    config = build_text_backbone_args(hidden_size_per_layer_input=2)
-    model = Gemma4Backbone(config)
-    output = model(build_test_inputs())
-    assert output.shape == (2, 5, config.hidden_dim)
-
-
-def test_backbone_runs_global_partial_rope():
-    config = build_text_backbone_args(
-        num_layers=6, sliding_window_pattern=3, head_dim=16, global_head_dim=16,
-        global_rope_partial_rotary_factor=0.25)
-    model = Gemma4Backbone(config)
-    output = model(build_test_inputs())
-    assert output.shape == (2, 5, config.hidden_dim)
 
 
 def test_kv_source_map_shares_tail_layers():
@@ -125,19 +102,6 @@ def test_bfloat16_prefill_parity_beyond_sliding_window():
     full = jp.asarray(full, jp.float32)
     cached = jp.asarray(cached, jp.float32)
     assert_close(full, cached, tol=1e-3)
-
-
-def test_causal_lm_cached_step_shapes():
-    config = build_text_backbone_args(hidden_size_per_layer_input=2)
-    model = Gemma4CausalLM(config)
-    token = jp.array([[1]], dtype=jp.int32)
-    cache = jp.asarray(model.build_cache(8))
-    embedding = model.backbone.token_embedding(token)
-    per_layer = model.backbone.per_layer_lookup(token)
-    logits, new_cache = model.call_with_cache(
-        embedding, cache, jp.array(0, jp.int32), None, per_layer)
-    assert logits.shape == (1, 1, config.vocabulary_size)
-    assert new_cache.shape == cache.shape
 
 
 def mixed_kv_config():

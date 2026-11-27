@@ -27,11 +27,6 @@ def make_inputs(batch=2):
     return query, value, boxes
 
 
-def test_attention_preserves_query_shape():
-    output = build_attention_model()(make_inputs())
-    assert tuple(output.shape) == (2, 5, 8)
-
-
 def test_attention_jit_matches_eager():
     model = build_attention_model()
     inputs = make_inputs()

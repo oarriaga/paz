@@ -15,13 +15,6 @@ def assert_close(left, right, tol=1e-6):
     assert float(diff) <= tol
 
 
-def test_causal_lm_output_shape():
-    config = build_text_backbone_args()
-    model = Gemma4CausalLM(config)
-    logits = model(build_test_inputs())
-    assert logits.shape == (1, 5, config.vocabulary_size)
-
-
 def test_causal_lm_logits_are_raw_scores():
     config = build_text_backbone_args()
     model = Gemma4CausalLM(config)

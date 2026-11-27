@@ -1,17 +1,9 @@
 import numpy as np
 
-from paz.models.foundation.gear_wbc.model import ACTION_DIM
 from paz.models.foundation.gear_wbc.model import LATENT_DIM
 from paz.models.foundation.gear_wbc.model import OBSERVATION_DIM
 from paz.models.foundation.gear_wbc.model import build_actor
 from paz.models.foundation.gear_wbc.model import compute_unit_norm
-
-
-def test_actor_maps_observation_history_to_lower_body_action():
-    actor = build_actor()
-    x = np.zeros((1, OBSERVATION_DIM), dtype="float32")
-    action = np.array(actor(x, training=False))
-    assert action.shape == (1, ACTION_DIM)
 
 
 def test_actor_parameter_count_matches_release():

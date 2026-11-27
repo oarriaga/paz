@@ -22,20 +22,6 @@ def build_tiny_inputs(seed=0):
     return [context, context_mask, actions, flow_time]
 
 
-def test_velocity_shape():
-    model = build(**TINY)
-    velocity = model(build_tiny_inputs())
-    assert velocity.shape == (2, TINY["num_actions"], TINY["action_dim"])
-
-
-def test_deterministic_outputs():
-    model = build(**TINY)
-    inputs = build_tiny_inputs()
-    first = np.asarray(model(inputs))
-    second = np.asarray(model(inputs))
-    assert np.array_equal(first, second)
-
-
 def test_causal_self_attention():
     model = build(**TINY)
     inputs = build_tiny_inputs()

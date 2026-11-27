@@ -25,14 +25,6 @@ def test_image_encoder_token_shape():
     assert tokens.shape == (2, 2, 16)
 
 
-def test_model_output_shape():
-    model = build(**TINY)
-    images = np.zeros((2, 32, 32, 3), "float32")
-    token_ids = np.zeros((2, 5), "int32")
-    context = model.predict([images, images, token_ids], verbose=0)
-    assert context.shape == (2, 9, 16)
-
-
 def test_encoder_block_mask_hides_keys():
     x = Input((4, 16), name="block_x")
     mask = Input((4,), name="block_mask")

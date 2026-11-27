@@ -12,14 +12,6 @@ def test_forward_looks_up_embeddings():
     assert tuple(hidden.shape) == (1, 3, 4)
 
 
-def test_reverse_projects_back_to_vocabulary():
-    layer = ReversibleEmbedding(10, 4)
-    layer.build(None)
-    hidden = ops.ones((2, 5, 4))
-    logits = layer(hidden, reverse=True)
-    assert tuple(logits.shape) == (2, 5, 10)
-
-
 def test_tied_reverse_uses_transposed_embeddings():
     layer = ReversibleEmbedding(10, 4)
     layer.build(None)

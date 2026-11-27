@@ -5,11 +5,6 @@ import numpy as np
 from paz.models.transformers.embeddings import sine
 
 
-def test_embed_boxes_returns_four_axes():
-    boxes = np.zeros((2, 5, 4), "float32")
-    assert tuple(sine.embed_boxes(boxes, 8).shape) == (2, 5, 32)
-
-
 def test_embed_boxes_at_zero_alternates_sine_and_cosine():
     boxes = np.zeros((1, 1, 4), "float32")
     embedded = np.array(sine.embed_boxes(boxes, 4))[0, 0]

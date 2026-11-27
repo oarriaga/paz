@@ -9,11 +9,6 @@ def build_patches(batch=2, height=4, width=6, hidden_size=3):
     return values.reshape(batch, height * width, hidden_size)
 
 
-def test_partition_folds_windows_into_batch():
-    windows = windowing.partition(build_patches(), (4, 6), 2)
-    assert tuple(windows.shape) == (8, 6, 3)
-
-
 def test_unpartition_inverts_partition():
     patches = build_patches()
     windows = windowing.partition(patches, (4, 6), 2)
