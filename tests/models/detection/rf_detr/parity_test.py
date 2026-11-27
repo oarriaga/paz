@@ -5,7 +5,8 @@ skipped unless ``RFDETR_CHECKPOINTS`` points at a directory holding them. The
 recorded differences are float32 accumulation noise over twelve windowed
 transformer blocks and the decoder stack.
 
-    RFDETR_CHECKPOINTS=~/rfdetr_checkpoints pytest paz/models/detection/rf_detr
+    export RFDETR_CHECKPOINTS=~/rfdetr_checkpoints
+    pytest tests/models/detection/rf_detr
 """
 import os
 
