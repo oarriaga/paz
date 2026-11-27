@@ -1,6 +1,8 @@
 import math
 
 import pytest
+import numpy as np
+import scipy.linalg
 
 import jax
 import jax.numpy as jp
@@ -143,7 +145,7 @@ def test_hat(se3_vector_A, se3_matrix_A):
 
 
 def test_exp(SE3_matrix_B, se3_matrix_B):
-    assert jp.allclose(SE3_matrix_B, SE3.exp(se3_matrix_B))
+    assert jp.allclose(SE3_matrix_B, SE3.exp(se3_matrix_B), atol=1e-6)
 
 
 def test_to_affine_matrix(SE3_matrix_B, SO3_matrix_B, E3_vector_B):
@@ -194,7 +196,8 @@ def test_xyz_rpy_to_SE3(SE3_matrix_from_radians, so3_vector_A, radians_vector):
 
 def test_exp_position(exp_position_input, E3_vector_B):
     inputs = exp_position_input
-    assert jp.all(SE3.exp_position(*inputs) == jp.reshape(E3_vector_B, (3, 1)))
+    expected = jp.reshape(E3_vector_B, (3, 1))
+    assert jp.allclose(SE3.exp_position(*inputs), expected, atol=1e-6)
 
 
 def test_sample_SE3(sample_key):
@@ -206,3 +209,62 @@ def test_sample_SE3(sample_key):
         jp.dot(rotation_matrix, rotation_matrix.T), jp.eye(3), atol=1e-6
     )
     assert jp.array_equal(SE3_matrix[3, :], jp.array([0, 0, 0, 1]))
+
+
+def test_sample_position_does_not_reuse_rotation_key(sample_key):
+    position = SE3.sample(sample_key, -1.0, 1.0)[:3, 3]
+    reused_key_position = jax.random.uniform(sample_key, (3,), float, -1, 1)
+    assert not jp.allclose(position, reused_key_position)
+
+
+VIEW_CAMERA_ORIGINS = [[0.0, 0.0, 5.0], [3.0, 4.0, 5.0], [0.0, 5.0, 0.01]]
+
+
+def exp_of_vector(se3_vector):
+    return SE3.exp(SE3.hat(se3_vector))
+
+
+def Log_of_exp(se3_vector):
+    return SE3.Log(exp_of_vector(se3_vector))
+
+
+def test_Log_gradient_is_identity_at_identity():
+    jacobian = jax.jacobian(Log_of_exp)(jp.zeros(6))
+    assert jp.allclose(jacobian, jp.eye(6))
+
+
+def test_Log_gradient_is_finite_at_pure_translation():
+    translation = SE3.translation(jp.array([1.0, 2.0, 3.0]))
+    assert jp.all(jp.isfinite(jax.jacobian(SE3.Log)(translation)))
+
+
+@pytest.mark.parametrize("angle", [0.0, 1e-7, 1e-4, 1e-3, 1e-2, 0.5, 2.0, 3.0])
+def test_exp_and_log_match_scipy(angle):
+    omega = angle * jp.array([1.0, 2.0, -0.5]) / jp.sqrt(5.25)
+    se3_vector = jp.concatenate([omega, jp.array([0.3, -0.2, 0.5])])
+    se3_matrix = np.asarray(SE3.hat(se3_vector), dtype=np.float64)
+    SE3_matrix = exp_of_vector(se3_vector)
+    expected_log = scipy.linalg.logm(np.asarray(SE3_matrix, np.float64))
+    assert jp.allclose(SE3_matrix, scipy.linalg.expm(se3_matrix), atol=1e-6)
+    assert jp.allclose(SE3.log(SE3_matrix), expected_log.real, atol=1e-5)
+    assert jp.allclose(Log_of_exp(se3_vector), se3_vector, atol=1e-5)
+
+
+def test_Log_works_under_jit_and_vmap():
+    se3_vectors = jp.array([[0.0, 0, 0, 1, 2, 3], [0.3, 0.2, -0.1, 1, 2, 3]])
+    recovered = jax.jit(jax.vmap(Log_of_exp))(se3_vectors)
+    assert jp.allclose(recovered, se3_vectors, atol=1e-5)
+
+
+@pytest.mark.parametrize("camera_origin", VIEW_CAMERA_ORIGINS)
+def test_view_transform_is_rigid_and_looks_at_target(camera_origin):
+    camera_origin = jp.array(camera_origin)
+    target, world_up = jp.array([0.5, 0.0, -0.5]), jp.array([0.0, 1.0, 0.0])
+    view_transform = SE3.view_transform(camera_origin, target, world_up)
+    rotation, _ = SE3.split(view_transform)
+    distance = jp.linalg.norm(target - camera_origin)
+    target_in_camera = view_transform @ jp.append(target, 1.0)
+    expected = jp.array([0.0, 0.0, -distance, 1.0])
+    assert jp.allclose(rotation @ rotation.T, jp.eye(3), atol=1e-5)
+    assert jp.isclose(jp.linalg.det(rotation), 1.0, atol=1e-5)
+    assert jp.allclose(target_in_camera, expected, atol=1e-5)

@@ -53,7 +53,8 @@ def to_affine_matrices(rotations, translations):
 
 
 def rotation_matrix_to_compact_axis_angle(rotation):
-    angle = np.arccos((np.trace(rotation) - 1.0) / 2.0)
+    cosine = np.clip((np.trace(rotation) - 1.0) / 2.0, -1.0, 1.0)
+    angle = np.arccos(cosine)
     axis = np.array(
         [
             rotation[2, 1] - rotation[1, 2],
@@ -61,8 +62,9 @@ def rotation_matrix_to_compact_axis_angle(rotation):
             rotation[1, 0] - rotation[0, 1],
         ]
     )
-    axis = axis / np.linalg.norm(axis)
-    return axis * angle
+    norm = np.linalg.norm(axis)
+    safe_norm = np.where(norm == 0.0, 1.0, norm)
+    return axis / safe_norm * angle
 
 
 def change_link_order(joints, source_labels, target_labels):

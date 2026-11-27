@@ -118,7 +118,7 @@ class Scale(_ScaleBase, Bijector):
         return _sum_event(log_det, event_ndims)
 
     def is_increasing(self):
-        return bool(jp.all(jp.asarray(self.scale) > 0))
+        return jp.asarray(self.scale) > 0
 
 
 _SigmoidBase = namedtuple("Sigmoid", ["low", "high"])
@@ -163,7 +163,7 @@ class Sigmoid(_SigmoidBase, Bijector):
     def is_increasing(self):
         if self.low is None:
             return True
-        return bool(jp.all(jp.asarray(self.high) > jp.asarray(self.low)))
+        return jp.asarray(self.high) > jp.asarray(self.low)
 
 
 _ExpBase = namedtuple("Exp", [])
@@ -376,7 +376,7 @@ class Power(_PowerBase, Bijector):
         return _sum_event(log_det, event_ndims)
 
     def is_increasing(self):
-        return bool(jp.all(jp.asarray(self.power) > 0))
+        return jp.asarray(self.power) > 0
 
 
 _NormalCDFBase = namedtuple("NormalCDF", [])

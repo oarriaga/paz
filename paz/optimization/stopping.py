@@ -14,7 +14,8 @@ class StatefulStop:
 
 def grad_norm_stop(tolerance):
     def stop_fn(_step_arg, _params, _loss, gradients):
-        return otu.tree_norm(gradients) < tolerance
+        norm_squared = otu.tree_vdot(gradients, gradients)
+        return jp.sqrt(norm_squared) < tolerance
 
     stop_fn.message = "stop=grad_norm"
     return stop_fn

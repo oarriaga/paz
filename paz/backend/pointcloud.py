@@ -64,7 +64,9 @@ def centroid_distance(points_a, points_b):
 
 def mean_nearest_neighbor_distance(points_a, points_b):
     nearest_squared = compute_nearest_squared_distances(points_a, points_b)
-    return jp.mean(jp.sqrt(nearest_squared))
+    is_zero = nearest_squared == 0.0
+    safe_squared = jp.where(is_zero, 1.0, nearest_squared)
+    return jp.mean(jp.where(is_zero, 0.0, jp.sqrt(safe_squared)))
 
 
 def chamfer_distance(points_a, points_b):
@@ -159,8 +161,8 @@ def to_depth(pointcloud, camera_intrinsics, H, W, min_depth=0.0):
     fx, fy = camera_intrinsics[0, 0], camera_intrinsics[1, 1]
     cx = camera_intrinsics[0, 2]
     cy = camera_intrinsics[1, 2]
-    u = ((fx * x / z) + cx).astype(int)
-    v = ((fy * y / z) + cy).astype(int)
+    u = jp.round((fx * x / z) + cx).astype(int)
+    v = jp.round((fy * y / z) + cy).astype(int)
     # initialize depth image
     depth_image = jp.full((H, W), jp.inf)
     # Keep points within image bounds
@@ -168,13 +170,8 @@ def to_depth(pointcloud, camera_intrinsics, H, W, min_depth=0.0):
     valid_v = jp.logical_and(v >= 0, v < H)
     valid_pixels = jp.logical_and(valid_u, valid_v)
     u, v, z = u[valid_pixels], v[valid_pixels], z[valid_pixels]
-    for point_arg in range(len(u)):
-        x_pixel_arg = u[point_arg]
-        y_pixel_arg = v[point_arg]
-        z_value_new = z[point_arg]
-        z_value_old = depth_image[y_pixel_arg, x_pixel_arg]
-        if min_depth < z_value_new < z_value_old:
-            depth_image[y_pixel_arg, x_pixel_arg] = z_value_new
+    z = jp.where(z > min_depth, z, jp.inf)
+    depth_image = depth_image.at[v, u].min(z)
     depth_image = jp.where(depth_image == jp.inf, 0, depth_image)
     return depth_image
 

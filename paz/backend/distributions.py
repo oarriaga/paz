@@ -624,13 +624,18 @@ class TruncatedNormal(_TruncatedNormalBase, Distribution):
         std_low, std_high = _standardized_bounds(
             self.loc, self.scale, self.low, self.high
         )
-        low_cdf = normal_cdf(std_low)
-        high_cdf = normal_cdf(std_high)
+        # The normal cdf rounds to one in the upper tail, so an interval
+        # above the mean is sampled through its mirror image.
+        is_low_positive = std_low >= 0
+        low_cdf = normal_cdf(jp.where(is_low_positive, -std_high, std_low))
+        high_cdf = normal_cdf(jp.where(is_low_positive, -std_low, std_high))
         shape = build_sample_shape(num_samples) + self.batch_shape
         uniforms = jax.random.uniform(
             seed, shape, dtype=self.dtype, minval=low_cdf, maxval=high_cdf
         )
-        return self.loc + self.scale * normal_icdf(uniforms)
+        draws = normal_icdf(uniforms)
+        draws = jp.where(is_low_positive, -draws, draws)
+        return self.loc + self.scale * draws
 
 
 _BetaBase = namedtuple(
@@ -671,8 +676,8 @@ class Beta(_BetaBase, Distribution):
         alpha = to_float(self.concentration1, self.dtype)
         beta = to_float(self.concentration0, self.dtype)
         log_prob = (
-            (alpha - 1.0) * jp.log(values)
-            + (beta - 1.0) * jp.log1p(-values)
+            jsp_special.xlogy(alpha - 1.0, values)
+            + jsp_special.xlog1py(beta - 1.0, -values)
             - lbeta(alpha, beta)
         )
         if self.force_probs:
@@ -917,10 +922,9 @@ class Categorical(_CategoricalBase, Distribution):
             safe_values, num_categories, dtype=log_probs.dtype
         )
         gathered = jp.sum(multiply_no_nan(log_probs, mask), axis=-1)
-        if not self.force_probs:
-            return gathered
         in_support = (safe_values >= 0) & (safe_values < num_categories)
-        if jp.issubdtype(values.dtype, jp.inexact):
+        is_inexact = jp.issubdtype(values.dtype, jp.inexact)
+        if self.force_probs and is_inexact:
             same = values == safe_values.astype(values.dtype)
             in_support = in_support & same
         return jp.where(in_support, gathered, -jp.inf)
@@ -1100,33 +1104,33 @@ class TransformedDistribution(_TransformedBase, Distribution):
         if self.event_shape != ():
             raise NotImplementedError("cdf is only implemented for scalars.")
         inverse_values = self.bijector.inverse(values)
-        if self.bijector.is_increasing():
-            return self.distribution.cdf(inverse_values)
-        return self.distribution.survival_function(inverse_values)
+        increasing = self.distribution.cdf(inverse_values)
+        decreasing = self.distribution.survival_function(inverse_values)
+        return jp.where(self.bijector.is_increasing(), increasing, decreasing)
 
     def log_cdf(self, values):
         if self.event_shape != ():
             raise NotImplementedError("log_cdf is only defined for scalars.")
         inverse_values = self.bijector.inverse(values)
-        if self.bijector.is_increasing():
-            return self.distribution.log_cdf(inverse_values)
-        return self.distribution.log_survival_function(inverse_values)
+        increasing = self.distribution.log_cdf(inverse_values)
+        decreasing = self.distribution.log_survival_function(inverse_values)
+        return jp.where(self.bijector.is_increasing(), increasing, decreasing)
 
     def survival_function(self, values):
         if self.event_shape != ():
             raise NotImplementedError("sf is only implemented for scalars.")
         inverse_values = self.bijector.inverse(values)
-        if self.bijector.is_increasing():
-            return self.distribution.survival_function(inverse_values)
-        return self.distribution.cdf(inverse_values)
+        increasing = self.distribution.survival_function(inverse_values)
+        decreasing = self.distribution.cdf(inverse_values)
+        return jp.where(self.bijector.is_increasing(), increasing, decreasing)
 
     def log_survival_function(self, values):
         if self.event_shape != ():
             raise NotImplementedError("log_sf is only implemented for scalars.")
         inverse_values = self.bijector.inverse(values)
-        if self.bijector.is_increasing():
-            return self.distribution.log_survival_function(inverse_values)
-        return self.distribution.log_cdf(inverse_values)
+        increasing = self.distribution.log_survival_function(inverse_values)
+        decreasing = self.distribution.log_cdf(inverse_values)
+        return jp.where(self.bijector.is_increasing(), increasing, decreasing)
 
     def sample(self, num_samples=1, seed=None):
         values = self.distribution.sample(num_samples, seed=seed)
@@ -1309,9 +1313,7 @@ class MultivariateNormalFullCovariance(_MVNFullBase, Distribution):
         covariance = to_float(self.covariance_matrix, self.dtype)
         chol = jp.linalg.cholesky(covariance)
         diff = values - self.loc
-        solved = jsp_linalg.solve_triangular(
-            chol, diff[..., None], lower=True
-        )[..., 0]
+        solved = _solve_lower_triangular(chol, diff)
         standard = Normal(
             jp.asarray(0.0, dtype=self.dtype),
             jp.asarray(1.0, dtype=self.dtype),
@@ -1683,7 +1685,8 @@ class Exponential(_ExponentialBase, Distribution):
     def log_prob(self, values):
         values = to_float(values, self.dtype)
         rate = to_float(self.rate, self.dtype)
-        return jp.log(rate) - rate * values
+        log_prob = jp.log(rate) - rate * values
+        return jp.where(values < 0.0, -jp.inf, log_prob)
 
     def cdf(self, values):
         values = to_float(values, self.dtype)
@@ -1691,12 +1694,12 @@ class Exponential(_ExponentialBase, Distribution):
         return jp.where(values < 0.0, 0.0, -jp.expm1(-rate * values))
 
     def survival_function(self, values):
-        values = to_float(values, self.dtype)
-        return jp.exp(-to_float(self.rate, self.dtype) * values)
+        return jp.exp(self.log_survival_function(values))
 
     def log_survival_function(self, values):
         values = to_float(values, self.dtype)
-        return -to_float(self.rate, self.dtype) * values
+        log_survival = -to_float(self.rate, self.dtype) * values
+        return jp.where(values < 0.0, 0.0, log_survival)
 
     def mean(self):
         return _fill(1.0 / to_float(self.rate, self.dtype), self.batch_shape,
@@ -1709,7 +1712,7 @@ class Exponential(_ExponentialBase, Distribution):
         return jp.sqrt(self.variance())
 
     def mode(self):
-        return _fill(jp.nan, self.batch_shape, self.dtype)
+        return _fill(0.0, self.batch_shape, self.dtype)
 
     def entropy(self):
         return _fill(1.0 - jp.log(self.rate), self.batch_shape, self.dtype)
@@ -2219,9 +2222,7 @@ class MultivariateNormalTriL(_MVNTriLBase, Distribution):
         values = to_float(values, self.dtype)
         chol = to_float(self.scale_tril, self.dtype)
         diff = values - self.loc
-        solved = jsp_linalg.solve_triangular(
-            chol, diff[..., None], lower=True
-        )[..., 0]
+        solved = _solve_lower_triangular(chol, diff)
         standard = Normal(
             jp.asarray(0.0, self.dtype), jp.asarray(1.0, self.dtype)
         )
@@ -2337,7 +2338,16 @@ def _require_seed(seed):
 
 
 def _standardized_bounds(loc, scale, low, high):
+    low, high = jp.asarray(low), jp.asarray(high)
     return (low - loc) / scale, (high - loc) / scale
+
+
+def _solve_lower_triangular(chol, diff):
+    batch_shape = jp.broadcast_shapes(chol.shape[:-2], diff.shape[:-1])
+    chol = jp.broadcast_to(chol, batch_shape + chol.shape[-2:])
+    diff = jp.broadcast_to(diff, batch_shape + diff.shape[-1:])
+    solved = jsp_linalg.solve_triangular(chol, diff[..., None], lower=True)
+    return solved[..., 0]
 
 
 def _bernoulli_log_probs(logits, probs):

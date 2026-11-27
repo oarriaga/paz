@@ -688,3 +688,81 @@ def test_masked_shapes_and_sample():
     assert masked.event_shape == ()
     draws = masked.sample(10, seed=jax.random.PRNGKey(0))
     assert draws.shape == (10, 4)
+
+
+def test_multivariate_normal_log_prob_broadcasts_values_and_parameters():
+    key = jax.random.split(KEY, 3)
+    loc, values = sample(key[0], (3,), -3, 3), sample(key[1], (4, 3), -6, 6)
+    covariance = build_covariance(key[2], (3,))
+    scale_tril = jp.linalg.cholesky(covariance)
+    expected = compute_full_log_pdf(loc, covariance, values)
+    full = D.MultivariateNormalFullCovariance(loc, covariance)
+    assert_close(full.log_prob(values), expected)
+    tril = D.MultivariateNormalTriL(loc, scale_tril)
+    assert_close(tril.log_prob(values), expected)
+    scales = jp.array([1.0, 2.0])[:, None, None]
+    expected_0 = compute_full_log_pdf(loc, covariance, values[0])
+    expected_1 = compute_full_log_pdf(loc, 2.0 * covariance, values[0])
+    expected = jp.stack([expected_0, expected_1])
+    full = D.MultivariateNormalFullCovariance(loc, scales * covariance)
+    assert_close(full.log_prob(values[0]), expected)
+    tril = D.MultivariateNormalTriL(loc, jp.sqrt(scales) * scale_tril)
+    assert_close(tril.log_prob(values[0]), expected)
+
+
+def test_transformed_cumulative_selects_direction_per_element():
+    base = D.Normal(jp.array([0.5, 1.0]), 0.7)
+    bijector = B.Scale(jp.array([2.0, -1.0]))
+    transformed = D.TransformedDistribution(base, bijector)
+    reference = stats.norm([1.0, -1.0], [1.4, 0.7])
+    assert_methods(transformed, reference, jp.array([0.3, 0.3]), SCALAR)
+
+
+def test_transformed_cumulative_is_jittable_over_the_bijector():
+    def compute_cdf(scale, values):
+        bijector = B.Chain([B.Shift(1.0), B.Scale(scale)])
+        transformed = D.TransformedDistribution(D.Normal(0.5, 0.7), bijector)
+        return transformed.cdf(values)
+
+    expected = stats.norm(0.0, 1.4).cdf(0.3)
+    assert_close(jax.jit(compute_cdf)(-2.0, 0.3), expected, rtol=1e-6)
+
+
+def test_truncated_normal_moments_accept_python_floats():
+    truncated = D.TruncatedNormal(0.5, 1.3, -1.0, 2.0)
+    reference = stats.truncnorm(-1.5 / 1.3, 1.5 / 1.3, 0.5, 1.3)
+    assert_moments(truncated, reference, MOMENTS)
+
+
+def test_truncated_normal_samples_the_upper_tail_in_single_precision():
+    f = lambda value: jp.asarray(value, jp.float32)
+    truncated = D.TruncatedNormal(f(0.0), f(1.0), f(6.0), f(9.0))
+    samples = truncated.sample(2000, seed=KEY)
+    expected_mean = stats.truncnorm(6.0, 9.0).mean()
+    assert jp.all((samples >= 6.0) & (samples <= 9.0))
+    assert jp.isclose(samples.mean(), expected_mean, atol=0.02)
+
+
+def test_exponential_has_no_mass_below_zero():
+    exponential = D.Exponential(1.7)
+    values = jp.array([-1.0, -0.1])
+    assert jp.array_equal(exponential.log_prob(values), jp.full(2, -jp.inf))
+    assert jp.array_equal(exponential.cdf(values), jp.zeros(2))
+    assert jp.array_equal(exponential.survival_function(values), jp.ones(2))
+    log_survival = exponential.log_survival_function(values)
+    assert jp.array_equal(log_survival, jp.zeros(2))
+    assert exponential.mode() == 0.0
+
+
+def test_beta_log_prob_on_the_boundary_with_unit_concentration():
+    f = lambda value: jp.asarray(value, jp.float64)
+    alpha, beta = f([1.0, 1.0, 2.0]), f([1.0, 2.0, 1.0])
+    values = f([0.0, 0.0, 1.0])
+    expected = stats.beta(alpha, beta).logpdf(values)
+    assert_close(D.Beta(alpha, beta).log_prob(values), expected)
+
+
+def test_categorical_log_prob_is_minus_infinity_out_of_range():
+    categorical = D.Categorical(logits=jp.zeros(3))
+    expected = jp.array([-jp.inf, -jp.log(3.0), -jp.log(3.0), -jp.inf])
+    assert_close(categorical.log_prob(jp.array([-1, 0, 2, 5])), expected)

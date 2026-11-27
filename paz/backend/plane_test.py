@@ -72,3 +72,22 @@ def test_weighted_least_squares_with_zero_weights(points_with_outliers):
     expected = paz.plane.fit_least_squares(points_with_outliers[selected])
     for value, expected_value in zip(weighted, expected):
         assert np.allclose(value, expected_value, atol=1e-5)
+
+
+@pytest.mark.parametrize("direction", [1.0, -1.0])
+def test_build_plane_to_world_handles_normal_along_world_up(direction):
+    world_up = jp.array([0.0, 1.0, 0.0])
+    position = jp.array([1.0, 2.0, 3.0])
+    args = (world_up, direction * world_up, position)
+    rotation, translation = paz.SE3.split(paz.plane.build_plane_to_world(*args))
+    assert jp.allclose(rotation @ rotation.T, jp.eye(3), atol=1e-6)
+    assert jp.allclose(rotation[:, 1], direction * world_up)
+    assert jp.allclose(translation, position)
+
+
+def test_fit_ground_plane_is_finite_for_a_level_floor(key):
+    scale = jp.array([1.0, 0.0, 1.0])
+    points = scale * jax.random.uniform(key, (300, 3), minval=-1, maxval=1)
+    normal, centroid, floor_to_world = paz.plane.fit_ground_plane(points)
+    assert jp.allclose(jp.abs(normal), jp.array([0.0, 1.0, 0.0]), atol=1e-3)
+    assert jp.all(jp.isfinite(floor_to_world))

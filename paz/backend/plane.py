@@ -148,6 +148,10 @@ def fit_laplace(pointcloud, state=None, optimizer=None, scale=0.01, steps=200):
 def build_plane_to_world(world_up, normal, position):
     y_axis = normal / jp.linalg.norm(normal)
     x_axis = jp.cross(world_up, y_axis)
+    # a level plane has its normal along world_up, which leaves no x axis
+    is_parallel = jp.linalg.norm(x_axis) < 1e-6
+    least_aligned_axis = jp.eye(3)[jp.argmin(jp.abs(y_axis))]
+    x_axis = jp.where(is_parallel, jp.cross(least_aligned_axis, y_axis), x_axis)
     x_axis = x_axis / jp.linalg.norm(x_axis)
     z_axis = jp.cross(y_axis, x_axis)
     rotation = jp.stack([x_axis, y_axis, z_axis], axis=1)

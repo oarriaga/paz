@@ -54,7 +54,7 @@ def climbs_gradient(updates, gradients):
     if gradients is None:
         is_uphill = jp.array(False)
     else:
-        is_uphill = optax.tree.vdot(gradients, updates) > 0.0
+        is_uphill = optax.tree_utils.tree_vdot(gradients, updates) > 0.0
     return is_uphill
 
 
