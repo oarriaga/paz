@@ -25,6 +25,7 @@ parser.add_argument("--ambient", default=0.1, type=float)
 parser.add_argument("--diffuse", default=0.9, type=float)
 parser.add_argument("--specular", default=0.5, type=float)
 parser.add_argument("--shininess", default=4.0, type=float)
+parser.add_argument("--draw_materials", action="store_true")
 args = parser.parse_args()
 os.environ["XLA_PYTHON_CLIENT_MEM_FRACTION"] = str(args.memory)
 
@@ -34,6 +35,8 @@ import optax
 import jax.numpy as jp
 import matplotlib.pyplot as plt
 import paz.utils.pytree as pytree
+import figures
+from draw_materials import write_material_figures
 
 
 def write_losses(losses, directory, filename):
@@ -225,6 +228,7 @@ def write_materials(material_variables, path):
         variable = variable._asdict()
         materials[material_type] = variable
     write_pytree_files(materials, path, "materials")
+    return materials
 
 
 key = jax.random.PRNGKey(args.seed)
@@ -303,7 +307,7 @@ for label_arg, label in enumerate(labels):
     shape = build_shape(material.variable, label)
     write_pytree_files(shape, shapes_directory, f"shape_{label_arg:03d}")
 
-write_materials(materials, root)
+material_properties = write_materials(materials, root)
 
 losses_directory = paz.directory.make(Path(root) / "losses")
 write_pytree_files(landscape_losses, losses_directory, "landscape_losses")
@@ -312,3 +316,10 @@ for material_type, losses in materials_losses.items():
     losses = jp.array(losses)
     write_pytree_files(losses, losses_directory, f"{material_type}_losses")
     write_losses(losses, losses_directory, f"{material_type}_losses.pdf")
+
+# Figures come last so a drawing failure cannot cost the outputs above.
+if args.draw_materials:
+    figures_directory = Path(paz.directory.make(Path(root) / "figures"))
+    figures.configure()
+    figure_args = (material_properties, figures_directory, 512, 3, 6)
+    write_material_figures(jax.random.key(args.seed), *figure_args)

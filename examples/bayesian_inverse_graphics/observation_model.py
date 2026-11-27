@@ -1,5 +1,7 @@
+import jax
 import jax.numpy as jp
 import paz
+from paz.graphics.mesh.silhouette import project_to_pixels
 
 
 def build_observation_model(render, floor):
@@ -218,17 +220,62 @@ def parse_summary(summary, statistic="mean"):
     }
 
 
-def estimate_point(summary, render, statistic="mean"):
-    """Render image from point estimate in MCMC summary.
+def parse_true_values(label):
+    dataset = paz.datasets.fsclvr
+    return {
+        "shift": dataset.parse_shift(label),
+        "theta": dataset.parse_theta(label),
+        "scale": dataset.parse_scale(label),
+        "color": dataset.parse_color(label),
+    }
 
-    Args:
-        summary: ArviZ summary object
-        render: Observation model function
-        statistic: String, which statistic to extract
 
-    Returns:
-        Tuple of (image, depth) arrays
-    """
-    sample = parse_summary(summary, statistic)
-    point_image, point_depth = render(sample)
-    return point_image, point_depth
+def sample_priors(key, priors, num_samples):
+    forward_samples, inverse_samples = {}, {}
+    for prior, subkey in zip(priors, jax.random.split(key, len(priors))):
+        key_0, key_1 = jax.random.split(subkey)
+        forward_samples[prior.name] = prior.sample(key_0, num_samples)
+        inverse = prior.sample_inverse(key_1, num_samples)
+        inverse_samples[prior.name] = inverse
+    return forward_samples, inverse_samples
+
+
+def build_display_model(image_shape, y_FOV, camera_pose, lights, floor):
+    """Renders samples with shadows at twice `image_shape`, then shrinks."""
+    H, W = image_shape
+    intrinsics = paz.graphics.camera.compute_intrinsics(y_FOV, 2 * H, 2 * W)
+    render_args = ((2 * H, 2 * W), intrinsics, camera_pose, lights, True)
+    pattern_image = fill_unseen_texels(floor.pattern.image)
+    floor = floor._replace(pattern=floor.pattern._replace(image=pattern_image))
+    model = build_observation_model(build_render_function(*render_args), floor)
+
+    def apply(sample):
+        image, _ = model(sample)
+        image = paz.image.resize(image, (H, W), "linear", True)
+        return jp.clip(image, 0.0, 1.0)
+
+    return apply
+
+
+def hide_shape(sample, camera_origin):
+    # A shape far behind the camera leaves only the floor in view.
+    x, _, z = camera_origin
+    return {**sample, "shift": 20.0 * jp.array([x, z])}
+
+
+def project_ground_points(shifts, image_shape, y_FOV, camera_pose):
+    intrinsics = paz.graphics.camera.compute_intrinsics(y_FOV, *image_shape)
+    x, z = shifts[:, 0], shifts[:, 1]
+    points = jp.stack([x, jp.zeros_like(x), z], axis=-1)
+    camera_points = paz.algebra.transform_points(camera_pose, points)
+    pixels, _ = project_to_pixels(camera_points, intrinsics)
+    return pixels
+
+
+def fill_unseen_texels(pattern_image):
+    # Texels that no training ray hit keep their zero initial value and
+    # show up as stripes at higher resolutions.
+    seen = jp.any(pattern_image != 0.0, axis=-1, keepdims=True)
+    blur = paz.lock(paz.image.apply_gaussian_blur, 9, 2.0)
+    weights = jp.maximum(blur(seen.astype(float)), 1e-6)
+    return jp.where(seen, pattern_image, blur(pattern_image) / weights)

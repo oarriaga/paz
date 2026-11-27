@@ -10,20 +10,16 @@ from pathlib import Path
 os.environ.setdefault("XLA_PYTHON_CLIENT_PREALLOCATE", "false")
 os.environ.setdefault("KERAS_BACKEND", "jax")
 
-import arviz as az
 import jax
 import jax.numpy as jp
 import numpy as np
+import pandas
 import keras
 
 import paz
-import paz.utils.plot as plot
+import figures
 import paz.utils.pytree as pytree
-from observation_model import (
-    build_observation_model,
-    build_render_function,
-    parse_summary,
-)
+from observation_model import build_observation_model, build_render_function
 
 
 NAME_ORDER = [
@@ -224,35 +220,40 @@ def build_trace(samples, burn_in):
     return trace
 
 
-def mode(values):
-    return az.plots.plot_utils.calculate_point_estimate("mode", values)
-
-
-def median(values):
-    return az.plots.plot_utils.calculate_point_estimate("median", values)
-
-
 def build_summary(trace):
-    variable_names = list(trace.keys())
-    return az.summary(
-        trace, var_names=variable_names, stat_funcs=[mode, median]
-    )
+    rows = {}
+    for name, values in trace.items():
+        values = values.reshape(values.shape[0] * values.shape[1], -1)
+        for arg, samples in enumerate(values.T):
+            is_scalar = values.shape[1] == 1
+            row_name = name if is_scalar else f"{name}[{arg}]"
+            rows[row_name] = summarize(samples)
+    return pandas.DataFrame.from_dict(rows, orient="index")
+
+
+def summarize(samples):
+    return {
+        "mean": samples.mean(),
+        "stdv": samples.std(),
+        "median": np.median(samples),
+        "mode": compute_mode(samples),
+    }
+
+
+def compute_mode(samples):
+    # A density cannot be estimated from samples that are all equal.
+    if np.ptp(samples) > 0.0:
+        grid, density = figures.compute_density(samples)
+        mode = grid[np.argmax(density)]
+    else:
+        mode = samples[0]
+    return mode
 
 
 def write_image(image, directory, filename):
     filepath = Path(directory) / filename
     image = paz.image.denormalize(jp.clip(image, 0.0, 1.0))
     paz.image.write(filepath, image)
-
-
-def write_true_pred_image(true_image, pred_image, directory, label):
-    image = jp.concatenate([true_image, pred_image], axis=1)
-    write_image(image, directory, f"true_pred_{label}_image.png")
-
-
-def write_error_image(true_image, pred_image, directory):
-    image = (true_image - pred_image) ** 2
-    write_image(image, directory, "error_image.png")
 
 
 def write_trace(trace, directory):
@@ -262,20 +263,6 @@ def write_trace(trace, directory):
 def write_summary(summary, directory):
     summary.to_csv(Path(directory) / "summary.csv")
     summary.to_latex(Path(directory) / "summary.tex")
-
-
-def estimate_point(summary, render, statistic):
-    sample = parse_summary(summary, statistic)
-    return render(sample)
-
-
-def iterate_samples(samples, num_samples):
-    if num_samples == 1:
-        yield samples._asdict()
-        return
-    sample_dict = samples._asdict()
-    for index in range(num_samples):
-        yield {name: value[index] for name, value in sample_dict.items()}
 
 
 def build_output_directory(root, dataset_name, label, concept, shot_arg):
@@ -307,7 +294,6 @@ parser.add_argument("--concept", default=0, type=int)
 parser.add_argument("--shot_arg", default=0, type=int)
 parser.add_argument("--tune_steps", default=500, type=int)
 parser.add_argument("--tune_episodes", default=5, type=int)
-parser.add_argument("--num_posterior_samples", default=100, type=int)
 parser.add_argument("--image_noise", default=1.0, type=float)
 parser.add_argument("--neuro_weight", default=0.05, type=float)
 parser.add_argument("--num_branches", default=3, type=int)
@@ -323,7 +309,8 @@ jax.config.update("jax_platform_name", args.device)
 keras.utils.set_random_seed(args.seed)
 
 key = jax.random.PRNGKey(args.seed)
-key_0, key_1, key_2 = jax.random.split(key, 3)
+# Three keys were split here before; keeping it preserves the chains.
+key_0, _, _ = jax.random.split(key, 3)
 
 root_path = Path(args.root) / args.dataset_name
 scene_pattern = root_path / args.scene_wildcard
@@ -335,11 +322,6 @@ scene_metadata, scene_directory = load_latest_parameters(
 )
 dataset_name = scene_metadata["dataset_name"]
 viewport_factor = scene_metadata["viewport_factor"]
-image_shape, camera_origin, y_FOV = (
-    None,
-    None,
-    None,
-)
 dataset_metadata = paz.datasets.fsclvr.parse_metadata(dataset_name)
 camera_origin = jp.array(dataset_metadata["camera_origin"])
 H, W = dataset_metadata["image_shape"]
@@ -363,7 +345,8 @@ render = build_render_function(
 )
 observation_model = build_observation_model(render, floor)
 
-invariances = paz.file.load_latest(features_pattern, args.features_filename)
+features_directory = paz.directory.find_latest(str(features_pattern))
+invariances = load_json(Path(features_directory) / args.features_filename)
 neuro_model = None
 if args.neuro_weight > 0.0 and args.num_branches > 0:
     weights = None if args.weights == "none" else args.weights
@@ -414,69 +397,16 @@ results = {
 root = build_output_directory(
     args.root, dataset_name, args.label, args.concept, args.shot_arg
 )
-paz.file.write_json(args.__dict__, Path(root) / "parameters.json")
+# Later renders and redraws need the exact inputs this run was fitted with.
+input_directories = (scene_directory, priors_directory, features_directory)
+input_names = ("scene_directory", "priors_directory", "features_directory")
+resolved = [str(Path(path).resolve()) for path in input_directories]
+inputs = dict(zip(input_names, resolved))
+paz.file.write_json({**args.__dict__, **inputs}, Path(root) / "parameters.json")
 paz.file.write_json(results, Path(root) / "results.json")
 
 trace_dict = build_trace(posterior.samples, args.burn_in)
-inference_data = az.from_dict(posterior=trace_dict)
-summary = build_summary(trace_dict)
-write_summary(summary, root)
 write_trace(trace_dict, root)
-
 write_image(image, root, "true_image.png")
-mean_image, _ = estimate_point(summary, observation_model, "mean")
-medn_image, _ = estimate_point(summary, observation_model, "median")
-write_image(mean_image, root, "mean_point.png")
-write_image(medn_image, root, "median_point.png")
-write_true_pred_image(image, mean_image, root, "mean")
-write_true_pred_image(image, medn_image, root, "median")
-write_error_image(image, mean_image, root)
-write_error_image(image, medn_image, root)
-write_image(mean_image, root, "mean_image.png")
-write_image(medn_image, root, "median_image.png")
-
-true_shift = paz.datasets.fsclvr.parse_shift(list(label.values())[0])
-
-figure, _ = plot.plot_trace(inference_data)
-plot.save(figure, Path(root) / "trace.pdf")
-figure, _ = plot.plot_shift_posterior(trace_dict, true_point=true_shift)
-plot.save(figure, Path(root) / "shift_posterior.pdf")
-figure, _ = plot.plot_theta_posterior(trace_dict["theta"])
-plot.save(figure, Path(root) / "theta_posterior.pdf")
-figure, _ = plot.plot_shift_posteriors(inference_data)
-plot.save(figure, Path(root) / "shift_posteriors.pdf")
-figure, _ = plot.plot_shift_x_posterior(trace_dict)
-plot.save(figure, Path(root) / "shift_x_posterior.pdf")
-figure, _ = plot.plot_shift_y_posterior(trace_dict)
-plot.save(figure, Path(root) / "shift_y_posterior.pdf")
-figure, _ = plot.plot_scale_posterior(inference_data)
-plot.save(figure, Path(root) / "scale_posterior.pdf")
-figure, _ = plot.plot_scale_x_posterior(trace_dict)
-plot.save(figure, Path(root) / "scale_x_posterior.pdf")
-figure, _ = plot.plot_scale_y_posterior(trace_dict)
-plot.save(figure, Path(root) / "scale_y_posterior.pdf")
-figure, _ = plot.plot_scale_z_posterior(trace_dict)
-plot.save(figure, Path(root) / "scale_z_posterior.pdf")
-figure, _ = plot.plot_color_posterior(inference_data)
-plot.save(figure, Path(root) / "color_posterior.pdf")
-figure, _ = plot.plot_ambient_posterior(inference_data)
-plot.save(figure, Path(root) / "ambient_posterior.pdf")
-figure, _ = plot.plot_diffuse_posterior(inference_data)
-plot.save(figure, Path(root) / "diffuse_posterior.pdf")
-figure, _ = plot.plot_specular_posterior(inference_data)
-plot.save(figure, Path(root) / "specular_posterior.pdf")
-figure, _ = plot.plot_shininess_posterior(inference_data)
-plot.save(figure, Path(root) / "shininess_posterior.pdf")
-figure, _ = plot.plot_classes_posterior(trace_dict)
-plot.save(figure, Path(root) / "classes_posterior.pdf")
-figure, _ = plot.plot_dirichlet_posterior(trace_dict)
-plot.save(figure, Path(root) / "dirichlet_posterior.pdf")
-
-posterior_directory = Path(root) / "posterior_samples"
-paz.directory.make(posterior_directory)
-forward_samples = posterior.sample(key_1, args.num_posterior_samples)
-iterator = iterate_samples(forward_samples, args.num_posterior_samples)
-for arg, sample in enumerate(iterator):
-    pred_image, _ = observation_model(sample)
-    filename = f"posterior_sample_{arg:02d}.png"
-    write_image(pred_image, posterior_directory, filename)
+paz.file.write_json(list(label.values())[0], Path(root) / "label.json")
+write_summary(build_summary(trace_dict), root)
