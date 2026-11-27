@@ -102,9 +102,16 @@ def test_mask_decoder_shapes():
     assert np.array(tokens).shape == (1, 4, 256)
 
 
+def jit_image_encoder(bundle):
+    # An eager call keeps every activation of the 1024x1024 encoder alive and
+    # needs more than 8 GB of memory; the jitted call stays near 2 GB.
+    encoder = bundle.image_encoder
+    return bundle._replace(image_encoder=jax.jit(lambda x: encoder(x)))
+
+
 @pytest.fixture(scope="module")
 def bundle():
-    return sam2_model.build(TINY)
+    return jit_image_encoder(sam2_model.build(TINY))
 
 
 def test_single_and_multimask_selection(bundle):
@@ -140,6 +147,6 @@ def test_window_partition_jit_cache_is_stable():
                     reason="set PAZ_SAM2_DOWNLOAD to fetch hosted weights")
 def test_pretrained_download_and_embed_shape():
     from paz.models import SAMHieraTiny21
-    bundle = SAMHieraTiny21()
+    bundle = jit_image_encoder(SAMHieraTiny21())
     state = predict.encode_image(bundle, np.zeros((64, 96, 3), np.uint8))
     assert np.array(state.features.image_embed).shape == (1, 64, 64, 256)

@@ -1,21 +1,11 @@
-import os
+import numpy as np
 import pytest
 
 torch = pytest.importorskip("torch")
 
-import numpy as np
-import keras
+from paz.models.foundation.dinov3 import port_dino_weights_from_torch_to_keras
 from paz.models.foundation.dinov3.models.vision_transformer import vit_small
-from torch_vision_transformer_for_testing import (
-    PT_vit_small,
-)
-from paz.models.foundation.dinov3.port_dino_weights_from_torch_to_keras import (
-    transfer_weights_from_pt_to_keras,
-)
-
-
-PT_WEIGHT_PATH = "/home/octavio/Storage/dinov3/dinov3_vits16_pretrain_lvd1689m-08c60483.pth"
-weights_exist = os.path.isfile(PT_WEIGHT_PATH)
+from torch_vision_transformer_for_testing import PT_vit_small
 
 MODEL_KWARGS = {
     "img_size": 224,
@@ -29,61 +19,57 @@ MODEL_KWARGS = {
 }
 
 
-@pytest.fixture(scope="module")
-def pytorch_model_and_weights():
-    if not weights_exist:
-        pytest.skip(f"PyTorch weight file not found: {PT_WEIGHT_PATH}")
+def build_random_reference():
+    torch.manual_seed(0)
+    reference = PT_vit_small(**MODEL_KWARGS)
+    reference.init_weights()
+    # The reference leaves the layer scales uninitialized; values near one
+    # make every block contribute to the compared output.
+    for name, parameter in reference.named_parameters():
+        if name.endswith("gamma"):
+            torch.nn.init.uniform_(parameter, 0.5, 1.0)
+    return reference.eval()
 
-    pt_model = PT_vit_small(**MODEL_KWARGS)
-    state_dict = torch.load(PT_WEIGHT_PATH, map_location=torch.device("cpu"))
-    pt_model.load_state_dict(state_dict, strict=False)
-    pt_model.eval()
 
-    return pt_model, state_dict
-
-
-@pytest.fixture(scope="module")
-def keras_model():
+def build_model():
     model = vit_small(**MODEL_KWARGS)
-    dummy_input = np.zeros((1, 224, 224, 3), dtype="float32")
-    model(dummy_input, training=False)
+    model(np.zeros((1, 224, 224, 3), "float32"), training=False)
     return model
 
 
-def test_ported_model_output_matches_pytorch(pytorch_model_and_weights, keras_model):
-    """Tests that after porting weights, model outputs match PyTorch."""
-    pt_model, state_dict = pytorch_model_and_weights
+def port_weights(state_dict, model):
+    porting = port_dino_weights_from_torch_to_keras
+    return porting.transfer_weights_from_pt_to_keras(state_dict, model)
 
-    transfer_weights_from_pt_to_keras(state_dict, keras_model)
 
-    np.random.seed(42)
-    dummy_input_np = np.random.randn(1, 224, 224, 3).astype("float32")
-    keras_input = keras.ops.convert_to_tensor(dummy_input_np)
-    pt_input = torch.from_numpy(dummy_input_np.transpose(0, 3, 1, 2))
-
-    keras_output = keras_model(keras_input, training=False)
+def assert_outputs_match(reference, model):
+    shape = (1, 224, 224, 3)
+    image = np.random.RandomState(42).randn(*shape).astype("float32")
     with torch.no_grad():
-        pt_output = pt_model(pt_input, is_training=False)
-
-    keras_output_np = keras.ops.convert_to_numpy(keras_output)
-    pt_output_np = pt_output.detach().cpu().numpy()
-
-    np.testing.assert_allclose(
-        keras_output_np,
-        pt_output_np,
-        rtol=1e-5,
-        atol=1e-5,
-        err_msg="Ported model outputs do not match PyTorch outputs"
-    )
+        expected = reference(torch.from_numpy(image.transpose(0, 3, 1, 2)))
+    output = np.array(model(image, training=False))
+    np.testing.assert_allclose(output, expected.numpy(), rtol=1e-5, atol=1e-5)
 
 
-def test_weight_count_matches(pytorch_model_and_weights, keras_model):
-    """Tests that the number of trainable parameters matches between PyTorch and Keras."""
-    pt_model, _ = pytorch_model_and_weights
+def test_ported_random_weights_match_reference():
+    reference = build_random_reference()
+    model = port_weights(reference.state_dict(), build_model())
+    assert_outputs_match(reference, model)
 
-    pt_params = sum(p.numel() for p in pt_model.parameters() if p.requires_grad)
-    keras_params = sum(np.prod(w.shape) for w in keras_model.trainable_weights)
 
-    tolerance = 0.01
-    assert abs(pt_params - keras_params) / pt_params < tolerance, \
-        f"Parameter count mismatch: PyTorch={pt_params}, Keras={keras_params}"
+def test_ported_pretrained_weights_match_reference(torch_weights_path):
+    filename = "dinov3_vits16_pretrain_lvd1689m-08c60483.pth"
+    path = torch_weights_path(filename)
+    state_dict = torch.load(path, map_location=torch.device("cpu"))
+    reference = PT_vit_small(**MODEL_KWARGS)
+    reference.load_state_dict(state_dict, strict=False)
+    model = port_weights(state_dict, build_model())
+    assert_outputs_match(reference.eval(), model)
+
+
+def test_trainable_parameter_count_matches_reference():
+    reference = PT_vit_small(**MODEL_KWARGS)
+    parameters = [p for p in reference.parameters() if p.requires_grad]
+    expected = sum(parameter.numel() for parameter in parameters)
+    weights = build_model().trainable_weights
+    assert sum(int(np.prod(weight.shape)) for weight in weights) == expected

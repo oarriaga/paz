@@ -1,5 +1,4 @@
 import os
-import sys
 import numpy as np
 import pytest
 
@@ -25,8 +24,6 @@ from torch_convnext_for_testing import (
 )
 
 
-DINO_REPO_PATH = ""
-PT_MODELS_WEIGHTS_DIR_PATH = "/home/octavio/Storage/dinov3/"
 KERAS_MODELS_WEIGHTS_DIR_PATH = os.path.expanduser("~/.keras/paz/models/")
 
 VIT_MODEL_WEIGHTS_PATHS = {
@@ -108,16 +105,12 @@ CONVNEXT_MODEL_CONFIGS = [
 ALL_MODEL_CONFIGS = VIT_MODEL_CONFIGS + CONVNEXT_MODEL_CONFIGS
 
 
-def get_PT_model(pt_constructor, pt_weight_path_key, model_kwargs):
+def get_PT_model(
+    pt_constructor, pt_weight_path_key, model_kwargs, torch_weights_path
+):
     """Instantiates a PyTorch model and loads its pre-trained weights."""
-    if DINO_REPO_PATH not in sys.path:
-        sys.path.insert(0, DINO_REPO_PATH)
-
-    pt_weight_path = os.path.join(
-        PT_MODELS_WEIGHTS_DIR_PATH, PT_MODEL_WEIGHTS_PATHS[pt_weight_path_key]
-    )
-    if not os.path.isfile(pt_weight_path):
-        pytest.skip(f"PyTorch weight file not found: {pt_weight_path}")
+    filename = PT_MODEL_WEIGHTS_PATHS[pt_weight_path_key]
+    pt_weight_path = torch_weights_path(filename)
 
     pt_model = pt_constructor(**model_kwargs)
     state_dict = torch.load(pt_weight_path, map_location=torch.device("cpu"))
@@ -159,10 +152,13 @@ def get_keras_model(keras_constructor, keras_weight_path_key, model_kwargs):
     "pt_constructor, keras_constructor, weight_key, model_kwargs", VIT_MODEL_CONFIGS
 )
 def test_final_VIT_output_equivalence(
-    pt_constructor, keras_constructor, weight_key, model_kwargs
+    pt_constructor, keras_constructor, weight_key, model_kwargs,
+    torch_weights_path
 ):
     print(f"\n--- Testing Final Output Equivalence: {weight_key} ---")
-    pt_model = get_PT_model(pt_constructor, weight_key, model_kwargs)
+    pt_model = get_PT_model(
+        pt_constructor, weight_key, model_kwargs, torch_weights_path
+    )
     keras_model = get_keras_model(keras_constructor, weight_key, model_kwargs)
 
     # --- Create Identical Inputs ---
@@ -208,10 +204,13 @@ def test_final_VIT_output_equivalence(
     CONVNEXT_MODEL_CONFIGS,
 )
 def test_final_CONVNEXT_output_equivalence(
-    pt_constructor, keras_constructor, weight_key, model_kwargs
+    pt_constructor, keras_constructor, weight_key, model_kwargs,
+    torch_weights_path
 ):
     print(f"\n--- Testing Final Output Equivalence: {weight_key} ---")
-    pt_model = get_PT_model(pt_constructor, weight_key, model_kwargs)
+    pt_model = get_PT_model(
+        pt_constructor, weight_key, model_kwargs, torch_weights_path
+    )
     keras_model = get_keras_model(keras_constructor, weight_key, model_kwargs)
 
     # --- Create Identical Inputs ---
@@ -264,10 +263,13 @@ def test_final_CONVNEXT_output_equivalence(
     "pt_constructor, keras_constructor, weight_key, model_kwargs", VIT_MODEL_CONFIGS
 )
 def test_deep_dive_VIT_block_equivalence(
-    pt_constructor, keras_constructor, weight_key, model_kwargs
+    pt_constructor, keras_constructor, weight_key, model_kwargs,
+    torch_weights_path
 ):
     print(f"\n--- Testing Deep-Dive Block Equivalence: {weight_key} ---")
-    pt_model = get_PT_model(pt_constructor, weight_key, model_kwargs)
+    pt_model = get_PT_model(
+        pt_constructor, weight_key, model_kwargs, torch_weights_path
+    )
     keras_model = get_keras_model(keras_constructor, weight_key, model_kwargs)
 
     any_failure = False
@@ -295,7 +297,7 @@ def test_deep_dive_VIT_block_equivalence(
             )
             print(f"       {e}")
             any_failure = True
-            print(f"       Correcting Keras tensor to continue analysis...")
+            print("       Correcting Keras tensor to continue analysis...")
             return keras.ops.convert_to_tensor(torch_np)
 
     for i in range(len(keras_model.blocks)):
@@ -379,10 +381,13 @@ def test_deep_dive_VIT_block_equivalence(
     CONVNEXT_MODEL_CONFIGS,
 )
 def test_deep_dive_convnext_block_equivalence(
-    pt_constructor, keras_constructor, weight_key, model_kwargs
+    pt_constructor, keras_constructor, weight_key, model_kwargs,
+    torch_weights_path
 ):
     print(f"\n--- Testing Deep-Dive Block Equivalence: {weight_key} ---")
-    pt_model = get_PT_model(pt_constructor, weight_key, model_kwargs)
+    pt_model = get_PT_model(
+        pt_constructor, weight_key, model_kwargs, torch_weights_path
+    )
     keras_model = get_keras_model(keras_constructor, weight_key, model_kwargs)
 
     any_failure = False
@@ -409,7 +414,7 @@ def test_deep_dive_convnext_block_equivalence(
             print(f"    ❌ FAILURE at {block_str} - {layer_name}: Output mismatch.")
             print(f"       {e}")
             any_failure = True
-            print(f"       Correcting Keras tensor to continue analysis...")
+            print("       Correcting Keras tensor to continue analysis...")
             return keras.ops.convert_to_tensor(torch_np)
 
     np.random.seed(42)
