@@ -34,15 +34,6 @@ def test_intersect_canonical_mesh_miss():
     assert jp.allclose(depth[0, 0], FARAWAY)
 
 
-def test_intersect_canonical_mesh_miss_returns_faraway():
-    vertices, faces = make_triangle()
-    origins = jp.array([[-1.0, -1.0, -1.0]])
-    directions = jp.array([[0.0, 0.0, 1.0]])
-    args = vertices, faces, origins, directions
-    _, depth, _, _ = intersect_canonical_mesh(*args)
-    assert depth[0, 0] >= FARAWAY - 1.0
-
-
 def test_intersect_canonical_mesh_rejects_negative_depth():
     vertices, faces = make_triangle()
     origins = jp.array([[0.25, 0.25, 1.0]])

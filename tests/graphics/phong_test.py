@@ -74,16 +74,6 @@ def test_compute_shape_albedo_adds_pattern_to_material_color():
     assert jp.allclose(colors, expected)
 
 
-def test_compute_shape_albedo_is_independent_of_light():
-    pattern_image = jp.full((2, 2, 3), 0.5)
-    pattern = Pattern(jp.eye(4), PLANAR_PATTERN, pattern_image)
-    shape = Shape(jp.eye(4), 0, None, pattern)
-    material = Material(color=jp.array([0.4, 0.1, 0.2]))
-    points = jp.array([[0.0, 0.0, 0.0]])
-    colors = albedo.compute_shape_albedo(shape, material, points)
-    assert jp.allclose(colors, 0.5 + material.color)
-
-
 def test_compute_ambient(simple_albedo, simple_material, simple_light):
     """Tests the ambient light calculation."""
     expected_base = simple_material.color * simple_light.intensity

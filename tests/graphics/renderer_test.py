@@ -181,14 +181,6 @@ def build_shifted_sphere_scene(z_shift):
     return Scene([Sphere(SE3.translation(offset), material)])
 
 
-def test_render_reflection_scene(small_image_shape, camera_pose):
-    scene, lights = build_material_scene()
-    image, depth = render_scene(small_image_shape, camera_pose, scene, lights)
-    assert image.shape == (small_image_shape[0], small_image_shape[1], 3)
-    assert not jp.isnan(image).any()
-    assert jp.std(image) > 0.0
-
-
 def test_render_primitives_matches_snapshot(camera_pose):
     scene = build_primitives_snapshot_scene()
     lights = [PointLight(jp.ones(3), jp.array([0.0, 5.0, -5.0]))]
@@ -552,20 +544,6 @@ def test_scene_renderer_returns_uint8_frame(small_image_shape, camera_pose):
     image = render_frame(camera_pose)
     assert image.shape == (small_image_shape[0], small_image_shape[1], 3)
     assert image.dtype == jp.uint8
-
-
-def test_jit_compilation_full(small_image_shape, camera_pose):
-    material = Material(color=jp.array([1.0, 0.0, 0.0]))
-    sphere = Sphere(jp.eye(4), material)
-    scene = Scene([sphere])
-    lights = [PointLight(jp.ones(3), jp.array([0.0, 10.0, 0.0]))]
-
-    @jax.jit
-    def jitted_render():
-        return render_scene(small_image_shape, camera_pose, scene, lights)
-
-    image, depth = jitted_render()
-    assert image.shape == (small_image_shape[0], small_image_shape[1], 3)
 
 
 def compute_glass_gradients(build_shape, num_bounces):

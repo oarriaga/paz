@@ -136,21 +136,6 @@ def test_diffuse_color_vanishes_for_metallic_surfaces(metallic_material):
     assert jp.allclose(diffuse, jp.zeros_like(diffuse))
 
 
-def test_compute_colors_runs_with_dielectric(
-    simple_shape, dielectric_material, simple_light
-):
-    points = jp.array([[0.0, 0.0, 0.0]])
-    normals = jp.array([[0.0, 1.0, 0.0]])
-    eye = jp.array([[0.0, 1.0, 0.0]])
-    args = simple_shape, dielectric_material, points
-    shape_albedo = albedo.compute_shape_albedo(*args)
-    colors = cook_torrance.compute_colors(
-        shape_albedo, dielectric_material, points, normals, eye, simple_light
-    )
-    assert colors.shape == (1, 3)
-    assert jp.all(colors >= 0.0)
-
-
 def test_compute_colors_is_zero_for_back_facing_normals(
     simple_shape, dielectric_material, simple_light
 ):

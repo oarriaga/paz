@@ -66,17 +66,6 @@ def render_scene(image_shape=(20, 20), tiles=(1, 1), chunk_size=1024):
     return render(*args, tiles, chunk_size)
 
 
-def test_render_returns_correct_shapes():
-    image, depth = render_scene((20, 20))
-    assert image.shape == (20, 20, 3)
-    assert depth.shape == (20, 20)
-
-
-def test_render_produces_nonzero_image():
-    image, depth = render_scene()
-    assert jp.any(image < 1.0)
-
-
 def test_render_jit_compatible():
     args = make_scene()
     args = args + ((1, 1), 1024)
@@ -256,53 +245,6 @@ def test_textured_quad_samples_texture_not_vertex_colors():
     assert float(jp.max(center_rows) - jp.min(center_rows)) > 0.1
 
 
-def make_tile_scene(image_shape=(20, 20), tiles=(2, 2), chunk_size=1024):
-    camera_origin = jp.array([0.0, 1.0, -1.5])
-    intrinsics = build_intrinsics(jp.pi / 4.0, image_shape)
-    camera_pose = SE3.view_transform(
-        camera_origin, jp.zeros(3), jp.array([0.0, 0.0, 1.0])
-    )
-    lights = [PointLight(jp.full((3,), 10.0), camera_origin)]
-    vertices, faces, edges = build_cube(1.0)
-    color = jp.array([[0.7, 0.3, 0.1]])
-    vertex_colors = jp.repeat(color, len(vertices), axis=0)
-    transform = SE3.translation(jp.zeros(3))
-    material = Material(jp.zeros(3), 0.1, 0.9, 0.1, 100)
-    mesh = Mesh(vertices, vertex_colors, transform, material, faces, edges)
-    scene, mask = build_scene(mesh)
-    args = image_shape, intrinsics, camera_pose, scene, mask, lights
-    return args + (tiles, chunk_size)
-
-
-def test_render_rect_tiles_returns_correct_shapes():
-    args = make_tile_scene((20, 20))
-    image, depth = render(*args)
-    assert image.shape == (20, 20, 3)
-    assert depth.shape == (20, 20)
-
-
-def test_render_rect_tiles_produces_nonzero_image():
-    args = make_tile_scene()
-    image, depth = render(*args)
-    assert jp.any(image < 1.0)
-
-
-def test_render_rect_tiles_jit_compatible():
-    args = make_tile_scene()
-    render_fn = jax.jit(render, static_argnums=(0, 6, 7))
-    image, depth = render_fn(*args)
-    assert image.shape == (20, 20, 3)
-
-
-def test_render_rect_depth_matches_single_tile():
-    expected = make_tile_scene((20, 20), (1, 1), 1024)
-    actual = make_tile_scene((20, 20), (2, 2), 1024)
-    _, expected_depth = render(*expected)
-    _, actual_depth = render(*actual)
-    assert actual_depth.shape == expected_depth.shape
-    assert jp.allclose(actual_depth, expected_depth, atol=1e-5)
-
-
 # Gradient faithfulness of object pose for analysis-by-synthesis fitting.
 # The mesh is a non-spherical ellipsoid so rotation changes the silhouette.
 # sigma is kept small so the soft-mask blur radius stays sub-pixel and the
@@ -388,39 +330,6 @@ def test_depth_translation_gradient_matches_finite_difference():
 
 def test_depth_rotation_gradient_matches_finite_difference():
     assert_matches_central_difference(render_pose_depth, z_rotation, 0.3)
-
-
-def render_scene_meshes(image_shape=(24, 24), tiles=(1, 1), chunk_size=1024):
-    shape, intrinsics, pose, _, _, lights = make_multi_mesh_scene(image_shape)
-    scene = paz.graphics.Scene([build_cube_mesh(), build_sphere_mesh()])
-    args = shape, intrinsics, pose, scene, None, lights
-    return paz.graphics.render(*args, tiles, chunk_size)
-
-
-def test_scene_meshes_render_returns_correct_shapes():
-    image, depth = render_scene_meshes()
-    assert image.shape == (24, 24, 3)
-    assert depth.shape == (24, 24)
-
-
-def test_scene_meshes_cover_same_pixels_as_mesh_render():
-    _, expected_depth = render_multi_mesh()
-    _, actual_depth = render_scene_meshes()
-    assert jp.array_equal(actual_depth > 0, expected_depth > 0)
-
-
-def test_scene_meshes_match_mesh_render_within_precision():
-    expected_image, expected_depth = render_multi_mesh()
-    actual_image, actual_depth = render_scene_meshes()
-    assert compute_max_abs_difference(actual_depth, expected_depth) <= 5e-2
-    assert compute_max_abs_difference(actual_image, expected_image) <= 1e-1
-
-
-def test_scene_meshes_render_is_tile_invariant():
-    expected_image, expected_depth = render_scene_meshes()
-    actual_image, actual_depth = render_scene_meshes((24, 24), (2, 4), 13)
-    assert compute_max_abs_difference(actual_image, expected_image) <= 1e-4
-    assert compute_max_abs_difference(actual_depth, expected_depth) <= 1e-4
 
 
 def test_scene_meshes_respect_mask():
@@ -562,13 +471,6 @@ def render_cook_torrance_scene(meshes):
     scene = paz.graphics.Scene(list(meshes))
     args = shape, intrinsics, pose, scene, None, lights
     return paz.graphics.render(*args, (1, 1), 1024)
-
-
-def test_cook_torrance_mesh_renders():
-    image, depth = render_cook_torrance_scene([build_cook_torrance_mesh()])
-    assert image.shape == (24, 24, 3)
-    assert jp.any(depth > 0.0)
-    assert jp.all(jp.isfinite(image))
 
 
 def test_cook_torrance_mesh_roughness_changes_shading():

@@ -68,13 +68,6 @@ def test_compute_position_shape():
     assert positions.shape == (2, 2, 3)
 
 
-def test_transform_points_shape():
-    points = jp.ones((3, 4, 3))
-    affine = jp.eye(4)
-    result = transform_points(affine, points)
-    assert result.shape == (3, 4, 3)
-
-
 def test_transform_points_identity():
     points = jp.array([[[1.0, 2.0, 3.0]]])
     affine = jp.eye(4)

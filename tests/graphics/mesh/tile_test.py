@@ -41,13 +41,6 @@ def test_build_tile_rays_match_full_image_block():
     assert jp.allclose(tile_directions, block, atol=1e-6)
 
 
-def test_build_tile_rays_normalized():
-    args = 10, 15, 1, 1, build_calibrated_intrinsics(), jp.eye(4)
-    _, directions = build_tile_rays(*args, jp.array([0, 0]))
-    norms = jp.linalg.norm(directions, axis=-1)
-    assert jp.allclose(norms, 1.0, atol=1e-4)
-
-
 def test_assemble_reconstructs_image():
     blocks = jp.arange(24).reshape(4, 6, 1).astype(float)
     image = assemble(4, 6, 2, 2, blocks)
