@@ -86,6 +86,7 @@ def _infer_mh(
     sample_args = (key_sample, log_density_fn, positions, sigma)
     sample_args = sample_args + (total_samples, num_chains, show_sampling)
     states, infos = mh_sample(*sample_args, callbacks)
+    jax.effects_barrier()
     if reports:
         progressbar.newline()
     if num_warmup > 0:
