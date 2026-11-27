@@ -169,106 +169,9 @@ def generate_sample_boxes_and_priors():
 
 
 @pytest.fixture
-def box_data():
-    """Basic test data for boxes in corner form with labels."""
-    boxes = jp.array([[10, 20, 60, 90], [30, 40, 100, 120]])
-    boxes_with_labels = jp.hstack([boxes, jp.ones((2, 1))])
-    return boxes_with_labels
-
-
-@pytest.fixture
-def prior_data():
-    """Prior boxes in center form [center_x, center_y, width, height]."""
-    return jp.array([[35, 55, 50, 70], [65, 80, 70, 80]])
-
-
-@pytest.fixture
 def default_variances():
     """Default variance values for encoding/decoding."""
     return [0.1, 0.1, 0.2, 0.2]
-
-
-@pytest.fixture
-def alternate_variances():
-    """Alternative variance values for testing."""
-    return [0.2, 0.3, 0.4, 0.5]
-
-
-@pytest.fixture
-def box_centers(box_data):
-    """Boxes converted to center form."""
-    return paz.boxes.to_center_form(box_data[:, :4])
-
-
-@pytest.fixture
-def encoded_boxes(box_data, prior_data, default_variances):
-    """Encoded boxes using default variances."""
-    return encode(box_data, prior_data, default_variances)
-
-
-@pytest.fixture
-def expected_encoding_values(box_centers, prior_data, default_variances):
-    """Expected encoding values for the first box."""
-    epsilon = 1e-8
-
-    exp_cx_diff = (
-        (box_centers[0, 0] - prior_data[0, 0])
-        / prior_data[0, 2]
-        / default_variances[0]
-    )
-    exp_cy_diff = (
-        (box_centers[0, 1] - prior_data[0, 1])
-        / prior_data[0, 3]
-        / default_variances[1]
-    )
-    exp_w = (
-        jp.log(box_centers[0, 2] / prior_data[0, 2] + epsilon)
-        / default_variances[2]
-    )
-    exp_h = (
-        jp.log(box_centers[0, 3] / prior_data[0, 3] + epsilon)
-        / default_variances[3]
-    )
-
-    return {
-        "cx_diff": exp_cx_diff,
-        "cy_diff": exp_cy_diff,
-        "width": exp_w,
-        "height": exp_h,
-    }
-
-
-@pytest.fixture
-def single_prediction():
-    """A single prediction for decode testing."""
-    return jp.array([[0.1, 0.2, 0.3, 0.4, 1.0]])
-
-
-@pytest.fixture
-def single_prior():
-    """A single prior for decode testing."""
-    return jp.array([[50, 60, 30, 40]])
-
-
-@pytest.fixture
-def expected_decoded_center(single_prediction, single_prior, default_variances):
-    """Expected center-format box after decoding."""
-    cx = (
-        single_prediction[0, 0] * single_prior[0, 2] * default_variances[0]
-        + single_prior[0, 0]
-    )
-    cy = (
-        single_prediction[0, 1] * single_prior[0, 3] * default_variances[1]
-        + single_prior[0, 1]
-    )
-    w = single_prior[0, 2] * jp.exp(
-        single_prediction[0, 2] * default_variances[2]
-    )
-    h = single_prior[0, 3] * jp.exp(
-        single_prediction[0, 3] * default_variances[3]
-    )
-
-    return jp.array([[cx, cy, w, h]])
 
 
 @pytest.fixture
@@ -299,40 +202,6 @@ def large_test_data():
     priors = jp.hstack([priors_center, priors_size])
 
     return boxes, priors
-
-
-@pytest.fixture
-def expected_encoding_with_alternate_variances(
-    box_centers, prior_data, alternate_variances
-):
-    """Expected encoding values for the first box using alternate variances."""
-    epsilon = 1e-8
-
-    exp_cx_diff = (
-        (box_centers[0, 0] - prior_data[0, 0])
-        / prior_data[0, 2]
-        / alternate_variances[0]
-    )
-    exp_cy_diff = (
-        (box_centers[0, 1] - prior_data[0, 1])
-        / prior_data[0, 3]
-        / alternate_variances[1]
-    )
-    exp_w = (
-        jp.log(box_centers[0, 2] / prior_data[0, 2] + epsilon)
-        / alternate_variances[2]
-    )
-    exp_h = (
-        jp.log(box_centers[0, 3] / prior_data[0, 3] + epsilon)
-        / alternate_variances[3]
-    )
-
-    return {
-        "cx_diff": exp_cx_diff,
-        "cy_diff": exp_cy_diff,
-        "width": exp_w,
-        "height": exp_h,
-    }
 
 
 def test_decode_basic(generate_sample_boxes_and_priors):
@@ -574,18 +443,11 @@ def test_encode_with_large_offset_from_prior():
     assert jp.allclose(decoded, far_box)
 
 
-@pytest.mark.skip(reason="to corner form changed implementation")
-def test_decode_with_zero_predictions():
-    """Test decoding when predictions are all zeros."""
-    zero_pred = jp.zeros((2, 5))
-    zero_pred = zero_pred.at[:, 4].set(jp.array([1, 2]))
-
+def test_decode_with_zero_predictions_returns_priors_in_corner_form():
+    predictions = jp.zeros((2, 5)).at[:, 4].set(jp.array([1, 2]))
     priors = jp.array([[50, 50, 20, 20], [100, 100, 30, 30]])
-
-    decoded = decode(zero_pred, priors)
-
-    expected = jp.hstack([to_corner_form(priors), zero_pred[:, 4:5]])
-
+    decoded = decode(predictions, priors)
+    expected = jp.array([[40, 40, 60, 60, 1], [85, 85, 115, 115, 2]])
     assert jp.allclose(decoded, expected)
 
 
@@ -627,46 +489,30 @@ def test_with_multiple_additional_attributes():
     assert jp.allclose(decoded[:, 4:], boxes[:, 4:])
 
 
-def test_encode_basic(encoded_boxes, expected_encoding_values):
-    """Test basic encoding functionality."""
-    assert jp.allclose(encoded_boxes[0, 0], expected_encoding_values["cx_diff"])
-    assert jp.allclose(encoded_boxes[0, 1], expected_encoding_values["cy_diff"])
-    assert jp.allclose(encoded_boxes[0, 2], expected_encoding_values["width"])
-    assert jp.allclose(encoded_boxes[0, 3], expected_encoding_values["height"])
-    assert jp.allclose(encoded_boxes[0, 4], 1.0)
+def test_encode_matches_hand_computed_offsets():
+    """Box center (10, 30) with size (20, 40) against a (10, 20) prior."""
+    matched = jp.array([[0.0, 10.0, 20.0, 50.0, 1.0]])
+    priors = jp.array([[20.0, 20.0, 10.0, 20.0]])
+    encoded = encode(matched, priors, [0.1, 0.1, 0.2, 0.2])
+    expected = jp.array([[-10.0, 5.0, 3.465736, 3.465736, 1.0]])
+    assert jp.allclose(encoded, expected, atol=1e-5)
 
 
-def test_encode_with_different_variances(
-    box_data,
-    prior_data,
-    alternate_variances,
-    expected_encoding_with_alternate_variances,
-):
-    """Test encoding with different variance values."""
-    encoded = encode(box_data, prior_data, alternate_variances)
-
-    assert jp.allclose(
-        encoded[0, 0], expected_encoding_with_alternate_variances["cx_diff"]
-    )
-    assert jp.allclose(
-        encoded[0, 1], expected_encoding_with_alternate_variances["cy_diff"]
-    )
-    assert jp.allclose(
-        encoded[0, 2], expected_encoding_with_alternate_variances["width"]
-    )
-    assert jp.allclose(
-        encoded[0, 3], expected_encoding_with_alternate_variances["height"]
-    )
+def test_encode_divides_each_offset_by_its_variance():
+    matched = jp.array([[0.0, 10.0, 20.0, 50.0, 1.0]])
+    priors = jp.array([[20.0, 20.0, 10.0, 20.0]])
+    encoded = encode(matched, priors, [0.2, 0.3, 0.4, 0.5])
+    expected = jp.array([[-5.0, 1.666667, 1.732868, 1.386294, 1.0]])
+    assert jp.allclose(encoded, expected, atol=1e-5)
 
 
-@pytest.mark.skip(reason="to corner form changed implementation")
-def test_decode_helpers(
-    single_prediction, single_prior, default_variances, expected_decoded_center
-):
-    """Test the individual decode helper functions."""
-    result = decode(single_prediction, single_prior, default_variances)
-    expected_corner = to_corner_form(expected_decoded_center)
-    assert jp.allclose(result[:, :4], expected_corner)
+def test_decode_matches_hand_computed_box():
+    """Center (50.3, 60.8) with size (30 e^0.06, 40 e^0.08)."""
+    predictions = jp.array([[0.1, 0.2, 0.3, 0.4, 1.0]])
+    priors = jp.array([[50.0, 60.0, 30.0, 40.0]])
+    decoded = decode(predictions, priors, [0.1, 0.1, 0.2, 0.2])
+    expected = jp.array([[34.37245, 39.134254, 66.22755, 82.465744, 1.0]])
+    assert jp.allclose(decoded, expected, atol=1e-4)
 
 
 def test_encode_decode_1000_boxes(large_test_data, default_variances):
@@ -682,70 +528,22 @@ def test_encode_decode_1000_boxes(large_test_data, default_variances):
     ), "Bounding box coordinates not recovered within tolerance"
 
 
-def test_match_with_repeated_boxes():
-    """
-    Tests that paz.backend.detection.match behaves differently when
-    ground truth boxes are repeated (as with edge padding).
-    """
-    # Priors in center form: [center_x, center_y, width, height]
-    # We define four prior boxes.
+def test_match_ignores_repeated_boxes():
+    """Edge padding repeats the last box; matches must not change."""
     prior_boxes = jp.array(
         [
-            [0.15, 0.15, 0.1, 0.1],  # High IOU with the first ground truth box
-            [0.35, 0.35, 0.1, 0.1],  # Low IOU with all ground truth boxes
-            [0.55, 0.55, 0.1, 0.1],  # High IOU with the second ground truth box
-            [0.95, 0.95, 0.1, 0.1],  # No overlap with any ground truth box
+            [0.15, 0.15, 0.1, 0.1],
+            [0.35, 0.35, 0.1, 0.1],
+            [0.55, 0.55, 0.1, 0.1],
+            [0.95, 0.95, 0.1, 0.1],
         ]
     )
-
-    # Ground truth boxes in corner form: [x_min, y_min, x_max, y_max, class_id]
-    # We start with two distinct ground truth boxes.
-    boxes_with_class_arg = jp.array(
-        [
-            [0.1, 0.1, 0.2, 0.2, 1],
-            [0.5, 0.5, 0.6, 0.6, 2],
-        ]
-    )
-
-    # Simulate edge padding by repeating the last ground truth box.
-    # This increases the number of ground truth boxes to match against.
-    padded_boxes_with_class_arg = jp.array(
-        [
-            [0.1, 0.1, 0.2, 0.2, 1],
-            [0.5, 0.5, 0.6, 0.6, 2],
-            [0.5, 0.5, 0.6, 0.6, 2],  # Repeated box
-        ]
-    )
-
-    # 1. Match with the original (unpadded) ground truth boxes
-    unpadded_matched = paz.detection.match(
-        boxes_with_class_arg, prior_boxes, IOU_threshold=0.5
-    )
-
-    # 2. Match with the padded ground truth boxes
-    padded_matched = paz.detection.match(
-        padded_boxes_with_class_arg, prior_boxes, IOU_threshold=0.5
-    )
-
-    # 3. Assert that the results are different
-    # The `match` function ensures that every ground truth box is matched to at
-    # least # one prior. When a box is repeated, it forces an additional match,
-    # which should change the output.
-    assert jp.allclose(
-        unpadded_matched, padded_matched
-    ), "Matched output should be different when ground truth boxes are repeated"
-
-    # We can also verify that the number of positive matches (non-background)
-    # is different. A positive match has a class_id > 0.
-    unpadded_positives = jp.sum(unpadded_matched[:, -1] > 0)
-    padded_positives = jp.sum(padded_matched[:, -1] > 0)
-
-    print(f"Number of positive matches (unpadded): {unpadded_positives}")
-    print(f"Number of positive matches (padded): {padded_positives}")
-
-    assert (
-        unpadded_positives == padded_positives
-    ), "The number of positive matches should be different."
+    boxes = jp.array([[0.1, 0.1, 0.2, 0.2, 1], [0.5, 0.5, 0.6, 0.6, 2]])
+    repeated_boxes = jp.concatenate([boxes, boxes[-1:]])
+    matched = paz.detection.match(boxes, prior_boxes, 0.5)
+    repeated_matched = paz.detection.match(repeated_boxes, prior_boxes, 0.5)
+    assert jp.allclose(matched[:, 4], jp.array([1, 0, 2, 0]))
+    assert jp.allclose(matched, repeated_matched)
 
 
 def test_padded_boxes_do_not_overwrite_positive_matches():
@@ -870,24 +668,6 @@ def test_clip_keeps_edge_box_but_drops_padding():
 def padded_detections():
     boxes = jp.array([[0.3, 0.3, 0.5, 0.7, 5.0], [0.0, 0.0, 0.05, 0.05, 2.0]])
     return paz.detection.pad(boxes, 8, "constant", -1)
-
-
-def test_place_in_canvas_identity():
-    image = jax.random.randint(jax.random.PRNGKey(0), (32, 32, 3), 0, 256)
-    scale, translation = jp.array([1.0, 1.0]), jp.array([0.0, 0.0])
-    same = paz.image.place_in_canvas(image, (32, 32), scale, translation,
-                                     jp.zeros(3))
-    assert jp.allclose(same, image.astype(jp.float32), atol=1e-4)
-
-
-def test_place_in_canvas_fills_uncovered():
-    image = jp.full((32, 32, 3), 200.0)
-    scale, translation = jp.array([0.5, 0.5]), jp.array([0.0, 0.0])
-    fill = jp.array([10.0, 20.0, 30.0])
-    args = image, (32, 32), scale, translation, fill
-    canvas = paz.image.place_in_canvas(*args)
-    assert jp.allclose(canvas[-1, -1], fill, atol=1e-4)
-    assert jp.allclose(canvas[0, 0], jp.full(3, 200.0), atol=1e-4)
 
 
 def test_random_expand_identity_when_probability_zero():

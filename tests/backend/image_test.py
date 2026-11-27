@@ -9,15 +9,6 @@ import jax.numpy as jp
 import paz
 
 
-def legacy_forward_differences(image):
-    H, W, C = image.shape
-    dy = image[1:, :, :] - image[:-1, :, :]
-    dx = image[:, 1:, :] - image[:, :-1, :]
-    dy = jp.concatenate([dy, jp.zeros((1, W, C))], axis=0)
-    dx = jp.concatenate([dx, jp.zeros((H, 1, C))], axis=1)
-    return dy, dx
-
-
 def test_write_accepts_path_object():
     image = jp.full((4, 4, 3), 128, dtype=jp.uint8)
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -32,7 +23,7 @@ def test_load_accepts_path_object():
         filepath = Path(tmpdir) / "image.png"
         paz.image.write(str(filepath), image)
         loaded = paz.image.load(filepath)
-        assert loaded.shape == image.shape
+        assert np.array_equal(loaded, image)
 
 
 def test_decode_JPEG_recovers_encoded_image():
@@ -42,23 +33,20 @@ def test_decode_JPEG_recovers_encoded_image():
     assert jp.abs(decoded.astype(int) - image.astype(int)).max() <= 3
 
 
-def test_forward_differences_matches_example_formula():
+def test_forward_differences_pads_last_row_and_column_with_zeros():
     image = jp.array([[[1.0], [2.0]], [[4.0], [8.0]]])
     dy, dx = paz.image.forward_differences(image)
-    expected_dy, expected_dx = legacy_forward_differences(image)
-    assert jp.allclose(dy, expected_dy)
-    assert jp.allclose(dx, expected_dx)
-    assert jp.allclose(dy[-1], jp.zeros_like(dy[-1]))
-    assert jp.allclose(dx[:, -1], jp.zeros_like(dx[:, -1]))
+    assert jp.allclose(dy, jp.array([[[3.0], [6.0]], [[0.0], [0.0]]]))
+    assert jp.allclose(dx, jp.array([[[1.0], [0.0]], [[4.0], [0.0]]]))
 
 
 def test_forward_differences_batches_images():
     image = jp.array([[[1.0], [2.0]], [[4.0], [8.0]]])
     batch = jp.stack((image, image * 2.0))
     dy, dx = paz.image.forward_differences(batch)
-    expected = jax.vmap(legacy_forward_differences)(batch)
-    assert jp.allclose(dy, expected[0])
-    assert jp.allclose(dx, expected[1])
+    expected_dy, expected_dx = paz.image.forward_differences(image)
+    assert jp.allclose(dy, jp.stack((expected_dy, expected_dy * 2.0)))
+    assert jp.allclose(dx, jp.stack((expected_dx, expected_dx * 2.0)))
 
 
 def test_make_random_plain_image_is_uniform_color():
@@ -85,12 +73,16 @@ def test_randomize_rendered_image_jits_without_recompilation():
     assert randomize._cache_size() == 1
 
 
-def test_random_photometric_stays_in_uint8_range():
+def test_random_photometric_changes_image_and_keeps_uint8():
     key = jax.random.PRNGKey(1)
     image = jax.random.randint(key, (64, 64, 3), 0, 256).astype(jp.uint8)
-    out = paz.image.random_photometric(jax.random.PRNGKey(2), image)
-    assert out.dtype == jp.uint8
-    assert int(out.min()) >= 0 and int(out.max()) <= 255
+    changed = [image]
+    for seed in range(4):
+        key = jax.random.PRNGKey(seed)
+        changed.append(paz.image.random_photometric(key, image))
+    assert all(output.dtype == jp.uint8 for output in changed)
+    assert all(output.shape == image.shape for output in changed)
+    assert any(not np.array_equal(output, image) for output in changed)
 
 
 def test_scale_with_aspect_ratio_returns_scaled_image():
@@ -124,3 +116,21 @@ def test_random_blur_keeps_shape_of_2D_image():
         assert output.shape == image.shape
         is_blurred = np.array_equal(output, blurred)
         assert is_blurred or np.array_equal(output, image)
+
+
+def test_place_in_canvas_identity():
+    image = jax.random.randint(jax.random.PRNGKey(0), (32, 32, 3), 0, 256)
+    scale, translation = jp.array([1.0, 1.0]), jp.array([0.0, 0.0])
+    args = image, (32, 32), scale, translation, jp.zeros(3)
+    same = paz.image.place_in_canvas(*args)
+    assert jp.allclose(same, image.astype(jp.float32), atol=1e-4)
+
+
+def test_place_in_canvas_fills_uncovered():
+    image = jp.full((32, 32, 3), 200.0)
+    scale, translation = jp.array([0.5, 0.5]), jp.array([0.0, 0.0])
+    fill = jp.array([10.0, 20.0, 30.0])
+    args = image, (32, 32), scale, translation, fill
+    canvas = paz.image.place_in_canvas(*args)
+    assert jp.allclose(canvas[-1, -1], fill, atol=1e-4)
+    assert jp.allclose(canvas[0, 0], jp.full(3, 200.0), atol=1e-4)
