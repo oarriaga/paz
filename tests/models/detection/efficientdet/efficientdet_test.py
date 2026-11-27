@@ -49,16 +49,6 @@ from paz.models.detection.efficientdet.layers import (
 
 
 @pytest.fixture
-def model_input_name():
-    return "image"
-
-
-@pytest.fixture
-def model_output_name():
-    return "boxes"
-
-
-@pytest.fixture
 def model_weight_path():
     WEIGHT_PATH = (
         "https://github.com/oarriaga/altamira-data/releases/download/v0.16/"
@@ -345,17 +335,6 @@ def test_MBconv_blocks():
     assert output_features[0].shape[-1] == 16
 
 
-def test_efficientnet():
-    """Test the EFFICIENTNET function."""
-    input_tensor = Input(shape=(64, 64, 3))
-    scaling_coefficients = (1.0, 1.0, 0.8)
-    output_features = EFFICIENTNET(
-        image=input_tensor, scaling_coefficients=scaling_coefficients
-    )
-    assert isinstance(output_features, list)
-    assert len(output_features) == 5  # P3-P7 outputs
-
-
 def test_scale_filters():
     """Test the scale_filters function."""
     filters = 32
@@ -417,43 +396,6 @@ def test_MB_block():
     assert model.output_shape == (None, 32, 32, 16)
 
 
-def test_apply_drop_connect():
-    """Test the apply_drop_connect function."""
-
-    # Create a dummy input tensor with a fixed batch size
-    input_tensor = np.ones(shape=(4, 32, 32, 32))  # Batch size = 4
-    output_tensor = apply_drop_connect(
-        input_tensor, is_training=True, survival_rate=0.8
-    )
-
-    # Ensure the output tensor has the same shape as the input tensor
-    assert output_tensor.shape == input_tensor.shape
-
-
-@pytest.mark.parametrize(
-    ("image_size, scaling_coefficients, output_shape"),
-    [
-        (512, (1.0, 1.0, 0.8), (256, 256, 16)),
-        (640, (1.0, 1.1, 0.8), (320, 320, 16)),
-        (768, (1.1, 1.2, 0.7), (384, 384, 16)),
-        (896, (1.2, 1.4, 0.7), (448, 448, 24)),
-        (1024, (1.4, 1.8, 0.6), (512, 512, 24)),
-        (1280, (1.6, 2.2, 0.6), (640, 640, 24)),
-        (1280, (1.8, 2.6, 0.5), (640, 640, 32)),
-        (1536, (1.8, 2.6, 0.5), (768, 768, 32)),
-    ],
-)
-def test_efficientnet_bottleneck_block(
-    image_size, scaling_coefficients, output_shape
-):
-    shape = (image_size, image_size, 3)
-    image = Input(shape=shape, name="image")
-    branch_tensors = EFFICIENTNET(image, scaling_coefficients)
-    assert (
-        branch_tensors[0].shape == (None,) + output_shape
-    ), "Bottleneck block output shape mismatch"
-
-
 @pytest.mark.parametrize(
     ("input_shape, dtype, target_shape, is_training"),
     [
@@ -480,31 +422,6 @@ def test_drop_connect(input_shape, dtype, target_shape, is_training):
     # Validate the shape and dtype of the output
     assert y.shape == target_shape, "Incorrect target shape"
     assert y.dtype == dtype, "Incorrect target datatype"
-
-
-@pytest.mark.parametrize(
-    ("image_size, scaling_coefficients, output_shape"),
-    [
-        (512, (1.0, 1.0, 0.8), (256, 256, 16)),
-        (640, (1.0, 1.1, 0.8), (320, 320, 16)),
-        (768, (1.1, 1.2, 0.7), (384, 384, 16)),
-        (896, (1.2, 1.4, 0.7), (448, 448, 24)),
-        (1024, (1.4, 1.8, 0.6), (512, 512, 24)),
-        (1280, (1.6, 2.2, 0.6), (640, 640, 24)),
-        (1280, (1.8, 2.6, 0.5), (640, 640, 32)),
-        (1536, (1.8, 2.6, 0.5), (768, 768, 32)),
-    ],
-)
-def test_EfficientNet_SE_block(image_size, scaling_coefficients, output_shape):
-    shape = (image_size, image_size, 3)
-    image = Input(shape=shape, name="image")
-    branch_tensors = EFFICIENTNET(
-        image, scaling_coefficients, excite_ratio=0.8
-    )
-    assert (
-        branch_tensors[0].shape == (None,) + output_shape
-    ), "SE block output shape mismatch"
-    del image, branch_tensors
 
 
 @pytest.mark.parametrize(

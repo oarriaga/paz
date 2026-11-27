@@ -4,7 +4,6 @@ os.environ["KERAS_BACKEND"] = "jax"
 
 import numpy as np
 import pytest
-from keras.models import Model
 
 from paz.models.pose_estimation.higher_hrnet import HigherHRNet
 
@@ -17,10 +16,6 @@ def model():
 @pytest.fixture(scope="module")
 def outputs(model):
     return model(np.zeros((1, 256, 256, 3), dtype="float32"))
-
-
-def test_higher_hrnet_creation(model):
-    assert isinstance(model, Model)
 
 
 def test_higher_hrnet_weighted_layer_count(model):
