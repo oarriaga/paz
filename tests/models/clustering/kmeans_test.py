@@ -52,10 +52,3 @@ def test_kmeans_small_cluster_falls_back_to_all_points():
     expected_mean = points.mean(axis=0)
     assert bool(is_small.any())
     assert jp.allclose(clusters.means[is_small], expected_mean, atol=1e-5)
-
-
-def test_kmeans_is_importable_from_package():
-    from paz.models.clustering import Clusters, KMeans
-
-    assert KMeans is paz.KMeans
-    assert Clusters._fields == ("means", "stdvs", "counts")

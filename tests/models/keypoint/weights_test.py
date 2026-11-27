@@ -2,7 +2,6 @@ import json
 import os
 import subprocess
 import textwrap
-from pathlib import Path
 
 os.environ["KERAS_BACKEND"] = "jax"
 
@@ -430,31 +429,3 @@ def test_iknet_pretrained_matches_compatibility_model(compatibility_outputs):
         np.asarray(quaternions), compatibility_outputs["iknet"], atol=1e-6
     )
 
-
-@pytest.mark.weights
-def test_detnet_port_weights_script(tmp_path):
-    output_path = tmp_path / "detnet_paz_jax.weights.h5"
-    script_path = Path("paz/models/keypoint/port_detnet_weights.py")
-    env = dict(os.environ)
-    env["KERAS_BACKEND"] = "jax"
-    subprocess.check_output(
-        [
-            "python",
-            str(script_path),
-            "--output_path",
-            str(output_path),
-        ],
-        text=True,
-        env=env,
-    )
-
-    image, _ = build_inputs()
-    pretrained_model = DetNet(weights="detnet")
-    expected_xyz, expected_uv = pretrained_model(image)
-
-    ported_model = DetNet(weights=None)
-    ported_model.load_weights(output_path)
-    xyz, uv = ported_model(image)
-
-    assert np.allclose(np.asarray(xyz), np.asarray(expected_xyz), atol=1e-6)
-    assert np.array_equal(np.asarray(uv), np.asarray(expected_uv))

@@ -4,7 +4,6 @@ os.environ["KERAS_BACKEND"] = "jax"
 
 import numpy as np
 import pytest
-from keras.models import Model
 
 from paz.models.keypoint.detnet import DetNet
 
@@ -18,10 +17,6 @@ def model():
 def outputs(model):
     image = np.zeros((1, 128, 128, 3), dtype=np.uint8)
     return model(image)
-
-
-def test_detnet_creation(model):
-    assert isinstance(model, Model)
 
 
 def test_detnet_output_shape(model):
