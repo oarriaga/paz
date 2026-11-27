@@ -1,115 +1,56 @@
 import pytest
-from keras.models import Model
+from paz.models.detection.single_shot_detector import build_prior_boxes
 from paz.models.detection.single_shot_detector.ssd512 import SSD512
 
 
-@pytest.mark.weights
-def test_model_creation():
-    """Test if SSD512 model is created successfully."""
-    num_classes = 81
-    input_shape = (512, 512, 3)
-    model = SSD512(num_classes=num_classes, input_shape=input_shape)
-    output_shape = model.outputs[0].shape
-
-    # Check if the returned object is a Keras Model
-    assert isinstance(model, Model)
-
-    # Check if the model has a single concatenated output
-    assert len(model.outputs) == 1  # Single output tensor
-
-    # Check the shape of the output tensor: classification + localization
-    assert output_shape[-1] == num_classes + 4
-    assert output_shape[1] > 0  # Total number of boxes
+def test_untrained_model_predicts_one_row_per_prior_box():
+    model = SSD512(num_classes=81, base_weights=None, head_weights=None)
+    num_boxes = len(build_prior_boxes("COCO"))
+    assert num_boxes == 24564
+    assert model.output_shape == (None, num_boxes, 4 + 81)
 
 
 def test_invalid_base_weights():
-    """Test invalid base weights."""
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="base_weights"):
         SSD512(base_weights="INVALID")
 
 
 def test_invalid_head_weights():
-    """Test invalid head weights."""
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="head_weights"):
         SSD512(head_weights="INVALID")
 
 
 def test_incompatible_num_classes_with_weights():
-    """Test incompatible num_classes with pre-trained weights."""
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="num_classes"):
         SSD512(num_classes=10, head_weights="COCO")
 
 
 @pytest.mark.weights
-def test_SSD512_COCO_COCO():
-    """Test SSD512 with COCO-COCO weights."""
-    try:
-        SSD512(num_classes=81, base_weights="COCO", head_weights="COCO")
-    except ValueError as valuerror:
-        pytest.fail(f"SSD COCO-COCO loading failed: {valuerror}")
+@pytest.mark.parametrize(
+    "num_classes, base_weights, head_weights",
+    [
+        (81, "COCO", "COCO"),
+        (2, "OIV6Hand", "OIV6Hand"),
+        (22, "COCO", "YCBVideo"),
+        (2, "COCO", "OIV6Hand"),
+    ],
+)
+def test_pretrained_weights_load(num_classes, base_weights, head_weights):
+    model = SSD512(num_classes, base_weights, head_weights)
+    assert model.output_shape == (None, 24564, 4 + num_classes)
 
 
-@pytest.mark.weights
-def test_SSD512_OIV6Hand_OIV6Hand():
-    """Test SSD512 with OIV6Hand-OIV6Hand weights."""
-    try:
-        SSD512(num_classes=2, base_weights="OIV6Hand", head_weights="OIV6Hand")
-    except ValueError as valuerror:
-        pytest.fail(f"SSD OIV6Hand-OIV6Hand loading failed: {valuerror}")
-
-
-@pytest.mark.weights
-def test_SSD512_YCBVideo_COCO():
-    """Test SSD512 with YCBVideo-COCO weights."""
-    try:
-        SSD512(num_classes=22, base_weights="COCO", head_weights="YCBVideo")
-    except ValueError as valuerror:
-        pytest.fail(f"SSD YCBVideo-COCO loading failed: {valuerror}")
-
-
-@pytest.mark.weights
-def test_SSD512_OIV6Hand_COCO():
-    """Test SSD512 with OIV6Hand-COCO weights."""
-    try:
-        SSD512(num_classes=2, base_weights="COCO", head_weights="OIV6Hand")
-    except ValueError as valuerror:
-        pytest.fail(f"SSD OIV6Hand-COCO loading failed: {valuerror}")
-
-
-def test_SSD512_YCBVideo_OIV6Hand():
-    """Test SSD512 with YCBVideo-OIV6Hand weights."""
+@pytest.mark.parametrize(
+    "num_classes, base_weights, head_weights",
+    [
+        (22, "OIV6Hand", "YCBVideo"),
+        (2, "OIV6Hand", None),
+        (81, "OIV6Hand", "COCO"),
+        (81, None, "COCO"),
+        (2, None, "OIV6Hand"),
+        (22, None, "YCBVideo"),
+    ],
+)
+def test_unsupported_weights_raise(num_classes, base_weights, head_weights):
     with pytest.raises(NotImplementedError):
-        SSD512(
-            num_classes=22, base_weights="OIV6Hand", head_weights="YCBVideo"
-        )
-
-
-def test_SSD512_None_OIV6Hand():
-    """Test SSD512 with None-OIV6Hand weights."""
-    with pytest.raises(NotImplementedError):
-        SSD512(num_classes=2, base_weights="OIV6Hand", head_weights=None)
-
-
-def test_SSD512_COCO_OIV6Hand():
-    """Test SSD512 with None-OIV6Hand weights."""
-    with pytest.raises(NotImplementedError):
-        SSD512(num_classes=81, base_weights="OIV6Hand", head_weights="COCO")
-
-
-def test_SSD512_COCO_None():
-    """Test SSD512 with None-OIV6Hand weights."""
-    with pytest.raises(NotImplementedError):
-        SSD512(num_classes=81, base_weights=None, head_weights="COCO")
-
-
-def test_SSD512_OIV6Hand_None():
-    """Test SSD512 with None-OIV6Hand weights."""
-    with pytest.raises(NotImplementedError):
-        SSD512(num_classes=2, base_weights=None, head_weights="OIV6Hand")
-
-
-def test_SSD512_YCBVideo_None():
-    """Test SSD512 with None-OIV6Hand weights."""
-    with pytest.raises(NotImplementedError):
-        SSD512(num_classes=22, base_weights=None, head_weights="YCBVideo")
-
+        SSD512(num_classes, base_weights, head_weights)
