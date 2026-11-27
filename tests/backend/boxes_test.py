@@ -75,7 +75,7 @@ def test_compute_generalized_IOUs_self_intersection(boxes_A):
     assert jp.allclose(1.0, jp.diag(IOUs))
 
 
-def test_compute_generalized_IOUs_match_IOUs_when_nested(boxes_A):
+def test_compute_generalized_IOUs_match_IOUs_when_nested():
     """A box inside another shares its hull, so both measures agree."""
     inner = jp.array([[10.0, 10.0, 20.0, 20.0]])
     outer = jp.array([[0.0, 0.0, 40.0, 40.0]])
@@ -106,50 +106,22 @@ def test_to_corner_form(boxes_D_corner_form, boxes_D_center_form):
     assert jp.allclose(boxes_D_corner_form, values)
 
 
-@pytest.mark.skip(reason="changed implementation")
-def test_to_one_hot():
-    class_indices = jp.array([1, 3])
-    one_hot = to_one_hot(class_indices, 4)
-    expected = jp.array([[0, 1, 0, 0], [0, 0, 0, 1]])
-    assert jp.allclose(one_hot, expected)
+def test_square_extends_the_shorter_side_around_the_center():
+    boxes = jp.array([[0, 0, 4, 2]])
+    expected = jp.array([[0, -1, 4, 3]])
+    assert jp.array_equal(paz.boxes.square(boxes), expected)
 
 
-@pytest.mark.skip(reason="changed implementation")
-def test_make_box_square():
-    box = (0, 0, 4, 2)
-    square_box = paz.boxes.square(jp.array(box))
-    # Expected to adjust y coordinates to match width
-    expected = (0, -1, 4, 3)
-    assert jp.array_equal(square_box, jp.array(expected))
+def test_clip_limits_boxes_to_the_last_pixel():
+    boxes = jp.array([[-10, -5, 150, 200]])
+    expected = jp.array([[0, 0, 119, 99]])
+    assert jp.array_equal(paz.boxes.clip(boxes, 100, 120), expected)
 
 
-@pytest.mark.skip(reason="changed implementation")
-def test_offset():
-    coords = (10, 20, 30, 40)
-    offset_scales = (0.1, 0.1)
-    new_coords = offset(coords, offset_scales)
-    # x offset is (30-10)*0.1 = 2, y offset is (40-20)*0.1 = 2
-    # x_min -2, x_max +2; y_min -2, y_max +2
-    expected = (8, 18, 32, 42)
-    assert jp.array_equal(new_coords, jp.array(expected))
-
-
-@pytest.mark.skip(reason="changed implementation")
-def test_clip():
-    coords = (-10, -5, 150, 200)
-    image_shape = (100, 100)
-    clipped = clip(coords, image_shape)
-    expected = (0, 0, 100, 100)
-    assert jp.array_equal(clipped, jp.array(expected))
-
-
-@pytest.mark.skip(reason="changed implementation")
-def test_denormalize_box():
-    box = jp.array([0.5, 0.5, 1.0, 1.0])
-    image_shape = (100, 200)
-    denorm_box = denormalize_box(box, image_shape)
-    expected = (100, 50, 200, 100)
-    assert jp.array_equal(denorm_box, jp.array(expected))
+def test_denormalize_scales_x_by_width_and_y_by_height():
+    boxes = jp.array([[0.5, 0.5, 1.0, 1.0]])
+    expected = jp.array([[100, 50, 200, 100]])
+    assert jp.array_equal(paz.boxes.denormalize(boxes, 100, 200), expected)
 
 
 def test_flip_left_right():
@@ -160,13 +132,10 @@ def test_flip_left_right():
     assert jp.allclose(flipped, expected)
 
 
-@pytest.mark.skip(reason="changed implementation")
-def test_coordinate_conversions():
-    image = jp.zeros((100, 200, 3))
-    boxes = jp.array([[0.5, 0.5, 1.0, 1.0]])
-    image_boxes = to_image_coordinates(boxes, image)
-    normalized_boxes = to_normalized_coordinates(image_boxes, image)
-    assert jp.allclose(normalized_boxes, boxes, atol=1e-4)
+def test_normalize_inverts_denormalize():
+    boxes = jp.array([[0.5, 0.25, 1.0, 0.75]])
+    image_boxes = paz.boxes.denormalize(boxes, 100, 200)
+    assert jp.allclose(paz.boxes.normalize(image_boxes, 100, 200), boxes)
 
 
 def test_pad_when_boxes_are_smaller():

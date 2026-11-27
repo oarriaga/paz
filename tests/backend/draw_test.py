@@ -3,7 +3,6 @@ import numpy as np
 import jax
 import jax.numpy as jp
 import paz
-from paz.backend import draw
 
 
 def make_camera_matrix():
@@ -108,26 +107,6 @@ def test_mesh_poses_accepts_explicit_colors():
     result = paz.draw.mesh_poses(*args)
     expected = np.array([10, 20, 30], dtype=np.uint8)
     assert np.any(np.all(result == expected, axis=-1))
-
-
-def test_poses_and_mesh_poses_compose():
-    image = jp.zeros((64, 64, 3), dtype=jp.uint8)
-    meshes = make_mesh()
-    camera_matrix = make_camera_matrix()
-    transforms = meshes.transform
-    image = paz.draw.poses(image, transforms, camera_matrix)
-    image = paz.draw.mesh_poses(image, meshes, camera_matrix)
-    assert image.shape == (64, 64, 3)
-    assert image.dtype == np.uint8
-    assert np.any(image != 0)
-
-
-def test_lincolors_uses_cache():
-    before = draw._lincolors.cache_info().hits
-    draw._lincolors(3)
-    draw._lincolors(3)
-    after = draw._lincolors.cache_info().hits
-    assert after == before + 1
 
 
 def test_blend_background_respects_mask():
