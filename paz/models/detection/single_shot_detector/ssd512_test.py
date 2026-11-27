@@ -1,15 +1,9 @@
-import os
 import pytest
 from keras.models import Model
 from paz.models.detection.single_shot_detector.ssd512 import SSD512
 
 
-def skip_if_missing(filename):
-    path = os.path.expanduser("~/.keras/paz/models/" + filename)
-    return pytest.mark.skipif(not os.path.exists(path), reason="not cached")
-
-
-@skip_if_missing("SSD512_COCO-COCO_weights.hdf5")
+@pytest.mark.weights
 def test_model_creation():
     """Test if SSD512 model is created successfully."""
     num_classes = 81
@@ -46,7 +40,7 @@ def test_incompatible_num_classes_with_weights():
         SSD512(num_classes=10, head_weights="COCO")
 
 
-@skip_if_missing("SSD512_COCO-COCO_weights.hdf5")
+@pytest.mark.weights
 def test_SSD512_COCO_COCO():
     """Test SSD512 with COCO-COCO weights."""
     try:
@@ -55,7 +49,7 @@ def test_SSD512_COCO_COCO():
         pytest.fail(f"SSD COCO-COCO loading failed: {valuerror}")
 
 
-@skip_if_missing("SSD512_OIV6Hand-OIV6Hand_weights.hdf5")
+@pytest.mark.weights
 def test_SSD512_OIV6Hand_OIV6Hand():
     """Test SSD512 with OIV6Hand-OIV6Hand weights."""
     try:
@@ -64,7 +58,7 @@ def test_SSD512_OIV6Hand_OIV6Hand():
         pytest.fail(f"SSD OIV6Hand-OIV6Hand loading failed: {valuerror}")
 
 
-@skip_if_missing("SSD512_COCO-YCBVideo_weights.hdf5")
+@pytest.mark.weights
 def test_SSD512_YCBVideo_COCO():
     """Test SSD512 with YCBVideo-COCO weights."""
     try:
@@ -73,7 +67,7 @@ def test_SSD512_YCBVideo_COCO():
         pytest.fail(f"SSD YCBVideo-COCO loading failed: {valuerror}")
 
 
-@skip_if_missing("SSD512_COCO-OIV6Hand_weights.hdf5")
+@pytest.mark.weights
 def test_SSD512_OIV6Hand_COCO():
     """Test SSD512 with OIV6Hand-COCO weights."""
     try:

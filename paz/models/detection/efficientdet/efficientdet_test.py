@@ -209,6 +209,7 @@ def count_params(weights):
     return int(sum(np.prod(p) for p in standardized_weight_shapes))
 
 
+@pytest.mark.weights
 @pytest.mark.parametrize(
     (
         "model, model_name, trainable_parameters,"
@@ -1133,6 +1134,7 @@ def test_fuse_feature():
     assert np.allclose(output_sum, expected_sum)
 
 
+@pytest.mark.weights
 @pytest.mark.parametrize(
     ("model, image_size"),
     [
@@ -1160,6 +1162,7 @@ def test_EfficientDet_output(model, image_size):
     del detector
 
 
+@pytest.mark.weights
 @pytest.mark.parametrize(
     ("model, model_name"),
     [
@@ -1198,6 +1201,7 @@ def test_load_weights(model, model_name, model_weight_path):
         del detector
 
 
+@pytest.mark.weights
 @pytest.mark.parametrize(
     ("model, aspect_ratios, num_boxes"),
     [
@@ -1252,18 +1256,17 @@ def get_first_kernel(model, layer_type):
     return np.array(layers[0].weights[0])
 
 
+@pytest.mark.weights
 def test_EFFICIENTDETD0_COCO_None_loads_base_weights():
     filename = "efficientdet-d0-COCO-None_weights.hdf5"
     path = os.path.expanduser("~/.keras/paz/models/" + filename)
-    if not os.path.exists(path):
-        pytest.skip("weights not cached")
+    untrained = EFFICIENTDETD0(5, None, None)
+    model = EFFICIENTDETD0(5, "COCO", None)
     stem = "efficientnet-b0/stem/conv2d"
     node = "fpn_cells/cell_0/fnode0/op_after_combine5/conv"
     with h5py.File(path) as file:
         stem_kernel = file[stem][stem + "/kernel:0"][()]
         node_kernel = file[node][node + "/depthwise_kernel:0"][()]
-    untrained = EFFICIENTDETD0(5, None, None)
-    model = EFFICIENTDETD0(5, "COCO", None)
     assert model.output_shape == (None, 49104, 9)
     assert np.allclose(get_first_kernel(model, Conv2D), stem_kernel)
     assert np.allclose(get_first_kernel(model, SeparableConv2D), node_kernel)

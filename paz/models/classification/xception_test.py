@@ -1,14 +1,8 @@
-import os
-
 import jax
 import jax.numpy as jp
 import pytest
 import paz
 from paz.models.classification.xception import MiniXception
-
-MODELS = os.path.expanduser("~/.keras/paz/models")
-FER_WEIGHTS = os.path.join(MODELS, "fer2013_mini_XCEPTION.hdf5")
-IMDB_WEIGHTS = os.path.join(MODELS, "imdb_mini_XCEPTION_paz_jax.weights.h5")
 
 
 def get_layer_types(model):
@@ -36,7 +30,7 @@ def test_unknown_preprocess_raises():
         MiniXception((48, 48, 1), 7, preprocess="normalize")
 
 
-@pytest.mark.skipif(not os.path.exists(FER_WEIGHTS), reason="not cached")
+@pytest.mark.weights
 def test_MiniXceptionFER_loads_released_weights():
     # scores recorded on a constant 0.5 image before the stem was moved
     expected = jp.array([0.13431, 0.25521, 0.32726])
@@ -46,7 +40,7 @@ def test_MiniXceptionFER_loads_released_weights():
     assert jp.allclose(scores[0, [0, 3, 6]], expected, atol=1e-4)
 
 
-@pytest.mark.skipif(not os.path.exists(IMDB_WEIGHTS), reason="not cached")
+@pytest.mark.weights
 def test_MiniXceptionIMDB_loads_released_weights():
     model = paz.models.MiniXceptionIMDB()
     scores = jax.jit(model)(jp.full((1, 64, 64, 1), 0.5))
