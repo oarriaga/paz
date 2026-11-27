@@ -1,15 +1,13 @@
-import os
 import pytest
 
 torch = pytest.importorskip("torch")
 
 import numpy as np
 import jax
-import keras
 from keras import ops
 
 from paz.models.foundation.dinov3.layers.rms_norm import RMSNorm
-from paz.models.foundation.dinov3.layers.torch_layers_for_testing import PT_RMSNorm
+from torch_layers_for_testing import PT_RMSNorm
 
 
 @pytest.fixture
@@ -125,49 +123,3 @@ def test_nan_propagation(params):
 
     assert np.isnan(output_keras[0, 5])
     assert np.isnan(output_torch[0, 5])
-
-
-DINO_REPO_PATH = ""  # Not needed
-DINO_WEIGHT_PATH = "/path/that/does/not/exist/dinov3_vits16_pretrain.pth"
-dinov3_files_exist = os.path.isfile(DINO_WEIGHT_PATH)
-
-
-@pytest.mark.skipif(
-    not dinov3_files_exist, reason="DINOv3 local model/weight files not found."
-)
-def test_dinov3_real_pretrained_weights(params):
-    """
-    Tests equivalence by loading ACTUAL pre-trained weights from a DINOv3
-    model file and comparing outputs.
-    """
-    # 1. Load the pre-trained DINOv3 model from local source
-    dinov3_model = torch.hub.load(
-        DINO_REPO_PATH, "dinov3_vits16", source="local", weights=DINO_WEIGHT_PATH
-    )
-    dinov3_model.eval()
-
-    # 2. Extract the real LayerNorm layer and its parameters
-    torch_pretrained_norm = dinov3_model.blocks[0].norm1
-    dino_dim = torch_pretrained_norm.weight.shape[0]
-    dino_eps = torch_pretrained_norm.eps
-
-    # 3. Use the built-in Keras LayerNormalization layer
-    keras_model = keras.layers.LayerNormalization(
-        epsilon=dino_eps,
-        # Ensure parameter names match for weight loading
-        gamma_initializer="ones",
-        beta_initializer="zeros",
-    )
-
-    # 4. Create matching random input data
-    shape = (params["batch_size"], params["seq_len"], dino_dim)
-    input_np = np.random.rand(*shape).astype("float32")
-
-    # 5. Build Keras layer and port the pre-trained weights
-    keras_model.build(input_np.shape)
-    pretrained_weight = torch_pretrained_norm.weight.detach().cpu().numpy()
-    pretrained_bias = torch_pretrained_norm.bias.detach().cpu().numpy()
-    keras_model.set_weights([pretrained_weight, pretrained_bias])
-
-    # 6. Run forward pass and compare outputs
-    run_and_compare(keras_model, torch_pretrained_norm, input_np, atol=1e-5)

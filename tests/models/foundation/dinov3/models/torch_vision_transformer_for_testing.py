@@ -4,7 +4,7 @@ from functools import partial
 from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Union
 from torch import Tensor, nn
 from paz.models.foundation.dinov3.utils import named_apply
-from paz.models.foundation.dinov3.layers.torch_layers_for_testing import (
+from torch_layers_for_testing import (
     PT_LayerScale,
     PT_Mlp,
     PT_PatchEmbed,

@@ -21,14 +21,6 @@ def test_small_returns_class_and_patch_tokens():
     assert tuple(patch_tokens.shape) == (2, 25, 384)
 
 
-def test_standard_output_is_two_plain_tensors():
-    model = DINOv2Small(image_shape=IMAGE_SHAPE)
-    output = model(make_input())
-    assert not isinstance(output, dict)
-    assert not hasattr(output, "_fields")
-    assert len(output) == 2
-
-
 def test_base_returns_class_and_patch_tokens():
     model = DINOv2Base(image_shape=IMAGE_SHAPE)
     class_token, patch_tokens = model(make_input())

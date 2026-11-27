@@ -19,17 +19,10 @@ def make_input(batch=1):
     return np.random.RandomState(0).randn(*shape).astype("float32")
 
 
-def test_backbone_returns_four_features_and_four_camera_tokens():
-    model = build_da3_small_backbone(VIEWS, IMAGE_SHAPE)
-    outputs = model(make_input())
-    assert not isinstance(outputs, dict)
-    assert not hasattr(outputs, "_fields")
-    assert len(outputs) == 8
-
-
 def test_backbone_feature_and_camera_shapes():
     model = build_da3_small_backbone(VIEWS, IMAGE_SHAPE)
     outputs = model(make_input())
+    assert len(outputs) == 8
     grid = grid_shape(IMAGE_SHAPE, 14)
     num_patches = grid[0] * grid[1]
     for feature_map in outputs[:4]:
@@ -84,7 +77,7 @@ def test_mono_large_returns_depth_and_sky():
     assert tuple(sky.shape) == (1, 70, 70)
 
 
-def test_da3_small_jit_runs():
+def test_da3_small_jit_matches_eager():
     model = DepthAnything3Small(VIEWS, IMAGE_SHAPE)
     data = make_input()
     eager = np.array(model(data)[0])

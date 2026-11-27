@@ -1,4 +1,3 @@
-import os
 import pytest
 
 torch = pytest.importorskip("torch")
@@ -9,7 +8,7 @@ from paz.models.foundation.dinov3.layers.rope_position_encoding import (
     RopePositionEmbedding,
 )
 
-from paz.models.foundation.dinov3.layers.torch_layers_for_testing import (
+from torch_layers_for_testing import (
     PT_RopePositionEmbedding,
 )
 
@@ -140,44 +139,3 @@ def test_training_augmentations_are_different(params):
     assert not np.allclose(cos_eval_torch.numpy(), cos_train_torch.numpy())
     assert sin_train_keras.shape == sin_eval_keras.shape
     assert cos_train_keras.shape == cos_eval_keras.shape
-
-
-DINO_REPO_PATH = ""  # Not needed
-DINO_WEIGHT_PATH = "/path/that/does/not/exist/dinov3_vits16_pretrain.pth"
-dinov3_files_exist = os.path.isfile(DINO_WEIGHT_PATH)
-
-
-@pytest.mark.skipif(
-    not dinov3_files_exist, reason="DINOv3 local model/weight files not found."
-)
-def test_dinov3_real_pretrained_weights(params):
-    dinov3_model = torch.hub.load(
-        DINO_REPO_PATH, "dinov3_vits16", source="local", weights=DINO_WEIGHT_PATH
-    )
-    dinov3_model.eval()
-    torch_pretrained_rope = dinov3_model.rope_embed
-    dino_embed_dim = dinov3_model.embed_dim
-    dino_num_heads = dinov3_model.blocks[0].attn.num_heads
-    keras_model = RopePositionEmbedding(
-        embed_dim=dino_embed_dim,
-        num_heads=dino_num_heads,
-        base=torch_pretrained_rope.base,
-        min_period=torch_pretrained_rope.min_period,
-        max_period=torch_pretrained_rope.max_period,
-        normalize_coords=torch_pretrained_rope.normalize_coords,
-        shift_coords=torch_pretrained_rope.shift_coords,
-        jitter_coords=torch_pretrained_rope.jitter_coords,
-        rescale_coords=torch_pretrained_rope.rescale_coords,
-        dtype="float32",
-    )
-    keras_model.build(input_shape=None)
-    torch_periods_np = torch_pretrained_rope.periods.cpu().numpy()
-    keras_model.set_weights([torch_periods_np])
-    run_and_compare(
-        keras_model,
-        torch_pretrained_rope,
-        H=params["H"],
-        W=params["W"],
-        training=False,
-        atol=1e-5,
-    )

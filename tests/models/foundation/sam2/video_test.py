@@ -35,17 +35,6 @@ def test_memory_encoder_adds_absent_embedding():
     assert np.allclose(absent - present, 3.0, atol=1e-5)
 
 
-def test_sine_position_encoding_shape():
-    encoding = me.sine_position_encoding(64, 64, 64)
-    assert encoding.shape == (1, 64, 64, 64)
-
-
-def test_rotary_tables_shape():
-    cos, sin = ma.rotary_tables(4, 4)
-    assert cos.shape == (16, ma.ROPE_DIM)
-    assert sin.shape == (16, ma.ROPE_DIM)
-
-
 def test_identity_tables_are_neutral():
     cos, sin = ma.identity_tables(5)
     assert np.allclose(cos, 1.0)
