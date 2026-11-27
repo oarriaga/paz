@@ -108,7 +108,7 @@ def test_fork_leaves(fork, fork_leaves):
     assert fork.leaves() == fork_leaves
 
 
-@pytest.mark.skip(reason="Collider test not implemented yet")
+@pytest.mark.xfail(strict=True, reason="add_edge allows two parents")
 def test_no_colliders():
     tree = Tree(["a", "b", "c"])
     tree.add_edge("a", "c")

@@ -46,13 +46,16 @@ def test_discretize_peak_at_center():
     assert int(jp.argmax(probs)) == 15
 
 
-def test_indices_to_values_accepts_samples():
+def test_indices_to_values_maps_samples_onto_the_grid():
     key = jax.random.PRNGKey(0)
     distribution = paz.distributions.Normal(loc=0.0, scale=1.0)
     categorical = discretize(distribution, -1.0, 1.0, 11)
     indices = categorical.sample(5, seed=key)
     values = indices_to_values(indices, -1.0, 1.0, 11)
+    grid = get_grid_values(-1.0, 1.0, 11)
+    distances = jp.abs(values[:, None] - grid[None, :])
     assert values.shape == (5,)
+    assert jp.allclose(distances.min(axis=1), 0.0, atol=1e-6)
 
 
 def test_discretize_log_normal_has_finite_probs():

@@ -122,11 +122,13 @@ def test_bijector_roundtrip():
         paz.bijectors.Invert(paz.bijectors.Scale(3.0)),
         paz.bijectors.Chain(affine),
     ]
+    value = jp.array([0.3, -0.2])
     for bijector in cases:
         arrays = {}
         spec = _serialize_bijector(bijector, arrays, "b")
         restored = _deserialize_bijector(spec, arrays)
         assert isinstance(restored, type(bijector))
+        assert jp.allclose(restored(value), bijector(value))
 
 
 def test_serialize_deserialize_density_distribution():
@@ -134,7 +136,9 @@ def test_serialize_deserialize_density_distribution():
     dist = paz.distributions.MultivariateNormalDiag(jp.zeros(2), jp.ones(2))
     spec = _serialize_distribution(_DummyDensity(dist), arrays)
     restored = _deserialize_distribution(spec, arrays)
+    value = jp.array([0.1, 0.2])
     assert isinstance(restored, paz.distributions.MultivariateNormalDiag)
+    assert jp.allclose(restored.log_prob(value), dist.log_prob(value))
 
 
 def test_serialize_deserialize_full_covariance_density():
@@ -200,7 +204,9 @@ def test_serialize_deserialize_gmm_distribution():
     dist = paz.distributions.MixtureSameFamily(mixture, components)
     spec = _serialize_distribution(_DummyDensity(dist), arrays)
     restored = _deserialize_distribution(spec, arrays)
+    value = jp.array([0.1, 0.2])
     assert isinstance(restored, paz.distributions.MixtureSameFamily)
+    assert jp.allclose(restored.log_prob(value), dist.log_prob(value))
 
 
 def test_serialize_deserialize_distribution_obj_roundtrip():

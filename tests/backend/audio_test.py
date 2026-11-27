@@ -29,11 +29,12 @@ def test_to_mono_keeps_single_channel():
     np.testing.assert_allclose(to_mono(waveform), waveform)
 
 
-def test_resample_changes_length_by_ratio():
-    waveform = np.zeros(16000, dtype="float32")
+def test_resample_halves_a_constant_waveform():
+    waveform = np.ones(16000, dtype="float32")
     result = resample(waveform, 16000, 8000)
     assert result.dtype == np.float32
-    assert result.shape[0] == 8000
+    assert result.shape == (8000,)
+    np.testing.assert_allclose(result[100:-100], 1.0, atol=1e-3)
 
 
 def test_resample_keeps_rate_when_equal():
@@ -42,9 +43,10 @@ def test_resample_keeps_rate_when_equal():
     np.testing.assert_allclose(result, waveform)
 
 
-def test_log_mel_spectrogram_has_mel_channels():
+def test_log_mel_spectrogram_of_silence_is_constant():
     mel_filters = build_mel_filters(80, 400, 16000, 45.245640471924965)
     mel_filters = ops.convert_to_tensor(mel_filters)
     waveform = ops.zeros((1, 16000), dtype="float32")
     features = log_mel_spectrogram(waveform, mel_filters, 16000 * 30, 400, 160)
-    assert features.shape[-1] == 80
+    assert features.shape == (1, 3000, 80)
+    np.testing.assert_allclose(features, -1.5)

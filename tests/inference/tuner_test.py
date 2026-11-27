@@ -6,11 +6,11 @@ from paz.inference.tuner import compute_cholesky_sigma, compute_diagonal_sigma
 from paz.inference.tuner import keep_sigma
 
 
-def test_acceptance_to_variance_returns_finite():
+def test_acceptance_to_variance_passes_through_the_given_points():
     acceptance = jp.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6])
     factors = jp.array([0.1, 0.5, 0.9, 1.1, 2.0, 10.0])
     rate_fn = AcceptanceToVariance(acceptance, factors)
-    assert jp.isfinite(rate_fn(0.2))
+    assert jp.allclose(rate_fn(acceptance), factors, atol=0.05)
 
 
 def test_tuner_returns_infos_shape():

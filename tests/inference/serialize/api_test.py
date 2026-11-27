@@ -2,6 +2,7 @@ import json
 import os
 
 import jax.numpy as jp
+import pytest
 
 import paz
 from paz.inference.prior import Prior
@@ -44,9 +45,5 @@ def test_infer_format_from_manifest(tmp_path):
 def test_infer_format_without_manifest(tmp_path):
     path = tmp_path / "empty"
     os.makedirs(path)
-    try:
+    with pytest.raises(ValueError, match="Unable to infer format"):
         _infer_format(path)
-    except ValueError as error:
-        assert "Unable to infer format" in str(error)
-    else:
-        raise AssertionError("Expected ValueError")

@@ -20,9 +20,11 @@ def test_gmm_density_requires_key():
         build_gmm_density(None, samples, latent_space, k=2)
 
 
-def test_gmm_density_log_prob_shape():
+def test_gmm_density_integrates_to_one():
     latent_space = _build_latent_space()
     samples = latent_space.Sample(x=jp.linspace(-1.0, 1.0, 6))
-    density = build_gmm_density(jax.random.PRNGKey(0), samples, latent_space, k=2, num_iters=2)
-    log_prob = jax.vmap(density.log_prob_inverse)(samples)
-    assert log_prob.shape == (6,)
+    key = jax.random.PRNGKey(0)
+    density = build_gmm_density(key, samples, latent_space, k=2, num_iters=2)
+    grid = jp.linspace(-6.0, 6.0, 4000)
+    probs = jax.vmap(density.prob)({"x": grid})
+    assert jp.isclose(jp.trapezoid(probs, grid), 1.0, atol=1e-2)

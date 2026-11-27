@@ -131,7 +131,8 @@ def test_recover_discrete_posterior_vmaps_over_samples():
     pgm, data = build_scalar_mixture_model(0.0, 2.0, 1.0, 0.3, 1.5)
     recover = partial(recover_discrete_posterior, pgm, "z", data=data)
     posterior = jax.vmap(recover)(build_batched_theta(4)).posterior
-    assert posterior.shape == (4, 2)
+    expected = compute_analytic_posterior(0.0, 2.0, 1.0, 0.3, 1.5)
+    assert jp.allclose(posterior, jp.tile(expected, (4, 1)))
 
 
 def test_marginalize_multiple_names_raises():

@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jp
+import pytest
 
 import paz
 from paz.inference.density.gaussian import build_gaussian_density
@@ -53,12 +54,8 @@ def _roundtrip(obj):
 
 
 def test_serde_for_unknown_type():
-    try:
+    with pytest.raises(ValueError, match="No serializer registered"):
         _serde_for_type("missing")
-    except ValueError as error:
-        assert "No serializer registered" in str(error)
-    else:
-        raise AssertionError("Expected ValueError")
 
 
 def test_serde_for_known_type():

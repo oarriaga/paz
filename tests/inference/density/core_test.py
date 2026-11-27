@@ -11,11 +11,11 @@ def _build_latent_space():
     return build_latent_space([prior])
 
 
-def test_flatten_samples_batch_size():
+def test_flatten_samples_stacks_one_row_per_sample():
     latent_space = _build_latent_space()
     samples = latent_space.Sample(x=jp.array([0.0, 1.0, 2.0]))
     flat, _ = core._flatten_samples(samples, latent_space)
-    assert flat.shape[0] == 3
+    assert jp.array_equal(flat, jp.array([[0.0], [1.0], [2.0]]))
 
 
 def test_unflatten_samples_single():
@@ -26,13 +26,14 @@ def test_unflatten_samples_single():
     assert result.x == 3.0
 
 
-def test_compute_covariance_shape():
+def test_compute_covariance_regularizes_the_sample_covariance():
     flat_samples = jp.array([[0.0, 1.0], [1.0, 2.0], [2.0, 3.0]])
-    cov = core._compute_covariance(flat_samples, 1e-6)
-    assert cov.shape == (2, 2)
+    covariance = core._compute_covariance(flat_samples, 0.5)
+    assert jp.allclose(covariance, jp.array([[1.5, 1.0], [1.0, 1.5]]))
 
 
-def test_lowrank_covariance_shape():
-    cov = jp.eye(3)
-    lowrank = core._lowrank_covariance(cov, rank=2, regularization=1e-6)
-    assert lowrank.shape == (3, 3)
+def test_lowrank_covariance_keeps_the_largest_eigenvalues():
+    covariance = jp.diag(jp.array([1.0, 2.0, 3.0]))
+    lowrank = core._lowrank_covariance(covariance, 2, 0.5)
+    expected = jp.diag(jp.array([0.5, 2.5, 3.5]))
+    assert jp.allclose(lowrank, expected, atol=1e-5)

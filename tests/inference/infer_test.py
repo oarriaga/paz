@@ -83,26 +83,15 @@ def test_infer_mh_unknown_method_raises():
         )
 
 
-def test_tune_updates_default_sigma():
+def test_infer_runs_configured_tuner_and_replaces_sigma():
     model, data = build_simple_model()
-    key = jax.random.PRNGKey(4)
-    infer_key = jax.random.split(key)[0]
-    model.configure(
-        num_chains=1,
-        sigma=0.4,
-        warmup=0,
-        tuner=paz.AdaptiveStepTuner(
-            sigma=0.4, num_steps=2, num_episodes=1, progress=False
-        ),
-    )
-    posterior = model.infer(
-        infer_key,
-        data,
-        num_samples=5,
-        num_chains=1,
-        progress=False,
-    )
+    kwargs = {"num_steps": 20, "num_episodes": 3, "progress": False}
+    tuner = paz.AdaptiveStepTuner(sigma=0.4, **kwargs)
+    model.configure(num_chains=4, sigma=0.4, warmup=0, tuner=tuner)
+    kwargs = {"num_samples": 5, "progress": False}
+    posterior = model.infer(jax.random.PRNGKey(4), data, **kwargs)
     assert posterior.config["tune"] is True
+    assert not jp.isclose(posterior.config["sigma"], 0.4)
 
 
 diagonal_case = (paz.AdaptiveDiagonalTuner, (1,))

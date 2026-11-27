@@ -30,7 +30,7 @@ def test_write_json_uses_custom_indent():
 
         with open(filepath, "r") as f:
             content = f.read()
-        assert "  " in content
+        assert content == '{\n  "key": "value"\n}'
 
 
 def test_write_json_overwrites_existing_file():

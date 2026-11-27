@@ -1,7 +1,13 @@
-import warnings
+import argparse
 import importlib
+import json
+import os
+import warnings
 
-from paz.backend import logger
+import jax
+import jax.numpy as jp
+
+from paz.backend import directory, file, logger, message
 
 
 def test_logger_import_issues_deprecation_warning():
@@ -15,22 +21,28 @@ def test_logger_import_issues_deprecation_warning():
 
 
 def test_logger_re_exports_directory_functions():
-    assert hasattr(logger, "make_directory")
-    assert hasattr(logger, "make_timestamped_directory")
-    assert hasattr(logger, "find_path")
+    assert logger.make_directory is directory.make
+    assert logger.make_timestamped_directory is directory.make_timestamped
+    assert logger.find_path is directory.find_latest
 
 
 def test_logger_re_exports_file_functions():
-    assert hasattr(logger, "write_dictionary")
-    assert hasattr(logger, "write_weights")
-    assert hasattr(logger, "load_csv")
-    assert hasattr(logger, "load_latest")
+    assert logger.write_dictionary is file.write_json
+    assert logger.write_weights is file.write_weights
+    assert logger.load_csv is file.load_csv
+    assert logger.load_latest is file.load_latest
 
 
 def test_logger_re_exports_console_functions():
-    assert hasattr(logger, "warn")
+    assert logger.warn is message.warn
 
 
-def test_logger_keeps_setup_function():
-    assert hasattr(logger, "setup")
-    assert callable(logger.setup)
+def test_setup_writes_parameters_and_returns_seeded_key(tmp_path):
+    args = argparse.Namespace(root=str(tmp_path), seed=3, model="a", label="b")
+    experiment_root, key = logger.setup(args)
+    with open(os.path.join(experiment_root, "parameters.json")) as filedata:
+        parameters = json.load(filedata)
+    assert parameters == vars(args)
+    assert os.path.dirname(experiment_root) == str(tmp_path)
+    assert experiment_root.endswith("_a_b")
+    assert jp.array_equal(key, jax.random.PRNGKey(3))

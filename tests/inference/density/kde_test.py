@@ -12,12 +12,13 @@ def _build_latent_space():
     return build_latent_space([prior])
 
 
-def test_kde_density_log_prob_shape():
+def test_kde_density_integrates_to_one():
     latent_space = _build_latent_space()
     samples = latent_space.Sample(x=jp.linspace(-1.0, 1.0, 6))
     density = build_kde_density(samples, latent_space)
-    log_prob = jax.vmap(density.log_prob_inverse)(samples)
-    assert log_prob.shape == (6,)
+    grid = jp.linspace(-6.0, 6.0, 4000)
+    probs = jax.vmap(density.prob)({"x": grid})
+    assert jp.isclose(jp.trapezoid(probs, grid), 1.0, atol=1e-2)
 
 
 def test_kde_density_sample_shape():

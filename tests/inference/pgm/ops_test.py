@@ -263,8 +263,10 @@ def test_likelihood_log_prob_matches_observables():
     model, data = build_two_observables_model()
     key = jax.random.PRNGKey(3)
     theta_inv = model.sample_inverse(key)
-    state = model.likelihood.log_prob_inverse(theta_inv, data)
-    expected = state.log_prob["y1"] + state.log_prob["y2"]
+    theta = to_forward_samples(model.prior.latent_space, theta_inv)
+    y1 = paz.distributions.Normal(theta.mean, theta.stdv)
+    y2 = paz.distributions.Normal(theta.mean + 1, theta.stdv)
+    expected = y1.log_prob(data["y1"]).sum() + y2.log_prob(data["y2"]).sum()
     actual = model.likelihood.log_prob_inverse(theta_inv, data).log_prob_sum
     assert jp.isclose(actual, expected)
 

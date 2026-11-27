@@ -13,12 +13,14 @@ def _build_latent_space():
     return build_latent_space([prior])
 
 
-def test_gaussian_density_sample_has_field():
+def test_gaussian_density_samples_follow_the_fitted_moments():
     latent_space = _build_latent_space()
     samples = latent_space.Sample(x=jp.linspace(-1.0, 1.0, 5))
     density = build_gaussian_density(samples, latent_space)
-    draw = density.sample_inverse(jax.random.PRNGKey(0), num_samples=1)
-    assert hasattr(draw, "x")
+    draws = density.sample_inverse(jax.random.PRNGKey(0), num_samples=4000)
+    assert draws.x.shape == (4000,)
+    assert jp.isclose(draws.x.mean(), 0.0, atol=0.05)
+    assert jp.isclose(draws.x.std(), samples.x.std(), atol=0.05)
 
 
 def test_gaussian_density_rejects_many_samples():
