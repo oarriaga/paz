@@ -1,7 +1,3 @@
-import os
-
-os.environ.setdefault("KERAS_BACKEND", "jax")
-
 from keras import Input, Model
 
 from paz.models.transformers import feedforward

@@ -1,7 +1,3 @@
-import os
-
-os.environ.setdefault("KERAS_BACKEND", "jax")
-
 import jax
 import jax.numpy as jp
 

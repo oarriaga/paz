@@ -1,6 +1,4 @@
-import os
-
-os.environ.setdefault("KERAS_BACKEND", "jax")
+import re
 
 import numpy as np
 import keras
@@ -18,8 +16,6 @@ vision_module = pytest.importorskip(
     "keras_hub.src.models.gemma4.gemma4_vision_encoder")
 Gemma4Backbone = backbone.Gemma4Backbone
 Gemma4VisionEncoder = vision_module.Gemma4VisionEncoder
-
-from paz.models.foundation.gemma4.vision_test import role as vision_role
 
 TEXT = build_text_backbone_args(num_layers=2, sliding_window_pattern=2)
 VISION = build_vision_encoder_args(output_dim=TEXT.hidden_dim)
@@ -45,6 +41,18 @@ def build_reference():
         sliding_window_pattern=TEXT.sliding_window_pattern,
         vision_encoder=vision, layer_norm_epsilon=TEXT.layer_norm_epsilon,
         dtype="float32")
+
+
+def vision_role(path):
+    path = path.replace("/dense/", "/")
+    match = re.search(r"encoder_block_(\d+)", path)
+    if match:
+        rest = path[match.end():].lstrip("/_").replace("/", "_")
+        return "b{}:{}".format(int(match.group(1)), rest)
+    if "position_embedding_table" in path:
+        return "g:position_embedding_table"
+    parts = path.split("/")
+    return "g:{}_{}".format(parts[-2], parts[-1])
 
 
 def role(path):

@@ -1,7 +1,3 @@
-import os
-
-os.environ.setdefault("KERAS_BACKEND", "jax")
-
 import numpy as np
 
 from paz.models.foundation.gemma4.image_converter import preprocess_images

@@ -1,7 +1,3 @@
-import os
-
-os.environ.setdefault("KERAS_BACKEND", "jax")
-
 import numpy as np
 
 from paz.models.transformers import mask

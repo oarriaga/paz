@@ -1,7 +1,5 @@
 import os
 
-os.environ.setdefault("KERAS_BACKEND", "jax")
-
 import numpy as np
 import pytest
 

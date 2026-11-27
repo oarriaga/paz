@@ -1,7 +1,3 @@
-import os
-
-os.environ.setdefault("KERAS_BACKEND", "jax")
-
 import re
 
 import numpy as np
