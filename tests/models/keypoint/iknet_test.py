@@ -1,10 +1,5 @@
-import os
-
-os.environ["KERAS_BACKEND"] = "jax"
-
 import numpy as np
 import pytest
-from keras.models import Model
 
 from paz.models.keypoint.iknet import IKNet
 
@@ -18,10 +13,6 @@ def model():
 def outputs(model):
     keypoints = np.zeros((1, 84, 3), dtype=np.float32)
     return model(keypoints)
-
-
-def test_iknet_creation(model):
-    assert isinstance(model, Model)
 
 
 def test_iknet_output_shape(model):

@@ -1,5 +1,4 @@
 import jax.numpy as jp
-import paz
 import paz.datasets.fewsol as fewsol
 
 
@@ -32,15 +31,13 @@ def test_ensure_dataset_downloads_when_missing(tmp_path, monkeypatch):
     assert result == expected
 
 
-def test_masks_to_boxes_matches_non_vectorized():
-    masks = jp.array(
-        [
-            [[0.0, 0.0], [0.0, 1.0]],
-            [[0.0, 1.0], [1.0, 1.0]],
-        ]
-    )
-    expected = jp.array([paz.mask.to_box(mask, 1.0) for mask in masks])
-    expected = paz.boxes.xyxy_to_xywh(expected)
-    expected = jp.expand_dims(jp.array(expected), axis=1)
-    result = fewsol.masks_to_boxes(masks)
-    assert jp.allclose(result, expected)
+def test_masks_to_boxes_returns_one_xywh_box_per_mask():
+    masks = jp.zeros((2, 6, 8)).at[0, 1:3, 2:6].set(1.0).at[1, 4, 7].set(1.0)
+    expected = jp.array([[[2, 1, 3, 1]], [[7, 4, 0, 0]]])
+    assert jp.array_equal(fewsol.masks_to_boxes(masks), expected)
+
+
+def test_masks_to_boxes_accepts_a_trailing_channel():
+    masks = jp.zeros((1, 6, 8, 1)).at[0, 1:3, 2:6].set(1.0)
+    expected = jp.array([[[2, 1, 3, 1]]])
+    assert jp.array_equal(fewsol.masks_to_boxes(masks), expected)

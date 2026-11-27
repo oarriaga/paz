@@ -83,3 +83,7 @@ include = ["paz*"]
 
 [tool.setuptools.dynamic]
 version = { attr = "paz.__version__" }
+
+[tool.pytest.ini_options]
+# Test files in different folders share basenames (image_test.py, ...).
+addopts = "--import-mode=importlib"

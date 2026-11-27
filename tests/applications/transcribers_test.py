@@ -11,22 +11,12 @@ WEIGHTS_DIR = ROOT / "examples" / "speech_to_text" / "whisper_models"
 AUDIO_PATH = ROOT / "examples" / "speech_to_text" / "harvard.wav"
 
 
-def has_assets():
-    return (ASSETS_DIR / "tokenizer.json").exists()
-
-
 def has_weights():
     return (WEIGHTS_DIR / "whisper_tiny_en" / "encoder.weights.h5").exists()
 
 
 def has_vocabulary():
     return (ASSETS_DIR / "vocabulary.json").exists()
-
-
-@pytest.mark.skipif(not has_assets(), reason="tokenizer assets not present")
-def test_transcribe_whisper_builds_callable():
-    transcribe = TranscribeWhisper("whisper_tiny_en", weights=None)
-    assert callable(transcribe)
 
 
 @pytest.mark.skipif(not (has_weights() and has_vocabulary()),

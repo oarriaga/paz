@@ -15,10 +15,13 @@ def random_image():
     return np.random.RandomState(0).randint(0, 256, (48, 64, 3), "uint8")
 
 
-def test_preprocess_image_shape_and_normalization():
-    processed = np.array(preprocess_image(random_image(), IMAGE_SIZE))
+def test_preprocess_image_resizes_and_standardizes_with_imagenet():
+    white = np.full((48, 64, 3), 255, "uint8")
+    processed = np.array(preprocess_image(white, IMAGE_SIZE))
+    mean = np.array([0.485, 0.456, 0.406])
+    expected = (1.0 - mean) / np.array([0.229, 0.224, 0.225])
     assert processed.shape == (IMAGE_SIZE, IMAGE_SIZE, 3)
-    assert processed.min() < 0.0 and processed.max() > 0.0
+    assert np.allclose(processed, expected, atol=1e-5)
 
 
 def test_any_view_estimator_returns_six_tensors(tmp_path):

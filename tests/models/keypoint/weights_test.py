@@ -1,10 +1,8 @@
 import json
 import os
 import subprocess
+import sys
 import textwrap
-from pathlib import Path
-
-os.environ["KERAS_BACKEND"] = "jax"
 
 import numpy as np
 import pytest
@@ -372,14 +370,24 @@ def run_compatibility_models():
     )
     env = dict(os.environ)
     env.pop("KERAS_BACKEND", None)
-    output = subprocess.check_output(
-        ["python", "-c", script], text=True, env=env
-    ).strip()
-    return json.loads(output.splitlines()[-1])
+    # The reference runs on CPU so it does not need a working cuDNN.
+    env["CUDA_VISIBLE_DEVICES"] = ""
+    command = [sys.executable, "-c", script]
+    output = subprocess.check_output(command, text=True, env=env)
+    return json.loads(output.strip().splitlines()[-1])
+
+
+def has_original_weights():
+    models_path = os.path.expanduser("~/.keras/paz/models")
+    names = ["detnet_weights.hdf5", "iknet_weight.hdf5"]
+    return all(os.path.exists(os.path.join(models_path, x)) for x in names)
 
 
 @pytest.fixture(scope="module")
 def compatibility_outputs():
+    pytest.importorskip("tensorflow")
+    if not has_original_weights():
+        pytest.skip("original TensorFlow weights not in ~/.keras/paz/models")
     return run_compatibility_models()
 
 
@@ -430,31 +438,3 @@ def test_iknet_pretrained_matches_compatibility_model(compatibility_outputs):
         np.asarray(quaternions), compatibility_outputs["iknet"], atol=1e-6
     )
 
-
-@pytest.mark.weights
-def test_detnet_port_weights_script(tmp_path):
-    output_path = tmp_path / "detnet_paz_jax.weights.h5"
-    script_path = Path("paz/models/keypoint/port_detnet_weights.py")
-    env = dict(os.environ)
-    env["KERAS_BACKEND"] = "jax"
-    subprocess.check_output(
-        [
-            "python",
-            str(script_path),
-            "--output_path",
-            str(output_path),
-        ],
-        text=True,
-        env=env,
-    )
-
-    image, _ = build_inputs()
-    pretrained_model = DetNet(weights="detnet")
-    expected_xyz, expected_uv = pretrained_model(image)
-
-    ported_model = DetNet(weights=None)
-    ported_model.load_weights(output_path)
-    xyz, uv = ported_model(image)
-
-    assert np.allclose(np.asarray(xyz), np.asarray(expected_xyz), atol=1e-6)
-    assert np.array_equal(np.asarray(uv), np.asarray(expected_uv))

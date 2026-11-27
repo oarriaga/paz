@@ -1,7 +1,5 @@
 import os
 
-os.environ.setdefault("KERAS_BACKEND", "jax")
-
 import numpy as np
 import jax.numpy as jp
 import pytest
@@ -31,8 +29,8 @@ def test_interpolate_matches_torch(mode):
     positions = rng.uniform(-20, 660, size=(200, 2)).astype(np.float32)
     reference = torch_sample(feature, positions, 480, 640, mode)
     feature_hwc = jp.asarray(np.transpose(feature, (1, 2, 0)))
-    ours = features.interpolate(feature_hwc, jp.asarray(positions),
-                                   480, 640, mode)
+    args = feature_hwc, jp.asarray(positions), 480, 640, mode
+    ours = features.interpolate(*args)
     assert np.allclose(np.asarray(ours), reference, atol=1e-4)
 
 
